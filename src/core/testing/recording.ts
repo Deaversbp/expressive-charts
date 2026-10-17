@@ -2,6 +2,9 @@
 
 import type { IconHandle, Layer, MarkHandle, MarkStyle, Matrix, Paint, PathHandle, TextHandle, TextStyle } from "../contracts/drawing";
 import type { Icon } from "../contracts/icon";
+import type { EffectSlot } from "../contracts/slots";
+import { mergeFields as merge } from "../merge";
+import type { RunnerSurface, SurfaceGroup } from "../runner";
 
 export interface DrawnIcon {
   readonly kind: "icon";
@@ -172,14 +175,53 @@ export function recordingMark(): RecordingMark {
   };
 }
 
-/** Fields given replace the current ones; a field given as undefined is removed. */
-function merge<T extends object>(current: T, next: Partial<T> | undefined): T {
-  const result: Record<string, unknown> = { ...(current as Record<string, unknown>) };
-  for (const [field, value] of Object.entries(next ?? {})) {
-    if (value === undefined) delete result[field];
-    else result[field] = value;
-  }
-  return result as T;
+/** One overlay group a runner asked for. */
+export interface RecordedGroup {
+  readonly key: string;
+  readonly slot: EffectSlot;
+  readonly layer: RecordingLayer;
+  /** True once the runner cleared it. */
+  readonly cleared: boolean;
+}
+
+/** A RunnerSurface in memory: every run's group is a recording layer, every mark a recording mark. */
+export interface RecordingSurface extends RunnerSurface {
+  /** Every group asked for, in order, cleared ones included. */
+  readonly groups: readonly RecordedGroup[];
+  /** The mark's handle, made on first use. */
+  mark(key: string): RecordingMark;
+  /** What's drawn now in the groups not yet cleared, optionally for one key, as RecordingLayer.picture() gives it. */
+  picture(key?: string): Picture[];
+}
+
+export function recordingSurface(): RecordingSurface {
+  const groups: { key: string; slot: EffectSlot; layer: RecordingLayer; cleared: boolean }[] = [];
+  const marks = new Map<string, RecordingMark>();
+  return {
+    groups,
+    group(key, slot) {
+      const record = { key, slot, layer: recordingLayer(), cleared: false };
+      groups.push(record);
+      const group: SurfaceGroup = {
+        icon: (icon, options) => record.layer.icon(icon, options),
+        path: (d, paint) => record.layer.path(d, paint),
+        text: (content, style) => record.layer.text(content, style),
+        clear() {
+          record.cleared = true;
+          record.layer.clear();
+        }
+      };
+      return group;
+    },
+    mark(key) {
+      let mark = marks.get(key);
+      if (!mark) marks.set(key, (mark = recordingMark()));
+      return mark;
+    },
+    picture(key) {
+      return groups.filter((group) => !group.cleared && (key === undefined || group.key === key)).flatMap((group) => group.layer.picture());
+    }
+  };
 }
 
 function rounder(decimals: number): (value: number) => number {

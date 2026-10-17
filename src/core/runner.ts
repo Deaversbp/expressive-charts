@@ -1,0 +1,520 @@
+// The effect runner: connects a chart's mark events to its effects and owns every run's lifecycle,
+// so effects stay small and stateless. Each chart or adapter creates one. Internal: charts and
+// adapters use it; it isn't part of the public API. See docs/architecture.md#runner.
+
+import { defaultClock, type Clock } from "./clock";
+import type { MarkData } from "./contracts/data";
+import type { Layer, MarkHandle, MarkStyle } from "./contracts/drawing";
+import type { AnyMarkEffect, EffectContext, MarkEffect } from "./contracts/effect";
+import type { MarkGeometry } from "./contracts/geometry";
+import type { IconSource } from "./contracts/icon";
+import type { EffectSlot } from "./contracts/slots";
+import { mergeFields } from "./merge";
+import { motion as pageMotion, type Motion, type MotionView } from "./motion";
+import { report } from "./report";
+import { tween } from "./tween";
+
+type Batch = { readonly index: number; readonly count: number };
+
+// ── One run's context ────────────────────────────────────────────────────────
+
+export interface RunScopeOptions {
+  readonly clock: Clock;
+  readonly motion: MotionView;
+  readonly icons: IconSource;
+  readonly layer: Layer & { clear(): void };
+  readonly mark: MarkHandle;
+  readonly batch: Batch;
+  readonly previous?: MarkGeometry | undefined;
+}
+
+/** An EffectContext plus the controls the runner keeps for itself. testContext() is built on it too. */
+export interface RunScope {
+  readonly context: EffectContext;
+  abort(): void;
+  /** Calls the run's onChange listeners. */
+  change(mark: MarkGeometry, data?: MarkData): void;
+  /** The runner's cleanup after effect.clear(ctx): abort, empty the layer, reset the mark, drop onChange listeners. */
+  clear(): void;
+}
+
+export function runScope(options: RunScopeOptions): RunScope {
+  const { clock, motion, layer, mark } = options;
+  const controller = new AbortController();
+  let listeners: ((mark: MarkGeometry, data?: MarkData) => void)[] = [];
+
+  const context: EffectContext = {
+    signal: controller.signal,
+    motion,
+    mark,
+    layer,
+    icons: options.icons,
+    batch: options.batch,
+    ...(options.previous ? { previous: options.previous } : {}),
+    tween(tweenOptions) {
+      const own = tweenOptions.signal;
+      const running = tween({ ...tweenOptions, signal: own ?? controller.signal }, { clock, motion });
+      // An effect's own signal doesn't stop the run's signal from cancelling it too.
+      if (own && own !== controller.signal) {
+        if (controller.signal.aborted) running.cancel();
+        else controller.signal.addEventListener("abort", () => running.cancel(), { once: true });
+      }
+      return running;
+    },
+    onChange(listener) {
+      listeners.push(listener);
+    }
+  };
+
+  return {
+    context,
+    abort() {
+      controller.abort();
+    },
+    change(geometry, data) {
+      for (const listener of [...listeners]) listener(geometry, data);
+    },
+    clear() {
+      controller.abort();
+      layer.clear();
+      mark.reset();
+      listeners = [];
+    }
+  };
+}
+
+// ── The runner ───────────────────────────────────────────────────────────────
+
+/** The effects a runner plays, at most one per slot, with preset names already resolved (resolveEffects). */
+export type SlotEffects<D = unknown> = { readonly [S in EffectSlot]?: MarkEffect<D> };
+
+/** A mark as the runner sees it. Chart events (MarkEvent) fit as they are. */
+export interface RunInput<D = unknown> {
+  readonly mark: MarkGeometry;
+  readonly data: MarkData<D>;
+}
+
+export interface UpdateInput<D = unknown> extends RunInput<D> {
+  /** The geometry before this update. Default: the last geometry the runner saw for the key. */
+  readonly from?: MarkGeometry;
+}
+
+/** One run's overlay group. */
+export interface SurfaceGroup extends Layer {
+  /**
+   * Removes everything drawn in the group. Called once, when the run is cleared; nothing is drawn in
+   * the group after that, so it can remove itself. Handles from a cleared group must ignore calls.
+   */
+  clear(): void;
+}
+
+/** What the runner draws on: a chart's or adapter's renderer (SVG today) implements it. */
+export interface RunnerSurface {
+  /** A new, empty overlay group for one run, above the marks, in chart coordinates. Asked for on the run's first draw. */
+  group(key: string, slot: EffectSlot): SurfaceGroup;
+  /** The mark's own style handle. The runner merges every live run's style into it. */
+  mark(key: string): MarkHandle;
+}
+
+export interface RunnerOptions<D = unknown> {
+  readonly effects: SlotEffects<D>;
+  readonly surface: RunnerSurface;
+  /** Default: the page-wide motion. The runner subscribes, so turning motion off mid-run jumps to end states. */
+  readonly motion?: MotionView & Pick<Motion, "subscribe">;
+  /** Default: the page-wide clock. */
+  readonly clock?: Clock;
+  /** Default: no icons. */
+  readonly icons?: IconSource;
+}
+
+/**
+ * Charts call these as things happen; the runner starts, clears and replays runs. A run is one
+ * effect playing on one mark for one slot. Every method takes marks by key, as given in their
+ * geometry, and is a no-op after destroy().
+ */
+export interface Runner<D = unknown> {
+  /** Marks appeared: starts `decorate` (it stays until the mark exits), then `enter`. */
+  enter(marks: readonly RunInput<D>[]): void;
+  /** Marks' values changed, when their transition starts: runs `update`, with the previous geometry and data. */
+  update(marks: readonly UpdateInput<D>[]): void;
+  /**
+   * Marks are leaving: clears their other runs and runs `exit`. Resolves when every exit run has
+   * finished, been cleared by a re-enter, or the runner is destroyed; then the chart removes them.
+   */
+  exit(marks: readonly RunInput<D>[]): Promise<void>;
+  /** Pointer or focus arrived: runs `hover`. While a transition is in flight it waits until settle(). */
+  hover(marks: readonly RunInput<D>[]): void;
+  /** Pointer or focus left these marks (default: every hovered mark): clears their hover runs. */
+  leave(keys?: readonly string[]): void;
+  /** A mark's geometry (or data) changed on screen: every frame of a transition, a resize, a line reveal. */
+  change(mark: MarkGeometry, data?: MarkData<D>): void;
+  /** A data transition starts: clears hover runs, and holds new hovers until settle(). */
+  interrupt(): void;
+  /** The last transition settled: replays hover on the marks still hovered or focused. */
+  settle(): void;
+  /** Clears every run and stops following the motion mode. */
+  destroy(): void;
+}
+
+interface Entry<D> {
+  readonly key: string;
+  /** The latest geometry and data seen for the key. */
+  mark: MarkGeometry;
+  data: MarkData<D>;
+  readonly runs: Map<EffectSlot, Run<D>>;
+  /** The merged style last written to the mark's handle. */
+  applied: MarkStyle;
+  handle: MarkHandle | undefined;
+  /** Resolves the exit() promise while the mark is leaving. */
+  exiting: (() => void) | undefined;
+}
+
+interface Run<D> {
+  readonly entry: Entry<D>;
+  readonly slot: EffectSlot;
+  /** Start order: when two runs set the same style field, the later one wins. */
+  readonly order: number;
+  readonly effect: AnyMarkEffect;
+  readonly data: MarkData<D>;
+  readonly batch: Batch;
+  readonly previous: MarkGeometry | undefined;
+  readonly scope: RunScope;
+  /** This run's own style fields. */
+  style: MarkStyle;
+  /** "ended": run() resolved or end() drew; the run stays live (layer, style, onChange) until cleared. */
+  state: "running" | "ended" | "cleared";
+  /** Called once, when the run finishes or is cleared (exit() waits on it). */
+  done: (() => void) | undefined;
+}
+
+const NO_ICONS: IconSource = { get: () => undefined };
+/** Handed out for draws after a run is cleared, so an effect that ignores its signal draws nothing. */
+const INERT = { place() {}, update() {}, remove() {} };
+
+export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> {
+  const { effects, surface } = options;
+  const motion = options.motion ?? pageMotion;
+  const clock = options.clock ?? defaultClock;
+  const icons = options.icons ?? NO_ICONS;
+  const entries = new Map<string, Entry<D>>();
+  /** Hovered or focused keys, in the order they arrived. */
+  const hovered = new Set<string>();
+  let transitioning = false;
+  let destroyed = false;
+  let order = 0;
+
+  // The effective mode can turn off mid-run (the device asks for reduced motion, or the viewer picks
+  // Off). Runs still going are replaced by end() on a fresh context, so they never finish half-drawn.
+  const unsubscribe = motion.subscribe(() => {
+    if (motion.mode === "off") endRunning();
+  });
+
+  function track(input: RunInput<D>): Entry<D> {
+    const key = input.mark.key;
+    const entry = entries.get(key);
+    if (entry) {
+      entry.mark = input.mark;
+      entry.data = input.data;
+      return entry;
+    }
+    const created: Entry<D> = { key, mark: input.mark, data: input.data, runs: new Map(), applied: {}, handle: undefined, exiting: undefined };
+    entries.set(key, created);
+    return created;
+  }
+
+  /** Starts `slot`'s effect on the entry, clearing the slot's current run first. */
+  function start(entry: Entry<D>, slot: EffectSlot, data: MarkData<D>, batch: Batch, previous?: MarkGeometry, done?: () => void): void {
+    const effect = effects[slot] as AnyMarkEffect | undefined;
+    if (!effect) {
+      done?.();
+      return;
+    }
+    const current = entry.runs.get(slot);
+    if (current) clearRun(current);
+
+    const run: Run<D> = {
+      entry,
+      slot,
+      order: ++order,
+      effect,
+      data,
+      batch,
+      previous,
+      style: {},
+      state: "running",
+      done,
+      scope: runScope({
+        clock,
+        motion,
+        icons,
+        batch,
+        previous,
+        layer: runLayer(entry.key, slot, () => run.state !== "cleared"),
+        mark: runMark(() => run)
+      })
+    };
+    entry.runs.set(slot, run);
+
+    const { mark } = entry;
+    const ctx = run.scope.context;
+    try {
+      if (motion.mode === "off") {
+        if (effect.kind === "data") effect.end(mark, data, ctx);
+        else effect.end(mark, ctx);
+        finish(run);
+      } else {
+        const running = effect.kind === "data" ? effect.run(mark, data, ctx) : effect.run(mark, ctx);
+        Promise.resolve(running).then(
+          () => finish(run),
+          (error: unknown) => fail(run, error)
+        );
+      }
+    } catch (error) {
+      fail(run, error);
+    }
+  }
+
+  function finish(run: Run<D>): void {
+    if (run.state !== "running") return;
+    run.state = "ended";
+    release(run);
+  }
+
+  function fail(run: Run<D>, error: unknown): void {
+    const { signal } = run.scope.context;
+    // A run that rejects because it was aborted isn't broken.
+    if (signal.aborted && (error === signal.reason || (error as { name?: unknown } | null)?.name === "AbortError")) return;
+    report(error);
+    clearRun(run);
+  }
+
+  function release(run: Run<D>): void {
+    const done = run.done;
+    run.done = undefined;
+    done?.();
+  }
+
+  /** Abort, effect.clear(ctx), then the runner's own cleanup: so it happens even if the effect forgets. */
+  function clearRun(run: Run<D>): void {
+    if (run.state === "cleared") return;
+    run.state = "cleared";
+    const { entry } = run;
+    if (entry.runs.get(run.slot) === run) entry.runs.delete(run.slot);
+    run.scope.abort();
+    try {
+      run.effect.clear(run.scope.context);
+    } catch (error) {
+      report(error);
+    }
+    run.scope.clear();
+    release(run);
+  }
+
+  /** A run's overlay group, created on its first draw. Draws after the run is cleared do nothing. */
+  function runLayer(key: string, slot: EffectSlot, live: () => boolean): Layer & { clear(): void } {
+    let group: SurfaceGroup | undefined;
+    const target = (): Layer | undefined => (live() ? (group ??= surface.group(key, slot)) : undefined);
+    return {
+      icon: (icon, iconOptions) => target()?.icon(icon, iconOptions) ?? INERT,
+      path: (d, paint) => target()?.path(d, paint) ?? INERT,
+      text: (content, style) => target()?.text(content, style) ?? INERT,
+      clear() {
+        const drawn = group;
+        group = undefined;
+        drawn?.clear();
+      }
+    };
+  }
+
+  /** A run's view of the mark's style: its own fields, merged with the other live runs' into the real handle. */
+  function runMark(own: () => Run<D>): MarkHandle {
+    return {
+      set(style) {
+        const run = own();
+        if (run.state === "cleared") return;
+        run.style = mergeFields(run.style, style);
+        applyStyle(run.entry);
+      },
+      reset() {
+        const run = own();
+        if (Object.keys(run.style).length === 0) return;
+        run.style = {};
+        applyStyle(run.entry);
+      }
+    };
+  }
+
+  /** Writes what changed in the merged style of the entry's live runs (later runs win a field). */
+  function applyStyle(entry: Entry<D>): void {
+    const runs = [...entry.runs.values()].sort((a, b) => a.order - b.order);
+    const next: Record<string, unknown> = Object.assign({}, ...runs.map((run) => run.style));
+    const applied = entry.applied as Record<string, unknown>;
+    entry.applied = next as MarkStyle;
+    if (Object.keys(next).length === 0) {
+      if (Object.keys(applied).length > 0) handle(entry).reset();
+      return;
+    }
+    const changes: Record<string, unknown> = {};
+    let changed = false;
+    for (const field of new Set([...Object.keys(applied), ...Object.keys(next)])) {
+      if (applied[field] === next[field]) continue;
+      // A field no run sets any more is given as undefined, which resets it.
+      changes[field] = next[field];
+      changed = true;
+    }
+    if (changed) handle(entry).set(changes as MarkStyle);
+  }
+
+  function handle(entry: Entry<D>): MarkHandle {
+    return (entry.handle ??= surface.mark(entry.key));
+  }
+
+  /** Clears every run on the entry and drops it; resolves its exit() promise if it was leaving. */
+  function forget(entry: Entry<D>): void {
+    if (entries.get(entry.key) === entry) entries.delete(entry.key);
+    hovered.delete(entry.key);
+    const exited = entry.exiting;
+    entry.exiting = undefined;
+    for (const run of [...entry.runs.values()]) clearRun(run);
+    entry.handle = undefined;
+    exited?.();
+  }
+
+  /** Stops a pending exit (a re-enter, or exit() again) without forgetting the mark. */
+  function cancelExit(entry: Entry<D>): void {
+    const exited = entry.exiting;
+    if (!exited) return;
+    entry.exiting = undefined;
+    const run = entry.runs.get("exit");
+    if (run) clearRun(run);
+    exited();
+  }
+
+  function endRunning(): void {
+    for (const entry of [...entries.values()]) {
+      for (const run of [...entry.runs.values()]) {
+        if (run.state !== "running" || entry.runs.get(run.slot) !== run) continue;
+        // The exit() promise follows the replacement run.
+        const done = run.done;
+        run.done = undefined;
+        start(entry, run.slot, latestData(entry, run), run.batch, run.previous, done);
+      }
+    }
+  }
+
+  /** The entry's latest data, keeping the previous values the run was given. */
+  function latestData(entry: Entry<D>, run: Run<D>): MarkData<D> {
+    const previous = run.data.previous;
+    return previous && !entry.data.previous ? withPrevious(entry.data, previous) : entry.data;
+  }
+
+  return {
+    enter(marks) {
+      if (destroyed) return;
+      marks.forEach((input, index) => {
+        const entry = track(input);
+        cancelExit(entry);
+        const batch = { index, count: marks.length };
+        start(entry, "decorate", input.data, batch);
+        start(entry, "enter", input.data, batch);
+      });
+    },
+
+    update(marks) {
+      if (destroyed) return;
+      marks.forEach((input, index) => {
+        const known = entries.get(input.mark.key);
+        const previous = input.from ?? known?.mark;
+        const data = known && !input.data.previous ? withPrevious(input.data, known.data) : input.data;
+        start(track(input), "update", data, { index, count: marks.length }, previous);
+      });
+    },
+
+    exit(marks) {
+      if (destroyed) return Promise.resolve();
+      const exits = marks.map((input, index) => {
+        const entry = track(input);
+        cancelExit(entry);
+        hovered.delete(entry.key);
+        for (const run of [...entry.runs.values()]) clearRun(run);
+        return new Promise<void>((resolve) => {
+          entry.exiting = resolve;
+          if (!effects.exit) {
+            forget(entry);
+            return;
+          }
+          start(entry, "exit", input.data, { index, count: marks.length }, undefined, () => {
+            if (entry.exiting && entries.get(entry.key) === entry) forget(entry);
+          });
+        });
+      });
+      return Promise.all(exits).then(() => undefined);
+    },
+
+    hover(marks) {
+      if (destroyed) return;
+      marks.forEach((input, index) => {
+        const entry = track(input);
+        if (entry.exiting) return;
+        hovered.add(entry.key);
+        if (!transitioning) start(entry, "hover", input.data, { index, count: marks.length });
+      });
+    },
+
+    leave(keys = [...hovered]) {
+      for (const key of keys) {
+        hovered.delete(key);
+        const run = entries.get(key)?.runs.get("hover");
+        if (run) clearRun(run);
+      }
+    },
+
+    change(mark, data) {
+      const entry = entries.get(mark.key);
+      if (!entry) return;
+      entry.mark = mark;
+      if (data) entry.data = data;
+      for (const run of [...entry.runs.values()]) {
+        if (run.state === "cleared") continue;
+        try {
+          run.scope.change(mark, entry.data);
+        } catch (error) {
+          report(error);
+          clearRun(run);
+        }
+      }
+    },
+
+    interrupt() {
+      if (destroyed) return;
+      transitioning = true;
+      for (const entry of [...entries.values()]) {
+        const run = entry.runs.get("hover");
+        if (run) clearRun(run);
+      }
+    },
+
+    settle() {
+      if (!transitioning) return;
+      transitioning = false;
+      const keys = [...hovered];
+      keys.forEach((key, index) => {
+        const entry = entries.get(key);
+        if (entry) start(entry, "hover", entry.data, { index, count: keys.length });
+      });
+    },
+
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      transitioning = false;
+      unsubscribe();
+      for (const entry of [...entries.values()]) forget(entry);
+      hovered.clear();
+    }
+  };
+}
+
+function withPrevious<D>(data: MarkData<D>, previous: MarkData<D>): MarkData<D> {
+  return { datum: data.datum, samples: data.samples, related: (series) => data.related(series), previous };
+}

@@ -27,6 +27,11 @@ describe("importing in Node", () => {
     expect(lib.matrix.apply(lib.matrix.translate(1, 2), lib.offset({ x: 0, y: 0 }, 0, 3))).toEqual({ x: 4, y: 2 });
   });
 
+  it("registers presets and icons", async () => {
+    const lib = await import("./index");
+    expect(() => lib.registerPreset("node-check", () => ({ kind: "geometry", run: async () => {}, end: () => {}, clear: () => {} }))).not.toThrow();
+  });
+
   it("drives tweens from a timer when requestAnimationFrame is missing", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     const { createMotion, linear, tween } = await import("./index");

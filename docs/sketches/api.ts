@@ -1,14 +1,15 @@
 /**
  * Proposed public API for expressive-charts, as declarations only.
  *
- * Design sketch from the October 2026 design session. What's built is re-exported from src/core,
- * so the sketch builds on the real thing: the motion core, the shared contracts (MarkGeometry,
- * MarkData, the drawing API, EffectContext, the effect kinds, Icon) and the geometry (describe.bar,
- * .arc, .line, .point, matrix, offset). Everything still declared here is planned. Lines marked
- * NEW were added because writing the examples in ./examples exposed a gap in docs/plan.md.
+ * Design sketch from the October 2026 design session. What's built is re-exported from src, so
+ * the sketch builds on the real thing: the motion core, the shared contracts (MarkGeometry,
+ * MarkData, the drawing API, EffectContext, the effect kinds, Icon, the effect slots), the geometry
+ * (describe.bar, .arc, .line, .point, matrix, offset) and the preset and icon registries
+ * (registerPreset, registerIcon, registerIcons). Everything still declared here is planned. Lines
+ * marked NEW were added because writing the examples in ./examples exposed a gap in docs/plan.md.
  */
 
-export * from "../../src/core/index";
+export * from "../../src/index";
 import type {
   AnyMarkEffect,
   Baseline,
@@ -18,10 +19,10 @@ import type {
   describe as builders,
   Easing,
   EffectContext,
+  EffectSlots,
   GeometryEffect,
   Icon,
   MarkData,
-  MarkEffect,
   MarkGeometry,
   Motion,
   MotionMode,
@@ -34,7 +35,8 @@ import type {
 // ── Shared contracts and drawing API: built, in src/core/contracts ───────────
 // MarkGeometry, Outline, Sample, MarkData (with previous), Paint, MarkStyle, MarkHandle, IconHandle,
 // PathHandle, TextStyle, TextHandle, Layer, EffectContext (with previous), GeometryEffect,
-// DataEffect, TransitionEffect, MarkEffect, AnyMarkEffect, Combined.
+// DataEffect, TransitionEffect, MarkEffect, AnyMarkEffect, Combined; and the effect slots
+// (EffectSlot, EffectSlots, EffectOption, PresetName). The runner that plays slots is internal.
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -111,28 +113,19 @@ export type IconSpec = Omit<Icon, "footprint" | "pivot" | "size"> & Partial<Pick
 
 export declare function defineIcon(spec: IconSpec): Icon;
 export declare function iconFromSvg(markup: string, spec: Omit<IconSpec, "shapes" | "box">): Icon;
-export declare function registerIcon(icon: Icon): void;
-export declare function registerIcons(icons: readonly Icon[]): void;
+// registerIcon and registerIcons are built, in src/registries.
 export declare const icons: { readonly dot: Icon; readonly arrow: Icon; readonly chevron: Icon };
 
 // ── Presets ──────────────────────────────────────────────────────────────────
 
-/** Built-in names autocomplete; custom names are checked when the chart is created. */
-export type PresetName = "wiggle" | "pulse" | "flash" | (string & {});
-export declare function registerPreset(name: string, factory: () => MarkEffect): void;
+// PresetName and registerPreset are built (src/core/contracts, src/registries). Built-in names
+// autocomplete; custom names are checked when the chart is created. The built-in presets themselves
+// (wiggle, pulse, flash) are registered when their effects land in M3.
 
 // ── Events and effect slots (shared by reference charts and adapters) ───────
 
-export type EffectOption<D> = MarkEffect<D> | PresetName;
-
-/** NEW: slots grouped under `on`, so the `update` slot no longer collides with `chart.update()`. */
-export interface EffectSlots<D> {
-  readonly hover?: EffectOption<D>;
-  readonly enter?: EffectOption<D>;
-  readonly update?: EffectOption<D>;
-  readonly exit?: EffectOption<D>;
-  readonly decorate?: EffectOption<D>;
-}
+// EffectOption and EffectSlots are built, in src/core/contracts. NEW: slots are grouped under `on`,
+// so the `update` slot no longer collides with `chart.update()`.
 
 export interface MarkEvent<D> {
   readonly mark: MarkGeometry;

@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including charts you've already built with D3, Plot or Vega. Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core and the mark geometry are built ([below](#available-now-the-motion-core-and-mark-geometry)). Charts and effects are next, so the chart API under "Design target" isn't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry and the effect runner are built ([below](#available-now-the-motion-core-and-mark-geometry)). Charts and effects are next, so the chart API under "Design target" isn't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -87,7 +87,16 @@ offset(bar.end, bar.angle(1) - Math.PI / 2, 8);  // 8 px to the up side of the t
 const slice = describe.arc({ key: "Saved", cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle }); // d3.pie() angles
 ```
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API and [Mark geometry](docs/architecture.md#mark-geometry) for the builders.
+Presets and icons are registered by name, page-wide, for charts to look up when they're created:
+
+```js
+import { registerIcons, registerPreset } from "expressive-charts";
+
+registerPreset("nudge", () => myEffect); // then on: { hover: "nudge" } in any chart; unknown names throw
+registerIcons(myIcons);                  // then travel("my-icon")
+```
+
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, and [Runner](docs/architecture.md#runner) for how effects are played on marks.
 
 ## Demo
 

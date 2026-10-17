@@ -6,7 +6,7 @@ This document describes the design. Code that doesn't exist yet is marked as pla
 
 ```
           ┌──────────────┐
-          │    core      │  clock, easing, tweens, motion modes, shared contracts, geometry
+          │    core      │  clock, easing, tweens, motion modes, shared contracts, geometry, runner
           └──────▲───────┘
         ┌────────┴────────┐
  ┌──────┴──────┐   ┌──────┴──────┐
@@ -138,19 +138,25 @@ A `Matrix` is `[a, b, c, d, e, f]` in SVG order. Positive rotations turn clockwi
 
 The rest of `src/core/geometry` is internal: path segments (lines and circular arcs), walks parameterised by distance, outlines with canonical sampling, and path-data writing. Charts and effects inside the library use it directly.
 
-## Events and effect slots (planned)
+## Events and effect slots
 
-Charts and adapters emit `enter`, `update`, `exit`, `hover` and `leave`, each with the mark's geometry, its data and its position in the batch. An `update` event also carries the previous geometry. Effects attach to events through the `on` option:
+Charts and adapters emit `enter`, `update`, `exit`, `hover` and `leave` (planned, M1 step 5), each with the mark's geometry, its data and its position in the batch. An `update` event also carries the previous geometry. Effects attach to events through the `on` option, typed `EffectSlots<D>` (`src/core/contracts/slots.ts`); each slot takes an effect or a preset name:
 
 ```ts
 barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("soccer-ball"), update: "flash" } });
 ```
 
-`decorate` is a fifth slot for persistent effects like `threshold`: they start on enter, stay until exit, and redraw whenever the mark's geometry changes.
+| Slot | Runs | Until |
+| --- | --- | --- |
+| `hover` | on pointer hover or keyboard focus | leave; cleared during a data transition and replayed after it |
+| `enter` | when a mark appears | it re-triggers, or the mark exits |
+| `update` | when a mark's values change, as the transition starts (not on a re-sort alone) | it re-triggers, or the mark exits |
+| `exit` | before a mark is removed; removal waits for it | it finishes, and the mark goes |
+| `decorate` | from enter, for persistent effects like `threshold` | the mark exits; it redraws on every geometry change |
 
 ## Effects
 
-The effect interfaces and the drawing API are built as types (`src/core/contracts/`). The runner that drives them is M1 step 4, and the first effects follow in step 6.
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The first effects follow in M1 step 6.
 
 There are three kinds, distinguished by a `kind` field:
 
@@ -192,8 +198,48 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 `src/core/testing` has in-memory versions for effect tests. It's internal until the conformance suite is exported after M3.
 
 - `recordingLayer()` and `recordingMark()` record every call and keep what's drawn now. `picture()` gives that as plain data with numbers rounded, so a full run can be compared with `end()`.
-- `testContext({ mode, icons, batch, previous })` is a complete `EffectContext` on a manual clock, with `abort()`, `clear()` (the runner's cleanup) and `change(mark)` (fires `onChange`).
+- `testContext({ mode, icons, batch, previous })` is a complete `EffectContext` on a manual clock, with `abort()`, `clear()` and `change(mark)` (fires `onChange`). It's built on the same run scope the runner gives every run, so `clear()` is exactly the runner's cleanup after `effect.clear(ctx)`.
+- `recordingSurface()` is a `RunnerSurface` whose groups are recording layers and whose marks are recording marks, for runner and chart tests.
 - `measurePath(d)` measures the path data the geometry writes: length, start, end and commands.
+
+## Runner
+
+`src/core/runner.ts` plays a chart's slots. It's internal: each reference chart and adapter creates one and calls it as things happen, and the runner owns every run's lifecycle, so effects stay small and stateless. A *run* is one effect playing on one mark for one slot.
+
+```ts
+const runner = createRunner({ effects: resolveEffects(options.on, presets), surface, motion, icons });
+runner.enter(marks);         // decorate, then enter
+runner.interrupt();          // a data transition starts: hover runs are cleared
+runner.update(changed);      // update runs, given the previous geometry and data
+runner.change(mark);         // every frame of the transition: onChange for that mark's runs
+runner.settle();             // the transition settled: hover replays on marks still hovered
+await runner.exit(leaving);  // then remove their elements
+runner.hover([mark]); runner.leave(); runner.destroy();
+```
+
+- **One run per mark and slot.** Re-triggering clears the previous run, then starts the new one. Marks are matched by key.
+- **Clearing** a run aborts its `signal`, calls `effect.clear(ctx)`, empties its layer group, resets its mark style and drops its `onChange` listeners. This happens even if the effect forgets, and anything it draws or styles afterwards is ignored.
+- **Finished runs stay.** When `run()` resolves, what it drew and styled stays, and it keeps getting `onChange`, until it's cleared: by leave, a re-trigger, exit or destroy. So a ball that rolled to the end rests there while the pointer stays.
+- **Off.** When the effective mode is `off`, the runner calls `end()` instead of `run()`, on a fresh context. If the mode turns off mid-run (the device asks for reduced motion, or the viewer picks Off), runs still going are cleared and replaced by `end()` on a fresh context with the mark's latest geometry; finished runs keep what they drew.
+- **Data transitions.** `interrupt()` clears hover runs, and a hover that arrives during the transition waits. `settle()` replays hover, in the order the marks were hovered, on the marks still hovered or focused, with their latest geometry. Other runs keep going, and decorations follow every `change()`.
+- **Exit.** `exit()` clears the mark's other runs (hover too), runs `exit`, then clears that and forgets the mark. Its promise resolves when every exit is done, which is when the chart removes the elements. A leaving mark can't be hovered, and one that re-enters mid-exit cancels its exit.
+- **Errors.** An effect that throws or rejects, in `run`, `end` or an `onChange` listener, is reported (with `reportError`) and its run cleared; other runs and marks carry on. An error in `clear()` is reported and the cleanup continues. A rejection caused by the run's own abort isn't reported.
+- **Mark styles merge.** Every live run's `mark.set()` fields are merged into the mark's one style handle. When two runs set the same field, the one that started later wins; when it's cleared, the earlier run's value comes back.
+
+Each run's `EffectContext` has its own `signal`; the motion view; `tween()` bound to the clock, the motion and the signal (a tween given its own signal is still cancelled with the run); its own `layer` group and `mark` handle; the icon source; `batch`, the mark's position among the marks in that call; and `previous` on update runs. Data effects also get the mark's `MarkData`. On update, `previous` (geometry) and `data.previous` (values) come from the chart, or else from the last geometry and data the runner saw for that key.
+
+The renderer implements `RunnerSurface`: `group(key, slot)` returns a new overlay group for one run, asked for on the run's first draw and cleared once when the run is; `mark(key)` returns the mark's style handle. `recordingSurface()` in `src/core/testing` is an in-memory one.
+
+## Presets and icons by name
+
+A slot can name a preset instead of holding an effect, `on: { hover: "wiggle" }`, and an effect can name an icon, `travel("cleat")`. Charts resolve names through registries the composition root (`src/index.ts`) hands them, so a chart never knows what a name means.
+
+- `registerPreset(name, factory)` makes a name usable in any chart's `on`. The factory returns a fresh effect that works on any rows. The built-in presets (`wiggle`, `pulse`, `flash`) are registered when their effects land in M3.
+- `registerIcon(icon)` and `registerIcons(icons)` make icons usable by their `name`, through each run's `ctx.icons`.
+- A later registration replaces an earlier one with the same name.
+- Charts call `resolveEffects(on, presets)` when they're created. An unknown preset name throws a `RangeError` that lists the registered names. A transition effect in a mark slot, or a slot that doesn't exist, throws a `TypeError` naming the slot. Misspelled names aren't type errors (custom names are allowed), so this is where they're caught.
+
+Internally both are a `createRegistry({ kind, entries, hint })` (`src/core/registry.ts`) with `get`, `resolve`, `register` and `names`; a `Registry<Icon>` is an `IconSource`.
 
 ## Adapters (planned)
 

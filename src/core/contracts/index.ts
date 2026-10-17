@@ -24,3 +24,4 @@ export type {
   MarkEffect,
   TransitionEffect
 } from "./effect";
+export type { EffectOption, EffectSlot, EffectSlots, PresetName } from "./slots";

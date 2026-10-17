@@ -110,8 +110,12 @@ export interface SurfaceGroup extends Layer {
 
 /** What the runner draws on: a chart's or adapter's renderer (SVG today) implements it. */
 export interface RunnerSurface {
-  /** A new, empty overlay group for one run, above the marks, in chart coordinates. Asked for on the run's first draw. */
-  group(key: string, slot: EffectSlot): SurfaceGroup;
+  /**
+   * A new, empty overlay group for one run, above the marks, in chart coordinates. Asked for on the
+   * run's first draw, which can come late (a decoration that draws on its first change). Stack groups
+   * by `order`, the run's start order, lower below higher, not by when they were asked for.
+   */
+  group(key: string, slot: EffectSlot, order: number): SurfaceGroup;
   /** The mark's own style handle. The runner merges every live run's style into it. */
   mark(key: string): MarkHandle;
 }
@@ -172,7 +176,10 @@ interface Entry<D> {
 interface Run<D> {
   readonly entry: Entry<D>;
   readonly slot: EffectSlot;
-  /** Start order: when two runs set the same style field, the later one wins. */
+  /**
+   * Start order: when two runs set the same style field the later one wins, and later runs' overlay
+   * groups stack above. A run replaced by end() when the mode turns off keeps its order.
+   */
   readonly order: number;
   readonly effect: AnyMarkEffect;
   readonly data: MarkData<D>;
@@ -185,6 +192,13 @@ interface Run<D> {
   state: "running" | "ended" | "cleared";
   /** Called once, when the run finishes or is cleared (exit() waits on it). */
   done: (() => void) | undefined;
+}
+
+interface StartOptions {
+  readonly previous?: MarkGeometry | undefined;
+  readonly done?: (() => void) | undefined;
+  /** Default: the next start order. */
+  readonly order?: number;
 }
 
 const NO_ICONS: IconSource = { get: () => undefined };
@@ -223,7 +237,8 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
   }
 
   /** Starts `slot`'s effect on the entry, clearing the slot's current run first. */
-  function start(entry: Entry<D>, slot: EffectSlot, data: MarkData<D>, batch: Batch, previous?: MarkGeometry, done?: () => void): void {
+  function start(entry: Entry<D>, slot: EffectSlot, data: MarkData<D>, batch: Batch, more: StartOptions = {}): void {
+    const { previous, done } = more;
     const effect = effects[slot] as AnyMarkEffect | undefined;
     if (!effect) {
       done?.();
@@ -235,7 +250,7 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
     const run: Run<D> = {
       entry,
       slot,
-      order: ++order,
+      order: more.order ?? ++order,
       effect,
       data,
       batch,
@@ -249,7 +264,7 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
         icons,
         batch,
         previous,
-        layer: runLayer(entry.key, slot, () => run.state !== "cleared"),
+        layer: runLayer(entry.key, slot, () => run.order, () => run.state !== "cleared"),
         mark: runMark(() => run)
       })
     };
@@ -311,9 +326,9 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
   }
 
   /** A run's overlay group, created on its first draw. Draws after the run is cleared do nothing. */
-  function runLayer(key: string, slot: EffectSlot, live: () => boolean): Layer & { clear(): void } {
+  function runLayer(key: string, slot: EffectSlot, order: () => number, live: () => boolean): Layer & { clear(): void } {
     let group: SurfaceGroup | undefined;
-    const target = (): Layer | undefined => (live() ? (group ??= surface.group(key, slot)) : undefined);
+    const target = (): Layer | undefined => (live() ? (group ??= surface.group(key, slot, order())) : undefined);
     return {
       icon: (icon, iconOptions) => target()?.icon(icon, iconOptions) ?? INERT,
       path: (d, paint) => target()?.path(d, paint) ?? INERT,
@@ -394,10 +409,11 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
     for (const entry of [...entries.values()]) {
       for (const run of [...entry.runs.values()]) {
         if (run.state !== "running" || entry.runs.get(run.slot) !== run) continue;
-        // The exit() promise follows the replacement run.
+        // The replacement takes the run's place: its order (style precedence and stacking) and the
+        // exit() promise waiting on it.
         const done = run.done;
         run.done = undefined;
-        start(entry, run.slot, latestData(entry, run), run.batch, run.previous, done);
+        start(entry, run.slot, latestData(entry, run), run.batch, { previous: run.previous, done, order: run.order });
       }
     }
   }
@@ -426,7 +442,7 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
         const known = entries.get(input.mark.key);
         const previous = input.from ?? known?.mark;
         const data = known && !input.data.previous ? withPrevious(input.data, known.data) : input.data;
-        start(track(input), "update", data, { index, count: marks.length }, previous);
+        start(track(input), "update", data, { index, count: marks.length }, { previous });
       });
     },
 
@@ -443,8 +459,10 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
             forget(entry);
             return;
           }
-          start(entry, "exit", input.data, { index, count: marks.length }, undefined, () => {
-            if (entry.exiting && entries.get(entry.key) === entry) forget(entry);
+          start(entry, "exit", input.data, { index, count: marks.length }, {
+            done: () => {
+              if (entry.exiting && entries.get(entry.key) === entry) forget(entry);
+            }
           });
         });
       });

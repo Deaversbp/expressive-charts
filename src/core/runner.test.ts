@@ -85,10 +85,10 @@ interface Probe extends GeometryEffect {
 }
 
 /**
- * Draws the walk over 100 ms and sets `style`, logging every call. Its end state is the same
+ * Draws the walk over `duration` ms and sets `style`, logging every call. Its end state is the same
  * picture: the whole walk drawn, `style` set. Listens for changes in both run() and end().
  */
-function probe(style: MarkStyle = { emphasis: 1 }): Probe {
+function probe(style: MarkStyle = { emphasis: 1 }, duration = 100): Probe {
   const log: string[] = [];
   const contexts: EffectContext[] = [];
   const marks: MarkGeometry[] = [];
@@ -109,7 +109,7 @@ function probe(style: MarkStyle = { emphasis: 1 }): Probe {
       const tag = begin(mark, ctx);
       log.push(`run ${mark.key} ${tag}`);
       const stroke = ctx.layer.path(mark.slice(0, 0), { stroke: "mark" });
-      const result = await ctx.tween({ duration: 100, timing: "effect", ease: linear, update: (p) => stroke.update(mark.slice(0, p)) }).finished;
+      const result = await ctx.tween({ duration, timing: "effect", ease: linear, update: (p) => stroke.update(mark.slice(0, p)) }).finished;
       log.push(`${result} ${mark.key} ${tag}`);
     },
     end(mark, ctx) {
@@ -185,6 +185,31 @@ describe("createRunner", () => {
       runner.hover([input("a")]);
       runner.leave();
       await expect(Promise.all(results)).resolves.toEqual(["cancelled", "cancelled"]);
+    });
+
+    it("stacks overlay groups in run order, however late a run first draws", () => {
+      const decorate: GeometryEffect = {
+        kind: "geometry",
+        async run(_mark, ctx) {
+          ctx.onChange((moved) => ctx.layer.path(moved.slice(0, 1), { stroke: "negative" }));
+        },
+        end() {},
+        clear() {}
+      };
+      const hover: GeometryEffect = {
+        kind: "geometry",
+        async run(mark, ctx) {
+          ctx.layer.path(mark.slice(0, 1), { stroke: "mark" });
+        },
+        end() {},
+        clear() {}
+      };
+      const { runner, surface } = setup({ decorate, hover });
+      runner.enter([input("a")]);
+      runner.hover([input("a")]);
+      runner.change(bar("a", 80));
+      expect(surface.groups.map((group) => `${group.slot} ${group.order}`)).toEqual(["hover 2", "decorate 1"]);
+      expect(surface.picture("a").map((drawn) => ("paint" in drawn ? drawn.paint.stroke : undefined))).toEqual(["negative", "mark"]);
     });
 
     it("asks for a run's overlay group only when the run draws", () => {
@@ -328,6 +353,27 @@ describe("createRunner", () => {
       await flush();
       expect(hover.log).toContain("cancelled a #0");
       expect(report).not.toHaveBeenCalled();
+    });
+
+    it("keeps a replaced run's place, so a later run still wins its style and stacks above it", async () => {
+      const decorate = probe({ emphasis: 0.5 }, 1000);
+      const hover = probe({ emphasis: 1 });
+      const { runner, clock, motion, surface } = setup({ decorate, hover });
+      runner.enter([input("a")]);
+      runner.hover([input("a")]);
+      clock.advance(100);
+      await flush();
+      expect(hover.log).toEqual(["run a #0", "done a #0"]);
+
+      // The decoration is still going, so it's replaced by end(); the finished hover started later.
+      motion.chooseMode("off");
+      expect(decorate.log).toEqual(["run a #0", "clear #0", "end a #1"]);
+      expect(surface.mark("a").style).toEqual({ emphasis: 1 });
+      expect(surface.groups.map((group) => `${group.slot} ${group.order}${group.cleared ? " cleared" : ""}`)).toEqual([
+        "decorate 1 cleared",
+        "hover 2",
+        "decorate 1"
+      ]);
     });
 
     it("does the same for the viewer's choice, and leaves runs alone when motion comes back", () => {

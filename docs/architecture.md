@@ -224,11 +224,11 @@ runner.hover([mark]); runner.leave(); runner.destroy();
 - **Data transitions.** `interrupt()` clears hover runs, and a hover that arrives during the transition waits. `settle()` replays hover, in the order the marks were hovered, on the marks still hovered or focused, with their latest geometry. Other runs keep going, and decorations follow every `change()`.
 - **Exit.** `exit()` clears the mark's other runs (hover too), runs `exit`, then clears that and forgets the mark. Its promise resolves when every exit is done, which is when the chart removes the elements. A leaving mark can't be hovered, and one that re-enters mid-exit cancels its exit.
 - **Errors.** An effect that throws or rejects, in `run`, `end` or an `onChange` listener, is reported (with `reportError`) and its run cleared; other runs and marks carry on. An error in `clear()` is reported and the cleanup continues. A rejection caused by the run's own abort isn't reported.
-- **Mark styles merge.** Every live run's `mark.set()` fields are merged into the mark's one style handle. When two runs set the same field, the one that started later wins; when it's cleared, the earlier run's value comes back.
+- **Mark styles merge.** Every live run's `mark.set()` fields are merged into the mark's one style handle. When two runs set the same field, the one that started later wins; when it's cleared, the earlier run's value comes back. A run that `end()` replaces when the mode turns off keeps its place.
 
 Each run's `EffectContext` has its own `signal`; the motion view; `tween()` bound to the clock, the motion and the signal (a tween given its own signal is still cancelled with the run); its own `layer` group and `mark` handle; the icon source; `batch`, the mark's position among the marks in that call; and `previous` on update runs. Data effects also get the mark's `MarkData`. On update, `previous` (geometry) and `data.previous` (values) come from the chart, or else from the last geometry and data the runner saw for that key.
 
-The renderer implements `RunnerSurface`: `group(key, slot)` returns a new overlay group for one run, asked for on the run's first draw and cleared once when the run is; `mark(key)` returns the mark's style handle. `recordingSurface()` in `src/core/testing` is an in-memory one.
+The renderer implements `RunnerSurface`: `group(key, slot, order)` returns a new overlay group for one run, asked for on the run's first draw and cleared once when the run is. Groups stack by `order`, the run's start order, rather than by when they were asked for, since a decoration may first draw long after it started. `mark(key)` returns the mark's style handle. `recordingSurface()` in `src/core/testing` is an in-memory one.
 
 ## Presets and icons by name
 

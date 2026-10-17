@@ -361,10 +361,10 @@ This is the entire surface effects draw through. It's deliberately small and cov
 > - If the mode turns off mid-run, runs still going are cleared and replaced by `end()` on a fresh context. Runs that already finished keep what they drew.
 > - Finished runs stay drawn, styled and subscribed to `onChange` until they're cleared.
 > - Exit clears the mark's other runs, including hover; a leaving mark can't be hovered; a re-enter cancels the exit. `exit()` resolves when every exit is done.
-> - Each run's mark style is its own; the runner merges all live runs' styles into the mark's one handle, and a later run wins a shared field.
+> - Each run's mark style is its own; the runner merges all live runs' styles into the mark's one handle, and a later run wins a shared field. Overlay groups stack in the same start order, and a run replaced by `end()` keeps its place.
 > - Draws and styles after a run is cleared are ignored, and a rejection caused by the run's own abort isn't reported.
 > - On update, `ctx.previous` and `data.previous` default to the last geometry and data seen for the key.
-> - The renderer implements `RunnerSurface` (`group(key, slot)`, `mark(key)`); `testContext()` is built on the runner's own run scope.
+> - The renderer implements `RunnerSurface` (`group(key, slot, order)`, `mark(key)`); `testContext()` is built on the runner's own run scope.
 
 `src/core/runner.ts` connects chart events to effects, so each effect doesn't have to reimplement this:
 

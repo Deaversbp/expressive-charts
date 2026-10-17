@@ -179,6 +179,8 @@ export function recordingMark(): RecordingMark {
 export interface RecordedGroup {
   readonly key: string;
   readonly slot: EffectSlot;
+  /** The run's start order, which stacks groups. */
+  readonly order: number;
   readonly layer: RecordingLayer;
   /** True once the runner cleared it. */
   readonly cleared: boolean;
@@ -190,17 +192,17 @@ export interface RecordingSurface extends RunnerSurface {
   readonly groups: readonly RecordedGroup[];
   /** The mark's handle, made on first use. */
   mark(key: string): RecordingMark;
-  /** What's drawn now in the groups not yet cleared, optionally for one key, as RecordingLayer.picture() gives it. */
+  /** What's drawn now in the groups not yet cleared, optionally for one key, bottom to top (by order), as RecordingLayer.picture() gives it. */
   picture(key?: string): Picture[];
 }
 
 export function recordingSurface(): RecordingSurface {
-  const groups: { key: string; slot: EffectSlot; layer: RecordingLayer; cleared: boolean }[] = [];
+  const groups: { key: string; slot: EffectSlot; order: number; layer: RecordingLayer; cleared: boolean }[] = [];
   const marks = new Map<string, RecordingMark>();
   return {
     groups,
-    group(key, slot) {
-      const record = { key, slot, layer: recordingLayer(), cleared: false };
+    group(key, slot, order) {
+      const record = { key, slot, order, layer: recordingLayer(), cleared: false };
       groups.push(record);
       const group: SurfaceGroup = {
         icon: (icon, options) => record.layer.icon(icon, options),
@@ -219,7 +221,10 @@ export function recordingSurface(): RecordingSurface {
       return mark;
     },
     picture(key) {
-      return groups.filter((group) => !group.cleared && (key === undefined || group.key === key)).flatMap((group) => group.layer.picture());
+      return groups
+        .filter((group) => !group.cleared && (key === undefined || group.key === key))
+        .sort((a, b) => a.order - b.order)
+        .flatMap((group) => group.layer.picture());
     }
   };
 }

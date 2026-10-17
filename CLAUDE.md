@@ -13,7 +13,7 @@ expressive-charts is a TypeScript library of composable motion and expressive ef
 3. **Effects never know chart types.** An effect receives a `MarkGeometry` (and, for data effects, the mark's datum) and animates against it. No `if (chart === "bar")` branches, ever. If an effect needs that, the `MarkGeometry` description is missing something; extend it instead.
 4. **Every mark keeps a stable identity (a key).** Transitions, morphs and effects all depend on matching old marks to new marks by key, not by index.
 5. **Timing is relative.** Effects and charts express durations as base values; `core` scales them by motion mode. Never hard-code a duration that bypasses the motion mode.
-6. **Reduced motion is not optional.** When the mode is `off` or the user prefers reduced motion, every animation jumps to its end state. Every effect must define a sensible end state.
+6. **Reduced motion is not optional.** When the effective mode is `off` (the mode is `off`, or the user prefers reduced motion and hasn't picked a mode in an on-page control), every animation jumps to its end state. A mode the page author sets in code never overrides the reduced-motion setting; only the viewer's own choice on the page does. Every effect must define a sensible end state.
 7. **Effects compose.** `sequence`, `parallel` and `stagger` combine effects. New effects should be small and combinable rather than large and configurable.
 8. **Data effects are a separate kind.** Effects that compare values (for example `threshold`, which colors a line below a reference series) read data, not just geometry. Keep that distinction explicit in their types.
 

@@ -158,6 +158,102 @@ describe("tween", () => {
     expect(update).toHaveBeenLastCalledWith(0.5);
   });
 
+  it("jumps to the end on the next frame if the device switches to reduced motion mid-flight", async () => {
+    let reduced = false;
+    const listeners = new Set<() => void>();
+    const device = {
+      get matches() {
+        return reduced;
+      },
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      }
+    };
+    const clock = manualClock();
+    const update = vi.fn();
+    const t = tween({ duration: 1000, ease: linear, update }, { clock, motion: createMotion({ reducedMotion: device }) });
+    clock.advance(200);
+    reduced = true;
+    clock.advance(16);
+    expect(update).toHaveBeenLastCalledWith(1);
+    expect(t.state).toBe("done");
+    expect(clock.idle).toBe(true);
+    await expect(t.finished).resolves.toBe("done");
+  });
+
+  it("jumps to the end if the viewer picks Off mid-flight, even during a delay", () => {
+    const clock = manualClock();
+    const motion = createMotion({ reducedMotion: deviceAllowsMotion });
+    const update = vi.fn();
+    const t = tween({ duration: 1000, delay: 500, update }, { clock, motion });
+    clock.advance(100);
+    motion.chooseMode("off");
+    clock.advance(16);
+    expect(update.mock.calls).toEqual([[0], [1]]);
+    expect(t.state).toBe("done");
+  });
+
+  it("cancels and reports, rather than finishing, if the final update throws", async () => {
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    const { clock, env } = setup();
+    const boom = new Error("boom");
+    const t = tween(
+      {
+        duration: 100,
+        update: (progress) => {
+          if (progress === 1) throw boom;
+        }
+      },
+      env
+    );
+    clock.advance(100);
+    expect(reportError).toHaveBeenCalledWith(boom);
+    expect(t.state).toBe("cancelled");
+    expect(clock.idle).toBe(true);
+    await expect(t.finished).resolves.toBe("cancelled");
+  });
+
+  it("throws to the caller of finish() and cancels if the final update throws", async () => {
+    const { env } = setup();
+    const boom = new Error("boom");
+    const t = tween(
+      {
+        duration: 100,
+        update: (progress) => {
+          if (progress === 1) throw boom;
+        }
+      },
+      env
+    );
+    expect(() => t.finish()).toThrow(boom);
+    await expect(t.finished).resolves.toBe("cancelled");
+  });
+
+  it("doesn't recurse when the final update calls finish() or cancel()", async () => {
+    const { clock, env } = setup();
+    const update = vi.fn((progress: number) => {
+      if (progress === 1) handle.finish();
+    });
+    const handle = tween({ duration: 100, ease: linear, update }, env);
+    clock.advance(100);
+    expect(update).toHaveBeenCalledTimes(2);
+    await expect(handle.finished).resolves.toBe("done");
+
+    const cancelling = tween(
+      {
+        duration: 100,
+        update: (progress) => {
+          if (progress === 1) cancelling.cancel();
+        }
+      },
+      env
+    );
+    clock.advance(100);
+    await expect(cancelling.finished).resolves.toBe("cancelled");
+  });
+
   it("cancels itself and reports the error if update throws mid-flight", async () => {
     const reportError = vi.fn();
     vi.stubGlobal("reportError", reportError);

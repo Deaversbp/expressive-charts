@@ -36,7 +36,8 @@ export interface Tween {
 
 /**
  * Animate progress from 0 to 1. If the motion mode scales the duration to 0,
- * `update(ease(1))` runs synchronously, before `tween` returns.
+ * `update(ease(1))` runs synchronously, before `tween` returns. If the mode
+ * turns off while the tween runs, it jumps to the end on the next frame.
  */
 export function tween(options: TweenOptions, env: Partial<MotionEnv> = {}): Tween {
   const clock = env.clock ?? defaultClock;
@@ -67,23 +68,35 @@ export function tween(options: TweenOptions, env: Partial<MotionEnv> = {}): Twee
     if (state === "running") settle("cancelled");
   }
 
+  // True while the final update runs, so an update that calls finish() can't recurse.
+  let finishing = false;
+
   function finish(): void {
-    if (state !== "running") return;
-    settle("done");
-    update(ease(1));
+    if (state !== "running" || finishing) return;
+    finishing = true;
+    step(1);
+    // `update` may have cancelled the tween itself.
+    if (state === "running") settle("done");
   }
 
-  // Runs `update` and cancels the tween if it throws, so a broken callback doesn't run every frame.
-  const step = (progress: number): void => {
+  // Runs `update` and cancels the tween if it throws: a broken callback is reported once instead of
+  // every frame, and `finished` never says "done" when the last update failed.
+  function step(progress: number): void {
     try {
       update(ease(progress));
     } catch (error) {
       cancel();
       throw error;
     }
-  };
+  }
 
   const onFrame = (now: number): void => {
+    // The effective mode can turn off mid-flight (the device switches to reduced motion, or the
+    // viewer picks Off). Every animation then jumps to its end state.
+    if (view.mode === "off") {
+      finish();
+      return;
+    }
     const elapsed = now - start - delay;
     if (elapsed >= duration) finish();
     else if (elapsed > 0) step(elapsed / duration);

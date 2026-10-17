@@ -107,7 +107,7 @@ describe("animated", () => {
     expect(onChange.mock.calls).toEqual([[0], [5], [10]]);
   });
 
-  it("is cancelled through its signal", async () => {
+  it("comes to rest where it stopped when its signal aborts", async () => {
     const { clock, env } = setup();
     const controller = new AbortController();
     const value = animated(0, interpolateNumber, env);
@@ -116,7 +116,51 @@ describe("animated", () => {
     controller.abort();
     expect(value.animating).toBe(false);
     expect(value.value).toBe(20);
+    expect(value.target).toBe(20);
     await expect(running).resolves.toBe("cancelled");
+  });
+
+  it("stays put if its signal was already aborted", async () => {
+    const { env } = setup();
+    const controller = new AbortController();
+    controller.abort();
+    const value = animated(5, interpolateNumber, env);
+    const running = value.to(100, { duration: 1000, signal: controller.signal });
+    expect(value.value).toBe(5);
+    expect(value.target).toBe(5);
+    expect(value.animating).toBe(false);
+    await expect(running).resolves.toBe("cancelled");
+  });
+
+  it("keeps a later target when an earlier animation's signal aborts", () => {
+    const { clock, env } = setup();
+    const controller = new AbortController();
+    const value = animated(0, interpolateNumber, env);
+    value.to(100, { duration: 1000, signal: controller.signal });
+    clock.advance(200);
+    value.to(50, { duration: 1000 });
+    controller.abort();
+    expect(value.target).toBe(50);
+    expect(value.animating).toBe(true);
+  });
+
+  it("comes to rest where it stopped if onChange throws", () => {
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    const { clock, env } = setup();
+    const value = animated(0, interpolateNumber, {
+      ...env,
+      onChange: (v) => {
+        if (v > 30) throw new Error("render failed");
+      }
+    });
+    value.to(100, { duration: 1000, ease: linear });
+    clock.advance(200);
+    clock.advance(200);
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(value.animating).toBe(false);
+    expect(value.target).toBe(value.value);
+    vi.unstubAllGlobals();
   });
 });
 

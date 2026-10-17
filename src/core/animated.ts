@@ -84,7 +84,8 @@ export function animated<T>(initial: T, interpolate: Interpolator<T>, options: A
       return value;
     },
     get target() {
-      return target;
+      // Cancelled from outside (its signal aborted, or onChange threw): it's at rest where it stopped.
+      return running?.state === "cancelled" ? value : target;
     },
     get animating() {
       return running?.state === "running";
@@ -106,7 +107,8 @@ export function animated<T>(initial: T, interpolate: Interpolator<T>, options: A
         },
         env
       );
-      if (current.state === "running") running = current;
+      // Kept even if already settled, so `target` can tell an outside cancellation from a finish.
+      running = current;
       return current.finished;
     },
     set(next) {

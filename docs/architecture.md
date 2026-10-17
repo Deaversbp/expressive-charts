@@ -40,7 +40,8 @@ tween({ duration, timing?, ease?, delay?, update, signal? }, env?) // → { fini
 - `finished` resolves to `"done"` or `"cancelled"` and never rejects, so rapid hovering can't cause unhandled rejections.
 - `cancel()` stops where it is. `finish()` jumps to the end. Aborting `signal` cancels.
 - If the motion mode scales the duration to 0, `update(ease(1))` runs synchronously, before `tween` returns.
-- If `update` throws during a frame, the tween cancels itself and the error is reported, so it doesn't repeat every frame.
+- If the effective mode turns off while a tween runs (the device switches to reduced motion, or the viewer picks Off), the tween jumps to its end on the next frame.
+- If `update` throws, including on the final update, the tween cancels itself and the error is reported once. `finished` never says `"done"` when the last update failed.
 
 ### Animated values
 
@@ -49,7 +50,7 @@ const length = animated(0, interpolateNumber, { onChange });
 length.to(16, { duration: 500 });      // → Promise<"done" | "cancelled">
 ```
 
-An `Animated<T>` is a value that can be retargeted mid-flight. `to()` cancels whatever is running and starts from the current in-between value, so nothing jumps. When it interrupts a running animation, the default ease is ease-out rather than ease-in-out, because restarting an ease-in from a moving value makes the motion stall. `set()` jumps, and `stop()` freezes in place. The interpolators provided are `interpolateNumber`, `interpolatePoint` and `interpolateRecord`. `interpolateRecord` grows keys that appear from 0 and shrinks keys that disappear to 0, which suits stacked segments.
+An `Animated<T>` is a value that can be retargeted mid-flight. `to()` cancels whatever is running and starts from the current in-between value, so nothing jumps. When it interrupts a running animation, the default ease is ease-out rather than ease-in-out, because restarting an ease-in from a moving value makes the motion stall. `set()` jumps, and `stop()` freezes in place. `target` equals `value` whenever it's at rest, including after a cancellation from outside (an aborted `signal`, or an `onChange` that throws). The interpolators provided are `interpolateNumber`, `interpolatePoint` and `interpolateRecord`. `interpolateRecord` grows keys that appear from 0 and shrinks keys that disappear to 0, which suits stacked segments.
 
 ### Motion modes and duration scaling
 

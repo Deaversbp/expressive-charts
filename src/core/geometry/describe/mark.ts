@@ -1,0 +1,49 @@
+// Shared by the builders: assembling a MarkGeometry from a walk and a body, and checking input.
+
+import type { MarkGeometry, Outline, Point, Rect } from "../../contracts/geometry";
+import type { Walk } from "../walk";
+
+export interface MarkParts {
+  readonly key: string;
+  readonly series?: string | undefined;
+  readonly walk: Walk;
+  readonly thickness: number;
+  readonly outline: Outline;
+  readonly bounds: Rect;
+  readonly center: Point;
+  readonly pivot: Point;
+  readonly segments?: readonly MarkGeometry[];
+}
+
+export function assemble({ key, series, walk, thickness, outline, bounds, center, pivot, segments }: MarkParts): MarkGeometry {
+  return {
+    key,
+    ...(series === undefined ? {} : { series }),
+    start: walk.start,
+    end: walk.end,
+    length: walk.length,
+    path: (t) => walk.point(t),
+    angle: (t) => walk.angle(t),
+    slice: (t0, t1) => walk.slice(t0, t1),
+    thickness,
+    outline,
+    bounds,
+    center,
+    pivot,
+    ...(segments === undefined ? {} : { segments })
+  };
+}
+
+/** Throws a RangeError naming the builder and field unless `value` is a finite number. */
+export function finite(builder: string, field: string, value: number): number {
+  if (!Number.isFinite(value)) throw new RangeError(`describe.${builder}: ${field} must be a finite number, got ${value}.`);
+  return value;
+}
+
+/** Throws a RangeError unless `value` is a finite number ≥ 0. */
+export function size(builder: string, field: string, value: number): number {
+  if (!(Number.isFinite(value) && value >= 0)) {
+    throw new RangeError(`describe.${builder}: ${field} must be a finite number ≥ 0, got ${value}.`);
+  }
+  return value;
+}

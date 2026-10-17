@@ -6,7 +6,7 @@ This document describes the design. Code that doesn't exist yet is marked as pla
 
 ```
           ┌──────────────┐
-          │    core      │  clock, easing, tweens, motion modes, shared contracts
+          │    core      │  clock, easing, tweens, motion modes, shared contracts, geometry
           └──────▲───────┘
         ┌────────┴────────┐
  ┌──────┴──────┐   ┌──────┴──────┐
@@ -16,7 +16,7 @@ This document describes the design. Code that doesn't exist yet is marked as pla
  └─────────────┘   └─────────────┘
 ```
 
-Charts and effects both depend on core. They never depend on each other. They meet only through two shared contracts: the **mark geometry** and the **event stream**. Because charts and effects can't import each other, the types for both contracts live in core (`src/core/contracts/`).
+Charts and effects both depend on core. They never depend on each other. They meet only through two shared contracts: the **mark geometry** and the **event stream**. Because charts and effects can't import each other, the types for both contracts live in core (`src/core/contracts/`), and so does the geometry math that charts use to build marks and effects use to draw (`src/core/geometry/`).
 
 ## Core
 
@@ -77,16 +77,66 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 
 `motion` is the page-wide instance every chart follows unless it's given its own.
 
-## Mark geometry (planned)
+## Mark geometry
 
-Every mark, whether it's drawn by one of our charts or by another library, is described with the same `MarkGeometry` shape. It has two parts:
+Every mark, whether it's drawn by one of our charts or by another library, is described with the same `MarkGeometry` shape (`src/core/contracts/geometry.ts`). It has two parts:
 
-- **The walk**, from where the data starts to where it ends: `start`, `end`, `length`, `path(t)`, `angle(t)` and `slice(t0, t1)`. `t` is proportional to distance, so equal steps in `t` are equal distances on screen.
+- **The walk**, from where the data starts to where it ends: `start`, `end`, `length`, `path(t)`, `angle(t)` and `slice(t0, t1)`.
 - **The body**: `thickness`, `outline`, `bounds`, `center`, `pivot`, plus ordered `segments` for stacks.
 
 For a bar, the walk is the centre line from the baseline to the tip. For a donut slice, it's the mid-radius arc. For a line, it's the line itself. That's what lets one `travel` effect roll a ball along all three.
 
-Geometry builders (`describe.bar`, `.arc`, `.line`, `.point`, `.shape`) are public. Our charts and the adapters use the same ones. The full proposed types are in [sketches/api.ts](sketches/api.ts), and the reasoning is in [plan.md §2](plan.md#2-the-markgeometry-contract).
+### Conventions
+
+- **Space.** Chart pixels: the origin is the chart's top-left corner and y points down. Effects draw their overlay in the same space.
+- **Angles** are screen angles: radians, 0 along +x, positive turning clockwise on screen, as `Math.atan2` gives in chart pixels. `angle(t)` is the direction of travel, in (−π, π].
+- **Arc length.** `path(t)` is uniform in distance: `t = 0.5` is halfway along the walk on screen, not halfway through the data. Values of `t` outside [0, 1] are clamped. `length` is exact, for arcs too.
+- **Up side.** "Up" is the left of the direction of travel, `angle − π/2`. For a bar growing right that's screen up; for a column, screen left; for a negative bar, screen down; for a donut slice walked clockwise, outward.
+- **Outline sampling.** A closed outline's `sample(n)` takes n a multiple of 4 and returns n/4 points per side, evenly spaced along each side, clockwise on screen from the start-left corner: the left side (walked in the direction of travel), the end, the right side, then the start. Corners land at indices 0, n/4, n/2 and 3n/4 for any n, so morph can match marks corner to corner. An open outline (a line) returns n points along the stroke, from start to end inclusive.
+- **Slices.** `slice(t0, t1)` is SVG path data for that part of the walk, with its ends in either order; equal ends give a bare move that draws nothing.
+- **Path data** uses absolute `M`, `L`, `A` and `Z` only, with numbers rounded to 0.001 px. Arcs are split into pieces of at most half a turn, so a full ring still draws.
+- **Missing vs zero.** A series that isn't in the stack has no segment. A zero value gives a segment with `length` 0. Effects treat both the same: a walk shorter than 0.5 px finishes at once and draws nothing.
+- **Keys.** Segments are keyed `"<mark key>/<series>"`, or `"<mark key>/<index>"` when they have no series.
+
+### Builders
+
+The builders are public. Our charts and the adapters use the same ones, so a bar is described the same way whoever drew it. Bad input (a negative width, a `NaN`) throws a `RangeError` that names the builder and the field.
+
+| | `describe.bar` | `describe.arc` | `describe.line` | `describe.point` |
+| --- | --- | --- | --- | --- |
+| Input | rectangle, `baseline`, `radius`, `segments`, `gap` | `cx`, `cy`, `inner`, `outer`, `start`, `end` | `points`, `width` | `x`, `y`, `r` |
+| Walk | middle of the baseline edge → middle of the tip | start angle → end angle on the mid-radius arc | first point → last point | none: length 0 at the point |
+| `angle` | 0, π, −π/2 or π/2 by baseline | the d3 angle (the arc's tangent) | per leg | 0 |
+| `thickness` | across the bar | `outer − inner` | `width` (default 1, SVG's default) | `2r` |
+| `outline` | rectangle with a rounded tip | annular sector | the stroke, open | circle |
+| `pivot` | middle of the baseline edge | the donut centre | first point | the point |
+| `segments` | at least one | none | none | none |
+
+```ts
+describe.bar({ key: "Okafor", x: 0, y: 0, width: 220, height: 22, baseline: "left", radius: 4, gap: 2,
+  segments: [{ series: "goals", size: 160 }, { series: "assists", size: 60 }] });
+describe.arc({ key: "Saved", cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle });
+```
+
+- **Bars.** `baseline` is the edge the bar grows from: `left` and `right` for horizontal bars (`right` for negative values), `bottom` and `top` for columns. `radius` rounds the two tip corners only; the baseline end stays square. `segments` are ordered from the baseline, each `size` px along the walk. A plain bar gets one segment named after its `series`, so `travel(…, { along: "goals" })` works whether or not the chart is stacked.
+- **Gaps between segments.** The `gap` comes out of the start of the later segment, so every segment still ends at its value. It shrinks when the segment before it is shorter, and the tip rounding fades in as a segment nears the tip, so a stack that grows or shrinks never jumps. The whole bar's outline is the full rounded rectangle, gaps included.
+- **Slices** use the `d3.pie()` convention: radians, 0 at 12 o'clock, clockwise. So pie output plugs straight in, and `angle(t)` equals the d3 angle. As with `d3.arc()`, radii given the wrong way round are swapped and more than a full turn draws one ring. If `end < start`, the walk runs anticlockwise and its up side is inward; the outline is still clockwise.
+- **Planned:** `describe.shape(element, spec)`, which walks any SVG shape with `getPointAtLength` in the browser.
+
+### Geometry helpers
+
+For effect authors, experimental until M3:
+
+```ts
+matrix.translate(x, y); matrix.rotate(radians, about?); matrix.scale(sx, sy?, about?);
+matrix.multiply(a, b, c);  // like the SVG transform list "a b c": c applies first
+matrix.apply(m, point);
+offset(point, angle, distance); // offset(mark.end, mark.angle(1) - Math.PI / 2, 8) is 8 px to the up side of the tip
+```
+
+A `Matrix` is `[a, b, c, d, e, f]` in SVG order. Positive rotations turn clockwise on screen, like SVG's `rotate()`.
+
+The rest of `src/core/geometry` is internal: path segments (lines and circular arcs), walks parameterised by distance, outlines with canonical sampling, and path-data writing. Charts and effects inside the library use it directly.
 
 ## Events and effect slots (planned)
 
@@ -98,19 +148,52 @@ barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("so
 
 `decorate` is a fifth slot for persistent effects like `threshold`: they start on enter, stay until exit, and redraw whenever the mark's geometry changes.
 
-## Effects (planned)
+## Effects
+
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`). The runner that drives them is M1 step 4, and the first effects follow in step 6.
 
 There are three kinds, distinguished by a `kind` field:
 
-- **Geometry effects** receive a `MarkGeometry`.
-- **Data effects** also receive the mark's data (values along the walk, related series, previous values).
-- **Transition effects** receive two geometries (`morph`).
+- **Geometry effects** (`GeometryEffect`) receive a `MarkGeometry`.
+- **Data effects** (`DataEffect<D>`) also receive the mark's `MarkData<D>`: values along the walk, related series and the previous values. Their `run`, `end` and `clear` are function-typed properties rather than methods, so TypeScript checks the row type strictly and an effect that needs fields a chart's rows don't have is a type error.
+- **Transition effects** (`TransitionEffect`) receive two geometries (`morph`). They can't be used where a mark effect is expected.
 
-Each one has `run`, `end` (the final state, used for reduced motion) and `clear`. Effects draw only through the context's drawing API: icons, overlay paths, text, and mark styles.
+Each one has `run`, `end` (the final state, used for reduced motion) and `clear`. Effects are stateless: one effect object can run on many marks at once, and per-run state lives on the `EffectContext`:
 
-First set: `travel(icon, { along })`, `wiggle()`, `pulse()`, `flash()`, `threshold({ compareTo, color })`, `morph()`. Combinators: `sequence`, `parallel`, `stagger`, `only`. Combinations keep the data kind if any part has it.
+| Field | What it is |
+| --- | --- |
+| `signal` | Aborted on leave, re-trigger, data update or destroy |
+| `motion`, `tween()` | The motion view, and tweens with the clock, motion and signal already bound |
+| `mark` | Restyles the mark itself |
+| `layer` | This run's own overlay group, above the marks |
+| `icons` | Resolves icon names |
+| `batch` | The mark's position in a multi-mark event, for stagger |
+| `onChange()` | Called when the geometry moves |
+| `previous` | The geometry before this update, on update events |
 
-The effect-author API (`defineEffect`, `defineDataEffect`, `matrix`, `offset`) is experimental until M3.
+`Combined<E>` is the type `sequence` and `parallel` return: a data effect if any part is one, needing every part's row type at once (an intersection), so a generic part like `threshold()` can't widen a typed part back to `unknown`.
+
+Planned: `travel(icon, { along })`, `wiggle()`, `pulse()`, `flash()`, `threshold({ compareTo, color })`, `morph()`; the combinators `sequence`, `parallel`, `stagger` and `only`; and the experimental author helpers `defineEffect` and `defineDataEffect`.
+
+### Drawing API
+
+Effects touch the screen only through the context. It's deliberately small and renderer-neutral, so Canvas can implement it later without changing any effect.
+
+- `layer.icon(icon, { size })` draws an icon, hidden until the first `place(transform)`.
+- `layer.path(d, paint)` draws an overlay path; `update(d, paint?)` replaces the path data and merges the paint fields given.
+- `layer.text(content, style)` draws text in the theme text colour by default; `update(style, content?)` merges the style fields given. Series colours are for swatches, never for words.
+- `mark.set(style)` changes only the fields given, so effects running in parallel don't undo each other's transform or halo. A field given as `undefined` goes back to its default. `mark.reset()` restores the mark's own style.
+- Colours are theme tokens (`"text"`, `"negative"`, `"series-3"`, `"mark"` for this mark's colour) or any CSS colour.
+
+The runner empties the layer and resets the mark when a run is cleared, so cleanup happens even if an effect forgets.
+
+### Testing effects without a DOM
+
+`src/core/testing` has in-memory versions for effect tests. It's internal until the conformance suite is exported after M3.
+
+- `recordingLayer()` and `recordingMark()` record every call and keep what's drawn now. `picture()` gives that as plain data with numbers rounded, so a full run can be compared with `end()`.
+- `testContext({ mode, icons, batch, previous })` is a complete `EffectContext` on a manual clock, with `abort()`, `clear()` (the runner's cleanup) and `change(mark)` (fires `onChange`).
+- `measurePath(d)` measures the path data the geometry writes: length, start, end and commands.
 
 ## Adapters (planned)
 

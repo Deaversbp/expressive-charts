@@ -19,6 +19,14 @@ describe("importing in Node", () => {
     expect(lib.motion.duration(600)).toBe(600);
   });
 
+  it("builds mark geometry", async () => {
+    const lib = await import("./index");
+    const bar = lib.describe.bar({ key: "a", series: "goals", x: 0, y: 0, width: 100, height: 20, baseline: "left", radius: 4 });
+    expect(bar.path(0.5)).toEqual({ x: 50, y: 10 });
+    expect(bar.segments?.[0]?.key).toBe("a/goals");
+    expect(lib.matrix.apply(lib.matrix.translate(1, 2), lib.offset({ x: 0, y: 0 }, 0, 3))).toEqual({ x: 4, y: 2 });
+  });
+
   it("drives tweens from a timer when requestAnimationFrame is missing", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     const { createMotion, linear, tween } = await import("./index");

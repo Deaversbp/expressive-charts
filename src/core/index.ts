@@ -1,4 +1,4 @@
-// The motion core: everything here is independent of charts and effects.
+// The motion core, the shared contracts and the geometry: everything here is independent of charts and effects.
 
 export { createClock, defaultClock, manualClock } from "./clock";
 export type { Clock, FrameSource, ManualClock } from "./clock";
@@ -25,4 +25,34 @@ export type { MotionEnv, Tween, TweenOptions, TweenResult } from "./tween";
 export { animated, interpolateNumber, interpolatePoint, interpolateRecord } from "./animated";
 export type { Animated, AnimatedOptions, AnimateOptions, Interpolator } from "./animated";
 
-export type { Point, Rect } from "./contracts/geometry";
+export type {
+  AnyMarkEffect,
+  Color,
+  Combined,
+  DataEffect,
+  EffectContext,
+  GeometryEffect,
+  Icon,
+  IconHandle,
+  IconShape,
+  IconSource,
+  Layer,
+  MarkData,
+  MarkEffect,
+  MarkGeometry,
+  MarkHandle,
+  MarkStyle,
+  Matrix,
+  Outline,
+  Paint,
+  PathHandle,
+  Point,
+  Rect,
+  Sample,
+  TextHandle,
+  TextStyle,
+  TransitionEffect
+} from "./contracts";
+
+export { describe, matrix, offset } from "./geometry";
+export type { ArcSpec, BarSegmentSpec, BarSpec, Baseline, LineSpec, PointSpec } from "./geometry";

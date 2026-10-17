@@ -680,6 +680,17 @@ The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label
 
 The donut comes *before* the line on purpose. The architecture's central bet is that one effect works on any chart, and a second chart type tests that more cheaply than the line chart, which also brings in data effects and playback.
 
+### Backlog (after 0.1)
+
+These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brainstorm across BI chart types (bar to map, plus radar and comparison charts).
+
+- **Linked hover.** Hovering key K in one chart or series fires a hover for key K in the linked ones, and their ordinary effects run. It's needed for combo charts (column and line point together), butterflies (both halves), small multiples, and radar axes.
+  - It isn't an effect. Effects only touch their own mark; linking touches other marks, so it lives with the charts and adapters, like hover dimming.
+  - It generalises the line chart's `pointer: "x"`. A sketch might be `link([chartA, chartB], { by: "key" })`.
+  - Decide before it's built whether linked marks get `source: "linked"` on their hover event, so effects can tone themselves down.
+- **`trace` and `delta` as built-ins.** Both are written as custom effects in the sketch. The brainstorm uses them on slope charts, waterfalls, funnels, KPIs and tables, which is enough reuse to ship them.
+- **"Pour" (maybe).** Decorative droplets for funnels. Only after measuring its rendering cost, and never without a reduced-motion end state.
+
 ---
 
 ## 10. Open questions and risks

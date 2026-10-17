@@ -249,10 +249,21 @@ Internally both are a `createRegistry({ kind, entries, hint })` (`src/core/regis
 - Marks that share a key become one mark, and `segment` orders them as segments.
 - `refresh()` re-reads the marks after the host re-renders, then fires enter, update and exit by key.
 
+What each library needs (from the [adapter spike](ideas/adapter-spike.md)):
+
+- **D3** works as is: `__data__` holds the row.
+- **Observable Plot** binds indices, not rows, so the page passes a `datum` accessor. Which accessor depends on the mark:
+  - one element per row, with no transform that derives new data (bars, dots): `datum: (el) => rows[el.__data__]`;
+  - a line path: `el.__data__` is that series' array of row indices, with `-1` at gaps, so `el.__data__.filter((i) => i >= 0).map((i) => rows[i])`;
+  - after a group, bin or other reducing transform: the index points into the derived data, so `rows[i]` is silently the wrong row. Read the channel values through the mark's `render` option instead.
+
+  Plot has no pie mark.
+- **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, so a small helper that reads the View is planned.
+
 Adapters follow the chart rules:
 
 - They never know specific effects.
-- They express geometry in the marks' nearest common ancestor's coordinates, and draw their overlay there.
+- They express geometry in the marks' nearest common ancestor's coordinates. They draw their overlay as the last child of the root `<svg>`, with that ancestor's transform, because some hosts (Vega) remove foreign children from their own groups when they redraw.
 - They leave the host's styling, axes and tooltips alone.
 
 ## Rendering

@@ -4,7 +4,7 @@ Instructions for Claude when working in this repository. Read this before changi
 
 ## What this project is
 
-expressive-charts is a TypeScript library of composable motion and expressive effects for interactive web charts. It grew out of `demo/lab.html`, a single-file prototype. The goal is a library where any effect works on any chart without special cases. Effects come first: they run on our reference charts and, through small adapters, on SVG charts built with other libraries (D3, Plot, Vega). See the Principles in `docs/plan.md`.
+expressive-charts is a TypeScript library of composable motion and expressive effects for interactive web charts. It grew out of `demo/lab.html`, a single-file prototype. The goal is a library where any effect works on any chart without special cases. Effects come first: they run on our reference charts and, through small adapters, on SVG charts built with other libraries (D3 and Observable Plot directly; Vega and Vega-Lite through a small view helper, with the SVG renderer). See the Principles in `docs/plan.md`.
 
 ## Architecture rules (do not break these)
 

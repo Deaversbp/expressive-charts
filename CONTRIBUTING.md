@@ -12,7 +12,7 @@ npm run typecheck  # types
 npm run build      # package output in dist/
 ```
 
-Node.js 20 or newer is required.
+Node.js 22 or newer is required (CI tests 22 and 24).
 
 ## Adding an effect
 

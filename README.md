@@ -55,7 +55,7 @@ npm run dev
 | `npm test` | Runs the test suite |
 | `npm run typecheck` | Checks types without building |
 
-Requires Node.js 20 or newer.
+Requires Node.js 22 or newer (CI tests 22 and 24).
 
 See [docs/architecture.md](docs/architecture.md) for how the layers fit together and [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a chart or an effect.
 

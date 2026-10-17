@@ -648,10 +648,16 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 2. ✅ **Core motion.** Clock, manual clock, easing, tween, `animated`, `createMotion` with the scaling table, reduced motion, viewer choice.
 3. ✅ **Contracts and geometry.** All of §2 and §4.2 as types, with the §11 changes. Line and arc path math with arc-length sampling, `slice`, `sample`, matrices. The public `describe.bar` builder, plus `describe.arc`, `.line` and `.point`. The recording layer. The sketch re-exports all of it from `src`.
 4. **Runner and registries.** The rules in §4.3, plus the preset and icon registries.
-5. **`barChart`.** Horizontal and vertical, single and stacked. Keyed marks, measured layout, axis and grid in theme colours, built-in hover dimming, roving keyboard focus, events, and `update()` with staged, interruptible transitions.
-6. **Icons, `travel` and combinators.** The neutral core icons; the `expressive-charts/icons/sport` pack with `soccer-ball` and `cleat` (this needs a second build entry and a subpath export); `travel` with gaits; `sequence`, `parallel`, `only`.
-7. **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`.
-8. **`demo/bars.html`.** Metric switch (Goals / Assists / Goals + assists), sort and motion switch on the reference chart, with the same hover story on a hand-written SVG bar chart beside it.
+5. **A thin `barChart`.** Horizontal and vertical, single and stacked. Keyed marks, measured layout, axis and grid in theme colours, built-in hover dimming, and pointer hover events. For now, `update()` jumps straight to the new state with no transition.
+6. **Icons, `travel` and combinators.** The neutral core icons; the `expressive-charts/icons/sport` pack with `soccer-ball` and `cleat` (this needs a second build entry and a subpath export); `travel` with gaits; `sequence`, `parallel`, `only`. Decide how an icon's `size` combines with `place()`, the open question in the step 3 hand-over.
+7. **First look: `demo/bars.html`.** The ball-and-cleat hover on the thin chart, with the motion switch. The metric switch jumps between views for now.
+   - **Checkpoint:** judge the feel in a browser in all three modes: travel speed, easing, icon size and placement, hover timing. Tune the scaling table and the `travel` defaults before going on.
+8. **Updates.** `update()` with staged, interruptible transitions (values first, then positions): sorting and the metric switch animate, and hover replays after an update.
+9. **Keyboard.** Roving focus. Focus plays the hover story, Escape or blur leaves, and the focus ring is drawn from the mark's outline.
+10. **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`. Shaped by the adapter spike's findings (`docs/ideas/adapter-spike.md`).
+11. **Finish `demo/bars.html`.** Animated metric switch and sort, keyboard support, and the same hover story on a hand-written SVG bar chart beside the reference one.
+
+Steps 5–7 come first so the motion can be judged in a browser before staged updates, keyboard support and the adapter are built around it.
 
 **Done when:** all three hover stories match the prototype, on our chart and on the hand-written one; sorting is staged in presentation, fast in analysis, and instant in off and under reduced motion; keyboard focus plays the same stories; and the conformance suite passes for `travel` on bar marks from both sources.
 

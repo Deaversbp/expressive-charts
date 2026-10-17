@@ -206,7 +206,12 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 What each library needs (from the [adapter spike](ideas/adapter-spike.md)):
 
 - **D3** works as is: `__data__` holds the row.
-- **Observable Plot** binds each row's index, not the row, so pass `datum: (el) => rows[el.__data__]`. Plot has no pie mark.
+- **Observable Plot** binds indices, not rows, so the page passes a `datum` accessor. Which accessor depends on the mark:
+  - one element per row, with no transform that derives new data (bars, dots): `datum: (el) => rows[el.__data__]`;
+  - a line path: `el.__data__` is that series' array of row indices, with `-1` at gaps, so `el.__data__.filter((i) => i >= 0).map((i) => rows[i])`;
+  - after a group, bin or other reducing transform: the index points into the derived data, so `rows[i]` is silently the wrong row. Read the channel values through the mark's `render` option instead.
+
+  Plot has no pie mark.
 - **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, so a small helper that reads the View is planned.
 
 Adapters follow the chart rules:

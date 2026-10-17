@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: proposal, October 2026. M1 steps 1–3 are built (§9); the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: proposal, October 2026. M1 steps 1–4 are built (§9); the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -279,7 +279,7 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 
 > Updated by the design session: `ctx.previous`, `data.previous`, `Layer.text()` and the author helpers are in [`sketches/api.ts`](sketches/api.ts) (§11).
 >
-> **The contracts in §4.1 and §4.2 are built in M1 step 3** (`src/core/contracts/`), along with `matrix`, `offset` and the recording layer in `src/core/testing/`. [architecture.md](architecture.md#effects) is now the reference. Additions: `AnyMarkEffect` is exported for combinator signatures; the icon resolver is named `IconSource`; `mark.set()` merges the fields given (undefined resets one), so parallel effects don't undo each other; an icon is hidden until first placed; `matrix.apply(m, point)`; and `testContext()`, a ready-made `EffectContext` on a manual clock. The runner (§4.3), combinators and effects are still to come.
+> **The contracts in §4.1 and §4.2 are built in M1 step 3** (`src/core/contracts/`), along with `matrix`, `offset` and the recording layer in `src/core/testing/`. [architecture.md](architecture.md#effects) is now the reference. Additions: `AnyMarkEffect` is exported for combinator signatures; the icon resolver is named `IconSource`; `mark.set()` merges the fields given (undefined resets one), so parallel effects don't undo each other; an icon is hidden until first placed; `matrix.apply(m, point)`; and `testContext()`, a ready-made `EffectContext` on a manual clock. The runner (§4.3) is built in M1 step 4; combinators and effects are still to come.
 
 ### 4.1 Interfaces
 
@@ -354,6 +354,17 @@ export type Matrix = readonly [number, number, number, number, number, number];
 This is the entire surface effects draw through. It's deliberately small and covers all six planned effects. SVG implements it in `src/charts/render/`. An in-memory recording version in `src/core/testing/` lets effects be unit-tested with no DOM at all.
 
 ### 4.3 Lifecycle rules (owned by the runner, not by each effect)
+
+> **Built in M1 step 4** (`src/core/runner.ts`, internal). [architecture.md](architecture.md#runner) is now the reference. Additions to the rules below:
+>
+> - A hover that arrives during a data transition waits until the chart calls `settle()`, so nothing starts on a mark that's still moving. Replays go in the order the marks were hovered, with their latest geometry.
+> - If the mode turns off mid-run, runs still going are cleared and replaced by `end()` on a fresh context. Runs that already finished keep what they drew.
+> - Finished runs stay drawn, styled and subscribed to `onChange` until they're cleared.
+> - Exit clears the mark's other runs, including hover; a leaving mark can't be hovered; a re-enter cancels the exit. `exit()` resolves when every exit is done.
+> - Each run's mark style is its own; the runner merges all live runs' styles into the mark's one handle, and a later run wins a shared field. Overlay groups stack in the same start order, and a run replaced by `end()` keeps its place.
+> - Draws and styles after a run is cleared are ignored, and a rejection caused by the run's own abort isn't reported.
+> - On update, `ctx.previous` and `data.previous` default to the last geometry and data seen for the key.
+> - The renderer implements `RunnerSurface` (`group(key, slot, order)`, `mark(key)`); `testContext()` is built on the runner's own run scope.
 
 `src/core/runner.ts` connects chart events to effects, so each effect doesn't have to reimplement this:
 
@@ -498,6 +509,8 @@ export { registerPreset, registerIcon };
 ```
 
 An unknown preset name throws when the chart is created. `PresetName` is a union of the built-in names plus `(string & {})`, so editors autocomplete the built-ins.
+
+> **Built in M1 step 4.** `createRegistry({ kind, entries, hint })` and `resolveEffects(on, presets)` are in `src/core/registry.ts`. The page-wide registries and `registerPreset`, `registerIcon` and `registerIcons` are in `src/registries.ts`, re-exported by `src/index.ts`. A later registration replaces an earlier one. The built-in presets are registered in M3, with their effects. See [architecture.md](architecture.md#presets-and-icons-by-name).
 
 The basic hover feedback (100 ms emphasis, other marks dimmed to 0.3) isn't an effect. It's built into every chart through a shared helper, because it touches *other* marks, which effects never do. You can turn it off with `dim: false`.
 
@@ -647,7 +660,7 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 1. ✅ **Docs.** Update CLAUDE.md rule 6 (§3.5) and architecture.md, including the contract sections.
 2. ✅ **Core motion.** Clock, manual clock, easing, tween, `animated`, `createMotion` with the scaling table, reduced motion, viewer choice.
 3. ✅ **Contracts and geometry.** All of §2 and §4.2 as types, with the §11 changes. Line and arc path math with arc-length sampling, `slice`, `sample`, matrices. The public `describe.bar` builder, plus `describe.arc`, `.line` and `.point`. The recording layer. The sketch re-exports all of it from `src`.
-4. **Runner and registries.** The rules in §4.3, plus the preset and icon registries.
+4. ✅ **Runner and registries.** The rules in §4.3, plus the preset and icon registries, `resolveEffects` and the `EffectSlots` types. Manual-clock tests script the races (hover during an update, re-hover mid-run, the mode turning off mid-run).
 5. **A thin `barChart`.** Horizontal and vertical, single and stacked. Keyed marks, measured layout, axis and grid in theme colours, built-in hover dimming, and pointer hover events. For now, `update()` jumps straight to the new state with no transition.
 6. **Icons, `travel` and combinators.** The neutral core icons; the `expressive-charts/icons/sport` pack with `soccer-ball` and `cleat` (this needs a second build entry and a subpath export); `travel` with gaits; `sequence`, `parallel`, `only`. Decide how an icon's `size` combines with `place()`, the open question in the step 3 hand-over.
 7. **First look: `demo/bars.html`.** The ball-and-cleat hover on the thin chart, with the motion switch. The metric switch jumps between views for now.

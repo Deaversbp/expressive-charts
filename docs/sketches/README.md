@@ -4,7 +4,7 @@ The proposed public API, written down as TypeScript before it's built, plus the 
 
 | File | What it is |
 | --- | --- |
-| `api.ts` | The proposed API as declarations. The motion core is real and re-exported from `src/core`; everything else is `declare`. Lines marked NEW came out of writing the examples. |
+| `api.ts` | The proposed API as declarations. The motion core, the shared contracts and the geometry (`describe.bar`, `.arc`, `.line`, `.point`, `matrix`, `offset`) are real and re-exported from `src/core`; everything else is `declare`. Lines marked NEW came out of writing the examples. |
 | `icons-sport.ts` | The proposed optional icon pack, `expressive-charts/icons/sport`. |
 | `examples/01-ball-and-cleat.ts` | Lab card 1 on the reference bar chart. |
 | `examples/02-goals-vs-xg.ts` | Lab card 2 on the reference line chart, with playback and a pause button. |

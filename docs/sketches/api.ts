@@ -1,182 +1,42 @@
 /**
  * Proposed public API for expressive-charts, as declarations only.
  *
- * Design sketch from the October 2026 design session. Nothing in this file is
- * implemented except the motion core, which is re-exported from src/core so
- * the sketch builds on the real thing. Lines marked NEW were added because
- * writing the examples in ./examples exposed a gap in docs/plan.md.
+ * Design sketch from the October 2026 design session. What's built is re-exported from src/core,
+ * so the sketch builds on the real thing: the motion core, the shared contracts (MarkGeometry,
+ * MarkData, the drawing API, EffectContext, the effect kinds, Icon) and the geometry (describe.bar,
+ * .arc, .line, .point, matrix, offset). Everything still declared here is planned. Lines marked
+ * NEW were added because writing the examples in ./examples exposed a gap in docs/plan.md.
  */
 
 export * from "../../src/core/index";
-import type { Easing, Motion, MotionMode, MotionView, Point, Rect, Timing, Tween, TweenOptions } from "../../src/core/index";
+import type {
+  AnyMarkEffect,
+  Baseline,
+  Color,
+  Combined,
+  DataEffect,
+  describe as builders,
+  Easing,
+  EffectContext,
+  GeometryEffect,
+  Icon,
+  MarkData,
+  MarkEffect,
+  MarkGeometry,
+  Motion,
+  MotionMode,
+  MotionView,
+  Sample,
+  Timing,
+  TransitionEffect
+} from "../../src/core/index";
 
-// ── Shared contracts: charts, adapters and effects meet here ─────────────────
-
-export interface Outline {
-  /** SVG path data in the mark's coordinate space. */
-  readonly d: string;
-  /** True for areas (bars, slices, markers), false for strokes (lines). */
-  readonly closed: boolean;
-  /** n points clockwise from the start-left corner, n/4 per side (left, end, right, start). */
-  sample(n: number): readonly Point[];
-}
-
-export interface MarkGeometry {
-  /** Stable identity across updates. Segments are keyed "<mark key>/<series>". */
-  readonly key: string;
-  readonly series?: string;
-  /** The walk: from where the data starts to where it ends. */
-  readonly start: Point;
-  readonly end: Point;
-  readonly length: number;
-  /** t in [0, 1], proportional to distance along the walk. */
-  path(t: number): Point;
-  /** Direction of travel in radians; the mark's "up" side is angle - PI/2. */
-  angle(t: number): number;
-  slice(t0: number, t1: number): string;
-  /** The body. */
-  readonly thickness: number;
-  readonly outline: Outline;
-  readonly bounds: Rect;
-  readonly center: Point;
-  readonly pivot: Point;
-  /** Ordered parts, such as goals then assists. */
-  readonly segments?: readonly MarkGeometry[];
-}
-
-export interface Sample {
-  readonly t: number;
-  readonly value: number;
-  readonly at?: string | number | Date;
-}
-
-export interface MarkData<D = unknown> {
-  readonly datum: D;
-  readonly samples: readonly Sample[];
-  related(series: string): MarkData<D> | undefined;
-  /** NEW: the values before this update, for update effects that show change. */
-  readonly previous?: MarkData<D>;
-}
-
-// ── Drawing API: the only way effects touch the screen ───────────────────────
-
-/** A theme token ("text", "text-muted", "negative", "series-3", "mark") or any CSS colour. */
-export type Color = string;
-export type Matrix = readonly [a: number, b: number, c: number, d: number, e: number, f: number];
-
-export interface Paint {
-  readonly fill?: Color;
-  readonly stroke?: Color;
-  readonly width?: number;
-  readonly opacity?: number;
-  readonly linecap?: "butt" | "round";
-}
-
-export interface MarkStyle {
-  readonly transform?: Matrix;
-  readonly opacity?: number;
-  readonly emphasis?: number;
-  readonly halo?: { readonly width: number; readonly opacity: number; readonly color?: Color };
-}
-
-export interface MarkHandle {
-  set(style: MarkStyle): void;
-  reset(): void;
-}
-
-export interface IconHandle {
-  place(transform: Matrix): void;
-  remove(): void;
-}
-
-export interface PathHandle {
-  update(d: string, paint?: Partial<Paint>): void;
-  remove(): void;
-}
-
-/** NEW: effects that label a change ("+2") need text, drawn in theme text colours by default. */
-export interface TextStyle {
-  readonly at: Point;
-  readonly anchor?: "start" | "middle" | "end";
-  /** Default "text". Series colours are allowed only for swatches, never for words. */
-  readonly color?: Color;
-  readonly opacity?: number;
-}
-
-export interface TextHandle {
-  update(style: Partial<TextStyle>, content?: string): void;
-  remove(): void;
-}
-
-export interface Layer {
-  icon(icon: Icon, options?: { readonly size?: number }): IconHandle;
-  path(d: string, paint: Paint): PathHandle;
-  /** NEW */
-  text(content: string, style: TextStyle): TextHandle;
-}
-
-export interface EffectContext {
-  readonly signal: AbortSignal;
-  readonly motion: MotionView;
-  tween(options: TweenOptions): Tween;
-  readonly mark: MarkHandle;
-  readonly layer: Layer;
-  readonly icons: { get(name: string): Icon | undefined };
-  readonly batch: { readonly index: number; readonly count: number };
-  onChange(listener: (mark: MarkGeometry, data?: MarkData) => void): void;
-  /** NEW: the mark's geometry before this update, on update events. */
-  readonly previous?: MarkGeometry;
-}
+// ── Shared contracts and drawing API: built, in src/core/contracts ───────────
+// MarkGeometry, Outline, Sample, MarkData (with previous), Paint, MarkStyle, MarkHandle, IconHandle,
+// PathHandle, TextStyle, TextHandle, Layer, EffectContext (with previous), GeometryEffect,
+// DataEffect, TransitionEffect, MarkEffect, AnyMarkEffect, Combined.
 
 // ── Effects ──────────────────────────────────────────────────────────────────
-
-export interface GeometryEffect {
-  readonly kind: "geometry";
-  run(mark: MarkGeometry, ctx: EffectContext): Promise<void>;
-  end(mark: MarkGeometry, ctx: EffectContext): void;
-  clear(ctx: EffectContext): void;
-}
-
-/**
- * `run` and `end` are function-typed properties, not methods, on purpose: TypeScript checks method
- * parameters loosely in both directions, which would let an effect that needs more fields than a
- * chart's rows have (DataEffect<Row & { target: number }> on a chart of Row) slip through.
- */
-export interface DataEffect<D = unknown> {
-  readonly kind: "data";
-  readonly needs?: { readonly related?: readonly string[] };
-  readonly run: (mark: MarkGeometry, data: MarkData<D>, ctx: EffectContext) => Promise<void>;
-  readonly end: (mark: MarkGeometry, data: MarkData<D>, ctx: EffectContext) => void;
-  readonly clear: (ctx: EffectContext) => void;
-}
-
-export interface TransitionEffect {
-  readonly kind: "transition";
-  run(from: MarkGeometry, to: MarkGeometry, ctx: EffectContext): Promise<void>;
-  end(from: MarkGeometry, to: MarkGeometry, ctx: EffectContext): void;
-  clear(ctx: EffectContext): void;
-}
-
-type AnyMarkEffect = GeometryEffect | DataEffect<any>;
-export type MarkEffect<D = unknown> = GeometryEffect | DataEffect<D>;
-
-/** The row type a single effect needs; geometry effects need nothing (unknown). */
-type RowNeeds<E> = E extends DataEffect<infer D> ? D : unknown;
-/**
- * The rows a combination needs: every part's needs at once (an intersection, not a union, so a
- * generic part such as threshold() can't widen a typed part's needs back to unknown).
- */
-type AllRowNeeds<E extends readonly unknown[]> = E extends readonly []
-  ? unknown
-  : E extends readonly [infer First, ...infer Rest]
-    ? RowNeeds<First> & AllRowNeeds<Rest>
-    : E extends readonly (infer Item)[]
-      ? RowNeeds<Item>
-      : unknown;
-/** A combination is a data effect if any part of it is. */
-export type Combined<E extends readonly AnyMarkEffect[]> = [Extract<E[number], { kind: "data" }>] extends [never]
-  ? GeometryEffect
-  : DataEffect<AllRowNeeds<E>>;
 
 export declare function sequence<E extends readonly AnyMarkEffect[]>(...effects: E): Combined<E>;
 export declare function parallel<E extends readonly AnyMarkEffect[]>(...effects: E): Combined<E>;
@@ -235,38 +95,12 @@ export interface DataEffectSpec<D> {
 export declare function defineEffect(spec: GeometryEffectSpec): GeometryEffect;
 /** @experimental */
 export declare function defineDataEffect<D = unknown>(spec: DataEffectSpec<D>): DataEffect<D>;
-/** @experimental */
-export declare const matrix: {
-  translate(x: number, y: number): Matrix;
-  rotate(radians: number, about?: Point): Matrix;
-  scale(sx: number, sy?: number, about?: Point): Matrix;
-  multiply(...matrices: Matrix[]): Matrix;
-};
-/** @experimental A point `distance` px from `point` in direction `angle`. */
-export declare function offset(point: Point, angle: number, distance: number): Point;
+
+// matrix (translate, rotate, scale, multiply, apply) and offset are built, in src/core/geometry.
 
 // ── Icons: neutral core set; sports icons live in "expressive-charts/icons/sport" ─
 
-export interface IconShape {
-  readonly d: string;
-  readonly fill?: Color;
-  readonly stroke?: Color;
-  readonly width?: number;
-  readonly clip?: string;
-}
-
-export interface Icon {
-  readonly name: string;
-  readonly shapes: readonly IconShape[];
-  readonly box: Rect;
-  readonly size: number;
-  readonly anchor: Point;
-  readonly pivot: Point;
-  readonly footprint: readonly [behind: number, ahead: number];
-  readonly gait?: "roll" | "step" | "slide";
-  readonly radius?: number;
-  readonly upright?: boolean;
-}
+// Icon and IconShape are built, in src/core/contracts.
 
 export type IconSpec = Omit<Icon, "footprint" | "pivot" | "size"> & Partial<Pick<Icon, "footprint" | "pivot" | "size">>;
 
@@ -319,33 +153,9 @@ export interface MarkSourceHandle<D> {
 
 // ── Geometry builders: public, shared by reference charts and adapters ───────
 
-export type Baseline = "left" | "right" | "top" | "bottom";
-
-export declare const describe: {
-  bar(spec: {
-    readonly key: string;
-    readonly series?: string;
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-    readonly baseline: Baseline;
-    readonly radius?: number;
-    readonly segments?: readonly { readonly series: string; readonly size: number }[];
-  }): MarkGeometry;
-  /** Angles in radians, 0 at 12 o'clock, clockwise: the d3.pie() convention. */
-  arc(spec: {
-    readonly key: string;
-    readonly series?: string;
-    readonly cx: number;
-    readonly cy: number;
-    readonly inner: number;
-    readonly outer: number;
-    readonly start: number;
-    readonly end: number;
-  }): MarkGeometry;
-  line(spec: { readonly key: string; readonly series?: string; readonly points: readonly Point[]; readonly width?: number }): MarkGeometry;
-  point(spec: { readonly key: string; readonly series?: string; readonly x: number; readonly y: number; readonly r: number }): MarkGeometry;
+// describe.bar, .arc, .line and .point are built, in src/core/geometry (with the Baseline type and
+// NEW: an optional `gap` between bar segments). Only .shape is still planned.
+export declare const describe: typeof builders & {
   /** Browser only: walks any SVG shape with getPointAtLength. */
   shape(element: SVGGeometryElement, spec: { readonly key: string; readonly series?: string; readonly thickness?: number }): MarkGeometry;
 };

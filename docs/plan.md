@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: proposal, October 2026. Nothing here is built yet. When a section turns into code, move what's final into [architecture.md](architecture.md) and the README, and mark the section here as done.
+Status: proposal, October 2026. M1 steps 1–3 are built (§9); the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -42,6 +42,15 @@ I checked it locally with `npm ci`, `npm run typecheck`, `npm test`, `npm run bu
 ---
 
 ## 2. The `MarkGeometry` contract
+
+> **Built in M1 step 3**, with the §11 changes. [architecture.md](architecture.md#mark-geometry) is now the reference. Additions to the sketch below:
+>
+> - `describe.bar` takes an optional `gap`. It comes out of the start of the later segment, so each segment still ends at its value, and it shrinks when the segment before is shorter. The tip rounding fades in as a segment nears the tip, so a growing stack never pops.
+> - `describe.line` and `describe.point` are built too (a line's `width` defaults to 1); only `describe.shape` is left.
+> - `angle(t)` is normalised to (−π, π], `t` is clamped, and `slice` takes its ends in either order.
+> - `sample(n)` throws a `RangeError` unless n is a multiple of 4 (closed) or a whole number (open). The builders throw a `RangeError` naming the field on bad input, and an error on a series listed twice.
+> - Segments with no series are keyed `"<mark key>/<index>"`.
+> - Path data is absolute `M`, `L`, `A`, `Z` with numbers rounded to 0.001 px; arcs are split into pieces of at most half a turn.
 
 ### 2.1 Where the shared contracts live
 
@@ -269,6 +278,8 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 ## 4. Effects
 
 > Updated by the design session: `ctx.previous`, `data.previous`, `Layer.text()` and the author helpers are in [`sketches/api.ts`](sketches/api.ts) (§11).
+>
+> **The contracts in §4.1 and §4.2 are built in M1 step 3** (`src/core/contracts/`), along with `matrix`, `offset` and the recording layer in `src/core/testing/`. [architecture.md](architecture.md#effects) is now the reference. Additions: `AnyMarkEffect` is exported for combinator signatures; the icon resolver is named `IconSource`; `mark.set()` merges the fields given (undefined resets one), so parallel effects don't undo each other; an icon is hidden until first placed; `matrix.apply(m, point)`; and `testContext()`, a ready-made `EffectContext` on a manual clock. The runner (§4.3), combinators and effects are still to come.
 
 ### 4.1 Interfaces
 
@@ -633,9 +644,9 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 
 ### M1: Ball and cleat on real bars
 
-1. ✅ **Docs.** Update CLAUDE.md rule 6 (§3.5) and architecture.md. The core section is done; the contract sections follow with step 3.
+1. ✅ **Docs.** Update CLAUDE.md rule 6 (§3.5) and architecture.md, including the contract sections.
 2. ✅ **Core motion.** Clock, manual clock, easing, tween, `animated`, `createMotion` with the scaling table, reduced motion, viewer choice.
-3. **Contracts and geometry.** All of §2 and §4.2 as types, with the §11 changes. Line and arc path math with arc-length sampling, `slice`, `sample`, matrices. The public `describe.bar` builder. The recording layer.
+3. ✅ **Contracts and geometry.** All of §2 and §4.2 as types, with the §11 changes. Line and arc path math with arc-length sampling, `slice`, `sample`, matrices. The public `describe.bar` builder, plus `describe.arc`, `.line` and `.point`. The recording layer. The sketch re-exports all of it from `src`.
 4. **Runner and registries.** The rules in §4.3, plus the preset and icon registries.
 5. **`barChart`.** Horizontal and vertical, single and stacked. Keyed marks, measured layout, axis and grid in theme colours, built-in hover dimming, roving keyboard focus, events, and `update()` with staged, interruptible transitions.
 6. **Icons, `travel` and combinators.** The neutral core icons; the `expressive-charts/icons/sport` pack with `soccer-ball` and `cleat` (this needs a second build entry and a subpath export); `travel` with gaits; `sequence`, `parallel`, `only`.
@@ -652,7 +663,7 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 
 ### M3: Donut, plus the proof that effects are chart-agnostic
 
-`donutChart` (slice geometry, centre label) and the public `describe.arc`. The same `travel`, now rolling around slices, with **no change to effect code**, on our donut and on D3-style pie paths through `expressive({ geometry })`. `wiggle`, `pulse`, `stagger` and string presets, shown on both bars and donut (`on: { hover: "wiggle" }`).
+`donutChart` (slice geometry from `describe.arc`, built in M1, and a centre label). The same `travel`, now rolling around slices, with **no change to effect code**, on our donut and on D3-style pie paths through `expressive({ geometry })`. `wiggle`, `pulse`, `stagger` and string presets, shown on both bars and donut (`on: { hover: "wiggle" }`).
 
 **Then the effect API goes public:** drop `@experimental` from `defineEffect`, `defineDataEffect`, `matrix` and `offset`, export the conformance suite, and write the effect-authoring guide.
 

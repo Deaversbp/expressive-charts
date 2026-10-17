@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including charts you've already built with D3, Plot or Vega. Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core is built ([below](#available-now-the-motion-core)). Charts and effects are next, so the chart API under "Design target" isn't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core and the mark geometry are built ([below](#available-now-the-motion-core-and-mark-geometry)). Charts and effects are next, so the chart API under "Design target" isn't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -54,9 +54,9 @@ barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue"
 
 More examples, all type-checked against the proposed API, are in [docs/sketches](docs/sketches/).
 
-## Available now: the motion core
+## Available now: the motion core and mark geometry
 
-The first layer is built: the shared animation clock, tweens, retargetable values and motion modes that charts and effects will run on.
+The first layer is built: the shared animation clock, tweens, retargetable values and motion modes that charts and effects will run on, plus the shared mark description they meet through.
 
 ```js
 import { motion, animated, interpolateNumber } from "expressive-charts";
@@ -71,7 +71,23 @@ width.to(320, { duration: 500 }); // 500 ms in presentation, 175 ms in analysis,
 width.to(120, { duration: 500 }); // retargets from wherever it is now, without a jump
 ```
 
-See [docs/architecture.md](docs/architecture.md#core) for the full API.
+The geometry builders describe a mark the way every effect reads it: a walk from where the data starts to where it ends, measured by distance, plus an outline.
+
+```js
+import { describe, offset } from "expressive-charts";
+
+const bar = describe.bar({
+  key: "Okafor", x: 0, y: 0, width: 220, height: 22, baseline: "left", radius: 4, gap: 2,
+  segments: [{ series: "goals", size: 160 }, { series: "assists", size: 60 }]
+});
+bar.path(0.5);                                   // halfway along the bar, on screen
+bar.segments[1].slice(0, 1);                     // SVG path data along the assists segment
+offset(bar.end, bar.angle(1) - Math.PI / 2, 8);  // 8 px to the up side of the tip
+
+const slice = describe.arc({ key: "Saved", cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle }); // d3.pie() angles
+```
+
+See [docs/architecture.md](docs/architecture.md#core) for the motion API and [Mark geometry](docs/architecture.md#mark-geometry) for the builders.
 
 ## Demo
 

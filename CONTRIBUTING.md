@@ -16,7 +16,7 @@ Node.js 22 or newer is required (CI tests 22 and 24).
 
 ## Adding an effect
 
-1. Create `src/effects/<name>.ts` that implements the `Effect` interface.
+1. Create `src/effects/<name>.ts` that implements `GeometryEffect` or, if it reads values, `DataEffect` (`src/core/contracts/effect.ts`).
 2. Read only from `MarkGeometry` (and the datum, for data effects). Do not check chart types.
 3. Express durations as base values and pass them through the motion core.
 4. Implement `end()` so reduced motion shows a sensible final state.

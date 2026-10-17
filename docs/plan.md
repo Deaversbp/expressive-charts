@@ -144,6 +144,8 @@ Every cell is filled with no chart-type branch. The two cells marked "meaningles
 
 ## 3. Motion core
 
+> **Built in M1 step 2.** [architecture.md](architecture.md#core) is now the reference. Additions to the sketch below: `Tween.state`; `delay` on tweens; `Animated.target`, `animating` and `stop()`; an `onChange` option on `animated`; `Motion.clearChoice()`; and an injectable `ReducedMotionSource`.
+
 Everything in this section is in `src/core` with no DOM dependency except `matchMedia` and `requestAnimationFrame`. Both are injected, so tests and Node imports don't touch them.
 
 ### 3.1 Clock
@@ -610,8 +612,8 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 
 ### M1: Ball and cleat on real bars
 
-1. **Docs.** Update CLAUDE.md rule 6 (§3.5) and architecture.md with the contract decisions.
-2. **Core motion.** Clock, manual clock, easing, tween, `animated`, `createMotion` with the scaling table, reduced motion, viewer choice.
+1. ✅ **Docs.** Update CLAUDE.md rule 6 (§3.5) and architecture.md. The core section is done; the contract sections follow with step 3.
+2. ✅ **Core motion.** Clock, manual clock, easing, tween, `animated`, `createMotion` with the scaling table, reduced motion, viewer choice.
 3. **Contracts and geometry.** All of §2 and §4.2 as types. Line and arc path math with arc-length sampling, `slice`, `sample`, matrices. The recording layer.
 4. **Runner and registries.** The rules in §4.3, plus the preset and icon registries.
 5. **`barChart`.** Horizontal and vertical, single and stacked. Keyed marks, measured layout, axis and grid in theme colours, built-in hover dimming, roving keyboard focus, events, and `update()` with staged, interruptible transitions.

@@ -144,7 +144,7 @@ Marks with no direction (future scatter dots) have `length` 0 and `start = end =
 | `wiggle` | `pivot`, `length` | ✓ rotates about the baseline | ✓ whole row | ✓ (barely visible on long marks, by design) | ✓ | ✓ rotates about the donut centre | The swing is capped so the far end moves ≤ 3 px and data stays readable. |
 | `pulse` | `outline`, `thickness` | ✓ halo | ✓ | ✓ glow along the stroke | ✓ | ✓ | Uses a halo, never a scale change, so values don't look bigger. |
 | `flash` | `outline` | ✓ | ✓ | ✓ | ✓ | ✓ | A single halo blink, as in the prototype. |
-| `threshold` | `slice`, `samples`, `related` | ✓ against a constant (colours the part past a target) | ✓ | ✓ against another series | n/a (series level) | allowed but meaningless | Data effect. |
+| `threshold` | `slice`, `samples`, `related` | ✓ against a constant (colours the part below a target, or past it with `when: "above"`) | ✓ | ✓ against another series | n/a (series level) | allowed but meaningless | Data effect. |
 | `morph` | `outline.sample` | ✓ | ✓ | open ↔ open only | ✓ | ✓ | Transition effect: it takes two geometries. |
 
 Every cell is filled with no chart-type branch. The two cells marked "meaningless" are valid but not useful; that's a documentation issue, not a contract gap.
@@ -386,7 +386,7 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 | `wiggle({ swing? })` | geometry | A short damped rotation about `pivot`, with the angle capped so the far end moves ≤ 3 px. | No transform. |
 | `pulse({ times = 2 })` | geometry | A halo along the outline that grows and fades. Repeats are bounded, and `times` is capped so it finishes in under 5 s. | Nothing. |
 | `flash()` | geometry | One halo blink (the prototype's `stroke-width` 0 → 8 → 0). | Nothing. |
-| `threshold({ compareTo, color = "negative" })` | data | Finds where `samples` fall below the reference (a series or a constant), interpolates the crossings, and draws `slice()` overlays. Redraws on `onChange`. | The overlays drawn. |
+| `threshold({ compareTo, when = "below", color = "negative" })` | data | Finds where `samples` fall below (or, with `when: "above"`, above) the reference (a series or a constant), interpolates the crossings, and draws `slice()` overlays. Redraws on `onChange`. | The overlays drawn. |
 | `morph({ points = 160 })` | transition | Interpolates `outline.sample(n)` side by side between two geometries. | The target outline. |
 
 ### 4.6 Travel options
@@ -690,6 +690,22 @@ The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label
 - Decide whether to add more subpath exports, then publish 0.1.0.
 
 The donut comes *before* the line on purpose. The architecture's central bet is that one effect works on any chart, and a second chart type tests that more cheaply than the line chart, which also brings in data effects and playback.
+
+### Backlog (after 0.1)
+
+These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brainstorm across BI chart types (bar to map, plus radar and comparison charts).
+
+- **Linked hover.** Hovering a mark fires a hover for the marks in linked charts or series that share its *linking value*, and their ordinary effects run. It's needed for combo charts (column and line point together), butterflies (both halves), small multiples, and radar axes.
+  - It isn't an effect. Effects only touch their own mark; linking touches other marks, so it lives with the charts and adapters, like hover dimming.
+  - It links by a shared value, not by key. Keys are identities and differ across marks on purpose: a line point is `goals@12`, a column is `12`. By default, link by each mark's position on the category or x axis (`at`). Allow an accessor per source for anything else, for example `link([columns, line], { by: (event) => event.data.datum.month })`.
+  - It generalises the line chart's `pointer: "x"`, which is the same thing inside one chart.
+  - Decide before it's built whether linked marks get `source: "linked"` on their hover event, so effects can tone themselves down.
+- **`trace` as a built-in.** It draws a mark's path in. It's a custom effect in the sketch now, and the brainstorm uses it on slopes, waterfalls, annotations, sparklines and scatter trails.
+- **Change labels as built-ins, in two kinds:**
+  - `delta`: the change since the last update, as in the sketch's custom effect. For tables, live KPIs and "Play next matchweek".
+  - `label((data) => text)`: text computed from the mark's own data, such as last sample minus first (slopes) or a step's own signed value (waterfalls).
+  - Comparisons between neighbouring marks (funnel conversion) are computed into the rows by the chart or the page, because effects only see their own mark and related series.
+- **"Pour" (maybe).** Decorative droplets for funnels. Only after measuring its rendering cost, and never without a reduced-motion end state.
 
 ---
 

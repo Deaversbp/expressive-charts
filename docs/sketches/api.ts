@@ -76,7 +76,12 @@ export declare function travel(icon: Icon | string, options?: TravelOptions): Ge
 export declare function wiggle(options?: { readonly swing?: number }): GeometryEffect;
 export declare function pulse(options?: { readonly times?: number; readonly color?: Color }): GeometryEffect;
 export declare function flash(options?: { readonly color?: Color }): GeometryEffect;
-export declare function threshold(options: { readonly compareTo: string | number; readonly color?: Color }): DataEffect;
+/** Colours the parts of the walk where values are below the reference (default) or, with when: "above", above it. */
+export declare function threshold(options: {
+  readonly compareTo: string | number;
+  readonly when?: "below" | "above";
+  readonly color?: Color;
+}): DataEffect;
 export declare function morph(options?: { readonly points?: number }): TransitionEffect;
 
 // NEW: helpers for effect authors. Experimental until M3, when the effect API goes public.

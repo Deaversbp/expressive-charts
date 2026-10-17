@@ -1,6 +1,6 @@
 // Prototype card 1 on the reference bar chart: ball and cleat hover, metric switch,
 // staged sorting, "Play next matchweek" with a flash on changed bars.
-import { barChart, morph, motionSwitch, registerIcons, sequence, travel } from "expressive-charts";
+import { barChart, morph, motionSwitch, registerIcons, sequence, threshold, travel } from "expressive-charts";
 import { sport } from "expressive-charts/icons/sport";
 
 interface Player {
@@ -30,6 +30,9 @@ const chart = barChart("#goals", {
 });
 
 motionSwitch("#motion"); // Presentation / Analysis / Off; the viewer's pick beats reduced motion
+
+// Colour the part of each bar past a 10-goal target (threshold colours below a reference by default).
+export const pastTarget = threshold({ compareTo: 10, when: "above", color: "series-1-strong" });
 
 const stacks = {
   goals: ["goals"],

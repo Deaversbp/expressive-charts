@@ -1,0 +1,19 @@
+# API sketches
+
+The proposed public API, written down as TypeScript before it's built, plus the code users would write against it. It comes from the October 2026 design session; [plan.md §11](../plan.md#11-design-session-outcomes-october-2026) has the findings.
+
+| File | What it is |
+| --- | --- |
+| `api.ts` | The proposed API as declarations. The motion core is real and re-exported from `src/core`; everything else is `declare`. Lines marked NEW came out of writing the examples. |
+| `icons-sport.ts` | The proposed optional icon pack, `expressive-charts/icons/sport`. |
+| `examples/01-ball-and-cleat.ts` | Lab card 1 on the reference bar chart. |
+| `examples/02-goals-vs-xg.ts` | Lab card 2 on the reference line chart, with playback and a pause button. |
+| `examples/03-donut-morph.ts` | Lab card 3: donut to bars and back. |
+| `examples/04-d3-stacked-bars.ts` | The ball-and-cleat story on a D3 stacked bar chart through `expressive()`. |
+| `examples/05-d3-donut-and-line.ts` | D3 pie arcs and a D3 line with `threshold`, using the public geometry builders. |
+| `examples/06-custom-effects.ts` | Two effects written outside the project: `trace` and `delta`. |
+| `examples/07-presets.ts` | One-line presets and a registered house style. |
+
+`npm run typecheck` compiles this folder (`tsc -p docs/sketches`). Every `// @ts-expect-error` line is a misuse the API must reject; if one stops failing, the API got looser.
+
+As each piece is built, replace its `declare` in `api.ts` with a re-export from `src`, so the examples run against the real thing. When nothing is declared any more, the examples move into the docs.

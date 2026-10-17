@@ -1,6 +1,6 @@
 # expressive-charts
 
-Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, with presentation, analysis and reduced-motion modes built in.
+Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including charts you've already built with D3, Plot or Vega. Presentation, analysis and reduced-motion modes are built in.
 
 > **Status: pre-alpha.** The motion core is built ([below](#available-now-the-motion-core)). Charts and effects are next, so the chart API under "Design target" isn't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
@@ -11,31 +11,48 @@ Most chart libraries treat animation as an afterthought: a fixed transition you 
 The library has three layers:
 
 1. **Motion core.** One animation clock, easing, cancellation, and the motion modes: Presentation (staged, around one second), Analysis (fast, under about 200 ms, no staging) and Off. The device's reduced-motion setting is respected unless the viewer picks a mode on the page themselves.
-2. **Charts.** Bar, line, donut and more. Every chart describes its marks the same way (start point, end point, a path to travel along, and an outline) and announces events like hover and data updates.
+2. **Charts and adapters.** Our reference bar, line and donut charts, plus adapters that describe marks drawn by other libraries. Every mark is described the same way (start point, end point, a path to travel along, and an outline), and every mark announces events like hover and data updates.
 3. **Effects.** Plugins such as `travel`, `wiggle`, `pulse`, `flash`, `threshold` and `morph`. Effects only read the shared mark description, so one effect works on every chart.
 
 ## Design target
 
 ```js
-import { barChart, effects } from "expressive-charts";
+import { barChart, sequence, travel } from "expressive-charts";
+import { soccerBall, cleat } from "expressive-charts/icons/sport";
 
 barChart("#goals", {
+  label: "Goals and assists by player",
   data: players,
   y: "name",
   stack: ["goals", "assists"],
-  motion: "presentation",
-  hover: effects.sequence(
-    effects.travel("soccer-ball", { along: "goals" }),
-    effects.travel("cleat", { along: "assists" })
-  )
+  on: {
+    hover: sequence(
+      travel(soccerBall, { along: "goals" }),
+      travel(cleat, { along: "assists" })
+    )
+  }
+});
+```
+
+The same effects on a chart you already have, for example D3 bars:
+
+```js
+import { expressive, travel } from "expressive-charts";
+
+expressive(d3.selectAll("#existing rect"), {
+  key: (d) => d.name,
+  baseline: "left",
+  on: { hover: travel(soccerBall) }
 });
 ```
 
 Preset names give a one-line shortcut for common cases:
 
 ```js
-barChart("#sales", { data, y: "region", x: "revenue", hover: "wiggle" });
+barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue", on: { hover: "wiggle" } });
 ```
+
+More examples, all type-checked against the proposed API, are in [docs/sketches](docs/sketches/).
 
 ## Available now: the motion core
 

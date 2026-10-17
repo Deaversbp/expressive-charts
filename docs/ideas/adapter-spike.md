@@ -1,6 +1,6 @@
 # Adapter spike: can `expressive()` read D3, Plot and Vega charts?
 
-A research spike from October 2026, done before M1 step 7 (the rect adapter). It tests the assumption behind `expressive()` ([sketches/api.ts](../sketches/api.ts), "Adapters"; [plan.md](../plan.md) §11 items 7–11): that an adapter can recover rows, keys and geometry from the SVG another library renders.
+A research spike from October 2026, done before M1 step 10 (the rect adapter). It tests the assumption behind `expressive()` ([sketches/api.ts](../sketches/api.ts), "Adapters"; [plan.md](../plan.md) §11 items 7–11): that an adapter can recover rows, keys and geometry from the SVG another library renders.
 
 ## Short answer
 
@@ -70,7 +70,7 @@ D3 charts use the usual idioms: `d3.stack()` with one `<g>` per series, `d3.pie(
 
 **Build the DOM adapter, and add helpers only where a library's DOM falls short.** A DOM-only adapter would technically reach Vega through `datum` and `geometry` callbacks. But every Vega user would then write the same scenegraph code (item fields, arc normalisation, refresh after each run), and that code depends on Vega internals. That belongs in one tested helper, not in each page.
 
-### 1. The DOM adapter (M1 step 7), with two changes to the plan
+### 1. The DOM adapter (M1 step 10), with two changes to the plan
 
 - **Overlay at the root.** Keep expressing geometry in the marks' nearest common ancestor's coordinates, but draw the overlay as the last child of the root `<svg>`, with a `transform` equal to that ancestor's CTM relative to the SVG. Recompute it on every `refresh()`. This gives the same coordinate space, survives Vega's redraws, and never touches a group the host manages. It changes [plan.md](../plan.md) §10 ("an overlay inserted into that ancestor"), §11 item 8 ("the overlay is drawn there") and [architecture.md](../architecture.md), Adapters ("draw their overlay there").
 - **Delegated events.** Listen for `pointerover`/`pointerout` and `focusin`/`focusout` once on the root `<svg>`, and map `event.target` to the current mark through a lookup that `refresh()` rebuilds. Re-apply `tabindex` and ARIA attributes on every `refresh()`, because Plot and Vega replace mark elements. For Plot, `refresh(newSvg)` retargets the adapter to the new root.
@@ -108,7 +108,7 @@ Keys still come from the page (`key: (d) => d.name`), because tuples are copies.
 
 ### 4. Testing without new dependencies
 
-Unit tests for step 7 can use hand-written fixtures that copy each library's DOM conventions: D3's stack points on `__data__`, Plot's numeric index, and Vega's items and path-drawn bars. Rebuilding this spike's page (not committed) against the real libraries is the check before M3. That supports open question 12: D3 (and Plot and Vega) as dev dependencies can wait until M3.
+Unit tests for step 10 can use hand-written fixtures that copy each library's DOM conventions: D3's stack points on `__data__`, Plot's numeric index, and Vega's items and path-drawn bars. Rebuilding this spike's page (not committed) against the real libraries is the check before M3. That supports open question 12: D3 (and Plot and Vega) as dev dependencies can wait until M3.
 
 ## Proposed wording
 

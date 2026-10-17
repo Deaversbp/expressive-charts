@@ -1,6 +1,6 @@
 # expressive-charts
 
-Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including charts you've already built with D3, Plot or Vega. Presentation, analysis and reduced-motion modes are built in.
+Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
 > **Status: pre-alpha.** The motion core and the mark geometry are built ([below](#available-now-the-motion-core-and-mark-geometry)). Charts and effects are next, so the chart API under "Design target" isn't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 

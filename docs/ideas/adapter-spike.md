@@ -112,7 +112,7 @@ Unit tests for step 10 can use hand-written fixtures that copy each library's DO
 
 ## Proposed wording
 
-The claims hold for D3 and Plot. For Vega they need the SVG renderer and a helper, and the wording should say so. Suggested changes (not applied here):
+The claims hold for D3 and Plot. For Vega they need the SVG renderer and a helper, and the wording should say so. Suggested changes (since applied):
 
 - **README.md**, first paragraph: "…including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default)."
 - **CLAUDE.md**, "What this project is": "…through small adapters, on SVG charts built with other libraries (D3 and Observable Plot directly; Vega and Vega-Lite through a small view helper, with the SVG renderer)."

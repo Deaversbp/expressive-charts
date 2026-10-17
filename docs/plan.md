@@ -12,7 +12,7 @@ The goal for v0.1 is expressive motion that works on any SVG chart. We prove it 
 | Reduced motion | The OS setting forces `off` unless the **viewer** explicitly picks a mode in an on-page control. A mode the **author** sets in code never overrides it. CLAUDE.md rule 6 needs a matching wording change in M1 (see §3.5). |
 | Layout | Charts measure their container and lay out in real pixels, so text stays readable at every width. The prototype instead scales a fixed viewBox. |
 | Drawing | Effects draw through a small, renderer-neutral context: place an icon, restyle a mark, draw an overlay path. SVG implements it now, and Canvas can implement it later without changing any effect. Icons are stored as path data plus paint, not as raw SVG markup. |
-| Product | **Effects first.** Effects plus small adapters are the core, so they also work on D3, Plot and Vega SVG marks. Our bar, line and donut charts are reference implementations: complete enough for the demos and everyday use, not a full chart library. (Design session, §11.) |
+| Product | **Effects first.** Effects plus small adapters are the core, so they also work on SVG marks from D3 and Plot, and on Vega views rendered as SVG (through a small helper; see [ideas/adapter-spike.md](ideas/adapter-spike.md)). Our bar, line and donut charts are reference implementations: complete enough for the demos and everyday use, not a full chart library. (Design session, §11.) |
 | Guardrail | **Never distort data.** Effects may add personality or explain a change, but never move, resize or hide data while it's being read. |
 | Effect authors | The effect-author API becomes public after M3, once three chart types have proven it. Until then it's marked experimental. |
 | Domain | A neutral core (generic icons and gaits). The ball and cleat move to an optional pack, `expressive-charts/icons/sport`, which the demos use. |
@@ -655,7 +655,7 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 8. **Updates.** `update()` with staged, interruptible transitions (values first, then positions): sorting and the metric switch animate, and hover replays after an update.
 9. **Keyboard.** Roving focus. Focus plays the hover story, Escape or blur leaves, and the focus ring is drawn from the mark's outline.
 10. **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`.
-    - **Prerequisite:** the adapter spike's findings, which test what D3, Plot and Vega expose on their SVG elements. They're on a separate branch and will land as `docs/ideas/adapter-spike.md`. Don't start this step until they're on main.
+    - **Read first:** [ideas/adapter-spike.md](ideas/adapter-spike.md), which tested what D3, Plot and Vega expose on their SVG elements. Build to its recommendation 1: the overlay on the root `<svg>`, events delegated from the root, and `tabindex` re-applied on every `refresh()`.
 11. **Finish `demo/bars.html`.** Animated metric switch and sort, keyboard support, and the same hover story on a hand-written SVG bar chart beside the reference one.
 
 Steps 5–7 come first so the motion can be judged in a browser before staged updates, keyboard support and the adapter are built around it.
@@ -750,7 +750,7 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 - **Reduced-motion override confusing viewers.** Mitigation: the motion switch says when the device prefers reduced motion and that picking a mode overrides it.
 - **Screen reader support for ARIA in SVG is uneven.** Mitigations: test in M2, and keep the data table as the dependable fallback.
 - **Text measurement** differs between the browser and jsdom. Mitigations: measurement is injectable, and tests use fixed widths.
-- **Host charts we don't control.** Adapters run inside other libraries' SVG: transforms on parent groups, marks re-created on every render, and the host's own CSS. Mitigations: geometry in the marks' nearest common ancestor's coordinates (converted with each element's CTM), an overlay inserted into that ancestor, keys rather than elements as identity, and never writing a host element's `transform` without composing it with the host's own.
+- **Host charts we don't control.** Adapters run inside other libraries' SVG: transforms on parent groups, marks re-created on every render, and the host's own CSS. Mitigations: geometry in the marks' nearest common ancestor's coordinates (converted with each element's CTM), an overlay on the root `<svg>` with that ancestor's transform (Vega removes foreign children from its own groups when it redraws), keys rather than elements as identity, and never writing a host element's `transform` without composing it with the host's own.
 
 ---
 
@@ -777,7 +777,7 @@ The session settled the four product questions (now the last four rows of the de
 5. **Effect authors need small helpers:** `defineEffect`, `defineDataEffect`, `matrix` and `offset`. They're experimental until M3.
 6. **"A run ends where `end()` starts" is the right rule for informational effects.** The delta label rises into place and *stays*; if it faded out, reduced motion (end states only) would never show the change. This is now Principle 3.
 7. **Geometry builders are public.** `describe.bar`, `.arc`, `.line`, `.point` and `.shape` are the same builders our charts use, so adapters and reference charts share one implementation. Arc angles follow `d3.pie()` (radians, 0 at 12 o'clock, clockwise), so pie output plugs straight in.
-8. **Adapter coordinate space.** Marks often sit in transformed groups, and stacked bars sit in one `<g>` per series. Geometry is expressed in the marks' nearest common ancestor's coordinates, and the overlay is drawn there.
+8. **Adapter coordinate space.** Marks often sit in transformed groups, and stacked bars sit in one `<g>` per series. Geometry is expressed in the marks' nearest common ancestor's coordinates. The overlay is the root `<svg>`'s last child, with that ancestor's transform, because Vega removes foreign children from its own groups (corrected by the [adapter spike](ideas/adapter-spike.md); the session had said to draw it in the ancestor).
 9. **Data effects on adapters need samples.** `samplesAlong(mark, points)` projects data points onto the walk, which makes `threshold` a few lines on a D3 line.
 10. **Typing adapters.** D3 selections supply the row type; plain elements need `expressive<Row>(…)` or a `datum` accessor.
 11. **Host transitions.** The host can scale its own animations with `motion.duration(600)`, which is the simplest integration. `watch: true` follows a host transition frame by frame, at a cost to measure (open question 13).

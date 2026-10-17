@@ -203,10 +203,16 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 - Marks that share a key become one mark, and `segment` orders them as segments.
 - `refresh()` re-reads the marks after the host re-renders, then fires enter, update and exit by key.
 
+What each library needs (from the [adapter spike](ideas/adapter-spike.md)):
+
+- **D3** works as is: `__data__` holds the row.
+- **Observable Plot** binds each row's index, not the row, so pass `datum: (el) => rows[el.__data__]`. Plot has no pie mark.
+- **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, so a small helper that reads the View is planned.
+
 Adapters follow the chart rules:
 
 - They never know specific effects.
-- They express geometry in the marks' nearest common ancestor's coordinates, and draw their overlay there.
+- They express geometry in the marks' nearest common ancestor's coordinates. They draw their overlay as the last child of the root `<svg>`, with that ancestor's transform, because some hosts (Vega) remove foreign children from their own groups when they redraw.
 - They leave the host's styling, axes and tooltips alone.
 
 ## Rendering

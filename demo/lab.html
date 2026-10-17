@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>[hidden]{display:none!important} body{margin:0} img{max-width:100%}</style>
+</head>
+<body>
+<title>Expressive Chart Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap">
+<style>
+/* Layout: one reading column of chart cards under a sticky motion-mode bar; each card = title, note, controls, chart, data table */
+:root {
+  --page: #f6f6f3;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #7d7b75;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s1-strong: #1c5cab;
+  --under: #d03b3b;
+  --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s4-strong: #c98500;
+  --wash: rgba(42,120,214,0.10);
+  --font-display: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --hover-dur: 100ms;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+    --grid: #2c2c2a; --axis: #45453f; --ring: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s1-strong: #6da7ec; --under: #e66767; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s4-strong: #eda100;
+    --wash: rgba(57,135,229,0.16);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+  --grid: #2c2c2a; --axis: #45453f; --ring: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s1-strong: #6da7ec; --under: #e66767; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s4-strong: #eda100;
+  --wash: rgba(57,135,229,0.16);
+  color-scheme: dark;
+}
+:root[data-motion="off"] { --hover-dur: 0ms; }
+
+* { box-sizing: border-box; }
+body {
+  background: var(--page); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--page); }
+.wrap {
+  max-width: 760px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+  display: grid; gap: 24px;
+}
+header { display: grid; gap: 8px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 6vw, 40px); line-height: 1.1; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 500; font-size: 21px; margin: 0; text-wrap: balance; }
+.lede { color: var(--ink-2); margin: 0; max-width: 62ch; }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+
+.motionbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--page); padding-block: 10px; border-bottom: 1px solid var(--grid);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+}
+.motionbar .label { font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.motionbar .hint { font-size: 13px; color: var(--muted); flex: 1 1 220px; min-width: 0; }
+
+.seg { display: inline-flex; border: 1px solid var(--ring); border-radius: 8px; padding: 2px; background: var(--surface); gap: 2px; }
+.seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+.btn { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.btn:hover, .seg button:hover { background: var(--wash); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; min-width: 0; }
+.note { color: var(--ink-2); margin: 0; font-size: 14px; max-width: 64ch; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.controls .status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.chartbox { position: relative; min-width: 0; }
+.chartbox svg { width: 100%; height: auto; display: block; overflow: visible; touch-action: pan-y; }
+svg text { font-family: var(--font-ui); }
+.tick { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.baseline { stroke: var(--axis); stroke-width: 1; }
+.lab { font-size: 12.5px; fill: var(--ink-2); }
+.valtxt { font-size: 12.5px; fill: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.mark { transition: opacity var(--hover-dur) ease-out, fill var(--hover-dur) ease-out; }
+.hovering .mark:not(.hot) { opacity: 0.3; }
+.bar-path { stroke-opacity: 0.35; stroke-width: 0; paint-order: stroke; }
+.seg-goals { fill: var(--s1); stroke: var(--s1); }
+.seg-assists { fill: var(--s4); stroke: var(--s4); }
+.row.hot .seg-goals { fill: var(--s1-strong); }
+.row.hot .seg-assists { fill: var(--s4-strong); }
+.row .hit { fill: transparent; cursor: pointer; }
+.flash { animation: flash 900ms ease-out; }
+:root[data-motion="off"] .flash { animation: none; }
+@keyframes flash { 0% { stroke-width: 0; } 25% { stroke-width: 8; } 100% { stroke-width: 0; } }
+
+.seg-path { stroke: var(--surface); stroke-width: 2; stroke-linejoin: round; cursor: pointer; }
+.line { fill: none; stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
+.crosshair { stroke: var(--axis); stroke-width: 1; stroke-dasharray: 3 3; }
+
+.tip {
+  position: absolute; pointer-events: none; z-index: 3;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--ring); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12); padding: 8px 10px; font-size: 13px; line-height: 1.35;
+  white-space: nowrap; font-variant-numeric: tabular-nums; transform: translate(-50%, calc(-100% - 12px));
+}
+.tip b { font-weight: 600; }
+.tip .sub { color: var(--ink-2); }
+
+input[type="range"] { flex: 1 1 200px; min-width: 0; accent-color: var(--s1); }
+
+details { font-size: 13px; color: var(--ink-2); }
+summary { cursor: pointer; color: var(--ink-2); font-weight: 600; }
+.tablewrap { overflow-x: auto; max-height: 260px; overflow-y: auto; margin-top: 8px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--grid); }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+td.num, th.num { text-align: right; }
+
+.rules { display: grid; gap: 10px; }
+.rules ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 14px; display: grid; gap: 6px; max-width: 64ch; }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Prototype · sample data for a fictional club</p>
+    <h1>Expressive Chart Lab</h1>
+    <p class="lede">Three everyday charts with motion rules built in. Hover, sort, scrub and morph them, then switch the motion mode to feel the difference between presenting and analyzing.</p>
+  </header>
+
+  <div class="motionbar" role="group" aria-label="Motion mode">
+    <span class="label">Motion</span>
+    <div class="seg" id="motionSeg">
+      <button type="button" id="m-present" data-m="present">Presentation</button>
+      <button type="button" id="m-analyze" data-m="analyze">Analysis</button>
+      <button type="button" id="m-off" data-m="off">Off</button>
+    </div>
+    <span class="hint" id="motionHint"></span>
+  </div>
+
+  <!-- 1. Bars -->
+  <section class="card" aria-labelledby="h-bars">
+    <h2 id="h-bars">Harbor City FC: goals by player</h2>
+    <p class="note">Hover a bar to focus it. In Goals, a ball rolls out the length of the bar. In Assists, a boot steps along it. In Goals + assists, the ball rolls to the end of the goals and stops, then the boot carries on through the assists. Changing the metric or sort resizes bars first, then moves rows.</p>
+    <div class="controls">
+      <div class="seg" id="metricSeg" role="group" aria-label="Metric">
+        <button type="button" id="mt-goals" data-v="goals" aria-pressed="true">Goals</button>
+        <button type="button" id="mt-assists" data-v="assists" aria-pressed="false">Assists</button>
+        <button type="button" id="mt-ga" data-v="ga" aria-pressed="false">Goals + assists</button>
+      </div>
+      <div class="seg" id="sortSeg" role="group" aria-label="Sort">
+        <button type="button" id="st-value" data-v="value" aria-pressed="true">Highest first</button>
+        <button type="button" id="st-name" data-v="name" aria-pressed="false">A–Z</button>
+      </div>
+      <button type="button" class="btn" id="nextMw">Play next matchweek</button>
+      <span class="status" id="mwStatus">After matchweek 24</span>
+    </div>
+    <div class="legend" id="barLegend" hidden><span><i style="background:var(--s1)"></i>Goals</span><span><i style="background:var(--s4)"></i>Assists</span></div>
+    <div class="chartbox" id="barBox">
+      <svg id="barSvg" role="img" aria-label="Horizontal bar chart of player totals"></svg>
+      <div class="tip" id="barTip" hidden></div>
+    </div>
+    <details><summary>Data table</summary><div class="tablewrap"><table id="barTable"></table></div></details>
+  </section>
+
+  <!-- 2. Line -->
+  <section class="card" aria-labelledby="h-line">
+    <h2 id="h-line">Goals vs expected goals, season to date</h2>
+    <p class="note">Scrub the season or press Play. The goals line turns red wherever the team has scored fewer goals than its chances were worth. Hover anywhere to read both lines and the gap.</p>
+    <div class="legend"><span><i style="background:var(--s1)"></i>Goals scored</span><span><i style="background:var(--under)"></i>Goals below xG</span><span><i style="background:var(--s2)"></i>Expected goals (xG)</span></div>
+    <div class="controls">
+      <button type="button" class="btn" id="playBtn">Play season</button>
+      <input type="range" id="mwRange" min="1" max="38" step="1" value="38" aria-label="Matchweek">
+      <span class="status" id="rangeStatus">Through matchweek 38</span>
+    </div>
+    <div class="chartbox" id="lineBox">
+      <svg id="lineSvg" role="img" aria-label="Line chart of cumulative goals and expected goals by matchweek"></svg>
+      <div class="tip" id="lineTip" hidden></div>
+    </div>
+    <details><summary>Data table</summary><div class="tablewrap"><table id="lineTable"></table></div></details>
+  </section>
+
+  <!-- 3. Morph -->
+  <section class="card" aria-labelledby="h-morph">
+    <h2 id="h-morph">Shot outcomes</h2>
+    <p class="note">Switch between share of total and side-by-side counts. The same four shapes morph into each other, so you never lose which slice became which bar.</p>
+    <div class="legend" id="morphLegend"></div>
+    <div class="controls">
+      <button type="button" class="btn" id="morphBtn">Show as bars</button>
+    </div>
+    <div class="chartbox" id="morphBox">
+      <svg id="morphSvg" role="img" aria-label="Shot outcomes, shown as a donut or bars"></svg>
+      <div class="tip" id="morphTip" hidden></div>
+    </div>
+    <details><summary>Data table</summary><div class="tablewrap"><table id="morphTable"></table></div></details>
+  </section>
+
+  <section class="card rules" aria-labelledby="h-rules">
+    <h2 id="h-rules">The motion rules behind this page</h2>
+    <ul>
+      <li>Hover feedback is a 100 ms color shift with the other marks dimmed. Nothing moves under the cursor.</li>
+      <li>Presentation mode stages data changes at about one second: values first, then positions.</li>
+      <li>Analysis mode caps every transition near 200 ms with no staging, so exploring stays fast.</li>
+      <li>Off removes all motion. It is the default when your device asks for reduced motion.</li>
+      <li>Every mark keeps a stable identity through sorts, updates and morphs. That identity is what makes the motion readable.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const NS = "http://www.w3.org/2000/svg";
+  const $ = (s) => document.querySelector(s);
+  const el = (tag, attrs = {}, parent) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  };
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const easeIO = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const linear = (t) => t;
+
+  /* ---------- motion mode ---------- */
+  let reduce = false;
+  try { reduce = matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+  let motion = reduce ? "off" : "present";
+  const hints = {
+    present: "Staged transitions around one second. Best for walking someone through a change.",
+    analyze: "Quick 200 ms transitions with no staging. Best for exploring.",
+    off: "No motion. Charts jump straight to their new state."
+  };
+  const dur = (ms) => (motion === "present" ? ms : motion === "analyze" ? Math.min(200, ms * 0.35) : 0);
+  function setMotion(m) {
+    motion = m;
+    document.documentElement.setAttribute("data-motion", m);
+    document.querySelectorAll("#motionSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.m === m)));
+    $("#motionHint").textContent = hints[m];
+  }
+  document.querySelectorAll("#motionSeg button").forEach((b) => b.addEventListener("click", () => setMotion(b.dataset.m)));
+  setMotion(motion);
+
+  function animator() {
+    let id = 0;
+    return {
+      run(ms, fn, ez = easeIO) {
+        const my = ++id;
+        return new Promise((res) => {
+          if (ms <= 0) { fn(1); res(true); return; }
+          const t0 = performance.now();
+          const step = (t) => {
+            if (my !== id) { res(false); return; }
+            const p = Math.min(1, (t - t0) / ms);
+            fn(ez(p));
+            if (p < 1) requestAnimationFrame(step); else res(true);
+          };
+          requestAnimationFrame(step);
+        });
+      },
+      cancel() { id++; }
+    };
+  }
+
+  function niceStep(x) {
+    const p = Math.pow(10, Math.floor(Math.log10(x)));
+    const f = x / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  }
+  const niceMax = (v) => { const s = niceStep(v / 4); return Math.ceil(v / s) * s; };
+
+  function placeTip(tip, box, svg, vbW, vx, vy, html) {
+    const r = svg.getBoundingClientRect();
+    const k = r.width / vbW;
+    tip.innerHTML = html;
+    tip.hidden = false;
+    let x = vx * k;
+    const half = tip.offsetWidth / 2;
+    x = Math.max(half, Math.min(r.width - half, x));
+    tip.style.left = x + "px";
+    tip.style.top = Math.max(tip.offsetHeight + 12, vy * k) + "px";
+  }
+  const toVB = (svg, vbW, e) => {
+    const r = svg.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) / r.width) * vbW, y: ((e.clientY - r.top) / r.width) * vbW };
+  };
+
+  /* ---------- 1. Bars ---------- */
+  const players = [
+    { name: "Okafor", pos: "Forward", goals: 16, assists: 4 },
+    { name: "Lindqvist", pos: "Forward", goals: 10, assists: 7 },
+    { name: "Moreau", pos: "Winger", goals: 8, assists: 3 },
+    { name: "Tanaka", pos: "Midfielder", goals: 6, assists: 10 },
+    { name: "Reyes", pos: "Winger", goals: 5, assists: 4 },
+    { name: "Adeyemi", pos: "Midfielder", goals: 4, assists: 6 },
+    { name: "Novak", pos: "Defender", goals: 3, assists: 1 },
+    { name: "Castillo", pos: "Midfielder", goals: 1, assists: 5 }
+  ];
+  const BW = 640, BML = 92, BMR = 44, BMT = 4, ROW = 34, BH = 20, plotW = BW - BML - BMR;
+  const BTOP = (ROW - BH) / 2, BMID = ROW / 2, SEG_GAP = 2;
+  const BHgt = BMT + players.length * ROW + 26;
+  const barSvg = $("#barSvg");
+  barSvg.setAttribute("viewBox", `0 0 ${BW} ${BHgt}`);
+  const gGrid = el("g", {}, barSvg);
+  const gRows = el("g", {}, barSvg);
+  const bar = { metric: "goals", sort: "value", anim: animator(), cur: {}, max: 0, mw: 24, nodes: {}, hot: null };
+  const metricName = { goals: "goals", assists: "assists", ga: "goals + assists" };
+  const parts = (p, m) => ({ g: m === "assists" ? 0 : p.goals, a: m === "goals" ? 0 : p.assists });
+  const val = (p, m) => { const s = parts(p, m); return s.g + s.a; };
+  function order() {
+    const a = [...players];
+    if (bar.sort === "name") a.sort((x, y) => x.name.localeCompare(y.name));
+    else a.sort((x, y) => val(y, bar.metric) - val(x, bar.metric) || x.name.localeCompare(y.name));
+    return a;
+  }
+  // rounded = round the right end (the data end); left end stays square on the baseline
+  function segPath(x, y, w, h, r, rounded) {
+    if (w <= 0.25) return "";
+    if (!rounded) return `M${x},${y}h${w}v${h}h${-w}z`;
+    const rr = Math.min(r, w, h / 2);
+    return `M${x},${y}h${w - rr}a${rr},${rr} 0 0 1 ${rr},${rr}v${h - 2 * rr}a${rr},${rr} 0 0 1 ${-rr},${rr}h${-(w - rr)}z`;
+  }
+
+  /* hover icons: one shared layer above the rows */
+  const iconLayer = el("g", { "pointer-events": "none" }, barSvg);
+  const BALL_R = 8.5;
+  const ball = el("g", { visibility: "hidden" }, iconLayer);
+  const ballSpin = el("g", {}, ball);
+  (() => {
+    const cp = el("clipPath", { id: "ballClip" }, barSvg);
+    el("circle", { r: BALL_R }, cp);
+    el("circle", { r: BALL_R, fill: "#ffffff" }, ballSpin);
+    const inner = el("g", { "clip-path": "url(#ballClip)" }, ballSpin);
+    const pent = (cx, cy, rad, rot) => {
+      let d = "";
+      for (let i = 0; i < 5; i++) { const a = rot + (i * 2 * Math.PI) / 5; d += (i ? "L" : "M") + (cx + rad * Math.sin(a)).toFixed(2) + "," + (cy - rad * Math.cos(a)).toFixed(2); }
+      return d + "Z";
+    };
+    el("path", { d: pent(0, 0, 3.3, 0), fill: "#1d1c1a" }, inner);
+    for (let i = 0; i < 5; i++) {
+      const a = (i * 2 * Math.PI) / 5, ox = 3.3 * Math.sin(a), oy = -3.3 * Math.cos(a);
+      const fx = 8.8 * Math.sin(a), fy = -8.8 * Math.cos(a);
+      el("line", { x1: ox, y1: oy, x2: fx * 0.78, y2: fy * 0.78, stroke: "#1d1c1a", "stroke-width": 1 }, inner);
+      el("path", { d: pent(fx * 1.08, fy * 1.08, 3.1, a + Math.PI), fill: "#1d1c1a" }, inner);
+    }
+    el("circle", { r: BALL_R - 0.5, fill: "none", stroke: "#1d1c1a", "stroke-width": 1 }, ballSpin);
+  })();
+  // boot drawn with its toe pointing right; origin = heel at the sole line
+  const CLEAT_W = 26;
+  const cleat = el("g", { visibility: "hidden" }, iconLayer);
+  const cleatBody = el("g", {}, cleat);
+  el("path", { d: "M1.5,-1.5 L1.5,-11 Q1.5,-14 4.5,-14 L9.5,-14 Q11.5,-14 12.5,-11.5 L14.5,-8 Q21.5,-7.2 24.5,-4.4 Q26.6,-2.2 24.6,0 L3,0 Q1.5,0 1.5,-1.5 Z", fill: "#24221f", stroke: "#ffffff", "stroke-width": 0.9, "stroke-linejoin": "round" }, cleatBody);
+  el("path", { d: "M7,-3 L12,-9.5 M10,-3 L15,-8.3", stroke: "#ffffff", "stroke-width": 1.4, "stroke-linecap": "round" }, cleatBody);
+  el("path", { d: "M12.3,-11 l2.4,-0.6 M13.3,-9.6 l2.4,-0.5", stroke: "#bdbab2", "stroke-width": 0.8, "stroke-linecap": "round" }, cleatBody);
+  [4, 9, 16.5, 21.5].forEach((sx) => el("rect", { x: sx, y: 0, width: 2.2, height: 2.6, rx: 0.6, fill: "#24221f", stroke: "#ffffff", "stroke-width": 0.6 }, cleatBody));
+  const iconAnim = animator();
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  function placeBall(x, rowY, rolled) {
+    ball.setAttribute("transform", `translate(${x.toFixed(2)},${(rowY + BMID).toFixed(2)})`);
+    ballSpin.setAttribute("transform", `rotate(${((rolled / BALL_R) * 180 / Math.PI).toFixed(1)})`);
+  }
+  function placeCleat(x, rowY, lift, tilt) {
+    cleat.setAttribute("transform", `translate(${x.toFixed(2)},${(rowY + BMID + 6 - lift).toFixed(2)})`);
+    cleatBody.setAttribute("transform", `rotate(${tilt.toFixed(1)},13,-4)`);
+  }
+  function hideIcons() {
+    iconAnim.cancel();
+    ball.setAttribute("visibility", "hidden");
+    cleat.setAttribute("visibility", "hidden");
+  }
+  const travelMs = (px) => (motion === "present" ? Math.max(260, (px / 360) * 1000) : motion === "analyze" ? Math.max(140, (px / 1100) * 1000) : 0);
+  async function playIcons(p) {
+    hideIcons();
+    const c = bar.cur[p.name], rowY = c.y;
+    const wg = (c.g / bar.max) * plotW, wa = (c.a / bar.max) * plotW;
+    const gap = wg > 0.25 && wa > 0.25 ? SEG_GAP : 0;
+    const m = bar.metric;
+    if (m === "goals" || m === "ga") {
+      const x0 = BML + BALL_R, x1 = Math.max(x0, BML + wg - BALL_R);
+      ball.setAttribute("visibility", "visible");
+      placeBall(x0, rowY, 0);
+      const ok = await iconAnim.run(travelMs(x1 - x0), (k) => { const x = lerp(x0, x1, k); placeBall(x, rowY, x - x0); }, easeOut);
+      if (!ok || m === "goals") return;
+    }
+    // assists: the boot steps from the start of the assists segment to the end of the bar
+    const s0 = m === "ga" ? BML + wg + gap : BML;
+    const x0 = s0, x1 = Math.max(x0, s0 + wa - CLEAT_W);
+    cleat.setAttribute("visibility", "visible");
+    placeCleat(x0, rowY, 0, 0);
+    const steps = Math.max(1, Math.round((x1 - x0) / 42));
+    await iconAnim.run(travelMs(x1 - x0) * 1.15, (k) => {
+      const ph = Math.sin(Math.PI * k * steps);
+      placeCleat(lerp(x0, x1, k), rowY, Math.abs(ph) * 3.2, -Math.abs(ph) * 9 * (1 - k * 0.3));
+    }, easeIO);
+  }
+
+  players.forEach((p) => {
+    const g = el("g", { class: "row mark" }, gRows);
+    const hit = el("rect", { class: "hit", x: 0, y: 0, width: BW, height: ROW }, g);
+    const name = el("text", { class: "lab", x: BML - 10, y: BMID + 4.5, "text-anchor": "end" }, g);
+    name.textContent = p.name;
+    const pg = el("path", { class: "bar-path seg-goals" }, g);
+    const pa = el("path", { class: "bar-path seg-assists" }, g);
+    const v = el("text", { class: "valtxt", y: BMID + 4.5 }, g);
+    bar.nodes[p.name] = { g, pg, pa, v };
+    hit.addEventListener("pointerenter", () => {
+      $("#barBox").classList.add("hovering"); g.classList.add("hot"); bar.hot = p;
+      const c = bar.cur[p.name];
+      placeTip($("#barTip"), $("#barBox"), barSvg, BW, BML + (((c.g + c.a) / bar.max) * plotW) / 2, c.y + 2,
+        `<b>${p.name}</b> <span class="sub">${p.pos}</span><br>${p.goals} goals · ${p.assists} assists`);
+      playIcons(p);
+    });
+    hit.addEventListener("pointerleave", () => {
+      $("#barBox").classList.remove("hovering"); g.classList.remove("hot"); $("#barTip").hidden = true;
+      bar.hot = null; hideIcons();
+    });
+  });
+  function renderBars() {
+    const step = niceStep(bar.max / 4);
+    gGrid.innerHTML = "";
+    const bottom = BMT + players.length * ROW;
+    for (let t = 0; t <= bar.max + 1e-9; t += step) {
+      const x = BML + (t / bar.max) * plotW;
+      el("line", { class: t === 0 ? "baseline" : "gridline", x1: x, x2: x, y1: BMT, y2: bottom }, gGrid);
+      el("text", { class: "tick", x, y: bottom + 16, "text-anchor": "middle" }, gGrid).textContent = Math.round(t);
+    }
+    players.forEach((p) => {
+      const c = bar.cur[p.name], n = bar.nodes[p.name];
+      const wg = (c.g / bar.max) * plotW, wa = (c.a / bar.max) * plotW;
+      const gap = wg > 0.25 && wa > 0.25 ? SEG_GAP : 0;
+      n.g.setAttribute("transform", `translate(0,${c.y.toFixed(2)})`);
+      n.pg.setAttribute("d", segPath(BML, BTOP, wg, BH, 4, wa <= 0.25));
+      n.pa.setAttribute("d", segPath(BML + wg + gap, BTOP, Math.max(0, wa - gap), BH, 4, true));
+      n.v.setAttribute("x", BML + wg + wa + 6);
+      n.v.textContent = Math.round(c.g + c.a);
+    });
+  }
+  function barTable() {
+    const rows = order().map((p) => `<tr><td>${p.name}</td><td>${p.pos}</td><td class="num">${p.goals}</td><td class="num">${p.assists}</td><td class="num">${p.goals + p.assists}</td></tr>`).join("");
+    $("#barTable").innerHTML = `<thead><tr><th>Player</th><th>Position</th><th class="num">Goals</th><th class="num">Assists</th><th class="num">G+A</th></tr></thead><tbody>${rows}</tbody>`;
+  }
+  function targets() {
+    const o = order(), t = {};
+    o.forEach((p, i) => { const s = parts(p, bar.metric); t[p.name] = { g: s.g, a: s.a, y: BMT + i * ROW }; });
+    return { t, max: niceMax(Math.max(...o.map((p) => val(p, bar.metric)))) };
+  }
+  function syncLegend() {
+    $("#barLegend").hidden = bar.metric !== "ga";
+  }
+  async function updateBars() {
+    hideIcons();
+    const { t, max } = targets();
+    barTable(); syncLegend();
+    const from = {}; players.forEach((p) => (from[p.name] = { ...bar.cur[p.name] }));
+    const m0 = bar.max;
+    barSvg.setAttribute("aria-label", `Bar chart of ${metricName[bar.metric]} by player`);
+    const sizeStep = (k) => {
+      bar.max = lerp(m0, max, k);
+      players.forEach((p) => {
+        bar.cur[p.name].g = lerp(from[p.name].g, t[p.name].g, k);
+        bar.cur[p.name].a = lerp(from[p.name].a, t[p.name].a, k);
+      });
+    };
+    let ok;
+    if (motion === "present") {
+      ok = await bar.anim.run(dur(600), (k) => { sizeStep(k); renderBars(); });
+      if (!ok) return;
+      const y0 = {}; players.forEach((p) => (y0[p.name] = bar.cur[p.name].y));
+      ok = await bar.anim.run(dur(600), (k) => {
+        players.forEach((p) => (bar.cur[p.name].y = lerp(y0[p.name], t[p.name].y, k)));
+        renderBars();
+      });
+    } else {
+      ok = await bar.anim.run(dur(600), (k) => {
+        sizeStep(k);
+        players.forEach((p) => (bar.cur[p.name].y = lerp(from[p.name].y, t[p.name].y, k)));
+        renderBars();
+      });
+    }
+    if (ok && bar.hot) playIcons(bar.hot);
+  }
+  (() => { const { t, max } = targets(); bar.cur = t; bar.max = max; renderBars(); barTable(); syncLegend(); })();
+
+  function wireSeg(sel, key, after) {
+    document.querySelectorAll(sel + " button").forEach((b) => b.addEventListener("click", () => {
+      if (bar[key] === b.dataset.v) return;
+      bar[key] = b.dataset.v;
+      document.querySelectorAll(sel + " button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      after();
+    }));
+  }
+  wireSeg("#metricSeg", "metric", updateBars);
+  wireSeg("#sortSeg", "sort", updateBars);
+
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  $("#nextMw").addEventListener("click", () => {
+    const weights = { Forward: 0.45, Winger: 0.3, Midfielder: 0.2, Defender: 0.08 };
+    const changed = new Set();
+    players.forEach((p) => {
+      if (rnd() < weights[p.pos]) { p.goals++; changed.add(p.name); }
+      if (rnd() < 0.22) { p.assists++; changed.add(p.name); }
+    });
+    if (!changed.size) { players[0].goals++; changed.add(players[0].name); }
+    bar.mw++;
+    $("#mwStatus").textContent = `After matchweek ${bar.mw}`;
+    if (bar.mw >= 38) $("#nextMw").disabled = true;
+    changed.forEach((n) => [bar.nodes[n].pg, bar.nodes[n].pa].forEach((pth) => { pth.classList.remove("flash"); void pth.getBBox(); pth.classList.add("flash"); }));
+    updateBars();
+  });
+
+  /* ---------- 2. Line ---------- */
+  const W = 38;
+  let s2 = 42;
+  const r2 = () => { s2 = (s2 * 48271) % 2147483647; return s2 / 2147483647; };
+  const poisson = (lam) => { const L = Math.exp(-lam); let k = 0, p = 1; do { k++; p *= r2(); } while (p > L); return k - 1; };
+  const cumG = [], cumX = [];
+  let g = 0, x = 0;
+  for (let i = 0; i < W; i++) {
+    const xg = 0.6 + r2() * 1.9;
+    const form = i < 12 ? 0.72 : i < 26 ? 1.32 : 0.7; // slow start, hot streak, late slump
+    x += xg; g += poisson(xg * form);
+    cumG.push(g); cumX.push(Math.round(x * 10) / 10);
+  }
+  const LW = 640, LH = 300, LML = 40, LMR = 100, LMT = 12, LMB = 32;
+  const lineSvg = $("#lineSvg");
+  lineSvg.setAttribute("viewBox", `0 0 ${LW} ${LH}`);
+  const yMax = niceMax(Math.max(cumG[W - 1], cumX[W - 1]));
+  const lx = (w) => LML + ((w - 1) / (W - 1)) * (LW - LML - LMR);
+  const ly = (v) => LMT + (1 - v / yMax) * (LH - LMT - LMB);
+  const lg = el("g", {}, lineSvg);
+  const ys = niceStep(yMax / 4);
+  for (let t = 0; t <= yMax; t += ys) {
+    el("line", { class: t === 0 ? "baseline" : "gridline", x1: LML, x2: LW - LMR + 8, y1: ly(t), y2: ly(t) }, lg);
+    el("text", { class: "tick", x: LML - 8, y: ly(t) + 4, "text-anchor": "end" }, lg).textContent = t;
+  }
+  [1, 10, 20, 30, 38].forEach((w) => {
+    el("text", { class: "tick", x: lx(w), y: LH - LMB + 18, "text-anchor": "middle" }, lg).textContent = w === 1 ? "MW 1" : w;
+  });
+  const cross = el("line", { class: "crosshair", y1: LMT, y2: LH - LMB, visibility: "hidden" }, lineSvg);
+  const pathX = el("path", { class: "line", stroke: "var(--s2)" }, lineSvg);
+  // Two clip regions split by the full-season xG line: goals drawn above it stay blue, below it turn red.
+  const xgEdge = cumX.map((v, i) => `${lx(i + 1).toFixed(1)},${ly(v).toFixed(1)}`);
+  const edgeL = `${LML - 20},${ly(cumX[0]).toFixed(1)}`, edgeR = `${LW},${ly(cumX[W - 1]).toFixed(1)}`;
+  const defs = el("defs", {}, lineSvg);
+  el("path", { d: `M${edgeL}L${xgEdge.join("L")}L${edgeR}L${LW},${LH}L${LML - 20},${LH}Z` }, el("clipPath", { id: "belowXg" }, defs));
+  el("path", { d: `M${edgeL}L${xgEdge.join("L")}L${edgeR}L${LW},-20L${LML - 20},-20Z` }, el("clipPath", { id: "aboveXg" }, defs));
+  const pathG = el("path", { class: "line", stroke: "var(--s1)", "clip-path": "url(#aboveXg)" }, lineSvg);
+  const pathGr = el("path", { class: "line", stroke: "var(--under)", "clip-path": "url(#belowXg)" }, lineSvg);
+  const mk = (c) => el("circle", { r: 4.5, fill: c, stroke: "var(--surface)", "stroke-width": 2 }, lineSvg);
+  const dotX = mk("var(--s2)"), dotG = mk("var(--s1)");
+  const hX = mk("var(--s2)"), hG = mk("var(--s1)");
+  hX.setAttribute("visibility", "hidden"); hG.setAttribute("visibility", "hidden");
+  const labG = el("text", { class: "valtxt" }, lineSvg);
+  const labX = el("text", { class: "valtxt" }, lineSvg);
+  const overlay = el("rect", { x: LML, y: LMT, width: LW - LML - LMR, height: LH - LMT - LMB, fill: "transparent" }, lineSvg);
+  const line = { through: 38, anim: animator(), playing: false };
+  const at = (arr, t) => { const i = Math.floor(t) - 1, f = t - Math.floor(t); return i + 1 < arr.length ? lerp(arr[i], arr[i + 1], f) : arr[arr.length - 1]; };
+  function pathUpTo(arr, t) {
+    const pts = [];
+    for (let w = 1; w <= Math.floor(t); w++) pts.push(`${lx(w).toFixed(1)},${ly(arr[w - 1]).toFixed(1)}`);
+    if (t > Math.floor(t)) pts.push(`${lx(t).toFixed(1)},${ly(at(arr, t)).toFixed(1)}`);
+    return "M" + pts.join("L");
+  }
+  function renderLine() {
+    const t = line.through;
+    pathG.setAttribute("d", pathUpTo(cumG, t));
+    pathGr.setAttribute("d", pathUpTo(cumG, t));
+    pathX.setAttribute("d", pathUpTo(cumX, t));
+    const ex = lx(t), gy = ly(at(cumG, t)), xy = ly(at(cumX, t));
+    dotG.setAttribute("cx", ex); dotG.setAttribute("cy", gy);
+    dotG.setAttribute("fill", at(cumG, t) < at(cumX, t) ? "var(--under)" : "var(--s1)");
+    dotX.setAttribute("cx", ex); dotX.setAttribute("cy", xy);
+    let a = gy, b = xy;
+    if (Math.abs(a - b) < 16) { const mid = (a + b) / 2, s = a <= b ? -1 : 1; a = mid + s * 8; b = mid - s * 8; }
+    labG.setAttribute("x", ex + 10); labG.setAttribute("y", a + 4);
+    labX.setAttribute("x", ex + 10); labX.setAttribute("y", b + 4);
+    labG.textContent = `${Math.round(at(cumG, t))} goals`;
+    labX.textContent = `${at(cumX, t).toFixed(1)} xG`;
+    const wk = Math.round(t);
+    $("#mwRange").value = wk;
+    $("#rangeStatus").textContent = `Through matchweek ${wk}`;
+  }
+  renderLine();
+  $("#lineTable").innerHTML = `<thead><tr><th>Matchweek</th><th class="num">Goals</th><th class="num">xG</th><th class="num">Difference</th></tr></thead><tbody>` +
+    cumG.map((v, i) => `<tr><td>${i + 1}</td><td class="num">${v}</td><td class="num">${cumX[i].toFixed(1)}</td><td class="num">${(v - cumX[i] >= 0 ? "+" : "") + (v - cumX[i]).toFixed(1)}</td></tr>`).join("") + "</tbody>";
+
+  function stopPlay() { line.playing = false; $("#playBtn").textContent = "Play season"; }
+  $("#mwRange").addEventListener("input", (e) => {
+    stopPlay();
+    const to = +e.target.value, from = line.through;
+    line.anim.run(dur(350), (k) => { line.through = lerp(from, to, k); renderLine(); $("#mwRange").value = to; });
+  });
+  $("#playBtn").addEventListener("click", async () => {
+    if (line.playing) { line.anim.cancel(); stopPlay(); return; }
+    const from = line.through >= 38 ? 1 : line.through;
+    const span = (38 - from) / 37;
+    line.playing = true; $("#playBtn").textContent = "Pause";
+    const ms = motion === "present" ? 6500 * span : motion === "analyze" ? 2000 * span : 0;
+    const ok = await line.anim.run(ms, (k) => { line.through = lerp(from, 38, k); renderLine(); }, linear);
+    if (ok) stopPlay();
+  });
+  overlay.addEventListener("pointermove", (e) => {
+    const p = toVB(lineSvg, LW, e);
+    const w = Math.max(1, Math.min(Math.floor(line.through), Math.round(1 + ((p.x - LML) / (LW - LML - LMR)) * (W - 1))));
+    const cx = lx(w), gv = cumG[w - 1], xv = cumX[w - 1], d = gv - xv;
+    cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
+    hG.setAttribute("cx", cx); hG.setAttribute("cy", ly(gv)); hG.setAttribute("visibility", "visible");
+    hG.setAttribute("fill", gv < xv ? "var(--under)" : "var(--s1)");
+    hX.setAttribute("cx", cx); hX.setAttribute("cy", ly(xv)); hX.setAttribute("visibility", "visible");
+    placeTip($("#lineTip"), $("#lineBox"), lineSvg, LW, cx, Math.min(ly(gv), ly(xv)),
+      `<b>Matchweek ${w}</b><br>${gv} goals · ${xv.toFixed(1)} xG<br><span class="sub">${d >= 0 ? "+" : ""}${d.toFixed(1)} vs expected</span>`);
+  });
+  overlay.addEventListener("pointerleave", () => {
+    [cross, hG, hX].forEach((n) => n.setAttribute("visibility", "hidden"));
+    $("#lineTip").hidden = true;
+  });
+
+  /* ---------- 3. Donut <-> bars morph ---------- */
+  const cats = [
+    { k: "Goal", n: 58, c: "var(--s1)" },
+    { k: "Saved", n: 112, c: "var(--s2)" },
+    { k: "Off target", n: 149, c: "var(--s3)" },
+    { k: "Blocked", n: 87, c: "var(--s4)" }
+  ];
+  const total = cats.reduce((s, c) => s + c.n, 0);
+  const maxN = Math.max(...cats.map((c) => c.n));
+  const MW = 640, MH = 300, CX = 320, CY = 150, R = 116, r = 70, N = 40;
+  const BASE = 258, HMAX = 196, BWID = 72, GAP = 44;
+  const span = cats.length * BWID + (cats.length - 1) * GAP, bx0 = (MW - span) / 2;
+  const morphSvg = $("#morphSvg");
+  morphSvg.setAttribute("viewBox", `0 0 ${MW} ${MH}`);
+  $("#morphLegend").innerHTML = cats.map((c) => `<span><i style="background:${c.c}"></i>${c.k}</span>`).join("");
+  $("#morphTable").innerHTML = `<thead><tr><th>Outcome</th><th class="num">Shots</th><th class="num">Share</th></tr></thead><tbody>` +
+    cats.map((c) => `<tr><td>${c.k}</td><td class="num">${c.n}</td><td class="num">${Math.round((c.n / total) * 100)}%</td></tr>`).join("") +
+    `<tr><td><b>Total</b></td><td class="num"><b>${total}</b></td><td class="num">100%</td></tr></tbody>`;
+
+  const baseLine = el("line", { class: "baseline", x1: bx0 - 16, x2: bx0 + span + 16, y1: BASE, y2: BASE, opacity: 0 }, morphSvg);
+  const center = el("g", {}, morphSvg);
+  el("text", { x: CX, y: CY + 2, "text-anchor": "middle", class: "valtxt", style: "font-size:26px" }, center).textContent = total;
+  el("text", { x: CX, y: CY + 22, "text-anchor": "middle", class: "lab" }, center).textContent = "shots";
+
+  let a = 0;
+  cats.forEach((c, i) => {
+    const a0 = a, a1 = a + (c.n / total) * Math.PI * 2; a = a1;
+    const donut = [], bars = [];
+    const x0 = bx0 + i * (BWID + GAP), h = (c.n / maxN) * HMAX;
+    for (let j = 0; j <= N; j++) {
+      const ang = lerp(a0, a1, j / N);
+      donut.push([CX + R * Math.sin(ang), CY - R * Math.cos(ang)]);
+      bars.push([x0 + (BWID * j) / N, BASE - h]);
+    }
+    for (let j = 0; j <= N; j++) {
+      const ang = lerp(a1, a0, j / N);
+      donut.push([CX + r * Math.sin(ang), CY - r * Math.cos(ang)]);
+      bars.push([x0 + BWID - (BWID * j) / N, BASE]);
+    }
+    const mid = (a0 + a1) / 2, lr = R + 30;
+    c.dLab = [CX + lr * Math.sin(mid), CY - lr * Math.cos(mid)];
+    c.bLab = [x0 + BWID / 2, BASE + 20];
+    c.dVal = [c.dLab[0], c.dLab[1] + 15];
+    c.bVal = [x0 + BWID / 2, BASE - h - 8];
+    c.donut = donut; c.bars = bars;
+    c.path = el("path", { class: "seg-path mark", fill: c.c }, morphSvg);
+    c.lab = el("text", { class: "lab", "text-anchor": "middle" }, morphSvg);
+    c.lab.textContent = c.k;
+    c.val = el("text", { class: "valtxt", "text-anchor": "middle" }, morphSvg);
+    c.path.addEventListener("pointerenter", () => {
+      $("#morphBox").classList.add("hovering"); c.path.classList.add("hot");
+      const p = morph.t < 0.5 ? c.dLab : c.bVal;
+      placeTip($("#morphTip"), $("#morphBox"), morphSvg, MW, p[0], p[1] - 6,
+        `<b>${c.k}</b><br>${c.n} shots · ${Math.round((c.n / total) * 100)}% of all shots`);
+    });
+    c.path.addEventListener("pointerleave", () => {
+      $("#morphBox").classList.remove("hovering"); c.path.classList.remove("hot"); $("#morphTip").hidden = true;
+    });
+  });
+  const morph = { t: 0, anim: animator() };
+  function renderMorph() {
+    const t = morph.t;
+    cats.forEach((c) => {
+      let d = "";
+      for (let j = 0; j < c.donut.length; j++) {
+        const px = lerp(c.donut[j][0], c.bars[j][0], t), py = lerp(c.donut[j][1], c.bars[j][1], t);
+        d += (j ? "L" : "M") + px.toFixed(1) + "," + py.toFixed(1);
+      }
+      c.path.setAttribute("d", d + "Z");
+      c.lab.setAttribute("x", lerp(c.dLab[0], c.bLab[0], t)); c.lab.setAttribute("y", lerp(c.dLab[1], c.bLab[1], t));
+      c.val.setAttribute("x", lerp(c.dVal[0], c.bVal[0], t)); c.val.setAttribute("y", lerp(c.dVal[1], c.bVal[1], t));
+      c.val.textContent = t < 0.5 ? Math.round((c.n / total) * 100) + "%" : c.n;
+    });
+    center.setAttribute("opacity", Math.max(0, 1 - t * 2.5));
+    baseLine.setAttribute("opacity", Math.max(0, t * 2 - 1));
+  }
+  renderMorph();
+  $("#morphBtn").addEventListener("click", () => {
+    const to = morph.t > 0.5 ? 0 : 1, from = morph.t;
+    $("#morphBtn").textContent = to ? "Show as donut" : "Show as bars";
+    morphSvg.setAttribute("aria-label", to ? "Bar chart of shot outcomes" : "Donut chart of shot outcomes");
+    morph.anim.run(dur(950), (k) => { morph.t = lerp(from, to, k); renderMorph(); });
+  });
+})();
+</script>
+
+</body>
+</html>

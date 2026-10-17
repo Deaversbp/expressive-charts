@@ -1,0 +1,42 @@
+{
+  "name": "expressive-charts",
+  "version": "0.0.0",
+  "description": "Composable motion and expressive effects for interactive web charts.",
+  "license": "MIT",
+  "author": "Deaversbp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Deaversbp/expressive-charts.git"
+  },
+  "keywords": ["charts", "data-visualization", "animation", "motion", "svg", "dataviz"],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite demo",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}

@@ -654,7 +654,8 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
    - **Checkpoint:** judge the feel in a browser in all three modes: travel speed, easing, icon size and placement, hover timing. Tune the scaling table and the `travel` defaults before going on.
 8. **Updates.** `update()` with staged, interruptible transitions (values first, then positions): sorting and the metric switch animate, and hover replays after an update.
 9. **Keyboard.** Roving focus. Focus plays the hover story, Escape or blur leaves, and the focus ring is drawn from the mark's outline.
-10. **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`. Shaped by the adapter spike's findings (`docs/ideas/adapter-spike.md`).
+10. **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`.
+    - **Prerequisite:** the adapter spike's findings, which test what D3, Plot and Vega expose on their SVG elements. They're on a separate branch and will land as `docs/ideas/adapter-spike.md`. Don't start this step until they're on main.
 11. **Finish `demo/bars.html`.** Animated metric switch and sort, keyboard support, and the same hover story on a hand-written SVG bar chart beside the reference one.
 
 Steps 5–7 come first so the motion can be judged in a browser before staged updates, keyboard support and the adapter are built around it.

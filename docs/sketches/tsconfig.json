@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [],
+    "paths": {
+      "expressive-charts": ["./api.ts"],
+      "expressive-charts/icons/sport": ["./icons-sport.ts"]
+    }
+  },
+  "include": ["./**/*.ts"]
+}

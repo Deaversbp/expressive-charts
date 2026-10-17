@@ -39,7 +39,7 @@
     "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p docs/sketches"
   },
   "devDependencies": {
     "jsdom": "^29.1.1",

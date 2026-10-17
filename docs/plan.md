@@ -2,7 +2,7 @@
 
 Status: proposal, October 2026. Nothing here is built yet. When a section turns into code, move what's final into [architecture.md](architecture.md) and the README, and mark the section here as done.
 
-The goal for v0.1 is to rebuild everything in [`demo/lab.html`](../demo/lab.html) on the real library: ball-and-cleat bars, the goals vs xG line, and the donut-to-bars morph. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart with the `travel` effect.
+The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
 ## Decisions made while planning
 
@@ -12,6 +12,21 @@ The goal for v0.1 is to rebuild everything in [`demo/lab.html`](../demo/lab.html
 | Reduced motion | The OS setting forces `off` unless the **viewer** explicitly picks a mode in an on-page control. A mode the **author** sets in code never overrides it. CLAUDE.md rule 6 needs a matching wording change in M1 (see §3.5). |
 | Layout | Charts measure their container and lay out in real pixels, so text stays readable at every width. The prototype instead scales a fixed viewBox. |
 | Drawing | Effects draw through a small, renderer-neutral context: place an icon, restyle a mark, draw an overlay path. SVG implements it now, and Canvas can implement it later without changing any effect. Icons are stored as path data plus paint, not as raw SVG markup. |
+| Product | **Effects first.** Effects plus small adapters are the core, so they also work on D3, Plot and Vega SVG marks. Our bar, line and donut charts are reference implementations: complete enough for the demos and everyday use, not a full chart library. (Design session, §11.) |
+| Guardrail | **Never distort data.** Effects may add personality or explain a change, but never move, resize or hide data while it's being read. |
+| Effect authors | The effect-author API becomes public after M3, once three chart types have proven it. Until then it's marked experimental. |
+| Domain | A neutral core (generic icons and gaits). The ball and cleat move to an optional pack, `expressive-charts/icons/sport`, which the demos use. |
+
+## Principles
+
+These come from the design session (§11). Use them to settle disagreements about scope and to review new effects and presets.
+
+1. **Effects first.** The product is expressive motion that works on any SVG chart. Our charts exist to show the effects off and to cover everyday use; we don't compete on chart breadth.
+2. **Never distort data.** An effect may add personality or explain a change. It never moves, resizes or hides data while someone is reading it. Decorations go in an overlay. Changes to the marks themselves are small and bounded, for example a wiggle that moves the far end ≤ 3 px.
+3. **Information survives reduced motion.** An effect that tells the viewer something (a delta label, a threshold colour) must leave it visible in its end state, because reduced motion shows only end states.
+4. **The viewer controls motion.** Every duration goes through `motion`. Reduced motion is honoured unless the viewer picks a mode on the page.
+5. **Small pieces, typed seams.** Effects are small and composable. Their kind (geometry, data, transition) and the row type they read are checked at compile time.
+6. **Neutral core, optional packs.** Nothing domain-specific (soccer, finance, weather) ships in the core.
 
 ---
 
@@ -253,6 +268,8 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 
 ## 4. Effects
 
+> Updated by the design session: `ctx.previous`, `data.previous`, `Layer.text()` and the author helpers are in [`sketches/api.ts`](sketches/api.ts) (§11).
+
 ### 4.1 Interfaces
 
 ```ts
@@ -373,6 +390,8 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 ---
 
 ## 5. Chart API
+
+> Updated by the design session: effect slots now live under `on: { … }` and use `NoInfer`, and adapters (`expressive()`) share these events and slots. See [`sketches/api.ts`](sketches/api.ts) and §11.
 
 ### 5.1 Shared shape
 
@@ -507,6 +526,8 @@ view.show("bars");
 
 ## 6. Icons
 
+> Updated by the design session: the core ships neutral icons (`dot`, `arrow`, `chevron`); the ball and cleat move to `expressive-charts/icons/sport`.
+
 ```ts
 // src/core/contracts/icon.ts
 export interface IconShape { readonly d: string; readonly fill?: Color; readonly stroke?: Color; readonly width?: number; readonly clip?: string }
@@ -614,29 +635,32 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 
 1. ✅ **Docs.** Update CLAUDE.md rule 6 (§3.5) and architecture.md. The core section is done; the contract sections follow with step 3.
 2. ✅ **Core motion.** Clock, manual clock, easing, tween, `animated`, `createMotion` with the scaling table, reduced motion, viewer choice.
-3. **Contracts and geometry.** All of §2 and §4.2 as types. Line and arc path math with arc-length sampling, `slice`, `sample`, matrices. The recording layer.
+3. **Contracts and geometry.** All of §2 and §4.2 as types, with the §11 changes. Line and arc path math with arc-length sampling, `slice`, `sample`, matrices. The public `describe.bar` builder. The recording layer.
 4. **Runner and registries.** The rules in §4.3, plus the preset and icon registries.
 5. **`barChart`.** Horizontal and vertical, single and stacked. Keyed marks, measured layout, axis and grid in theme colours, built-in hover dimming, roving keyboard focus, events, and `update()` with staged, interruptible transitions.
-6. **Icons, `travel` and combinators.** `soccer-ball` and `cleat`; `travel` with gaits; `sequence`, `parallel`, `only`.
-7. **`demo/bars.html`.** Metric switch (Goals / Assists / Goals + assists), sort, motion switch.
+6. **Icons, `travel` and combinators.** The neutral core icons; the `expressive-charts/icons/sport` pack with `soccer-ball` and `cleat` (this needs a second build entry and a subpath export); `travel` with gaits; `sequence`, `parallel`, `only`.
+7. **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`.
+8. **`demo/bars.html`.** Metric switch (Goals / Assists / Goals + assists), sort and motion switch on the reference chart, with the same hover story on a hand-written SVG bar chart beside it.
 
-**Done when:** all three hover stories match the prototype; sorting is staged in presentation, fast in analysis, and instant in off and under reduced motion; keyboard focus plays the same stories; and the conformance suite passes for `travel` on bar marks.
+**Done when:** all three hover stories match the prototype, on our chart and on the hand-written one; sorting is staged in presentation, fast in analysis, and instant in off and under reduced motion; keyboard focus plays the same stories; and the conformance suite passes for `travel` on bar marks from both sources.
 
 ### M2: Bars at prototype parity
 
-`flash` via the `update` slot. "Play next matchweek". Tooltip, legend and data table. Theme tokens with dark mode and the eight validated colours. The `motionSwitch` helper. ARIA roles settled after screen reader testing. Optionally, Playwright visual tests.
+`flash` via `on.update`. "Play next matchweek". Tooltip, legend and data table. Theme tokens with dark mode and the eight validated colours. The `motionSwitch` helper. ARIA roles settled after screen reader testing. Optionally, Playwright visual tests.
 
 **Demo:** the full card 1 of the lab.
 
 ### M3: Donut, plus the proof that effects are chart-agnostic
 
-`donutChart` (slice geometry, centre label). The same `travel`, now rolling around slices, with **no change to effect code**. `wiggle`, `pulse`, `stagger` and string presets, shown on both bars and donut (`hover: "wiggle"`).
+`donutChart` (slice geometry, centre label) and the public `describe.arc`. The same `travel`, now rolling around slices, with **no change to effect code**, on our donut and on D3-style pie paths through `expressive({ geometry })`. `wiggle`, `pulse`, `stagger` and string presets, shown on both bars and donut (`on: { hover: "wiggle" }`).
+
+**Then the effect API goes public:** drop `@experimental` from `defineEffect`, `defineDataEffect`, `matrix` and `offset`, export the conformance suite, and write the effect-authoring guide.
 
 **Demo:** `demo/donut.html`.
 
 ### M4: Line chart and data effects
 
-`lineChart` with series and point marks and crosshair hover across series. `MarkData` samples. `threshold` with the `decorate` slot and `onChange`. The `playback()` controller with `playButton()` (WCAG 2.2.2) and `reveal()`. A ball riding the line (`ride: "on"`).
+`lineChart` with series and point marks and crosshair hover across series. `MarkData` samples, plus `samplesAlong` and `watch` for adapters. `threshold` in `on.decorate`, following `onChange`. The `playback()` controller with `playButton()` (WCAG 2.2.2) and `reveal()`. A ball riding the line (`ride: "on"`).
 
 **Demo:** card 2 of the lab.
 
@@ -651,8 +675,8 @@ The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label
 - A stress demo to set documented SVG limits (§10).
 - A full accessibility audit.
 - A bundle-size check in CI, done with a Node script and no new dependency.
-- An effect-authoring guide and README API docs.
-- Decide subpath exports, then publish 0.1.0.
+- README API docs.
+- Decide whether to add more subpath exports, then publish 0.1.0.
 
 The donut comes *before* the line on purpose. The architecture's central bet is that one effect works on any chart, and a second chart type tests that more cheaply than the line chart, which also brings in data effects and playback.
 
@@ -667,12 +691,14 @@ The donut comes *before* the line on purpose. The architecture's central bet is 
 3. **Persisting the viewer's motion choice** across pages (`localStorage`). *Recommendation:* opt-in `motionSwitch(el, motion, { persist: "key" })`.
 4. **Live-region announcements** on update, on or off by default. *Recommendation:* off by default, with a one-line option.
 5. **Playwright for visual regression** needs a new dev dependency plus browsers in CI. *Recommendation:* decide at M2.
-6. **Subpath exports** (`expressive-charts/core`, `/effects`) for smaller bundles. *Recommendation:* decide in M6 using real bundle numbers.
+6. **More subpath exports** (`expressive-charts/core`, `/effects`) for smaller bundles. The first one (`/icons/sport`) is needed in M1. *Recommendation:* decide the rest in M6 using real bundle numbers.
 7. **TypeScript 7** (the native compiler) is a separate upgrade. *Recommendation:* after M1, once there's real code to typecheck.
 8. **Framework wrappers** (React, Vue, Svelte) are out of scope for 0.1. The imperative `update()` API is designed to be easy to wrap.
 9. **Line smoothing.** v0.1 lines are straight polylines, which keeps `threshold` crossings exact and arc length cheap. Curves would mean sampled arc-length tables and approximate crossings.
 10. **Naming.** Keep the draft's `path` and `angle`, or rename them to `walk` and `heading` to avoid confusion with `outline`? *Recommendation:* keep them; the doc comments carry the meaning.
 11. **Releasing.** Check that the npm name is available, and publish from CI with provenance.
+12. **D3 in demos and tests.** Adapter demos and tests are most convincing against real D3, but D3 would be a new dev dependency (never a runtime one). *Recommendation:* M1 uses a hand-written SVG chart; decide on D3 as a dev dependency in M3, when pie paths need it.
+13. **Cost of `watch`.** Following a host's transition through attribute changes means re-reading geometry on every frame. *Recommendation:* measure it in M4 before making it more than opt-in.
 
 ### Risks
 
@@ -690,6 +716,38 @@ The donut comes *before* the line on purpose. The architecture's central bet is 
 - **Reduced-motion override confusing viewers.** Mitigation: the motion switch says when the device prefers reduced motion and that picking a mode overrides it.
 - **Screen reader support for ARIA in SVG is uneven.** Mitigations: test in M2, and keep the data table as the dependable fallback.
 - **Text measurement** differs between the browser and jsdom. Mitigations: measurement is injectable, and tests use fixed widths.
+- **Host charts we don't control.** Adapters run inside other libraries' SVG: transforms on parent groups, marks re-created on every render, and the host's own CSS. Mitigations: geometry in the marks' nearest common ancestor's coordinates (converted with each element's CTM), an overlay inserted into that ancestor, keys rather than elements as identity, and never writing a host element's `transform` without composing it with the host's own.
+
+---
+
+## 11. Design session outcomes (October 2026)
+
+The session settled the four product questions (now the last four rows of the decisions table and the Principles above). Then it tested the proposed API by writing what users would write, before any of it is built.
+
+**The sketch.** [`docs/sketches/`](sketches/) holds the proposed public API as TypeScript declarations (`api.ts`, which re-exports the real motion core) and seven example programs written against it:
+
+- the three lab cards on the reference charts;
+- the ball-and-cleat story on a D3 stacked bar chart;
+- D3 pie arcs and a D3 line with `threshold`;
+- two custom effects written outside the project;
+- presets.
+
+`npm run typecheck` compiles them, so the sketch stays honest as the real API lands: replace a declaration with a re-export of the real thing once it's built. Each `@ts-expect-error` line is a misuse that the types must reject, and each one was checked to fail for the intended reason.
+
+**What writing the examples changed.** Where `api.ts` differs from §2–§6, `api.ts` wins.
+
+1. **Type bug: generic effects erased the row type.** A data effect such as `threshold()` (typed for any row) in a chart's options made TypeScript infer the chart's row type as `unknown`, which silently switched off field-name checking. The effect slots now use `NoInfer`, and an effect written for one row type is rejected on a chart of another.
+2. **Effect slots move under `on: { hover, enter, update, exit, decorate }`.** A top-level `update` slot collided with the `chart.update()` method. The group also reads naturally: *on hover, travel*.
+3. **Update effects need the previous state.** Showing a change (a "+2" label, a ghost of the old bar) needs what came before: `ctx.previous` (geometry) and `data.previous` (values).
+4. **The drawing API needs `text()`.** It draws in theme text colours by default, never series colours.
+5. **Effect authors need small helpers:** `defineEffect`, `defineDataEffect`, `matrix` and `offset`. They're experimental until M3.
+6. **"A run ends where `end()` starts" is the right rule for informational effects.** The delta label rises into place and *stays*; if it faded out, reduced motion (end states only) would never show the change. This is now Principle 3.
+7. **Geometry builders are public.** `describe.bar`, `.arc`, `.line`, `.point` and `.shape` are the same builders our charts use, so adapters and reference charts share one implementation. Arc angles follow `d3.pie()` (radians, 0 at 12 o'clock, clockwise), so pie output plugs straight in.
+8. **Adapter coordinate space.** Marks often sit in transformed groups, and stacked bars sit in one `<g>` per series. Geometry is expressed in the marks' nearest common ancestor's coordinates, and the overlay is drawn there.
+9. **Data effects on adapters need samples.** `samplesAlong(mark, points)` projects data points onto the walk, which makes `threshold` a few lines on a D3 line.
+10. **Typing adapters.** D3 selections supply the row type; plain elements need `expressive<Row>(…)` or a `datum` accessor.
+11. **Host transitions.** The host can scale its own animations with `motion.duration(600)`, which is the simplest integration. `watch: true` follows a host transition frame by frame, at a cost to measure (open question 13).
+12. **What the types catch:** stacking a non-numeric field, a missing accessible name, a transition effect in a mark slot, a data effect where a geometry effect is required, an unknown series, an unknown initial view, and a foreign data effect. **What they don't:** misspelled preset names, which are only caught when the chart is created (custom names are allowed).
 
 ---
 

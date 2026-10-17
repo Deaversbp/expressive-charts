@@ -79,39 +79,52 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 
 ## Mark geometry (planned)
 
-Every chart describes each of its marks with the same shape:
+Every mark, whether it's drawn by one of our charts or by another library, is described with the same `MarkGeometry` shape. It has two parts:
+
+- **The walk**, from where the data starts to where it ends: `start`, `end`, `length`, `path(t)`, `angle(t)` and `slice(t0, t1)`. `t` is proportional to distance, so equal steps in `t` are equal distances on screen.
+- **The body**: `thickness`, `outline`, `bounds`, `center`, `pivot`, plus ordered `segments` for stacks.
+
+For a bar, the walk is the centre line from the baseline to the tip. For a donut slice, it's the mid-radius arc. For a line, it's the line itself. That's what lets one `travel` effect roll a ball along all three.
+
+Geometry builders (`describe.bar`, `.arc`, `.line`, `.point`, `.shape`) are public. Our charts and the adapters use the same ones. The full proposed types are in [sketches/api.ts](sketches/api.ts), and the reasoning is in [plan.md §2](plan.md#2-the-markgeometry-contract).
+
+## Events and effect slots (planned)
+
+Charts and adapters emit `enter`, `update`, `exit`, `hover` and `leave`, each with the mark's geometry, its data and its position in the batch. An `update` event also carries the previous geometry. Effects attach to events through the `on` option:
 
 ```ts
-interface MarkGeometry {
-  key: string;                 // stable identity across updates
-  start: Point;                // where the data begins (a bar's baseline end)
-  end: Point;                  // where the data ends (a bar's tip)
-  path: (t: number) => Point;  // walk the mark from start (t=0) to end (t=1)
-  angle: (t: number) => number;// direction of travel at t, for orienting icons
-  outline: string;             // SVG path data of the mark's shape
-  segments?: Record<string, MarkGeometry>; // e.g. "goals" and "assists" in a stacked bar
-}
+barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("soccer-ball"), update: "flash" } });
 ```
 
-For a bar, `path` is a straight line. For a donut slice, it's the arc. For a line chart, it's the line up to the mark. This is what lets one `travel` effect roll a ball along all three.
-
-## Events (planned)
-
-Charts emit `enter`, `update`, `exit`, `hover` and `leave`, each with the mark's geometry and datum. Effects subscribe to an event through the chart's options (`hover: effect`).
+`decorate` is a fifth slot for persistent effects like `threshold`: they start on enter, stay until exit, and redraw whenever the mark's geometry changes.
 
 ## Effects (planned)
 
-```ts
-interface Effect {
-  run(mark: MarkGeometry, ctx: EffectContext): Promise<void>; // animates; resolves when done or cancelled
-  end(mark: MarkGeometry, ctx: EffectContext): void;          // jump to final state (reduced motion)
-  clear(ctx: EffectContext): void;                            // remove anything the effect drew
-}
-```
+There are three kinds, distinguished by a `kind` field:
 
-First set: `travel(icon, { along })`, `wiggle()`, `pulse()`, `flash()`, `threshold({ compareTo, color })`, `morph()`.
+- **Geometry effects** receive a `MarkGeometry`.
+- **Data effects** also receive the mark's data (values along the walk, related series, previous values).
+- **Transition effects** receive two geometries (`morph`).
 
-Combinators: `sequence(...effects)`, `parallel(...effects)`, `stagger(effect, delay)`.
+Each one has `run`, `end` (the final state, used for reduced motion) and `clear`. Effects draw only through the context's drawing API: icons, overlay paths, text, and mark styles.
+
+First set: `travel(icon, { along })`, `wiggle()`, `pulse()`, `flash()`, `threshold({ compareTo, color })`, `morph()`. Combinators: `sequence`, `parallel`, `stagger`, `only`. Combinations keep the data kind if any part has it.
+
+The effect-author API (`defineEffect`, `defineDataEffect`, `matrix`, `offset`) is experimental until M3.
+
+## Adapters (planned)
+
+`expressive(marks, options)` attaches effects to SVG marks drawn by another library, such as a D3 selection, a NodeList or a selector:
+
+- It reads geometry from rects and circles itself. For other shapes, you describe the geometry with the public builders.
+- Marks that share a key become one mark, and `segment` orders them as segments.
+- `refresh()` re-reads the marks after the host re-renders, then fires enter, update and exit by key.
+
+Adapters follow the chart rules:
+
+- They never know specific effects.
+- They express geometry in the marks' nearest common ancestor's coordinates, and draw their overlay there.
+- They leave the host's styling, axes and tooltips alone.
 
 ## Rendering
 
@@ -121,3 +134,4 @@ SVG first. Canvas or WebGL rendering is a later option for charts with thousands
 
 - `dist/index.js` + `dist/index.d.ts`: ES module for npm and bundlers.
 - `dist/expressive-charts.global.js`: script-tag bundle exposing `window.ExpressiveCharts`.
+- Planned: `expressive-charts/icons/sport`, an optional icon pack (ball, cleat) as a separate entry point, so the core stays neutral.

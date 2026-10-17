@@ -1,5 +1,5 @@
 // Effects written by someone outside the project, against the experimental author API.
-import { barChart, defineDataEffect, defineEffect, expressive, offset, type MarkData } from "expressive-charts";
+import { barChart, defineDataEffect, defineEffect, expressive, offset, sequence, threshold, type DataEffect, type MarkData } from "expressive-charts";
 
 /**
  * A highlighter stroke that draws itself along the walk, then stays.
@@ -76,3 +76,14 @@ interface Team {
 declare const teams: Team[];
 // @ts-expect-error Region effect on a chart of Team rows.
 barChart("#bad", { label: "Bad", data: teams, y: "team", x: "points", on: { update: revenueOnly } });
+
+// Combining doesn't launder a requirement: a generic effect alongside a Region effect still needs Region rows.
+export const regionStory = sequence(revenueOnly, threshold({ compareTo: 0 }));
+barChart("#ok", { label: "OK", data: sales, y: "region", x: "revenue", on: { update: regionStory } });
+// @ts-expect-error the combination still reads datum.revenue.
+barChart("#bad", { label: "Bad", data: teams, y: "team", x: "points", on: { update: regionStory } });
+
+// An effect that needs more fields than the rows have is rejected too.
+declare const needsMore: DataEffect<Region & { target: number }>;
+// @ts-expect-error Region rows have no target field.
+barChart("#bad", { label: "Bad", data: sales, y: "region", x: "revenue", on: { update: needsMore } });

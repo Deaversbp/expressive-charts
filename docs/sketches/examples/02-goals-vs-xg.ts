@@ -42,3 +42,10 @@ export const wrong: GeometryEffect = threshold({ compareTo: "xg" });
 
 // @ts-expect-error "week" is fine as x, but series must be numeric fields that exist.
 lineChart("#bad", { label: "Bad", data: weeks, x: "week", series: ["goals", "points"] });
+
+interface LabelledWeek extends Week {
+  label: string;
+}
+declare const labelled: LabelledWeek[];
+// @ts-expect-error x must be a number or Date field; "label" holds strings.
+lineChart("#bad", { label: "Bad", data: labelled, x: "label", series: ["goals"] });

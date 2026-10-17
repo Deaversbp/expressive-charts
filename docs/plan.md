@@ -747,7 +747,23 @@ The session settled the four product questions (now the last four rows of the de
 9. **Data effects on adapters need samples.** `samplesAlong(mark, points)` projects data points onto the walk, which makes `threshold` a few lines on a D3 line.
 10. **Typing adapters.** D3 selections supply the row type; plain elements need `expressive<Row>(…)` or a `datum` accessor.
 11. **Host transitions.** The host can scale its own animations with `motion.duration(600)`, which is the simplest integration. `watch: true` follows a host transition frame by frame, at a cost to measure (open question 13).
-12. **What the types catch:** stacking a non-numeric field, a missing accessible name, a transition effect in a mark slot, a data effect where a geometry effect is required, an unknown series, an unknown initial view, and a foreign data effect. **What they don't:** misspelled preset names, which are only caught when the chart is created (custom names are allowed).
+12. **What the types catch:**
+    - stacking a non-numeric field;
+    - a field of the wrong type used as an encoding (`x: "label"` on a line chart);
+    - a missing accessible name;
+    - a transition effect in a mark slot;
+    - a data effect where a geometry effect is required;
+    - an unknown series or initial view;
+    - a data effect written for other rows;
+    - an effect that needs fields the rows don't have;
+    - a combination that hides a typed part behind a generic one.
+
+    **What they don't catch:** misspelled preset names. Custom names are allowed, so those are only caught when the chart is created.
+13. **Typing rules from the PR #2 review:**
+    - A combination needs *all* its parts' row types at once (an intersection, not a union). Otherwise `sequence(typed, threshold())` widens to `unknown` and fits any chart.
+    - `DataEffect`'s `run` and `end` are function-typed properties, not methods, so they're checked strictly (contravariantly) instead of loosely in both directions.
+    - Field-name accessors only accept fields of the declared value type.
+    - Keys accept string or numeric fields; numeric IDs are converted with `String()`.
 
 ---
 

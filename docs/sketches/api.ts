@@ -137,12 +137,17 @@ export interface GeometryEffect {
   clear(ctx: EffectContext): void;
 }
 
+/**
+ * `run` and `end` are function-typed properties, not methods, on purpose: TypeScript checks method
+ * parameters loosely in both directions, which would let an effect that needs more fields than a
+ * chart's rows have (DataEffect<Row & { target: number }> on a chart of Row) slip through.
+ */
 export interface DataEffect<D = unknown> {
   readonly kind: "data";
   readonly needs?: { readonly related?: readonly string[] };
-  run(mark: MarkGeometry, data: MarkData<D>, ctx: EffectContext): Promise<void>;
-  end(mark: MarkGeometry, data: MarkData<D>, ctx: EffectContext): void;
-  clear(ctx: EffectContext): void;
+  readonly run: (mark: MarkGeometry, data: MarkData<D>, ctx: EffectContext) => Promise<void>;
+  readonly end: (mark: MarkGeometry, data: MarkData<D>, ctx: EffectContext) => void;
+  readonly clear: (ctx: EffectContext) => void;
 }
 
 export interface TransitionEffect {
@@ -155,11 +160,23 @@ export interface TransitionEffect {
 type AnyMarkEffect = GeometryEffect | DataEffect<any>;
 export type MarkEffect<D = unknown> = GeometryEffect | DataEffect<D>;
 
-type DatumOf<E> = E extends DataEffect<infer D> ? D : never;
+/** The row type a single effect needs; geometry effects need nothing (unknown). */
+type RowNeeds<E> = E extends DataEffect<infer D> ? D : unknown;
+/**
+ * The rows a combination needs: every part's needs at once (an intersection, not a union, so a
+ * generic part such as threshold() can't widen a typed part's needs back to unknown).
+ */
+type AllRowNeeds<E extends readonly unknown[]> = E extends readonly []
+  ? unknown
+  : E extends readonly [infer First, ...infer Rest]
+    ? RowNeeds<First> & AllRowNeeds<Rest>
+    : E extends readonly (infer Item)[]
+      ? RowNeeds<Item>
+      : unknown;
 /** A combination is a data effect if any part of it is. */
 export type Combined<E extends readonly AnyMarkEffect[]> = [Extract<E[number], { kind: "data" }>] extends [never]
   ? GeometryEffect
-  : DataEffect<DatumOf<E[number]>>;
+  : DataEffect<AllRowNeeds<E>>;
 
 export declare function sequence<E extends readonly AnyMarkEffect[]>(...effects: E): Combined<E>;
 export declare function parallel<E extends readonly AnyMarkEffect[]>(...effects: E): Combined<E>;
@@ -377,9 +394,12 @@ export declare function expressive<D = unknown>(target: MarkSource<D>, options: 
 
 // ── Reference charts ─────────────────────────────────────────────────────────
 
-export type Accessor<D, T> = (keyof D & string) | ((d: D, i: number) => T);
+/** Field names of D whose values are T. */
+export type KeyOfType<D, T> = { [K in keyof D]-?: D[K] extends T ? K : never }[keyof D] & string;
+/** A field name whose values are T, or a function returning T. */
+export type Accessor<D, T> = KeyOfType<D, T> | ((d: D, i: number) => T);
 /** Field names whose values are numbers, so `stack: ["name"]` is a type error. */
-export type NumericKey<D> = { [K in keyof D]-?: D[K] extends number ? K : never }[keyof D] & string;
+export type NumericKey<D> = KeyOfType<D, number>;
 
 export interface ColorAssignment {
   slot(key: string): number;
@@ -391,7 +411,8 @@ export interface ChartOptions<D> {
   /** Accessible name; required. */
   readonly label: string;
   readonly description?: string;
-  readonly key?: Accessor<D, string>;
+  /** A string or numeric field (numeric IDs are converted with String()), or a function. */
+  readonly key?: Accessor<D, string | number>;
   readonly motion?: Motion | MotionMode;
   /** NEW NoInfer: without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
   readonly on?: EffectSlots<NoInfer<D>>;

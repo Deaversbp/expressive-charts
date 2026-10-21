@@ -21,6 +21,7 @@ export * from "./core";
 export * from "./effects";
 export * from "./icons";
 export { registerIcon, registerIcons, registerPreset } from "./registries";
+export { configure } from "./settings";
 export { colorAssignment } from "./charts";
 export type {
   Accessor,
@@ -35,7 +36,8 @@ export type {
   MarkEvent,
   MarkEvents,
   MarkSource,
-  NumericKey
+  NumericKey,
+  StyleOptions
 } from "./charts";
 export type { MotionSwitch, MotionSwitchOptions } from "./charts/controls";
 

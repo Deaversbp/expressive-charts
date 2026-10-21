@@ -55,8 +55,8 @@ describe("svgSurface groups", () => {
     const { overlay, surface } = setup();
     const group = surface.group("a", "hover", 1);
     const element = overlay.firstElementChild as SVGGElement;
-    expect(element.style.getPropertyValue("--ec-mark")).toBe("var(--ec-series-4, #eda100)");
-    expect(element.style.getPropertyValue("--ec-mark-strong")).toBe("var(--ec-series-4-strong, #c98500)");
+    expect(element.style.getPropertyValue("--ec-mark")).toBe("var(--ec-series-4, #c28409)");
+    expect(element.style.getPropertyValue("--ec-mark-strong")).toBe("var(--ec-series-4-strong, #9d6a07)");
     group.path("M0,0L10,0", { stroke: "mark", width: 2 });
     expect((element.querySelector("path") as SVGPathElement).style.getPropertyValue("stroke")).toBe("var(--ec-mark, var(--ec-series-1, #2a78d6))");
     group.clear();
@@ -76,8 +76,8 @@ describe("svgSurface groups", () => {
     slots.set("a", 2);
     surface.recolor("a");
     const mark = (g: Element) => (g as SVGGElement).style.getPropertyValue("--ec-mark");
-    expect(Array.from(overlay.children, mark)).toEqual(["var(--ec-series-2, #eb6834)", "var(--ec-series-3, #1baf7a)"]);
-    expect(mark(clearedGroup)).toBe("var(--ec-series-4, #eda100)");
+    expect(Array.from(overlay.children, mark)).toEqual(["var(--ec-series-2, #eb6834)", "var(--ec-series-3, #02a471)"]);
+    expect(mark(clearedGroup)).toBe("var(--ec-series-4, #c28409)");
     expect(() => surface.recolor("missing")).not.toThrow();
   });
 });
@@ -176,7 +176,7 @@ describe("svgLayer paths and text", () => {
     expect(element.getAttribute("opacity")).toBe("0.5");
     expect(element.getAttribute("stroke-width")).toBe("3");
     path.update("M0,0L5,0", { stroke: "series-3-strong" });
-    expect(element.style.getPropertyValue("stroke")).toBe("var(--ec-series-3-strong, #138a5f)");
+    expect(element.style.getPropertyValue("stroke")).toBe("var(--ec-series-3-strong, #07835a)");
     path.remove();
     expect(overlay.querySelector("path")).toBeNull();
   });
@@ -194,6 +194,6 @@ describe("svgLayer paths and text", () => {
     expect(element.textContent).toBe("+3");
     expect(element.getAttribute("opacity")).toBe("0.4");
     expect(element.getAttribute("x")).toBe("30");
-    expect(element.style.getPropertyValue("fill")).toBe("var(--ec-text-muted, #7d7b75)");
+    expect(element.style.getPropertyValue("fill")).toBe("var(--ec-text-muted, #75736d)");
   });
 });

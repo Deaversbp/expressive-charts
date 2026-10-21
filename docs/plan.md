@@ -254,7 +254,7 @@ Starting values, taken from the prototype and tuned in the demo:
 | `transition` | data changes | base, staged (≈500 + 500 ms) | base × 0.35, max 200 ms, not staged | 0 |
 | `effect` | travel, wiggle, flash, pulse | base | base × 0.35, min 140, max 300 ms | 0, so `end()` is used |
 | `playback` | "Play season" | base | base × 0.3 | 0: jumps to the end |
-| `stagger` | `stagger`'s delays between marks (planned in M3) | base | 0 | 0 |
+| `stagger` | `stagger`'s delays between marks (built in M3 step 2) | base | 0 | 0 |
 
 A rule is `{ factor, min?, max? }`, and the result is `clamp(base × factor, min(base, min), max)`. A floor never makes an animation longer than its base.
 
@@ -280,7 +280,7 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 
 > Updated by the design session: `ctx.previous`, `data.previous`, `Layer.text()` and the author helpers are in [`sketches/api.ts`](sketches/api.ts) (§11).
 >
-> **The contracts in §4.1 and §4.2 are built in M1 step 3** (`src/core/contracts/`), along with `matrix`, `offset` and the recording layer in `src/core/testing/`. [architecture.md](architecture.md#effects) is now the reference. Additions: `AnyMarkEffect` is exported for combinator signatures; the icon resolver is named `IconSource`; `mark.set()` merges the fields given (undefined resets one), so parallel effects don't undo each other; an icon is hidden until first placed; `matrix.apply(m, point)`; and `testContext()`, a ready-made `EffectContext` on a manual clock. The runner (§4.3) is built in M1 step 4. `travel` with its gaits and the combinators `sequence`, `parallel` and `only` are built in M1 step 6 (§4.4–§4.6), and `flash` in M2 step 2. `wiggle`, `pulse`, `stagger`, `defineEffect` and `defineDataEffect` are planned in M3 (§9); `threshold` and `morph` come later.
+> **The contracts in §4.1 and §4.2 are built in M1 step 3** (`src/core/contracts/`), along with `matrix`, `offset` and the recording layer in `src/core/testing/`. [architecture.md](architecture.md#effects) is now the reference. Additions: `AnyMarkEffect` is exported for combinator signatures; the icon resolver is named `IconSource`; `mark.set()` merges the fields given (undefined resets one), so parallel effects don't undo each other; an icon is hidden until first placed; `matrix.apply(m, point)`; and `testContext()`, a ready-made `EffectContext` on a manual clock. The runner (§4.3) is built in M1 step 4. `travel` with its gaits and the combinators `sequence`, `parallel` and `only` are built in M1 step 6 (§4.4–§4.6), `flash` in M2 step 2, and `wiggle`, `pulse` and `stagger` in M3 step 2. `defineEffect` and `defineDataEffect` are planned in M3 (§9); `threshold` and `morph` come later.
 
 ### 4.1 Interfaces
 
@@ -378,7 +378,7 @@ This is the entire surface effects draw through. It's deliberately small and cov
 
 ### 4.4 Combinators
 
-> **Built in M1 step 6** (`sequence`, `parallel`, `only`, in `src/effects/combinators.ts`); `stagger` comes in M3. [architecture.md](architecture.md#combinators) is now the reference. Additions: the parts share the run's context; `clear()` clears every part and passes on the first error after all have run; `parallel` rejects with the first part that rejects; a data combination's `needs.related` lists every part's; `only` matches a mark's key or series and keeps the effect's kind and `needs`; a part that isn't a mark effect throws a `TypeError`.
+> **Built in M1 step 6** (`sequence`, `parallel`, `only`, in `src/effects/combinators.ts`); `stagger` is built in M3 step 2. [architecture.md](architecture.md#combinators) is now the reference. Additions: the parts share the run's context; `clear()` clears every part and passes on the first error after all have run; `parallel` rejects with the first part that rejects; a data combination's `needs.related` lists every part's; `only` matches a mark's key or series and keeps the effect's kind and `needs`; a part that isn't a mark effect throws a `TypeError`.
 
 ```ts
 sequence(...effects)            // run in order; abort stops the chain; end() = every child's end() in order
@@ -905,10 +905,15 @@ Each step names the files it owns, so steps in the same wave can run in parallel
    - Layout, drawing, ticks and `retarget` stay in `bar.ts`. Write the modules for one more chart (the donut, step 4), not for every chart that might come.
    - Fix the comment in `src/charts/tooltip.test.ts` that calls a 1.5× scale "a pulse": a pulse never scales a mark.
    - **Done when** `bar.test.ts`, the conformance, matchweek and adapter tests, and every visual baseline pass, with no test or baseline changed.
-2. **`wiggle`, `pulse`, `stagger` and the built-in presets.** Owns `src/effects/wiggle.ts`, `src/effects/pulse.ts` and their tests, `stagger` in `src/effects/combinators.ts`, the `"stagger"` timing in `src/core/motion.ts`, and the `wiggle` and `pulse` presets in `src/registries.ts`.
+2. ✅ **`wiggle`, `pulse`, `stagger` and the built-in presets.** Owns `src/effects/wiggle.ts`, `src/effects/pulse.ts` and their tests, `stagger` in `src/effects/combinators.ts`, the `"stagger"` timing in `src/core/motion.ts`, and the `wiggle` and `pulse` presets in `src/registries.ts`.
    - The effects as decisions 6, 7 and 9 describe, and the presets as decision 8.
    - Tests on the manual clock with the recording layer, including the guardrails on every conformance fixture: no outline point moves more than `swing` px at any frame; a pulse's last frame comes before 5 s even with `effect` timing scaled ×2 in Presentation; stagger's waits are 0 in Analysis and Off, and the spread never passes 500 ms; and `expectTypeOf` checks that `stagger` keeps the kind and the row needs. The new effects join the record in `src/effects/conformance.test.ts`.
    - Docs: architecture.md (Effects, the timing table, presets), README and `src/effects/README.md`. Delete the sketch's declarations of `wiggle`, `pulse` and `stagger`, and the stale ones of `flash` and `motionSwitch`, so the examples use the real exports.
+   - **Built** as planned ([architecture.md](architecture.md#wiggle)). Decisions:
+     - `wiggle` is three half-swings, each a sine arch half the size of the one before and on the other side, so the first reaches the cap exactly. The cap is `2·asin(swing / (2·reach))`, and never more than 15°, so a tiny mark nods instead of spinning (3 px of movement would let a 3 px dot turn 60°). It follows `onChange`, so in the `update` slot it rocks about the pivot as it is now.
+     - `pulse` asks `motion.duration(600, "effect")` before each pulse and stops at the first that would end at 5 s or later; if a single pulse would take that long, it draws nothing. The width eases out and the fade is linear.
+     - While `stagger` waits, it follows `onChange`, so the effect starts on the geometry and data as they are when its turn comes (bars growing in on enter).
+     - `testContext` takes `scaling` overrides, for the 5 s test.
 3. **D3 as a dev dependency, and pies through `expressive()`.** Owns the devDependencies in `package.json`, `package-lock.json`, `src/charts/adapter/`, and the D3 pie source in `src/conformance.test.ts`.
    - Add `d3-shape`, `d3-selection`, `@types/d3-shape` and `@types/d3-selection`, pinned to exact versions. `src/package.test.ts` gains a check that `package.json` has no `dependencies`.
    - Order of marks described with `geometry`: when they all share one pivot (within 0.5 px), keyboard focus and `marks()` go clockwise by the angle of each mark's `center` about the pivot, from 12 o'clock. Otherwise they keep document order, as now.

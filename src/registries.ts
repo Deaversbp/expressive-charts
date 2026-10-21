@@ -1,16 +1,16 @@
 // The page-wide registries. The composition root (src/index.ts) hands them to every chart and
 // adapter, which resolve preset and icon names through them. The neutral core icons are registered
-// here; the sport pack is opt-in, with registerIcons(sport). The built-in presets are registered here
-// as their effects land: flash now, wiggle and pulse in M3.
+// here; the sport pack is opt-in, with registerIcons(sport). The built-in presets are exactly flash,
+// wiggle and pulse: none combines effects, draws an icon or staggers.
 
 import type { Icon, MarkEffect } from "./core";
 import { createRegistry, type PresetFactory } from "./core/registry";
-import { flash } from "./effects";
+import { flash, pulse, wiggle } from "./effects";
 import { icons } from "./icons";
 
 export const presetRegistry = /* @__PURE__ */ createRegistry<PresetFactory>({
   kind: "preset",
-  entries: { flash: () => flash() },
+  entries: { flash: () => flash(), wiggle: () => wiggle(), pulse: () => pulse() },
   hint: "Register custom presets with registerPreset(name, factory)."
 });
 

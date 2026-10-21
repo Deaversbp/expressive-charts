@@ -28,8 +28,8 @@ export function parallel<E extends readonly AnyMarkEffect[]>(...effects: E): Com
 }
 
 /**
- * What `only` returns: a new effect of the same kind, needing the same rows. Only the effect
- * interface is kept, not any other members the effect has.
+ * What `only` and `stagger` return: a new effect of the same kind, needing the same rows. Only the
+ * effect interface is kept, not any other members the effect has.
  */
 type Filtered<E extends AnyMarkEffect> = E extends DataEffect<infer D> ? DataEffect<D> : GeometryEffect;
 
@@ -61,6 +61,76 @@ export function only<E extends AnyMarkEffect>(filter: string | ((mark: MarkGeome
     clear: (ctx) => inner.clear(ctx)
   };
   return filtered as Filtered<E>;
+}
+
+export interface StaggerOptions {
+  /** Base ms between one mark's start and the next's, 0 or more. Default 50. */
+  readonly delay?: number;
+}
+
+/** Default base delay between marks, ms. */
+const STAGGER_DELAY = 50;
+/** The last mark of a batch starts at most this long (base ms) after the first. */
+const STAGGER_SPREAD = 500;
+
+/**
+ * Starts each mark of a batch a little after the one before: mark i waits `i × delay` (base ms,
+ * with "stagger" timing, so none at all in analysis or off), then runs the effect. The whole spread
+ * is capped at 500 ms base, so a big batch's delay shrinks. A batch of one (a hover) never waits.
+ *
+ * Never a default: research finds little benefit in staggering, and it can hurt. It keeps the
+ * effect's kind and `needs`, and `end()` draws the effect's end state at once.
+ */
+export function stagger<E extends AnyMarkEffect>(effect: E, options: StaggerOptions = {}): Filtered<E> {
+  const [part] = check("stagger", [effect]);
+  const delay = options.delay ?? STAGGER_DELAY;
+  if (!(typeof delay === "number" && delay >= 0 && Number.isFinite(delay))) {
+    throw new RangeError(`stagger: delay must be 0 ms or more, got ${String(delay)}.`);
+  }
+
+  /**
+   * Waits this mark's turn. The geometry and data may move meanwhile (marks growing in on enter), so
+   * it resolves with the latest of each; undefined if the run was aborted while it waited.
+   */
+  const wait = async <M>(mark: MarkGeometry, data: M, ctx: EffectContext): Promise<{ mark: MarkGeometry; data: M } | undefined> => {
+    if (ctx.signal.aborted) return undefined;
+    const { index, count } = ctx.batch;
+    const step = count > 1 ? Math.min(delay, STAGGER_SPREAD / (count - 1)) : 0;
+    const base = index > 0 ? index * step : 0;
+    if (!(base > 0)) return { mark, data };
+    let latest = { mark, data };
+    ctx.onChange((next, nextData) => {
+      latest = { mark: next, data: (nextData as M | undefined) ?? latest.data };
+    });
+    await ctx.tween({ duration: base, timing: "stagger", update: () => {} }).finished;
+    return ctx.signal.aborted ? undefined : latest;
+  };
+
+  if (part!.kind === "data") {
+    const inner = part as DataEffect<unknown>;
+    const staggered: DataEffect<unknown> = {
+      kind: "data",
+      ...(inner.needs ? { needs: inner.needs } : {}),
+      run: async (mark, data, ctx) => {
+        const turn = await wait(mark, data, ctx);
+        if (turn) await inner.run(turn.mark, turn.data, ctx);
+      },
+      end: (mark, data, ctx) => inner.end(mark, data, ctx),
+      clear: (ctx) => inner.clear(ctx)
+    };
+    return staggered as Filtered<E>;
+  }
+  const inner = part as GeometryEffect;
+  const staggered: GeometryEffect = {
+    kind: "geometry",
+    async run(mark, ctx) {
+      const turn = await wait(mark, undefined, ctx);
+      if (turn) await inner.run(turn.mark, ctx);
+    },
+    end: (mark, ctx) => inner.end(mark, ctx),
+    clear: (ctx) => inner.clear(ctx)
+  };
+  return staggered as Filtered<E>;
 }
 
 type Start = (part: AnyMarkEffect) => Promise<void>;

@@ -1,7 +1,7 @@
 import type { Combined, DataEffect, EffectContext, GeometryEffect, MarkData, MarkGeometry, TransitionEffect } from "../core";
 import { describe as build, linear } from "../core";
-import { play, testContext } from "../core/testing";
-import { only, parallel, sequence } from "./combinators";
+import { flush, play, testContext, type TestContextOptions } from "../core/testing";
+import { only, parallel, sequence, stagger } from "./combinators";
 
 interface Region {
   region: string;
@@ -59,6 +59,8 @@ describe("combinator kinds", () => {
     const team: DataEffect<Team> = { kind: "data", run: async () => {}, end: () => {}, clear: () => {} };
     expectTypeOf(sequence(reader("r", log), team)).toEqualTypeOf<Combined<[DataEffect<Region>, DataEffect<Team>]>>();
     expectTypeOf(only("North", reader("r", log))).toEqualTypeOf<DataEffect<Region>>();
+    expectTypeOf(stagger(step("a", log))).toEqualTypeOf<GeometryEffect>();
+    expectTypeOf(stagger(reader("r", log), { delay: 20 })).toEqualTypeOf<DataEffect<Region>>();
     // only() builds a new effect, so it promises the effect interface, not the part's other members.
     const custom = Object.assign(step("a", log), { label: "custom" });
     expectTypeOf(only("North", custom)).toEqualTypeOf<GeometryEffect>();
@@ -77,6 +79,8 @@ describe("combinator kinds", () => {
     expect(() => parallel(step("a", []), {} as GeometryEffect)).toThrow(/parallel: part 2/);
     expect(() => only("North", null as unknown as GeometryEffect)).toThrow(TypeError);
     expect(() => only(3 as unknown as string, step("a", []))).toThrow(/key, a series name or a predicate/);
+    expect(() => stagger(morph)).toThrow(/stagger: part 1 needs to be a mark effect/);
+    expect(() => stagger(undefined as unknown as GeometryEffect)).toThrow(TypeError);
   });
 });
 
@@ -167,5 +171,107 @@ describe("only", () => {
     await effect.run(other, data, testContext());
     effect.clear(testContext());
     expect(log).toEqual(["r run North", "r clear"]);
+  });
+});
+
+describe("stagger", () => {
+  /** How long the mark at `index` of a batch of `count` waits before the effect starts, in ms. */
+  async function waited(index: number, count: number, options: { delay?: number } = {}, context: TestContextOptions = {}): Promise<number> {
+    const log: string[] = [];
+    const ctx = testContext({ ...context, batch: { index, count } });
+    const elapsed = await play(ctx.clock, stagger(step("a", log, 0), options).run(mark, ctx), { frame: 5 });
+    expect(log).toEqual(["a start", "a done"]);
+    return elapsed;
+  }
+
+  it("starts mark i after i × 50 ms in presentation", async () => {
+    const waits = await Promise.all([0, 1, 2, 3, 4].map((index) => waited(index, 5)));
+    expect(waits).toEqual([0, 50, 100, 150, 200]);
+    expect(await waited(3, 5, { delay: 20 })).toBe(60);
+  });
+
+  it("doesn't wait at all in analysis or with motion off", async () => {
+    for (const mode of ["analysis", "off"] as const) {
+      const waits = await Promise.all([0, 1, 4].map((index) => waited(index, 5, { delay: 100 }, { mode })));
+      expect(waits).toEqual([0, 0, 0]);
+    }
+    const off = testContext({ mode: "off", batch: { index: 4, count: 5 } });
+    const running = stagger(step("a", [], 100)).run(mark, off);
+    expect(off.clock.idle).toBe(true);
+    await running;
+  });
+
+  it("caps the whole spread at 500 ms, shrinking a big batch's delay", async () => {
+    // 21 marks × 50 ms would spread over 1000 ms; the delay shrinks to 500 / 20 = 25.
+    expect(await waited(1, 21)).toBe(25);
+    expect(await waited(20, 21)).toBe(500);
+    expect(await waited(100, 101, { delay: 200 })).toBe(500);
+    // Under the cap, the delay stands.
+    expect(await waited(10, 11)).toBe(500);
+    expect(await waited(9, 10)).toBe(450);
+  });
+
+  it("never delays a batch of one, such as a hover", async () => {
+    expect(await waited(0, 1, { delay: 400 })).toBe(0);
+  });
+
+  it("settles when aborted mid-wait, and runs nothing", async () => {
+    const log: string[] = [];
+    const ctx = testContext({ batch: { index: 3, count: 4 } });
+    const running = stagger(step("a", log)).run(mark, ctx);
+    ctx.clock.advance(80);
+    ctx.abort();
+    await expect(running).resolves.toBeUndefined();
+    ctx.clock.advance(500);
+    await flush();
+    expect(log).toEqual([]);
+    expect(ctx.clock.idle).toBe(true);
+  });
+
+  it("runs the effect on the geometry and data as they are when its turn comes", async () => {
+    const seen: { width: number; revenue: number }[] = [];
+    const probe: DataEffect<Region> = {
+      kind: "data",
+      run: async (m, d) => void seen.push({ width: m.bounds.width, revenue: d.datum.revenue }),
+      end: () => {},
+      clear: () => {}
+    };
+    const ctx = testContext({ batch: { index: 2, count: 3 } });
+    const running = stagger(probe).run(mark, data, ctx);
+    ctx.clock.advance(50);
+    const grown = build.bar({ key: "North", series: "revenue", x: 0, y: 0, width: 160, height: 20, baseline: "left" });
+    ctx.change(grown, { ...data, datum: { region: "North", revenue: 6 } });
+    await play(ctx.clock, running);
+    expect(seen).toEqual([{ width: 160, revenue: 6 }]);
+  });
+
+  it("keeps a data effect a data effect, with its needs", async () => {
+    const log: string[] = [];
+    const effect = stagger(reader("r", log, ["xg"]));
+    expect(effect.kind).toBe("data");
+    expect(effect.needs).toEqual({ related: ["xg"] });
+    expect(stagger(reader("r", log)).needs).toBeUndefined();
+    expect(stagger(step("a", log)).kind).toBe("geometry");
+    const ctx = testContext({ batch: { index: 1, count: 2 } });
+    expect(await play(ctx.clock, effect.run(mark, data, ctx), { frame: 10 })).toBe(50);
+    expect(log).toEqual(["r run North"]);
+  });
+
+  it("ends at once, and passes clear through", () => {
+    const log: string[] = [];
+    const ctx = testContext({ batch: { index: 4, count: 5 } });
+    stagger(step("a", log)).end(mark, ctx);
+    stagger(reader("r", log)).end(mark, data, ctx);
+    stagger(step("a", log)).clear(ctx);
+    stagger(reader("r", log)).clear(ctx);
+    expect(log).toEqual(["a end", "r end North", "a clear", "r clear"]);
+  });
+
+  it("checks its delay", () => {
+    for (const delay of [-1, Number.NaN, Infinity, "50" as unknown as number]) {
+      expect(() => stagger(step("a", []), { delay })).toThrow(RangeError);
+    }
+    expect(() => stagger(step("a", []), { delay: -5 })).toThrow(/stagger: delay must be 0 ms or more, got -5/);
+    expect(() => stagger(step("a", []), { delay: 0 })).not.toThrow();
   });
 });

@@ -44,6 +44,7 @@ describe("duration scaling", () => {
     ["presentation", "transition", 500, 500],
     ["presentation", "effect", 833, 833],
     ["presentation", "playback", 6500, 6500],
+    ["presentation", "stagger", 150, 150],
     ["analysis", "feedback", 100, 100],
     ["analysis", "transition", 600, 200],
     ["analysis", "transition", 350, 122.5],
@@ -52,10 +53,12 @@ describe("duration scaling", () => {
     ["analysis", "effect", 300, 140],
     ["analysis", "effect", 100, 100],
     ["analysis", "playback", 6500, 1950],
+    ["analysis", "stagger", 150, 0],
     ["off", "feedback", 100, 0],
     ["off", "transition", 600, 0],
     ["off", "effect", 833, 0],
-    ["off", "playback", 6500, 0]
+    ["off", "playback", 6500, 0],
+    ["off", "stagger", 150, 0]
   ])("%s, %s: %d ms becomes %d ms", (mode, timing, base, expected) => {
     const motion = createMotion({ mode, reducedMotion: reducedSource().source });
     expect(motion.duration(base, timing)).toBeCloseTo(expected, 6);

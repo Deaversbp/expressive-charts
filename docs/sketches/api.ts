@@ -7,15 +7,15 @@
  * (describe.bar, .arc, .line, .point, matrix, offset), the preset and icon registries
  * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
  * options, accessors, colorAssignment), the icons (defineIcon, iconFromSvg, icons), the first
- * effects (travel with its gaits, sequence, parallel, only) and the adapter's types (MarkSource,
- * Attachment, ExpressiveOptions). Everything still declared here is planned. Lines marked NEW were
+ * effects (travel with its gaits, flash, wiggle, pulse, sequence, parallel, only, stagger), the
+ * viewer's motionSwitch and the adapter's types (MarkSource, Attachment, ExpressiveOptions).
+ * Everything still declared here is planned. Lines marked NEW were
  * added because writing the examples in ./examples exposed a gap in docs/plan.md.
  */
 
 export * from "../../src/index";
 import type {
   Accessor,
-  AnyMarkEffect,
   Attachment,
   BarChartOptions as BuiltBarChartOptions,
   Chart as BuiltChart,
@@ -32,7 +32,6 @@ import type {
   MarkEvents,
   MarkGeometry,
   MarkSource,
-  Motion,
   MotionView,
   NumericKey,
   Sample,
@@ -48,18 +47,13 @@ import type {
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
-// travel (with TravelOptions), the gaits (gaits.roll, .step, .slide; Gait, GaitState, GaitPose) and
-// the combinators sequence, parallel and only are built, in src/effects. Changed from the sketch: a
-// gait can carry its own easing and pace (a step takes 15% longer and eases in and out, as in the
-// prototype), and GaitState gives distances in the icon's own units plus its rolling radius
-// (instead of its size), so a gait looks the same at any size.
-
-/** Offsets each mark in a batch; 0 in analysis and off. Never a default. */
-export declare function stagger<E extends AnyMarkEffect>(effect: E, options: { readonly delay: number }): E;
-
-export declare function wiggle(options?: { readonly swing?: number }): GeometryEffect;
-export declare function pulse(options?: { readonly times?: number; readonly color?: Color }): GeometryEffect;
-export declare function flash(options?: { readonly color?: Color }): GeometryEffect;
+// travel (with TravelOptions), the gaits (gaits.roll, .step, .slide; Gait, GaitState, GaitPose),
+// flash, wiggle, pulse and the combinators sequence, parallel, only and stagger are built, in
+// src/effects. Changed from the sketch: a gait can carry its own easing and pace (a step takes 15%
+// longer and eases in and out, as in the prototype), and GaitState gives distances in the icon's own
+// units plus its rolling radius (instead of its size), so a gait looks the same at any size. flash
+// takes a width and opacity too, pulse a width; stagger's delay is optional (default 50 ms, the
+// spread capped at 500 ms), and it returns an effect of the same kind rather than the same type.
 /** Colours the parts of the walk where values are below the reference (default) or, with when: "above", above it. */
 export declare function threshold(options: {
   readonly compareTo: string | number;
@@ -95,9 +89,9 @@ export declare function defineDataEffect<D = unknown>(spec: DataEffectSpec<D>): 
 
 // ── Presets ──────────────────────────────────────────────────────────────────
 
-// PresetName and registerPreset are built (src/core/contracts, src/registries). Built-in names
-// autocomplete; custom names are checked when the chart is created. The built-in presets themselves
-// (wiggle, pulse, flash) are registered when their effects land in M3.
+// PresetName and registerPreset are built (src/core/contracts, src/registries), and so are the
+// built-in presets, exactly wiggle, pulse and flash. Built-in names autocomplete; custom names are
+// checked when the chart is created.
 
 // ── Events and effect slots (shared by reference charts and adapters) ───────
 
@@ -224,5 +218,6 @@ export declare function playback(options: {
 
 /** A Play/Pause toggle button (WCAG 2.2.2). */
 export declare function playButton(target: string | Element, playback: Playback): { destroy(): void };
-/** The Presentation / Analysis / Off control. Its choice is the viewer's, so it overrides reduced motion. */
-export declare function motionSwitch(target: string | Element, motion?: Motion): { destroy(): void };
+
+// motionSwitch, the Presentation / Analysis / Off control, is built (src/charts/controls). Changed
+// from the sketch: it takes options ({ persist }) and returns a MotionSwitch.

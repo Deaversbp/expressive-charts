@@ -3,7 +3,7 @@ import { report } from "./report";
 export type MotionMode = "presentation" | "analysis" | "off";
 
 /** What a duration is for. Each kind scales differently by mode. */
-export type Timing = "feedback" | "transition" | "effect" | "playback";
+export type Timing = "feedback" | "transition" | "effect" | "playback" | "stagger";
 
 /** Base ms × factor, clamped to [min(base, min), max]. A floor never makes an animation longer than its base. */
 export interface ScalingRule {
@@ -23,13 +23,16 @@ export const defaultScaling: ScalingTable = {
     feedback: { factor: 1 },
     transition: { factor: 1 },
     effect: { factor: 1 },
-    playback: { factor: 1 }
+    playback: { factor: 1 },
+    stagger: { factor: 1 }
   },
   analysis: {
     feedback: { factor: 1 },
     transition: { factor: 0.35, max: 200 },
     effect: { factor: 0.35, min: 140, max: 300 },
-    playback: { factor: 0.3 }
+    playback: { factor: 0.3 },
+    // Analysis has no staging, so marks don't wait for each other.
+    stagger: { factor: 0 }
   }
 };
 
@@ -75,7 +78,7 @@ export interface MotionOptions {
 }
 
 const MODES: readonly MotionMode[] = ["presentation", "analysis", "off"];
-const TIMINGS: readonly Timing[] = ["feedback", "transition", "effect", "playback"];
+const TIMINGS: readonly Timing[] = ["feedback", "transition", "effect", "playback", "stagger"];
 
 export function createMotion(options: MotionOptions = {}): Motion {
   let requested = checkMode(options.mode ?? "presentation");

@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry and the effect runner are built ([below](#available-now-the-motion-core-and-mark-geometry)). Charts and effects are next, so the chart API under "Design target" isn't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, icons and the first effect (`travel`, with `sequence`, `parallel` and `only`) are built ([below](#available-now-the-motion-core-mark-geometry-and-travel)). Charts are next, so the chart API under "Design target" isn't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -54,7 +54,7 @@ barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue"
 
 More examples, all type-checked against the proposed API, are in [docs/sketches](docs/sketches/).
 
-## Available now: the motion core and mark geometry
+## Available now: the motion core, mark geometry and travel
 
 The first layer is built: the shared animation clock, tweens, retargetable values and motion modes that charts and effects will run on, plus the shared mark description they meet through.
 
@@ -96,7 +96,23 @@ registerPreset("nudge", () => myEffect); // then on: { hover: "nudge" } in any c
 registerIcons(myIcons);                  // then travel("my-icon")
 ```
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, and [Runner](docs/architecture.md#runner) for how effects are played on marks.
+The first effect carries an icon along a mark: a ball rolling out a bar, around a donut slice or along a line. Combinators put effects together, and a step with nothing to do (a segment the chart isn't showing) finishes at once:
+
+```js
+import { icons, iconFromSvg, only, sequence, travel } from "expressive-charts";
+import { cleat, soccerBall } from "expressive-charts/icons/sport"; // optional pack; the core icons are dot, arrow and chevron
+
+const ballThenCleat = sequence(
+  travel(soccerBall, { along: "goals" }), // rolls out the goals segment and stays...
+  travel(cleat, { along: "assists" })     // ...then the boot steps along the assists
+);
+const arrows = only("revenue", travel(icons.arrow, { size: "fit" }));
+const pin = iconFromSvg(svgMarkup, { name: "pin", size: 16, anchor: { x: 12, y: 22 } }); // keeps only plain shapes
+```
+
+Charts play effects through their `on` slots (`on: { hover: ballThenCleat }`); the first chart, `barChart`, is next.
+
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, the combinators and icons, and [Runner](docs/architecture.md#runner) for how effects are played on marks.
 
 ## Demo
 
@@ -112,7 +128,7 @@ npm run dev
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Serves the `demo/` folder with live reload |
-| `npm run build` | Builds the npm package (ESM + types) and a script-tag bundle (`dist/expressive-charts.global.js`) |
+| `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` entry) and a script-tag bundle (`dist/expressive-charts.global.js`) |
 | `npm test` | Runs the test suite |
 | `npm run typecheck` | Checks types without building |
 

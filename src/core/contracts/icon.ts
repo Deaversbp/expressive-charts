@@ -3,29 +3,44 @@
 import type { Color } from "./drawing";
 import type { Point, Rect } from "./geometry";
 
+/** One path of an icon, drawn in order (the first is at the bottom). */
 export interface IconShape {
+  /** Path data in icon units. */
   readonly d: string;
+  /** Unset draws no fill (unlike SVG, where it's black). */
   readonly fill?: Color;
+  /** Unset draws no stroke. */
   readonly stroke?: Color;
+  /** Stroke width in icon units, so it scales with the icon. Default 1. */
   readonly width?: number;
-  /** Path data that clips this shape (the ball's panel pattern). */
+  /** Default "butt". */
+  readonly linecap?: "butt" | "round";
+  /** Default "miter". */
+  readonly linejoin?: "miter" | "round";
+  /** Path data, in icon units, that clips this shape (the ball's panel pattern). */
   readonly clip?: string;
 }
 
+/**
+ * Build one with defineIcon() or iconFromSvg(), which fill the defaults and check it. Icon units
+ * are px at the icon's natural size: `layer.icon(icon, { size })` scales it by size / icon.size
+ * about its anchor before `place()`.
+ */
 export interface Icon {
   readonly name: string;
-  /** Drawn facing +x, in icon units. */
+  /** Drawn facing +x, with its up side towards −y, in icon units. */
   readonly shapes: readonly IconShape[];
   /** Icon-space bounds. */
   readonly box: Rect;
-  /** Default rendered length along the walk, in px. */
+  /** The natural length along the walk, in px (and icon units). */
   readonly size: number;
   /** The icon-space point that sits on the walk. */
   readonly anchor: Point;
   /** What it spins or tilts around. */
   readonly pivot: Point;
-  /** Extent along +x from the anchor. */
+  /** Extent along +x from the anchor, which travel keeps inside the mark. */
   readonly footprint: readonly [behind: number, ahead: number];
+  /** The gait travel uses unless it's given one. */
   readonly gait?: "roll" | "step" | "slide";
   /** Rolling radius; default box height / 2. */
   readonly radius?: number;

@@ -25,6 +25,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./icons/sport": {
+      "types": "./dist/icons/sport.d.ts",
+      "import": "./dist/icons/sport.js",
+      "require": "./dist/icons/sport.cjs"
     }
   },
   "files": [

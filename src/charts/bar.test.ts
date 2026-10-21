@@ -679,6 +679,37 @@ describe("barChart: transitions", () => {
     expect(ys[ys.length - 1]).toBe(at(chart, "Lindqvist").y);
   });
 
+  it("reports hover with the geometry on screen while a change plays", async () => {
+    const { chart, clock, mark, settle } = setup();
+    const hovers: number[] = [];
+    chart.on("hover", (e) => hovers.push(e.mark.bounds.y));
+    const start = at(chart, "Okafor").y;
+    const sorted = chart.update({ sort: "key" });
+    clock.advance(250);
+    pointer("pointerover", mark("Okafor").querySelector(".ec-hit")!);
+    const mid = at(chart, "Okafor").y;
+    expect(mid).toBeGreaterThan(start);
+    expect(hovers).toEqual([mid]);
+    await settle(sorted);
+    expect(at(chart, "Okafor").y).toBeGreaterThan(mid);
+  });
+
+  it("starts exit effects from the shape on screen when a change is interrupted", async () => {
+    const widths: number[] = [];
+    const exit = recorder({ draw: (mark) => widths.push(mark.bounds.width) });
+    const { chart, clock, settle } = setup({ on: { exit: exit.effect } });
+    const events: number[] = [];
+    chart.on("exit", (e) => events.push(e.mark.bounds.width));
+    const start = at(chart, "Tanaka").width;
+    void chart.update({ data: tanakaScores(2) });
+    clock.advance(250);
+    const mid = at(chart, "Tanaka").width;
+    expect(mid).toBeLessThan(start);
+    await settle(chart.update({ data: players.filter((p) => p.name !== "Tanaka") }));
+    expect(widths).toEqual([mid]);
+    expect(events).toEqual([mid]);
+  });
+
   it("fires update effects only when values change, never for a re-sort alone", async () => {
     const update = recorder();
     const { chart, clock, settle } = setup({ on: { update: update.effect } });

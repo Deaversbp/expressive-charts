@@ -17,7 +17,11 @@ export interface MarkEvent<D> {
   readonly batch: { readonly index: number; readonly count: number };
 }
 
-/** Effect slots and `chart.on()` consume the same events. Data events fire when a change starts, with the new geometry. */
+/**
+ * Effect slots and `chart.on()` consume the same events. Data events fire when a change starts: enter
+ * and update with the new geometry, exit with the geometry on screen. Hover and leave carry the
+ * geometry on screen too, part way to the new one while a change plays.
+ */
 export interface MarkEvents<D> {
   enter: MarkEvent<D>;
   update: MarkEvent<D> & { readonly from: MarkGeometry };

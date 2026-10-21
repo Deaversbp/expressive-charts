@@ -492,7 +492,10 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
   // ── Hover ──────────────────────────────────────────────────────────────────
 
+  /** Where a mark is heading: what enter and update report as a change starts. */
   const input = (record: MarkRecord<D>): RunInput<D> => ({ mark: record.row.geometry, data: record.row.data });
+  /** The mark as it is on screen: what hover, leave and exit report, so mid-change they match what's under the pointer or on its way out. */
+  const onScreen = (record: MarkRecord<D>): RunInput<D> => ({ mark: record.shown.geometry, data: record.shown.data });
 
   const interaction = pointerHover(svg, {
     find(eventTarget) {
@@ -509,8 +512,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       hovered = target.key;
       record.group.classList.add("ec-hot");
       if (current.dim !== false) svg.classList.add("ec-hovering");
-      runner.hover([input(record)]);
-      emit("hover", { ...input(record), batch: ONE, source, ...(target.segment === undefined ? {} : { segment: target.segment }) });
+      runner.hover([onScreen(record)]);
+      emit("hover", { ...onScreen(record), batch: ONE, source, ...(target.segment === undefined ? {} : { segment: target.segment }) });
     },
     leave() {
       const key = hovered;
@@ -520,7 +523,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       if (key === undefined || !record) return;
       record.group.classList.remove("ec-hot");
       runner.leave([key]);
-      emit("leave", { ...input(record), batch: ONE });
+      emit("leave", { ...onScreen(record), batch: ONE });
     }
   });
 
@@ -537,7 +540,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   }
 
   function emitEach(type: "enter" | "exit", marks: readonly MarkRecord<D>[]): void {
-    marks.forEach((record, index) => emit(type, { ...input(record), batch: { index, count: marks.length } }));
+    const read = type === "exit" ? onScreen : input;
+    marks.forEach((record, index) => emit(type, { ...read(record), batch: { index, count: marks.length } }));
   }
 
   // ── Motion, size and fonts ─────────────────────────────────────────────────
@@ -622,7 +626,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       const diff = arrange(nextLayout);
       if (hovered !== undefined && !records.has(hovered)) interaction.clear();
       const leaves = diff.exiting.map((record) => record.leave!);
-      const exited = runner.exit(diff.exiting.map(input));
+      const exited = runner.exit(diff.exiting.map(onScreen));
       void exited.then(() => {
         for (const leave of leaves) leave.exited = true;
         sweep();

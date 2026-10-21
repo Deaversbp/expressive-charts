@@ -1,4 +1,11 @@
 import { defineConfig } from "tsup";
+import { stylesheet } from "./src/charts/render/theme";
+
+/** The one Node API the build uses. The repo has no Node types (the library never runs Node code), so it's typed here. */
+async function writeFile(path: string, text: string): Promise<void> {
+  const fs = (await import("node:fs/promises" as string)) as { writeFile(path: string, text: string): Promise<void> };
+  await fs.writeFile(path, text);
+}
 
 export default defineConfig([
   {
@@ -9,7 +16,10 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
-    target: "es2020"
+    target: "es2020",
+    // "expressive-charts/style.css", for pages that load the stylesheet themselves (configure({ injectStyles: false })).
+    // The same text the charts inject, so the two can't drift apart.
+    onSuccess: () => writeFile("dist/expressive-charts.css", stylesheet)
   },
   {
     // script-tag bundle: <script src=".../expressive-charts.global.js"> exposes window.ExpressiveCharts

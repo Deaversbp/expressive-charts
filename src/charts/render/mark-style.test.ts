@@ -38,7 +38,7 @@ describe("svgMarkHandle", () => {
     expect(goals!.element.style.getPropertyValue("transition")).toBe("none");
     handle.set({ emphasis: 0.25 });
     expect(assists!.element.style.getPropertyValue("fill")).toBe(
-      "color-mix(in srgb, var(--ec-series-4-strong, #c98500) 25%, var(--ec-series-4, #eda100))"
+      "color-mix(in srgb, var(--ec-series-4-strong, #9d6a07) 25%, var(--ec-series-4, #c28409))"
     );
     handle.set({ emphasis: undefined });
     expect(goals!.element.style.getPropertyValue("fill")).toBe("");
@@ -56,7 +56,7 @@ describe("svgMarkHandle", () => {
     expect(paths[0]!.getAttribute("stroke-width")).toBe("8");
     expect(paths[0]!.getAttribute("stroke-opacity")).toBe("0.35");
     expect(paths[0]!.style.getPropertyValue("fill")).toBe("none");
-    expect(paths[1]!.style.getPropertyValue("stroke")).toBe("var(--ec-series-4, #eda100)");
+    expect(paths[1]!.style.getPropertyValue("stroke")).toBe("var(--ec-series-4, #c28409)");
     handle.set({ halo: { width: 4, opacity: 1, color: "negative" } });
     expect(halo.children).toHaveLength(2);
     expect((halo.children[0] as SVGPathElement).style.getPropertyValue("stroke")).toBe("var(--ec-negative, #d03b3b)");
@@ -70,7 +70,7 @@ describe("svgMarkHandle", () => {
     const fresh = part("M0,0L30,0L30,20Z", 3);
     target.current = { body, parts: [fresh] };
     handle.repaint();
-    expect(fresh.element.style.getPropertyValue("fill")).toBe("var(--ec-series-3-strong, #138a5f)");
+    expect(fresh.element.style.getPropertyValue("fill")).toBe("var(--ec-series-3-strong, #07835a)");
     expect(body.querySelectorAll(".ec-halo path")).toHaveLength(1);
     expect(handle.style).toEqual({ emphasis: 1, halo: { width: 6, opacity: 0.3 }, opacity: 0.8 });
     handle.reset();

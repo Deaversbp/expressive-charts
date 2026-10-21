@@ -4,4 +4,5 @@
 export { barChart, type BarChart, type ChartEnv } from "./bar";
 export { expressive, type Attachment, type ExpressiveOptions, type MarkSource } from "./adapter";
 export { colorAssignment, type ColorAssignment } from "./colors";
+export { styleOptions, type StyleOptions } from "./render/theme";
 export type { Accessor, BarChartOptions, Chart, ChartOptions, KeyOfType, MarkEvent, MarkEvents, NumericKey } from "./types";

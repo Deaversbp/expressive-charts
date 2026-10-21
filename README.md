@@ -148,7 +148,24 @@ fx.refresh(svg.selectAll("rect"));                   // after the page redraws: 
 
 For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Other shapes take a `geometry` callback built with `describe`.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, and [Adapters](docs/architecture.md#adapters) for `expressive()`.
+Charts follow the device's light or dark setting, with eight series colours checked for contrast and colour-vision deficiencies in both. Theme them with `--ec-*` custom properties, which your CSS always overrides, and pin a theme with `data-theme` on any ancestor:
+
+```html
+<html data-theme="light">  <!-- a page without a dark theme of its own -->
+<style>.sales { --ec-series-1: #0f766e; }</style>
+```
+
+Under a Content-Security-Policy, give the stylesheet the charts inject your nonce, or load it as a file and inject nothing. Call `configure()` before creating charts:
+
+```js
+import { configure } from "expressive-charts";
+configure({ nonce: cspNonce });       // the injected <style> takes it
+
+import "expressive-charts/style.css"; // or the same rules as a file (dist/expressive-charts.css)...
+configure({ injectStyles: false });   // ...and nothing injected
+```
+
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Rendering](docs/architecture.md#rendering) for theming and CSP.
 
 ## Demo
 
@@ -164,7 +181,7 @@ npm run dev
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Serves the `demo/` folder with live reload |
-| `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` entry) and a script-tag bundle (`dist/expressive-charts.global.js`) |
+| `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` entry), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
 | `npm test` | Runs the test suite |
 | `npm run typecheck` | Checks types without building |
 

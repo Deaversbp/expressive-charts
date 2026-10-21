@@ -121,7 +121,7 @@ Charts follow the device's light or dark setting, with eight series colours chec
 <style>.sales { --ec-series-1: #0f766e; }</style>
 ```
 
-Under a Content-Security-Policy, give the stylesheet the charts inject your nonce, or load it as a file and inject nothing. Call `configure()` before creating charts:
+Under a Content-Security-Policy, give the stylesheet the charts inject your nonce, or load it as a file and inject nothing. The package lists its CSS under `sideEffects`, so bundlers keep the CSS import even though it imports no names. Call `configure()` before creating charts:
 
 ```js
 import { configure } from "expressive-charts";

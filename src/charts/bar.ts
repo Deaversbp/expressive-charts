@@ -150,9 +150,12 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   let destroyed = false;
 
   let laidOut: BarLayout<D>;
+  let firstTable: TableModel | undefined;
   try {
-    // Throws on data it can't draw. Nothing but the <svg> is in place yet, so that's all to undo.
+    // Throws on data it can't draw, or a table column it can't read. Nothing but the <svg> is in
+    // place yet (no listeners, observers or elements beside it), so that's all to undo.
     laidOut = layout(current);
+    firstTable = tableFor(current, laidOut);
   } catch (error) {
     svg.remove();
     throw error;
@@ -772,7 +775,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
   describeChart(svg, current);
   syncLegend();
-  table.render(tableFor(current, laidOut));
+  table.render(firstTable);
   setAttributes(svg, sizeAttributes(laidOut.frame.bands));
   for (const tick of laidOut.ticks) addTick(tick.value, 1);
   for (const tick of ticks.values()) drawTick(tick, laidOut.frame);

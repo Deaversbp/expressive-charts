@@ -431,7 +431,7 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 >
 > **A thin `barChart` is built in M1 step 5** (`src/charts`); [architecture.md](architecture.md#reference-charts) is now the reference for it. Differences from the sketch below and decisions made there:
 >
-> - `focus()` (step 9), `tooltip` and `table` (M2) aren't built, so `barChart` is still declared in the sketch, extending the built option and chart types.
+> - `focus()` (step 9) and `table` (M2) aren't built, so `barChart` is still declared in the sketch, extending the built option and chart types. `tooltip` is built (M2), and so is a `legend` option for stacks.
 > - `update()` jumps to the new state (staged transitions are step 8) and can't change `on` or `motion` yet. It rejects, changing nothing, on data it can't draw.
 > - `sort` defaults to `"none"` (data order). `"key"` sorts keys with numbers in numeric order.
 > - Bars are coloured by series through a `ColorAssignment` (`colorAssignment()` is built). Colouring each category, as the morph example needs, is open until M5.
@@ -641,7 +641,7 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
 - **Keyboard.** Each chart is one tab stop (roving `tabindex`). Arrow keys move between marks in visual order, following the current sort, and Home/End jump to the ends. Focus fires `hover` (`source: "keyboard"`), so effects play. Escape or blur fires `leave`. The focus ring is drawn from `mark.outline` in `--ec-focus`, because browser focus outlines on SVG are inconsistent.
 - **Data table.** On by default: a `<details>` "Data table" after the chart, as in the prototype. It follows the current sort and updates with the data. `"hidden"` makes it visually hidden but readable by screen readers.
 - **Pause controls (WCAG 2.2.2).** Nothing auto-plays by default. The `playback()` controller (play, pause, seek, stop) comes with a `playButton()` helper whose label switches between Play and Pause. Effects can't loop forever in v0.1: `pulse` repeats are capped below 5 s. If looping is ever added, the chart must render a pause control.
-- **Tooltips** are `aria-hidden`, since the same text is in the mark's label and the table. On touch they follow the tap.
+- **Tooltips** are `aria-hidden`, since the same text is in the mark's label and the table. On touch they follow the tap. *Built in M2 for `barChart`; see [architecture.md](architecture.md#bar-chart).*
 - **Updates.** An optional polite live region announces summaries like "Sorted A–Z". It's off by default (open question).
 
 ---

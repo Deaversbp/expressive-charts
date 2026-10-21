@@ -154,9 +154,8 @@ export declare function expressive<D = unknown>(target: MarkSource<D>, options: 
 // KeyOfType, Accessor, NumericKey, ColorAssignment and colorAssignment are built, in src/charts. So are
 // the chart options and the chart handle; the sketch adds what's still planned to them.
 
-/** Planned for M2: tooltips and the data table. */
+/** Planned for M2: the data table. (Tooltips are built.) */
 interface PlannedChartOptions<D> {
-  readonly tooltip?: boolean | ((d: D) => string);
   readonly table?: boolean | "hidden";
 }
 

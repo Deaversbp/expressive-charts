@@ -86,6 +86,13 @@ const STYLES = `
 :where(.ec-chart .ec-leaving, .ec-chart .ec-overlay) { pointer-events: none; }
 :where(.ec-attached.ec-dimmed) { opacity: var(--ec-dim-opacity, 0.3); }
 :where(.ec-attached) { transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
+:where(.ec-tooltip-layer) { position: relative; height: 0; }
+:where(.ec-tooltip) { position: absolute; left: 0; top: 0; z-index: 3; box-sizing: border-box; width: max-content; max-width: 24em; padding: 8px 10px; border: 1px solid var(--ec-ring, color-mix(in srgb, currentColor 12%, transparent)); border-radius: 8px; background: var(--ec-surface, ${TOKENS.surface}); color: var(--ec-text, ${TOKENS.text}); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); font-size: 13px; line-height: 1.35; white-space: pre-line; font-variant-numeric: tabular-nums; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity var(--ec-hover-duration, 100ms) ease-out, visibility 0s linear var(--ec-hover-duration, 100ms); }
+:where(.ec-tooltip.ec-tooltip-shown) { opacity: 1; visibility: visible; transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
+:where(.ec-tooltip-title) { font-weight: 600; }
+:where(.ec-legend) { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; color: var(--ec-text, ${TOKENS.text}); }
+:where(.ec-legend-item) { display: inline-flex; align-items: center; gap: 6px; }
+:where(.ec-legend-swatch) { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--ec-mark); forced-color-adjust: none; }
 `;
 
 const MARKER = "data-expressive-charts";

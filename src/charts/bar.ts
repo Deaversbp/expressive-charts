@@ -1,6 +1,6 @@
 // barChart: the thin reference bar chart. Horizontal bars or vertical columns, plain or stacked; keyed
 // marks described with describe.bar; a measured layout; axis, grid and labels in theme colours;
-// built-in hover dimming; pointer, touch and keyboard hover. update() animates the change: staged in
+// built-in hover dimming; pointer, touch and keyboard hover with a tooltip; a legend for stacks. update() animates the change: staged in
 // presentation (values, then positions), in one short stage in analysis, at once when motion is off.
 //
 // The chart never names an effect: it resolves `on` through the presets it's handed and plays them
@@ -15,12 +15,14 @@ import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLa
 import { toColorAssignment } from "./colors";
 import { pointerHover, type HoverTarget } from "./interaction";
 import { keyboardFocus } from "./keyboard";
+import { chartLegend } from "./legend";
 import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
 import { svgSurface } from "./render/surface";
 import { setAttributes, setStyles, svgElement, transformAttribute } from "./render/svg";
 import { textMeasure } from "./render/text";
 import { injectStyles, markColorStyles, seriesColors } from "./render/theme";
+import { chartTooltip, summaryContent } from "./tooltip";
 import type { BarChartOptions, Chart, MarkEvents } from "./types";
 
 /** What the composition root hands every chart, so charts never import the registries or effects. */
@@ -169,6 +171,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     colors: (key) => find(key)?.parts[0]?.colors
   });
   const runner = createRunner<D>({ effects, motion, icons: env.icons, clock, surface });
+  const tooltip = chartTooltip<D>(svg, { motion, option: () => current.tooltip });
+  const legend = chartLegend(svg);
 
   // ── Animated state ─────────────────────────────────────────────────────────
   // One animated value per mark property (values, slot, presence) plus the scale and the bands, so a
@@ -291,7 +295,16 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const moved = geometryChanged(record.shown.geometry, row.geometry);
     drawMark(record, row);
     if (moved) runner.change(row.geometry, row.data);
+    if (record.key === hovered?.key) showTooltip(record);
   }
+
+  /** The tooltip beside the hovered mark as it is on screen, with the text for where it's heading. */
+  function showTooltip(record: MarkRecord<D>): void {
+    const { row } = record;
+    tooltip.show(record.shown.geometry, row, () => summaryContent(row.label.text, row.values, format(current)));
+  }
+
+  const syncLegend = (): void => legend.update(barEncoding(current).series.map((s) => s.series), colors, current.legend !== false);
 
   const currentFrame = (): BarFrame => ({ orientation, scale: scale.value, bands: bands.value });
 
@@ -421,9 +434,10 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     return diff;
   }
 
-  /** The mark's accessible name, from where it's heading. */
+  /** The mark's accessible name, from where it's heading, and a tooltip function's text as its description. */
   function labelMark(record: MarkRecord<D>): void {
     record.group.setAttribute("aria-label", markLabel(record.row, format(current)));
+    tooltip.describe(record.group, record.row);
   }
 
   /**
@@ -556,6 +570,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     hovered = { key: record.key, source };
     record.group.classList.add("ec-hot");
     if (current.dim !== false) svg.classList.add("ec-hovering");
+    showTooltip(record);
     runner.hover([onScreen(record)]);
     emit("hover", { ...onScreen(record), batch: ONE, source, ...(segment === undefined ? {} : { segment }) });
   }
@@ -564,6 +579,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const key = hovered?.key;
     hovered = undefined;
     svg.classList.remove("ec-hovering");
+    tooltip.hide();
     const record = key === undefined ? undefined : find(key);
     if (key === undefined || !record) return;
     record.group.classList.remove("ec-hot");
@@ -693,6 +709,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   // ── First render ───────────────────────────────────────────────────────────
 
   describeChart(svg, current);
+  syncLegend();
   setAttributes(svg, sizeAttributes(laidOut.frame.bands));
   for (const tick of laidOut.ticks) addTick(tick.value, 1);
   for (const tick of ticks.values()) drawTick(tick, laidOut.frame);
@@ -719,6 +736,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       if ("colors" in next) colors = toColorAssignment(merged.colors);
       current = merged;
       describeChart(svg, current);
+      syncLegend();
       if (current.dim === false) svg.classList.remove("ec-hovering");
       else if (hovered !== undefined) svg.classList.add("ec-hovering");
       supersede?.();
@@ -772,6 +790,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       interaction.destroy();
       keyboard.destroy();
       runner.destroy();
+      tooltip.destroy();
+      legend.destroy();
       unsubscribeMotion();
       observer?.disconnect();
       stopFrame?.();
@@ -811,6 +831,9 @@ function checkOptions<D>(options: BarChartOptions<D>): void {
     const value = options[field];
     if (value !== undefined && !(Number.isFinite(value) && value > 0)) throw new RangeError(`barChart: ${field} must be a positive number of px, got ${String(value)}.`);
   }
+  const { tooltip, legend } = options;
+  if (tooltip !== undefined && typeof tooltip !== "boolean" && typeof tooltip !== "function") throw new TypeError("barChart: tooltip must be true, false or a function that returns a row's text.");
+  if (legend !== undefined && typeof legend !== "boolean") throw new TypeError("barChart: legend must be true or false.");
 }
 
 /**

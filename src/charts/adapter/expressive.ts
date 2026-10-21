@@ -193,6 +193,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   const first = read(source);
   const doc = first.root?.ownerDocument ?? (typeof document === "undefined" ? undefined : document);
   if (!doc) throw new TypeError("expressive needs a DOM.");
+  // The theme tokens the overlay and the focus ring draw in, and the dimming rules: shared, so it stays.
+  injectStyles(doc);
 
   let root: SVGSVGElement | undefined;
   let ancestor: Element | undefined;
@@ -386,7 +388,6 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   const unsubscribeMotion = dim ? motion.subscribe(applyDim) : undefined;
-  if (dim) injectStyles(doc);
 
   // ── Keyboard ───────────────────────────────────────────────────────────────
 

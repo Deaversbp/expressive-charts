@@ -212,8 +212,8 @@ describe("barChart: keys and colours", () => {
   it("uses pinned palette slots", () => {
     const { mark } = setup({ stack: ["goals", "assists"], colors: { goals: 1, assists: 4 } });
     const assists = mark("Okafor").querySelector('[data-series="assists"]') as SVGPathElement;
-    expect(assists.style.getPropertyValue("--ec-mark")).toBe("var(--ec-series-4, #eda100)");
-    expect(assists.style.getPropertyValue("--ec-mark-strong")).toBe("var(--ec-series-4-strong, #c98500)");
+    expect(assists.style.getPropertyValue("--ec-mark")).toBe("var(--ec-series-4, #c28409)");
+    expect(assists.style.getPropertyValue("--ec-mark-strong")).toBe("var(--ec-series-4-strong, #9d6a07)");
   });
 });
 
@@ -625,7 +625,7 @@ describe("barChart: effects", () => {
     const run = svg.querySelector(".ec-overlay > .ec-run") as SVGGElement;
     expect(run.getAttribute("data-key")).toBe("Okafor");
     expect(run.getAttribute("data-slot")).toBe("hover");
-    expect(run.style.getPropertyValue("--ec-mark")).toBe("var(--ec-series-3, #1baf7a)");
+    expect(run.style.getPropertyValue("--ec-mark")).toBe("var(--ec-series-3, #02a471)");
     expect(run.querySelector("path")?.getAttribute("d")).toBe(mark("Okafor").querySelector(".ec-segment")?.getAttribute("d"));
     svg.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" }));
     expect(svg.querySelector(".ec-overlay")?.childElementCount).toBe(0);
@@ -762,7 +762,7 @@ describe("barChart: effects", () => {
     const run = () => (svg.querySelector('.ec-run[data-key="Okafor"]') as SVGGElement).style.getPropertyValue("--ec-mark");
     expect(run()).toBe("var(--ec-series-1, #2a78d6)");
     await chart.update({ colors: { goals: 3 } });
-    expect(run()).toBe("var(--ec-series-3, #1baf7a)");
+    expect(run()).toBe("var(--ec-series-3, #02a471)");
     // A different first series: assists takes the first free slot.
     await settle(chart.update({ stack: ["assists"] }));
     expect(run()).toBe("var(--ec-series-1, #2a78d6)");

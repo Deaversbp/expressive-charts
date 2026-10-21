@@ -20,6 +20,12 @@ describe("page-wide registries", () => {
     expect(iconRegistry.get("cleat")).toBeUndefined();
   });
 
+  it("start with the built-in flash preset, a fresh effect each time", () => {
+    const factory = presetRegistry.resolve("flash");
+    expect(factory().kind).toBe("geometry");
+    expect(factory()).not.toBe(factory());
+  });
+
   it("registers presets by name", () => {
     const nudge = (): GeometryEffect => ({ kind: "geometry", run: async () => {}, end: () => {}, clear: () => {} });
     registerPreset("test-nudge", nudge);

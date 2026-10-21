@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a first bar chart, the `expressive()` adapter for bars drawn by other code, icons and the first effect (`travel`, with `sequence`, `parallel` and `only`) are built ([below](#available-now-the-motion-core-mark-geometry-a-bar-chart-travel-and-the-adapter)). The other built-in effects are next, so `wiggle`, `pulse`, `flash`, `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a first bar chart, the `expressive()` adapter for bars drawn by other code, icons, the first effects (`travel` and `flash`, with `sequence`, `parallel` and `only`) and the viewer's `motionSwitch` are built ([below](#available-now-the-motion-core-mark-geometry-a-bar-chart-travel-and-the-adapter)). The other built-in effects are next, so `wiggle`, `pulse`, `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -130,6 +130,22 @@ const arrows = only("revenue", travel(icons.arrow, { size: "fit" }));
 const pin = iconFromSvg(svgMarkup, { name: "pin", size: 16, anchor: { x: 12, y: 22 } }); // keeps only plain shapes
 ```
 
+`flash` marks a change: one halo blink along the outline, the prototype's 900 ms. In the `update` slot it runs on the bars whose values changed, not on a re-sort. With motion off it draws nothing, since the new value it points at is on the chart anyway:
+
+```js
+const chart = barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { update: "flash" } });
+chart.update({ data: afterMatchweek }); // the bars that scored blink as they grow
+```
+
+`motionSwitch()` is the viewer's own control: Presentation, Analysis and Off as buttons with `aria-pressed`, and a note on what the mode does. A click is the viewer's choice, so it overrides the device's reduced-motion setting; until then, Off is pressed and the note says why. It follows the motion whoever changes it, and `persist` (opt-in) keeps the choice in `localStorage`:
+
+```js
+import { motion, motionSwitch } from "expressive-charts";
+
+const control = motionSwitch("#motion", motion, { persist: "site:motion" }); // motion defaults to the page-wide one
+control.destroy();                                                            // removes it; the choice stays
+```
+
 The same effects run on bars someone else drew. `expressive()` reads keys, rows and geometry from the host's `<rect>` elements and draws on an overlay at the end of its `<svg>`. It leaves the host's styling alone, and `destroy()` puts back everything it changed:
 
 ```js
@@ -148,7 +164,7 @@ fx.refresh(svg.selectAll("rect"));                   // after the page redraws: 
 
 For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Other shapes take a `geometry` callback built with `describe`.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, and [Adapters](docs/architecture.md#adapters) for `expressive()`.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`.
 
 ## Demo
 

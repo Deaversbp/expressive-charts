@@ -36,6 +36,15 @@ function el(tag: string, attrs: Record<string, string | number>, parent: Element
   return node;
 }
 
+/** A round axis maximum, as the prototype rounds it (and as D3's scale.nice() would). */
+function niceMax(value: number): number {
+  const rough = value / 4;
+  const power = Math.pow(10, Math.floor(Math.log10(rough)));
+  const fraction = rough / power;
+  const step = (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * power;
+  return Math.ceil(value / step) * step;
+}
+
 /** Redraws the whole chart from scratch, as a simple host would, and returns the bars it drew. */
 export function drawHostChart(svg: SVGSVGElement, rows: readonly Row[], options: DrawOptions): SVGRectElement[] {
   const width = Math.max(320, svg.parentElement?.clientWidth ?? 640);
@@ -43,7 +52,7 @@ export function drawHostChart(svg: SVGSVGElement, rows: readonly Row[], options:
   const order = [...rows].sort((a, b) =>
     options.sort === "key" ? a.name.localeCompare(b.name) : total(b) - total(a) || a.name.localeCompare(b.name)
   );
-  const max = Math.max(1, ...order.map(total));
+  const max = niceMax(Math.max(1, ...order.map(total)));
   const plotWidth = width - LEFT - RIGHT;
   const x = (value: number): number => (value / max) * plotWidth;
   const height = TOP + order.length * ROW + 8;

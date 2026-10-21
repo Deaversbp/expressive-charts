@@ -5,4 +5,4 @@ export { barChart, type BarChart, type ChartEnv } from "./bar";
 export { expressive, type Attachment, type ExpressiveOptions, type MarkSource } from "./adapter";
 export { colorAssignment, type ColorAssignment } from "./colors";
 export { styleOptions, type StyleOptions } from "./render/theme";
-export type { Accessor, BarChartOptions, Chart, ChartChange, ChartOptions, KeyOfType, MarkEvent, MarkEvents, NumericKey, TableColumn, TableOptions } from "./types";
+export type { Accessor, BarChartOptions, Chart, ChartChange, ChartOptions, KeyOfType, MarkEvent, MarkEvents, MarkSummary, NumericKey, TableColumn, TableOptions } from "./types";

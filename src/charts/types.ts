@@ -61,6 +61,13 @@ export interface ChartOptions<D> {
    */
   readonly tooltip?: boolean | ((d: NoInfer<D>) => string);
   /**
+   * Words each mark's accessible name (its aria-label), which by default is the category and each
+   * series' value in `format`: "Okafor: 16 goals, 4 assists". Given the row and the mark as it's
+   * heading, with the series it shows, the chart's `format` and the default `text`, so a page can say
+   * "1 goal". An empty string, or a throw (reported), keeps the default: a mark is never left unnamed.
+   */
+  readonly markLabel?: (d: NoInfer<D>, mark: MarkSummary) => string;
+  /**
    * The data table: the fallback every screen reader can read. Default true: a closed <details>
    * "Data table" after the chart, listing the rows in the chart's order with the category, each series
    * and, for a stack, the total, in `format`. "hidden": visually hidden but still read. An object adds
@@ -95,6 +102,21 @@ export interface TableColumn<D> {
   readonly field: Accessor<D, unknown>;
   /** Default: numbers in the chart's `format`, anything else as text, and nothing for null or undefined. */
   readonly format?: (value: unknown) => string;
+}
+
+/** What `markLabel` is given beside the row: the mark as it's heading, in the chart's terms. */
+export interface MarkSummary {
+  readonly key: string;
+  /** The category, as the axis shows it. */
+  readonly category: string;
+  /** Each series the mark shows, from the baseline, with its signed value. A lone value read by a function is the series "value". */
+  readonly values: readonly { readonly series: string; readonly value: number }[];
+  /** The values added up. */
+  readonly total: number;
+  /** The chart's `format`, or its default. */
+  readonly format: (value: number) => string;
+  /** The name the chart gives by default: "Okafor: 16 goals, 4 assists". */
+  readonly text: string;
 }
 
 /** What `announce` is given: the chart's own summary of an update, and the marks it changed. */

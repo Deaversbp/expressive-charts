@@ -498,7 +498,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
   /** The mark's accessible name, from where it's heading, and a tooltip function's text as its description. */
   function labelMark(record: MarkRecord<D>): void {
-    record.group.setAttribute("aria-label", markLabel(record.row, format(current)));
+    record.group.setAttribute("aria-label", markLabel(record.row, current));
     tooltip.describe(record.group, record.row);
   }
 
@@ -907,8 +907,9 @@ function checkOptions<D>(options: BarChartOptions<D>): void {
     const value = options[field];
     if (value !== undefined && !(Number.isFinite(value) && value > 0)) throw new RangeError(`barChart: ${field} must be a positive number of px, got ${String(value)}.`);
   }
-  const { tooltip, legend, announce } = options;
+  const { tooltip, markLabel, legend, announce } = options;
   if (tooltip !== undefined && typeof tooltip !== "boolean" && typeof tooltip !== "function") throw new TypeError("barChart: tooltip must be true, false or a function that returns a row's text.");
+  if (markLabel !== undefined && typeof markLabel !== "function") throw new TypeError("barChart: markLabel must be a function that returns a mark's accessible name.");
   if (legend !== undefined && typeof legend !== "boolean") throw new TypeError("barChart: legend must be true or false.");
   checkTableOption(options.table, "barChart");
   if (announce !== undefined && typeof announce !== "boolean" && typeof announce !== "function") throw new TypeError("barChart: announce must be true, false or a function that returns the text to announce.");
@@ -957,11 +958,26 @@ function placeText(element: SVGTextElement, placement: TextPlacement): void {
   if (element.textContent !== placement.text) element.textContent = placement.text;
 }
 
-/** "Okafor: 16 goals, 4 assists". A lone value read by a function (its series is "value") goes unnamed: "Okafor: 16". */
-function markLabel<D>(row: BarRow<D>, format: (value: number) => string): string {
+/**
+ * "Okafor: 16 goals, 4 assists", or the page's wording from `markLabel`. A lone value read by a function
+ * (its series is "value") goes unnamed: "Okafor: 16". An empty name, or a throw (reported), keeps the
+ * default, so a focusable mark is never left unnamed.
+ */
+function markLabel<D>(row: BarRow<D>, options: BarChartOptions<D>): string {
+  const formatted = format(options);
   const lone = row.values.length === 1 && row.values[0]!.series === "value";
-  const values = row.values.map((v) => (lone ? format(v.value) : `${format(v.value)} ${v.series}`));
-  return `${row.label.text}: ${values.join(", ")}`;
+  const values = row.values.map((v) => (lone ? formatted(v.value) : `${formatted(v.value)} ${v.series}`));
+  const text = `${row.label.text}: ${values.join(", ")}`;
+  if (!options.markLabel) return text;
+  try {
+    // Copies of the values, so the page can't change the layout's.
+    const shown = row.values.map((v) => ({ series: v.series, value: v.value }));
+    const named: unknown = options.markLabel(row.datum, { key: row.key, category: row.label.text, values: shown, total: row.total, format: formatted, text });
+    if (named !== undefined && named !== null && String(named).trim() !== "") return String(named);
+  } catch (error) {
+    report(error);
+  }
+  return text;
 }
 
 function valuesChanged<D>(from: BarRow<D>, to: BarRow<D>): boolean {

@@ -1,7 +1,8 @@
 // M1: the prototype's ball-and-cleat card on the real library (steps 7 and 8), and the same story on a
 // hand-written SVG chart through expressive() (step 11). M2: "Play next matchweek" flashes the bars
 // that changed (step 2), the motion switch is the library's own (step 4), and the chart has a data
-// table with the players' positions and announces its updates to screen readers (step 5).
+// table with the players' positions and announces its updates to screen readers (step 5), and its bars'
+// accessible names say "1 goal" (markLabel).
 import { barChart, expressive, motionSwitch, sequence, travel } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
 import { drawHostChart, type DrawOptions, type Segment } from "./host-chart";
@@ -39,6 +40,10 @@ const titles: Record<Metric, string> = {
   ga: "Harbor City FC: goals and assists by player"
 };
 
+// Each bar's accessible name in words, "Castillo: 1 goal, 5 assists", where the default would say "1 goals".
+const nouns: Record<string, readonly [one: string, other: string]> = { goals: ["goal", "goals"], assists: ["assist", "assists"] };
+const counted = (value: number, series: string, format: (value: number) => string): string => `${format(value)} ${nouns[series]?.[value === 1 ? 0 : 1] ?? series}`;
+
 // One story for all three views and both charts: a segment that isn't in the stack makes its step a no-op.
 const ballThenCleat = sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" }));
 
@@ -52,6 +57,8 @@ const chart = barChart<Player>("#chart", {
   stack: stacks.goals,
   sort: "value",
   colors: { goals: 1, assists: 4 },
+  // Only the series the metric shows, in the chart's own format.
+  markLabel: (d, mark) => `${d.name}: ${mark.values.map((v) => counted(v.value, v.series, mark.format)).join(", ")}`,
   // As in the prototype, the table also lists each player's position.
   table: { category: "Player", columns: [{ label: "Position", field: "pos" }] },
   // The chart says what changed ("Sorted A to Z", "Okafor and Tanaka changed"); the page adds the matchweek.

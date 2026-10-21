@@ -31,7 +31,6 @@ Role words and their order vary between versions and verbosity settings: "graphi
 
 ## Known, no need to report
 
-- **"1 goals", "1 assists".** Labels use the series' field names. A `describe` option for custom labels is the planned fix; say if you'd like it in this step.
 - **The chart's name twice.** The page's section heading has the same text as the chart, so on the way in you may hear it as a region and then as a group.
 - **The second chart** ("The same story on someone else's chart") is the page's own SVG, with effects added by `expressive()`. Its ARIA isn't part of this step, so skip it. (Its `<svg>` is `role="img"` with focusable bars inside, which screen readers handle badly. That's a separate follow-up.)
 
@@ -48,7 +47,7 @@ Start in browse mode, NVDA's default. NVDA+Space switches between browse mode an
 | --- | --- | --- | --- |
 | 1 | Press Tab 10 times from the top of the page, until focus reaches the first bar. | "Harbor City FC: goals by player, grouping", then "Okafor: 16 goals, graphic". The ball rolls along Okafor's bar. | |
 | 2 | Down arrow twice (browse mode). | "graphic, Lindqvist: 10 goals", then "graphic, Moreau: 8 goals". In browse mode NVDA moves its own cursor and focus stays on Okafor; that's expected. | |
-| 3 | NVDA+Space (focus mode), then Down arrow, End, Home. | "Lindqvist: 10 goals, graphic", "Castillo: 1 goals, graphic", "Okafor: 16 goals, graphic". The focus ring moves with each one. | |
+| 3 | NVDA+Space (focus mode), then Down arrow, End, Home. | "Lindqvist: 10 goals, graphic", "Castillo: 1 goal, graphic", "Okafor: 16 goals, graphic". The focus ring moves with each one. | |
 | 4 | Escape, then NVDA+Space (back to browse mode). | Nothing for Escape (the story stops), then NVDA's browse-mode sound. | |
 | 5 | Shift+Tab 4 times, to "Goals + assists". Press Space. | "Goals + assists, toggle button, not pressed", then "pressed", then the announcement "Harbor City FC: goals and assists by player". | |
 | 6 | Tab 4 times, back into the chart. | "Harbor City FC: goals and assists by player, grouping", then "Okafor: 16 goals, 4 assists, graphic". | |
@@ -72,7 +71,7 @@ VO means Control+Option.
 | # | Do | Expect to hear (roughly) | What you heard |
 | --- | --- | --- | --- |
 | 1 | Press Tab 10 times, until focus reaches the first bar. | "Okafor: 16 goals, image", and "Harbor City FC: goals by player, group" (before it, or after a pause). | |
-| 2 | Down arrow twice, then End, then Home. | "Lindqvist: 10 goals, image", "Moreau: 8 goals, image", "Castillo: 1 goals, image", "Okafor: 16 goals, image". The focus ring moves with each one. | |
+| 2 | Down arrow twice, then End, then Home. | "Lindqvist: 10 goals, image", "Moreau: 8 goals, image", "Castillo: 1 goal, image", "Okafor: 16 goals, image". The focus ring moves with each one. | |
 | 3 | VO+Right, then VO+Left. | "Lindqvist: 10 goals, image", then "Okafor: 16 goals, image": one item per bar, never "Lindqvist" and "10" separately. | |
 | 4 | Escape. Shift+Tab 4 times, to "Goals + assists". Press Space. | "Goals + assists, toggle button" (perhaps "not selected"), then "selected", then "Harbor City FC: goals and assists by player". | |
 | 5 | Tab 4 times, back into the chart. | "Okafor: 16 goals, 4 assists, image", with the chart's new name ("… goals and assists by player, group"). | |
@@ -87,6 +86,7 @@ VO means Control+Option.
 ## Results
 
 **NVDA + Chrome on Windows 11, 21 October 2026: passed.** Steps 1–13 read as expected, with the default settings, so every "Listen for" item passed. The roles (`group` on the `<svg>`, `img` on each bar), the table and the announcements stay as built. Versions weren't noted.
+- That run heard "Castillo: 1 goals" in step 3, a known issue then. The demo now words its bars' names with `markLabel`, so the steps above say "1 goal". Only the wording changed, not the roles or the structure.
 - The one hitch was the tester's, not the page's. In step 11, T did nothing because NVDA was still in focus mode; after NVDA+Space back to browse mode, it found the table. Step 11 now says so.
 
 **VoiceOver + Safari:** not run yet. It needs a Mac.

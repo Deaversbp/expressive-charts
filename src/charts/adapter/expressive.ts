@@ -237,12 +237,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   focusMasks.set(doc, maskNumber);
   const ringMask = make("mask", { id: `ec-focus-mask-${maskNumber}`, maskUnits: "userSpaceOnUse", x: "-1e5", y: "-1e5", width: "2e5", height: "2e5" }, overlay);
   make("rect", { x: "-1e5", y: "-1e5", width: "2e5", height: "2e5", fill: "white" }, ringMask);
-  const ringHole = make("path", { fill: "black", stroke: "black", "stroke-width": String(2 * RING_GAP), "stroke-linejoin": "round" }, ringMask);
-  const ring = make(
-    "path",
-    { class: "ec-focus-ring", visibility: "hidden", "stroke-width": String(2 * (RING_GAP + RING)), "stroke-linejoin": "round", mask: `url(#${ringMask.id})` },
-    overlay
-  );
+  const ringHole = make("path", { stroke: "black", "stroke-linejoin": "round" }, ringMask);
+  const ring = make("path", { class: "ec-focus-ring", visibility: "hidden", "stroke-linejoin": "round", mask: `url(#${ringMask.id})` }, overlay);
   setStyles(ring, { fill: "none", stroke: cssColor("focus") });
 
   const find = (key: string): MarkRecord<D> | undefined => records.get(key) ?? leaving.get(key);
@@ -420,9 +416,13 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       setAttributes(ring, { visibility: "hidden" });
       return;
     }
-    const { d } = record.mark.geometry.outline;
-    setAttributes(ringHole, { d });
-    setAttributes(ring, { d, visibility: undefined });
+    const { outline, thickness } = record.mark.geometry;
+    // An open outline (a line from `geometry`) is the stroke's centre: the gap and ring start at the
+    // stroke's edge, and the hole isn't filled, which would close the line into a polygon and hide
+    // the ring on one side.
+    const stroke = outline.closed ? 0 : thickness;
+    setAttributes(ringHole, { d: outline.d, fill: outline.closed ? "black" : "none", "stroke-width": stroke + 2 * RING_GAP });
+    setAttributes(ring, { d: outline.d, "stroke-width": stroke + 2 * (RING_GAP + RING), visibility: undefined });
   }
 
   // barChart's keyboard focus, with the same hover rules: on the host's elements, written through

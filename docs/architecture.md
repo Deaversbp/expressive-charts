@@ -414,7 +414,7 @@ motionSwitch(target, motion?, { label?, labels?, hints?, persist? }) // → { el
 - **What it shows.** The pressed button is the effective mode. While the device asks for reduced motion and the viewer hasn't picked, Off is pressed and the note says so ("Your device asks for reduced motion…"); picking any mode, Off included, makes it the viewer's choice. It follows `motion.subscribe`, so it stays right when the author, the device or another control changes the mode.
 - **Persisting.** `persist: "key"` is opt-in: the viewer's choice is saved in `localStorage` under the key and restored when the switch is made, so it carries across pages and visits; `clearChoice()` removes it. A stored value that isn't a mode is ignored, and storage that's blocked or full is skipped (every access is guarded).
 - `label`, `labels` and `hints` replace the text, for other languages. `destroy()` removes the switch and stops following the motion; the viewer's choice stays.
-- **Styles.** Its rules are in the shared stylesheet, with `:where()` like the charts' and in theme tokens (`--ec-text`, `--ec-text-muted`, `--ec-surface`, `--ec-focus`), so host CSS restyles it without specificity fights.
+- **Styles.** Its rules are in the shared stylesheet, so `expressive-charts/style.css` and `configure()` cover them as they do the charts'. They use `:where()` and theme tokens (`--ec-text`, `--ec-text-muted`, `--ec-surface`, `--ec-ring`, `--ec-focus`), so they follow light and dark, and host CSS restyles them without specificity fights.
 
 ## Rendering
 

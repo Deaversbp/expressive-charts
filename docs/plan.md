@@ -763,7 +763,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
    - It builds the Presentation / Analysis / Off segmented control: buttons with `aria-pressed`, calling `motion.chooseMode()`, with the reduced-motion hint.
    - `persist: "key"` is an opt-in that remembers the viewer's choice in `localStorage` (open question 3).
    - The demo replaces its own switch with this one.
-   - **Built** as planned ([architecture.md](architecture.md#controls)): `motionSwitch(target, motion?, { label, labels, hints, persist })` returns `{ element, destroy() }`. The group is named by its visible label; the note is its description and a polite live region. `clearChoice()` also clears the stored choice. Its few `.ec-motion-*` rules are in the shared stylesheet in `theme.ts` (step 1's file), so they reach the CSS file too; it calls `injectStyles()` like a chart, so step 1's `nonce` and `injectStyles: false` options should reach it as well.
+   - **Built** as planned ([architecture.md](architecture.md#controls)): `motionSwitch(target, motion?, { label, labels, hints, persist })` returns `{ element, destroy() }`. The group is named by its visible label; the note is its description and a polite live region. `clearChoice()` also clears the stored choice. Its few `.ec-motion-*` rules are in the shared stylesheet in `theme.ts` (step 1's file), so they're in `expressive-charts/style.css` too, and it injects the stylesheet as charts do, so `configure({ nonce, injectStyles })` covers it.
 
 **Wave 2** (after wave 1 lands):
 

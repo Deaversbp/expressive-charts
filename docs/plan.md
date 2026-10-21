@@ -894,7 +894,13 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 **Wave 1** (parallel):
 
-1. **Shared chart code.** Owns `src/charts/bar.ts` and new modules in `src/charts/shell/`.
+1. ✅ **Shared chart code.** Owns `src/charts/bar.ts` and new modules in `src/charts/shell/`.
+   - **Built** (October 2026), with no existing test or baseline changed. [architecture.md](architecture.md#reference-charts) names the modules, and `bar.ts` went from about 1,090 lines to about 800. Decisions:
+     - Eight modules, each a function or small factory that takes callbacks: `events.ts`, `hover.ts`, `transitions.ts` (with `playUpdate`, the runner's order for an update), `leaving.ts`, `order.ts`, `watch.ts`, `setup.ts` and `format.ts`. A chart passes its name for error messages ("donutChart: unknown event …").
+     - The chart supplies, beside finding a mark and its element, the mark as it is on screen, drawing the ring and showing the tooltip. Drawing the ring stays in `bar.ts`, since step 4 moves the adapter's masked ring into `src/charts/render/` for both charts.
+     - Events are still made as each is sent (`emitEach(type, marks, read)`), so a listener that calls `update()` mid-batch sees what it did before.
+     - `bar.ts` still re-exports `ChartEnv`, because the adapter and several tests import it from there; `src/charts/index.ts` exports it from `shell/setup.ts`.
+     - The shell has unit tests of its own, so step 4 can lean on them without going through bars.
    - Move what doesn't know about bars out of `barChart`, with no change in behaviour:
      - **events:** the listener sets, `emit`, `emitEach` and the handle's `on()`;
      - **hover:** the hovered mark and its source; starting and ending a hover (emphasis, dimming, tooltip, runner, event); the wiring of `pointerHover` and `keyboardFocus` (pointer and focus share one hover; Escape, blur and focus from a click); the mark that shows the focus ring; and keeping the ring and tooltip with an effect's `transform`. The chart supplies how to find a mark from an event target, its element, and how to draw its ring;

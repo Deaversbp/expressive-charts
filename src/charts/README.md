@@ -4,7 +4,8 @@ Chart components (bar, line, donut, and later more). Each chart gives every mark
 
 | File | What it holds |
 | --- | --- |
-| `bar.ts` | `barChart`: DOM, hover and keyboard focus, staged and interruptible updates, resizing, and the runner wiring |
+| `bar.ts` | `barChart`: its marks, ticks and focus ring in the DOM, staged and interruptible updates (`retarget`), and what the table, legend and announcements say; the rest is in `shell/` |
+| `shell/` | What charts share beyond their marks, built from callbacks rather than a base class: mark events (`events.ts`), one hover for pointer, touch and keyboard focus (`hover.ts`), transitions and the runner's order for an update (`transitions.ts`), leaving marks (`leaving.ts`), DOM order that keeps focus (`order.ts`), the container's width, web fonts and the hover duration (`watch.ts`), and `ChartEnv`, the container, the accessible name and the `needs` check (`setup.ts`) and the default `format` (`format.ts`) |
 | `bar-layout.ts` | The bar chart's layout, pure: encoding, sorting, the nice scale, the frame (scale and bands), and `placeRow` / `placeTick`, which draw a laid-out row or any state in between |
 | `types.ts` | What charts share: options, `MarkEvent(s)`, `Chart`, accessors |
 | `colors.ts` | `colorAssignment`: palette slots that follow the entity |

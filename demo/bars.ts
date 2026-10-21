@@ -1,10 +1,11 @@
 // M1: the prototype's ball-and-cleat card on the real library (steps 7 and 8), and the same story on a
 // hand-written SVG chart through expressive() (step 11). M2: "Play next matchweek" flashes the bars
 // that changed (step 2), the motion switch is the library's own (step 4), and the chart has a data
-// table with the players' positions and announces its updates to screen readers (step 5).
+// table with the players' positions and announces its updates to screen readers (step 5), and
+// expressive() names the hand-written chart's players for screen readers (markLabel).
 import { barChart, expressive, motionSwitch, sequence, travel } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
-import { drawHostChart, type DrawOptions, type Segment } from "./host-chart";
+import { amount, drawHostChart, type DrawOptions, type Segment } from "./host-chart";
 
 interface Player {
   name: string;
@@ -70,6 +71,9 @@ const host = expressive<Segment>(drawHost(), {
   // What each rect shows, so refresh() flashes the players who scored, not every bar on a resize or a new axis maximum.
   value: (d) => d.value,
   keyboard: true,
+  // The host names each rect by what it shows ("Okafor: 4 assists"), but focus moves by player, so
+  // each player is read as one item: the rect that takes focus names all their values, and the other is hidden.
+  markLabel: (d, mark) => `${d.row.name}: ${mark.parts.map((part) => amount(part.datum.value, part.datum.series)).join(", ")}`,
   dim: true,
   on: { hover: ballThenCleat, update: "flash" }
 });

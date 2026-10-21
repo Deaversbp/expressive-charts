@@ -43,6 +43,8 @@ interface ReadMark<D> {
   readonly data: MarkData<D>;
   /** From the baseline for bars; in source order for marks described with `geometry`. */
   readonly parts: readonly Part<D>[];
+  /** `markLabel`'s name for it; undefined leaves its ARIA as the host drew it. */
+  readonly label: string | undefined;
 }
 
 interface Reading<D> {
@@ -95,6 +97,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   const colorCache = new WeakMap<Element, ReturnType<typeof hostColors>>();
   let source = target;
   let warnedIndex = false;
+  let warnedImage = false;
 
   // ── Reading the host's marks ───────────────────────────────────────────────
 
@@ -137,7 +140,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
           throw new TypeError(`expressive: geometry for "${key}" must be a MarkGeometry with the key "${key}". Build it with describe and the key passed in.`);
         }
         const parts = group.map((p) => part(p, outlineOf(geometry, p.series, group.length)));
-        return { key, geometry, data: markData(parts), parts };
+        return { key, geometry, data: markData(parts), parts, label: labelOf(key, parts) };
       });
       return { root: svg, ancestor: common, marks };
     }
@@ -165,7 +168,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         const segment = segments[n];
         return part(rects[i]![j]!, segment && segment.length >= 0.5 ? segment.outline.d : undefined);
       });
-      return { key, geometry, data: markData(parts), parts };
+      return { key, geometry, data: markData(parts), parts, label: labelOf(key, parts) };
     });
     return { root: svg, ancestor: common, marks };
   }
@@ -186,6 +189,18 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     const series: unknown = options.segment(datum, element);
     if (series === undefined || series === null || series === "") throw new TypeError(`expressive: segment returned ${String(series)} for a part of "${key}".`);
     return String(series);
+  }
+
+  /** `markLabel`'s name for a mark. Empty, or a throw (reported), is undefined: the host's own ARIA stays. */
+  function labelOf(key: string, parts: readonly Part<D>[]): string | undefined {
+    if (!options.markLabel) return undefined;
+    try {
+      const text = String(options.markLabel(parts[0]!.datum, { key, parts: parts.map(({ series, datum }) => ({ series, datum })) }) ?? "");
+      return text.trim() === "" ? undefined : text;
+    } catch (error) {
+      report(error);
+      return undefined;
+    }
   }
 
   function colorsOf(element: Element, svg: Element): HostPart["colors"] {
@@ -308,6 +323,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     });
     // Elements that left their mark, or moved to another one, get back what the host had.
     for (const [el, owner] of before) if (owners.get(el)?.record !== owner.record) edits.restore(el);
+    for (const record of order) nameMark(record);
 
     placeOverlay();
     applyDim();
@@ -315,6 +331,22 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     for (const key of recolor) surface.recolor(key);
     drawRing();
     return diff;
+  }
+
+  /**
+   * With `markLabel`, a mark is read as one item: the element that takes its focus is an image named
+   * by it, and its other parts are hidden. Each is written again on every read, since a part can
+   * become the first (a stack gains a segment) or stop being it.
+   */
+  function nameMark(record: MarkRecord<D>): void {
+    if (!options.markLabel) return;
+    const { label, parts } = record.mark;
+    parts.forEach((part, index) => {
+      const named = label !== undefined && index === 0;
+      edits.attribute(part.element, "role", named ? "img" : null);
+      edits.attribute(part.element, "aria-label", named ? label : null);
+      edits.attribute(part.element, "aria-hidden", label !== undefined && index > 0 ? "true" : null);
+    });
   }
 
   /** The overlay is the root's last child, in the common ancestor's coordinates. */
@@ -331,6 +363,10 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     detach();
     root = next;
     root.appendChild(overlay);
+    if ((options.keyboard === true || options.markLabel) && root.getAttribute("role") === "img" && !warnedImage) {
+      warnedImage = true;
+      console.warn('expressive: the <svg> is role="img", so screen readers read it as one picture and skip the marks inside, with their names and keyboard focus. Make it role="group"; its aria-label can stay.');
+    }
     interaction = pointerHover(root, {
       find(eventTarget) {
         const owner = ownerOf(eventTarget);
@@ -567,7 +603,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 function checkOptions<D>(options: ExpressiveOptions<D>): void {
   if (typeof options !== "object" || options === null) throw new TypeError("expressive needs options, with at least a key: { key: (d) => d.name }.");
   if (typeof options.key !== "function") throw new TypeError("expressive needs a key function, for example key: (d) => d.name. Marks are matched by key.");
-  for (const name of ["datum", "segment", "value", "geometry"] as const) {
+  for (const name of ["datum", "segment", "value", "geometry", "markLabel"] as const) {
     if (options[name] !== undefined && typeof options[name] !== "function") throw new TypeError(`expressive: ${name} must be a function.`);
   }
   if (options.baseline !== undefined && options.baseline !== "auto" && !isBaseline(options.baseline)) {

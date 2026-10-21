@@ -24,7 +24,7 @@ import { baselines, describeRects, isBaseline, union, visualOrder, type RectPart
 import { hostEdits } from "./edits";
 import { hostColors, hostMarkHandle, type HostMarkHandle, type HostPart } from "./host-style";
 import { commonAncestor, readSource, rootOf } from "./source";
-import { between, boxIn, rectOf } from "./space";
+import { axisAligned, between, boxIn, rectOf } from "./space";
 import type { Attachment, ExpressiveOptions, MarkSource } from "./types";
 
 interface Part<D> extends HostPart {
@@ -138,7 +138,11 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         if (p.element.localName !== "rect") {
           throw new TypeError(`expressive: can't read the geometry of a <${p.element.localName}> (mark "${key}"). Only <rect> marks are read; describe others with the geometry option.`);
         }
-        const rect: RectPart = { box: boxIn(between(common, p.element, svg), rectOf(p.element)), series: p.series, radius: radiusOf(p.element) };
+        const m = between(common, p.element, svg);
+        if (!axisAligned(m)) {
+          throw new TypeError(`expressive: the <rect> of "${key}" is rotated or skewed, so it isn't an upright bar. Describe it with the geometry option.`);
+        }
+        const rect: RectPart = { box: boxIn(m, rectOf(p.element)), series: p.series, radius: radiusOf(p.element) };
         return { ...p, rect };
       })
     );
@@ -206,7 +210,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   let ringKey: string | undefined;
   /** The focused mark, kept when the host removes its element, so refresh() can focus the new one. */
   let focused: string | undefined;
-  let pointerDown = false;
+  /** Whether the last input was a key (or there's been none), as :focus-visible decides. */
+  let keyboardInput = true;
   let interaction: PointerHover | undefined;
   let destroyed = false;
 
@@ -331,25 +336,25 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       }
     });
     if (keyboard) {
-      root.addEventListener("pointerdown", onPointerDown, true);
+      root.ownerDocument.addEventListener("keydown", onAnyKey, true);
+      root.ownerDocument.addEventListener("pointerdown", onAnyPointer, true);
       root.addEventListener("focusin", onFocusIn);
       root.addEventListener("focusout", onFocusOut);
       root.addEventListener("keydown", onKeyDown);
     }
-    syncMotion();
   }
 
-  /** Stops listening on the current root and gives it back what the host had. */
+  /** Stops listening on the current root. */
   function detach(): void {
     if (!root) return;
     endHover();
     interaction?.destroy();
     interaction = undefined;
-    root.removeEventListener("pointerdown", onPointerDown, true);
+    root.ownerDocument.removeEventListener("keydown", onAnyKey, true);
+    root.ownerDocument.removeEventListener("pointerdown", onAnyPointer, true);
     root.removeEventListener("focusin", onFocusIn);
     root.removeEventListener("focusout", onFocusOut);
     root.removeEventListener("keydown", onKeyDown);
-    edits.restore(root);
   }
 
   function ownerOf(eventTarget: EventTarget | null): Owner<D> | undefined {
@@ -364,7 +369,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
   function startHover(record: MarkRecord<D>, from: HoverSource, segment?: string): void {
     hovered = { key: record.key, source: from };
-    hot(record, true);
+    applyDim();
     runner.hover([input(record)]);
     emit("hover", { ...input(record), batch: ONE, source: from, ...(segment === undefined ? {} : { segment }) });
   }
@@ -374,34 +379,30 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     if (!current) return;
     hovered = undefined;
     const record = find(current.key);
-    if (record) hot(record, false);
+    applyDim();
     runner.leave([current.key]);
     if (record) emit("leave", { ...input(record), batch: ONE });
   }
 
-  /** With `dim`, the other marks fade while one is hovered. Classes, so host CSS can override them. */
-  function hot(record: MarkRecord<D>, on: boolean): void {
-    if (!dim || !root) return;
-    edits.toggleClass(root, "ec-dimming", on);
-    for (const part of record.mark.parts) if (owners.get(part.element)?.record === record) edits.toggleClass(part.element, "ec-hot", on);
-  }
-
+  /**
+   * With `dim`, this attachment's other marks fade while one is hovered: classes, so host CSS can
+   * override them, and only on its own marks, so attachments sharing an <svg> leave each other alone.
+   * The fade is a CSS transition timed by motion, like the charts'.
+   */
   function applyDim(): void {
-    if (!dim || !root) return;
+    if (!dim) return;
+    const duration = `${motion.duration(100, "feedback")}ms`;
     for (const record of order) {
+      const dimmed = hovered !== undefined && hovered.key !== record.key;
       for (const part of record.mark.parts) {
         edits.toggleClass(part.element, "ec-attached", true);
-        edits.toggleClass(part.element, "ec-hot", hovered?.key === record.key);
+        edits.toggleClass(part.element, "ec-dimmed", dimmed);
+        edits.style(part.element, "--ec-hover-duration", duration);
       }
     }
-    edits.toggleClass(root, "ec-dimming", hovered !== undefined);
   }
 
-  // Dimming is a CSS transition timed by motion, like the charts'.
-  const syncMotion = (): void => {
-    if (dim && root) edits.style(root, "--ec-hover-duration", `${motion.duration(100, "feedback")}ms`);
-  };
-  const unsubscribeMotion = dim ? motion.subscribe(syncMotion) : undefined;
+  const unsubscribeMotion = dim ? motion.subscribe(applyDim) : undefined;
   if (dim) injectStyles(doc);
 
   // ── Keyboard ───────────────────────────────────────────────────────────────
@@ -428,14 +429,17 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     else setAttributes(ring, { visibility: "hidden" });
   }
 
-  function onPointerDown(): void {
-    pointerDown = true;
+  // Listened for on the whole document: a click on the chart's background or elsewhere on the page
+  // brings no focusin, and a Tab from outside the chart has to count.
+  function onAnyKey(event: KeyboardEvent): void {
+    if (!event.metaKey && !event.altKey && !event.ctrlKey) keyboardInput = true;
+  }
+
+  function onAnyPointer(): void {
+    keyboardInput = false;
   }
 
   function onFocusIn(event: FocusEvent): void {
-    // Focus from a click or tap doesn't show the ring, as with :focus-visible.
-    const fromPointer = pointerDown;
-    pointerDown = false;
     const owner = ownerOf(event.target);
     if (!owner) return;
     const { record } = owner;
@@ -443,7 +447,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     focusable = record.key;
     applyKeyboard();
     edits.style(owner.part.element, "outline", "none");
-    ringKey = fromPointer ? undefined : record.key;
+    // Focus from a click or tap shows no ring, as with :focus-visible.
+    ringKey = keyboardInput ? record.key : undefined;
     drawRing();
     if (hovered?.key === record.key) return;
     endHover();

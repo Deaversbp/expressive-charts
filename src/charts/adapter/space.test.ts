@@ -1,6 +1,6 @@
 import { invert, parseTransform } from "../../core/geometry";
 import { matrix } from "../../core";
-import { between, boxIn, rectOf } from "./space";
+import { axisAligned, between, boxIn, rectOf } from "./space";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -55,6 +55,16 @@ describe("between", () => {
     Object.assign(plot, { getScreenCTM: ctm(1, 1, 100, 50) });
     Object.assign(rect, { getScreenCTM: ctm(2, 2, 110, 70) });
     close(between(plot, rect, svg), [2, 0, 0, 2, 10, 20]);
+  });
+});
+
+describe("axisAligned", () => {
+  it("accepts scales, flips and quarter turns, and refuses rotations and skews", () => {
+    expect(axisAligned(parseTransform("translate(60,10) scale(2,-1)"))).toBe(true);
+    expect(axisAligned(parseTransform("rotate(90) scale(3)"))).toBe(true);
+    expect(axisAligned(parseTransform("rotate(-90)"))).toBe(true);
+    expect(axisAligned(parseTransform("rotate(30)"))).toBe(false);
+    expect(axisAligned(parseTransform("skewX(10)"))).toBe(false);
   });
 });
 

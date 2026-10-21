@@ -258,6 +258,20 @@ describe("expressive: coordinates", () => {
     expect(host.plot.querySelector(".ec-overlay, .ec-run")).toBeNull();
   });
 
+  it("reads quarter turns, and refuses rects that are rotated or skewed", () => {
+    const host = d3Stack();
+    // Series groups turned a quarter turn below the common ancestor: still upright bars, now columns.
+    for (const group of host.groups) group.setAttribute("transform", "rotate(90)");
+    const turned = setup(host.selection(), stacked).fx.marks().find((m) => m.key === "Okafor")!;
+    expect(turned.bounds).toEqual({ x: -27, y: 0, width: 20, height: 200 });
+    expect(turned.angle(0)).toBe(Math.PI / 2);
+    document.querySelectorAll(".ec-overlay").forEach((overlay) => overlay.remove());
+    host.groups[1]!.setAttribute("transform", "rotate(30)");
+    expect(() => setup(host.selection(), stacked)).toThrow(/<rect> of "Okafor" is rotated or skewed/);
+    host.groups[1]!.setAttribute("transform", "skewX(10)");
+    expect(() => setup(host.selection(), stacked)).toThrow(/rotated or skewed/);
+  });
+
   it("follows the browser's CTMs where there's layout", () => {
     const host = d3Stack([players[0]!]);
     // As if CSS scaled the plot group by 2: the attributes don't show it, the CTMs do.
@@ -313,20 +327,45 @@ describe("expressive: hover", () => {
     const host = d3Stack();
     const { fx } = setup(host.selection(), stacked);
     pointer("pointerover", host.rect("Okafor", "goals"));
-    expect(host.svg.classList.contains("ec-dimming")).toBe(false);
     expect(host.rect("Tanaka", "goals").getAttribute("class")).toBeNull();
     fx.destroy();
 
     const dimmed = setup(host.selection(), { ...stacked, dim: true });
     pointer("pointerover", host.rect("Okafor", "goals"));
-    expect(host.svg.classList.contains("ec-dimming")).toBe(true);
-    expect(host.rect("Okafor", "assists").classList.contains("ec-hot")).toBe(true);
-    expect(host.rect("Tanaka", "goals").classList.contains("ec-hot")).toBe(false);
+    expect(host.rect("Okafor", "assists").classList.contains("ec-dimmed")).toBe(false);
+    expect(host.rect("Tanaka", "goals").classList.contains("ec-dimmed")).toBe(true);
     expect(host.rect("Tanaka", "goals").classList.contains("ec-attached")).toBe(true);
-    expect(host.svg.style.getPropertyValue("--ec-hover-duration")).toBe("100ms");
+    expect(host.rect("Tanaka", "goals").style.getPropertyValue("--ec-hover-duration")).toBe("100ms");
+    // Nothing on the root: it may be shared.
+    expect(host.svg.getAttribute("class")).toBeNull();
     pointer("pointerleave", host.svg);
-    expect(host.svg.classList.contains("ec-dimming")).toBe(false);
+    expect(host.rects().some((r) => r.classList.contains("ec-dimmed"))).toBe(false);
     dimmed.fx.destroy();
+  });
+
+  it("dims each attachment's own marks, so two on one <svg> leave each other alone", () => {
+    const host = d3Stack();
+    const goals = host.rects().filter((r) => (r.parentElement as Element | null) === host.groups[0]);
+    const assists = host.rects().filter((r) => (r.parentElement as Element | null) === host.groups[1]);
+    const name = (d: StackPoint): string => d.data.name;
+    const datum = (el: Element): StackPoint => (el as unknown as { __data__: StackPoint }).__data__;
+    const first = setup(goals, { key: name, datum, dim: true, keyboard: true });
+    const second = setup(assists, { key: name, datum, baseline: "left", dim: true });
+    const dimmed = (rects: SVGRectElement[]) => rects.map((r) => r.classList.contains("ec-dimmed"));
+
+    first.fx.focus("Okafor");
+    expect(dimmed(goals)).toEqual([false, true, true]);
+    expect(dimmed(assists)).toEqual([false, false, false]);
+
+    // The pointer plays the second one's hover while focus keeps the first one's going.
+    pointer("pointerover", host.rect("Tanaka", "assists"));
+    expect(dimmed(assists)).toEqual([true, false, true]);
+    expect(dimmed(goals)).toEqual([false, true, true]);
+    pointer("pointerleave", host.svg);
+    expect(dimmed(assists)).toEqual([false, false, false]);
+    expect(dimmed(goals)).toEqual([false, true, true]);
+    second.fx.destroy();
+    expect(dimmed(goals)).toEqual([false, true, true]);
   });
 
   it("styles the host's elements through the mark handle, composed with their own transforms", () => {
@@ -489,6 +528,17 @@ describe("expressive: keyboard", () => {
       "leave Tanaka"
     ]);
     expect(story.log.filter((line) => line.startsWith("run"))).toHaveLength(5);
+  });
+
+  it("shows the ring for a Tab after a click on the chart's background", () => {
+    const host = d3Stack();
+    setup(host.selection(), { ...stacked, keyboard: true });
+    const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
+    // A click on something that takes no focus, then Tab from outside the chart.
+    pointer("pointerdown", host.svg.querySelector(".axis line")!);
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    host.rect("Okafor", "goals").focus();
+    expect(ring.getAttribute("visibility")).toBeNull();
   });
 
   it("a click focuses without the ring, and keeps focus on a mark the host redraws", () => {

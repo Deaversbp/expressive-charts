@@ -22,6 +22,16 @@ export function ownTransform(element: Element): Matrix {
   return parseTransform(element.getAttribute("transform") ?? "");
 }
 
+/**
+ * Whether the transform keeps rectangles upright: scales, flips and quarter turns, with any
+ * translation. Only then is the box a rect covers exactly the rect.
+ */
+export function axisAligned(m: Matrix): boolean {
+  const [a, b, c, d] = m;
+  const tiny = 1e-9 * Math.max(Math.abs(a), Math.abs(b), Math.abs(c), Math.abs(d));
+  return (Math.abs(b) <= tiny && Math.abs(c) <= tiny) || (Math.abs(a) <= tiny && Math.abs(d) <= tiny);
+}
+
 /** The box a transformed rectangle covers, rounded to 0.001 px like path data. */
 export function boxIn(m: Matrix, rect: Rect): Rect {
   const corners: Point[] = [

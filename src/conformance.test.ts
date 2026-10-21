@@ -1,9 +1,12 @@
-// The plan §8 conformance checks for the built-in effects, on real bar marks from both sources: the reference
-// barChart, and expressive() on bars drawn by other code. This test brings charts and effects
-// together, so it lives beside src/index.ts, the only module allowed to.
+// The plan §8 conformance checks for the built-in effects, on real marks from three sources: bars
+// from the reference barChart and from expressive() on bars drawn by other code, and the slices of a
+// D3 pie through expressive(). This test brings charts and effects together, so it lives beside
+// src/index.ts, the only module allowed to.
 
+import { select } from "d3-selection";
+import { arc, pie, type PieArcDatum } from "d3-shape";
 import { play, testContext } from "./core/testing";
-import { barChart, expressive, flash, parallel, sequence, travel, type GeometryEffect, type MarkGeometry } from "./index";
+import { barChart, describe as build, expressive, flash, parallel, sequence, travel, type GeometryEffect, type MarkGeometry } from "./index";
 import { cleat, soccerBall } from "./icons/sport";
 
 interface Player {
@@ -55,6 +58,34 @@ function adapterMarks(): readonly MarkGeometry[] {
   return fx.marks();
 }
 
+interface Shot {
+  outcome: string;
+  shots: number;
+}
+
+const shots: Shot[] = [
+  { outcome: "Goal", shots: 58 },
+  { outcome: "Saved", shots: 112 },
+  { outcome: "Off target", shots: 149 },
+  { outcome: "Blocked", shots: 87 }
+];
+
+/** A real D3 donut: d3.pie() with its default sort, d3.arc() paths in a centred <g>, each slice described with describe.arc. */
+function pieMarks(): readonly MarkGeometry[] {
+  const plot = select(document.body).append("svg").attr("width", 640).attr("height", 300).append("g").attr("transform", "translate(320,150)");
+  const slices = plot
+    .selectAll<SVGPathElement, PieArcDatum<Shot>>("path")
+    .data(pie<Shot>().value((d) => d.shots)(shots))
+    .join("path")
+    .attr("d", arc<PieArcDatum<Shot>>().innerRadius(70).outerRadius(116));
+  const fx = expressive(slices, {
+    key: (d) => d.data.outcome,
+    value: (d) => d.value,
+    geometry: (_el, d, key) => build.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle })
+  });
+  return fx.marks();
+}
+
 const effects: Record<string, GeometryEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
@@ -63,19 +94,33 @@ const effects: Record<string, GeometryEffect> = {
   "flash while the ball rolls": parallel(flash(), travel(soccerBall, { along: "goals" }))
 };
 
-const sources: Record<string, () => readonly MarkGeometry[]> = { barChart: chartMarks, "expressive()": adapterMarks };
+const bars: Record<string, () => readonly MarkGeometry[]> = { barChart: chartMarks, "expressive() bars": adapterMarks };
+const sources: Record<string, () => readonly MarkGeometry[]> = { ...bars, "D3 pie through expressive()": pieMarks };
 
 afterEach(() => {
   document.body.replaceChildren();
 });
 
-describe.each(Object.entries(sources))("effects on bar marks from %s", (_source, marksOf) => {
+describe.each(Object.entries(bars))("bar marks from %s", (_source, marksOf) => {
   it("finds a stacked mark with goals and assists segments for every player", () => {
     const marks = marksOf();
     expect(marks.map((mark) => mark.key).sort()).toEqual(["Castillo", "Okafor", "Tanaka"]);
     for (const mark of marks) expect(mark.segments?.map((segment) => segment.series)).toEqual(["goals", "assists"]);
   });
+});
 
+describe("slices from a D3 pie through expressive()", () => {
+  it("finds a slice for every outcome, clockwise from 12 o'clock, around the donut's centre", () => {
+    const marks = pieMarks();
+    expect(marks.map((mark) => mark.key)).toEqual(["Off target", "Saved", "Blocked", "Goal"]);
+    for (const mark of marks) {
+      expect(mark.segments).toBeUndefined();
+      expect(mark.pivot).toEqual({ x: 0, y: 0 });
+    }
+  });
+});
+
+describe.each(Object.entries(sources))("effects on marks from %s", (_source, marksOf) => {
   for (const [effectName, effect] of Object.entries(effects)) {
     describe(effectName, () => {
       it("ends a full run with the same picture and mark style as end()", async () => {

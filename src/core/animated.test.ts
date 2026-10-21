@@ -51,6 +51,24 @@ describe("animated", () => {
     await expect(second).resolves.toBe("done");
   });
 
+  it("eases in and out when the value it interrupts hasn't started moving, or when it waits first", () => {
+    const { clock, env } = setup();
+    const value = animated(0, interpolateNumber, env);
+    // Still waiting out its delay, so at rest.
+    value.to(100, { duration: 1000, delay: 500, ease: linear });
+    clock.advance(200);
+    value.to(50, { duration: 1000 });
+    clock.advance(250);
+    expect(value.value).toBeCloseTo(50 * easeInOutCubic(0.25));
+    // Moving, but the new animation starts from rest after its delay.
+    value.to(0, { duration: 1000, delay: 500 });
+    const from = value.value;
+    clock.advance(500);
+    expect(value.value).toBe(from);
+    clock.advance(250);
+    expect(value.value).toBeCloseTo(from * (1 - easeInOutCubic(0.25)));
+  });
+
   it("keeps an explicitly chosen ease when retargeting", () => {
     const { clock, env } = setup();
     const value = animated(0, interpolateNumber, env);

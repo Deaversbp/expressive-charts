@@ -1,17 +1,18 @@
-// barChart: the thin reference bar chart (M1 step 5). Horizontal bars or vertical columns, plain or
-// stacked; keyed marks described with describe.bar; a measured layout; axis, grid and labels in theme
-// colours; built-in hover dimming; pointer and touch hover. update() jumps to the new state: staged
-// transitions come in step 8, keyboard support in step 9.
+// barChart: the thin reference bar chart. Horizontal bars or vertical columns, plain or stacked; keyed
+// marks described with describe.bar; a measured layout; axis, grid and labels in theme colours;
+// built-in hover dimming; pointer and touch hover. update() animates the change: staged in
+// presentation (values, then positions), in one short stage in analysis, at once when motion is off.
+// Keyboard support comes in M1 step 9.
 //
 // The chart never names an effect: it resolves `on` through the presets it's handed and plays them
 // through the runner, which draws on the SVG surface.
 
-import type { Clock, IconSource, MarkGeometry, Motion } from "../core";
-import { defaultClock } from "../core";
+import type { AnimateOptions, Animated, Clock, IconSource, MarkGeometry, Motion, TweenResult } from "../core";
+import { animated, defaultClock, interpolateNumber, interpolateRecord } from "../core";
 import { EFFECT_SLOTS, resolveEffects, type PresetFactory, type Registry } from "../core/registry";
 import { report } from "../core/report";
 import { createRunner, type RunInput, type SlotEffects } from "../core/runner";
-import { barEncoding, layoutBars, type BarLayout, type BarRow, type TextPlacement } from "./bar-layout";
+import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLayout, type BarRow, type TextPlacement } from "./bar-layout";
 import { toColorAssignment } from "./colors";
 import { pointerHover, type HoverTarget } from "./interaction";
 import { chartMotion } from "./motion";
@@ -36,9 +37,15 @@ export interface ChartEnv {
 
 export type BarChart<D> = Chart<D, BarChartOptions<D>>;
 
+/** Signed values by series, in data units. */
+type Values = Readonly<Record<string, number>>;
+
 interface MarkRecord<D> {
   readonly key: string;
+  /** Where the mark is heading, or rests: its row in the latest layout (its last one while it leaves). */
   row: BarRow<D>;
+  /** What's on screen now. */
+  shown: BarRow<D>;
   readonly group: SVGGElement;
   readonly hit: SVGRectElement;
   readonly label: SVGTextElement;
@@ -48,15 +55,43 @@ interface MarkRecord<D> {
   readonly paths: Map<string, SVGPathElement>;
   parts: StyledPart[];
   readonly handle: SvgMarkHandle;
+  /** In data units, so the bar's length follows the animated scale and always reads true against the axis. */
+  readonly values: Animated<Values>;
+  /** The order segments are drawn in: the layout's, with series on their way out kept where they were. */
+  series: readonly string[];
+  /** Position along the category axis, in bands. */
+  readonly slot: Animated<number>;
+  /** 0 to 1. A mark entering or leaving fades its labels; its bar grows or shrinks. */
+  readonly presence: Animated<number>;
+  /** The value label counts between totals, rounded to this many decimals; undefined shows the row's own text. */
+  count: number | undefined;
+  /** Set while the mark leaves. */
+  leave: Leave | undefined;
+}
+
+interface Leave {
+  /** Its exit effects are done. */
+  exited: boolean;
+  /** Resolves when its element is removed, or the mark comes back. */
+  readonly gone: Promise<void>;
+  readonly resolve: () => void;
+}
+
+interface TickRecord {
+  readonly value: number;
+  readonly line: SVGLineElement;
+  readonly label: SVGTextElement;
+  /** Ticks the scale gains fade in, and ones it loses fade out. */
+  readonly opacity: Animated<number>;
+  /** In the latest layout. */
+  wanted: boolean;
 }
 
 interface Diff<D> {
   readonly entering: MarkRecord<D>[];
   readonly exiting: MarkRecord<D>[];
-  /** Values changed: update effects run. */
-  readonly changed: { readonly record: MarkRecord<D>; readonly from: BarRow<D> }[];
-  /** Only the geometry changed: a re-sort, a new scale, a resize. */
-  readonly moved: MarkRecord<D>[];
+  /** Values changed: update effects run. A re-sort or a new scale only moves a mark. */
+  readonly changed: { readonly record: MarkRecord<D>; readonly from: MarkGeometry }[];
 }
 
 type Listeners<D> = { [K in keyof MarkEvents<D>]: Set<(event: MarkEvents<D>[K]) => void> };
@@ -64,6 +99,8 @@ type Listeners<D> = { [K in keyof MarkEvents<D>]: Set<(event: MarkEvents<D>[K]) 
 /** Used when the container has no width yet (hidden, or no layout as in jsdom); the prototype's width. */
 const FALLBACK_WIDTH = 640;
 const ONE = { index: 0, count: 1 } as const;
+/** Base ms for each stage of a data change: values, then positions. Unstaged, a change takes as long as its stages together, which analysis scales down. */
+const STAGE = 500;
 
 export function barChart<D>(target: string | Element, options: BarChartOptions<D>, env: ChartEnv): BarChart<D> {
   const container = resolveTarget(target);
@@ -86,7 +123,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   /** Marks on screen, in visual order. */
   let order: MarkRecord<D>[] = [];
   const records = new Map<string, MarkRecord<D>>();
-  /** Marks whose exit effects are still running. */
+  /** Marks on their way out: fading, or waiting for their exit effects. */
   const leaving = new Map<string, MarkRecord<D>>();
   const byGroup = new WeakMap<Element, MarkRecord<D>>();
   const listeners: Listeners<D> = { enter: new Set(), update: new Set(), exit: new Set(), hover: new Set(), leave: new Set() };
@@ -94,10 +131,10 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   let measuredWidth = containerWidth(container);
   let destroyed = false;
 
-  let first: BarLayout<D>;
+  let laidOut: BarLayout<D>;
   try {
     // Throws on data it can't draw. Nothing but the <svg> is in place yet, so that's all to undo.
-    first = layout(current);
+    laidOut = layout(current);
   } catch (error) {
     svg.remove();
     throw error;
@@ -115,6 +152,26 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   });
   const runner = createRunner<D>({ effects, motion, icons: env.icons, clock, surface });
 
+  // ── Animated state ─────────────────────────────────────────────────────────
+  // One animated value per mark property (values, slot, presence) plus the scale and the bands, so a
+  // new update() mid-flight retargets each from where it is and nothing jumps.
+
+  let orientation = laidOut.orientation;
+  const ticks = new Map<number, TickRecord>();
+  /** What changed since the last frame was drawn. */
+  const dirty = new Set<MarkRecord<D>>();
+  let frameMoved = false;
+  let ticksFaded = false;
+  const scale = animated(laidOut.frame.scale, interpolateRecord, { clock, motion, onChange: () => (frameMoved = true) });
+  const bands = animated(laidOut.frame.bands, interpolateRecord, { clock, motion, onChange: () => (frameMoved = true) });
+
+  /** The transition in flight: resolved when it settles. */
+  let transition: { readonly id: number; readonly waiters: readonly (() => void)[] } | undefined;
+  let transitions = 0;
+  let unfollow: (() => void) | undefined;
+  /** Resolves the latest update()'s promise early, when another update() supersedes it. */
+  let supersede: (() => void) | undefined;
+
   // ── Drawing ────────────────────────────────────────────────────────────────
 
   function layout(opts: BarChartOptions<D>): BarLayout<D> {
@@ -126,16 +183,20 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       sort: opts.sort,
       width: opts.width ?? measuredWidth,
       height: opts.height,
-      format: opts.format ?? defaultFormat,
+      format: format(opts),
       measure
     });
   }
 
-  function createRecord(row: BarRow<D>): MarkRecord<D> {
+  /** A new mark: drawn as laid out, or, when it enters, at its slot with nothing showing yet. */
+  function createRecord(row: BarRow<D>, entering: boolean): MarkRecord<D> {
     const group = svgElement("g", { class: "ec-mark", "data-key": row.key }, marksLayer);
+    const env = { clock, motion, onChange: () => dirty.add(record) };
+    const values = valuesOf(row);
     const record: MarkRecord<D> = {
       key: row.key,
       row,
+      shown: row,
       group,
       hit: svgElement("rect", { class: "ec-hit" }, group),
       label: svgElement("text", { class: "ec-label" }, group),
@@ -143,18 +204,29 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       value: svgElement("text", { class: "ec-value" }, group),
       paths: new Map(),
       parts: [],
-      handle: svgMarkHandle(() => record)
+      handle: svgMarkHandle(() => record),
+      values: animated(entering ? zeros(values) : values, interpolateRecord, env),
+      series: row.values.map((v) => v.series),
+      slot: animated(row.slot, interpolateNumber, env),
+      presence: animated(entering ? 0 : 1, interpolateNumber, env),
+      count: undefined,
+      leave: undefined
     };
     byGroup.set(group, record);
+    drawMark(record, entering ? currentRow(record, currentFrame()) : row);
     return record;
   }
 
   function drawMark(record: MarkRecord<D>, row: BarRow<D>): void {
     const before = record.parts[0]?.colors.color;
-    record.row = row;
+    record.shown = row;
     setAttributes(record.hit, { ...row.hit });
     placeText(record.label, row.label);
     placeText(record.value, row.value);
+    const presence = record.presence.value;
+    const opacity = presence < 1 ? presence : undefined;
+    setAttributes(record.label, { opacity });
+    setAttributes(record.value, { opacity });
     const segments = row.geometry.segments ?? [];
     const keep = new Set<string>();
     record.parts = segments.map((segment) => {
@@ -183,53 +255,239 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     if (record.parts[0]?.colors.color !== before) surface.recolor(record.key);
   }
 
-  function drawAxis(next: BarLayout<D>): void {
-    setAttributes(svg, { width: next.width, height: next.height, viewBox: `0 0 ${round(next.width)} ${round(next.height)}` });
-    grid.textContent = "";
-    axis.textContent = "";
-    for (const tick of next.ticks) {
-      svgElement("line", { class: tick.value === 0 ? "ec-baseline" : "ec-gridline", ...tick.line }, grid);
-      placeText(svgElement("text", { class: "ec-tick" }, axis), tick.label);
+  /** Draws the mark as `row`. Its runs hear about it when its geometry changed, so decorations follow. */
+  function show(record: MarkRecord<D>, row: BarRow<D>): void {
+    const moved = geometryChanged(record.shown.geometry, row.geometry);
+    drawMark(record, row);
+    if (moved) runner.change(row.geometry, row.data);
+  }
+
+  const currentFrame = (): BarFrame => ({ orientation, scale: scale.value, bands: bands.value });
+
+  /** The mark as it is now, part way through a transition. */
+  function currentRow(record: MarkRecord<D>, frame: BarFrame): BarRow<D> {
+    const { row } = record;
+    const now = record.values.value;
+    const values = record.series.map((series) => ({ series, value: now[series] ?? 0 }));
+    const total = values.reduce((sum, v) => sum + v.value, 0);
+    const text = record.count === undefined ? row.value.text : format(current)(round(total, record.count));
+    return placeRow(frame, { key: row.key, datum: row.datum, index: row.index, category: row.label.text, values, slot: record.slot.value, text });
+  }
+
+  function addTick(value: number, opacity: number): void {
+    const tick: TickRecord = {
+      value,
+      line: svgElement("line", { class: value === 0 ? "ec-baseline" : "ec-gridline" }, grid),
+      label: svgElement("text", { class: "ec-tick" }, axis),
+      opacity: animated(opacity, interpolateNumber, { clock, motion, onChange: () => (ticksFaded = true) }),
+      wanted: true
+    };
+    ticks.set(value, tick);
+    // In value order, as the layout lists them.
+    for (const t of [...ticks.values()].sort((a, b) => a.value - b.value)) {
+      grid.appendChild(t.line);
+      axis.appendChild(t.label);
     }
   }
 
-  /** Brings the DOM to `next` at once and says what changed. Leaving marks stay until their exit is done. */
-  function render(next: BarLayout<D>): Diff<D> {
+  function drawTick(tick: TickRecord, frame: BarFrame): void {
+    const placed = placeTick(frame, tick.value, format(current)(tick.value));
+    const opacity = tick.opacity.value < 1 ? tick.opacity.value : undefined;
+    setAttributes(tick.line, { ...placed.line, opacity });
+    placeText(tick.label, placed.label);
+    setAttributes(tick.label, { opacity });
+  }
+
+  /** Draws what moved since the last frame. */
+  function draw(): void {
+    const frame = currentFrame();
+    if (frameMoved) setAttributes(svg, sizeAttributes(frame.bands));
+    if (frameMoved || ticksFaded) for (const tick of ticks.values()) drawTick(tick, frame);
+    for (const record of [...order, ...leaving.values()]) {
+      if (frameMoved || dirty.has(record)) show(record, currentRow(record, frame));
+    }
+    frameMoved = false;
+    ticksFaded = false;
+    dirty.clear();
+  }
+
+  /** Draws exactly the layout once a transition settles: the frames in between are computed, this is laid out. */
+  function land(): void {
+    setAttributes(svg, sizeAttributes(laidOut.frame.bands));
+    for (const tick of [...ticks.values()]) {
+      if (tick.wanted) continue;
+      tick.line.remove();
+      tick.label.remove();
+      ticks.delete(tick.value);
+    }
+    for (const placed of laidOut.ticks) {
+      const tick = ticks.get(placed.value);
+      if (!tick) continue;
+      setAttributes(tick.line, { ...placed.line, opacity: undefined });
+      placeText(tick.label, placed.label);
+      tick.label.removeAttribute("opacity");
+    }
+    for (const record of order) {
+      record.series = record.row.values.map((v) => v.series);
+      record.count = undefined;
+      show(record, record.row);
+    }
+    frameMoved = false;
+    ticksFaded = false;
+    dirty.clear();
+  }
+
+  /** Matches the layout's rows to marks by key. New marks start at their slot with nothing showing; marks without a row start to leave. */
+  function arrange(next: BarLayout<D>): Diff<D> {
     const keys = new Set(next.rows.map((row) => row.key));
-    const diff: Diff<D> = { entering: [], exiting: [], changed: [], moved: [] };
+    const diff: Diff<D> = { entering: [], exiting: [], changed: [] };
     for (const record of order) {
       if (keys.has(record.key)) continue;
       records.delete(record.key);
       leaving.set(record.key, record);
       record.group.classList.add("ec-leaving");
+      record.leave = leave();
+      record.count = undefined;
       diff.exiting.push(record);
     }
     const previous = order;
     order = next.rows.map((row) => {
       let record = records.get(row.key);
       if (record) {
-        const from = record.row;
-        if (valuesChanged(from, row)) diff.changed.push({ record, from });
-        else if (geometryChanged(from.geometry, row.geometry)) diff.moved.push(record);
+        if (valuesChanged(record.row, row)) diff.changed.push({ record, from: record.shown.geometry });
+        record.count = Math.max(decimals(record.row.total), decimals(row.total));
       } else {
         // A mark that comes back mid-exit keeps its element; the runner cancels its exit.
         record = leaving.get(row.key);
         if (record) {
           leaving.delete(row.key);
           record.group.classList.remove("ec-leaving");
+          record.leave?.resolve();
+          record.leave = undefined;
         } else {
-          record = createRecord(row);
+          record = createRecord(row, true);
         }
+        record.count = undefined;
         records.set(row.key, record);
         diff.entering.push(record);
       }
-      drawMark(record, row);
+      record.row = row;
+      record.series = mergeSeries(record.series, row.values.map((v) => v.series));
       return record;
     });
     // DOM order follows visual order (the keyboard and screen readers will rely on it).
     if (order.some((record, i) => previous[i] !== record)) for (const record of order) marksLayer.appendChild(record.group);
-    drawAxis(next);
     return diff;
+  }
+
+  /**
+   * Sends every animated value toward `next`, and returns the animations started. Presentation stages
+   * the change: values first (bars resize, leaving bars shrink, the scale and ticks retarget), then
+   * positions (rows move to their slots; new bars grow in during the second half). A stage with
+   * nothing to do is skipped. Analysis runs it all as one stage, which its scaling keeps short. A
+   * jump (motion off, a new orientation, a resize) lands at once.
+   */
+  function retarget(next: BarLayout<D>, jump: boolean): Promise<TweenResult>[] {
+    const { frame } = next;
+    if (jump) orientation = next.orientation;
+    const wanted = new Set(next.ticks.map((tick) => tick.value));
+    for (const value of wanted) if (!ticks.has(value)) addTick(value, 0);
+    for (const tick of ticks.values()) tick.wanted = wanted.has(tick.value);
+
+    // New marks, and ones back after fading out completely, grow in at their slot.
+    const arriving = new Set(order.filter((record) => record.presence.value === 0));
+    const staying = order.filter((record) => !arriving.has(record));
+    const gone = [...leaving.values()];
+
+    const values =
+      busy(scale, frame.scale, sameFields) ||
+      [...ticks.values()].some((tick) => busy(tick.opacity, tick.wanted ? 1 : 0, same)) ||
+      staying.some((record) => busy(record.values, valuesOf(record.row), sameFields) || busy(record.presence, 1, same)) ||
+      gone.some((record) => busy(record.values, zeros(record.values.value), sameFields) || busy(record.presence, 0, same));
+    const positions = arriving.size > 0 || busy(bands, frame.bands, sameFields) || staying.some((record) => busy(record.slot, record.row.slot, same));
+
+    let first: AnimateOptions | undefined;
+    let second: AnimateOptions | undefined;
+    let grow: AnimateOptions | undefined;
+    if (!jump && motion.staged) {
+      const wait = values ? STAGE : 0;
+      first = { duration: STAGE };
+      second = { duration: STAGE, delay: wait };
+      grow = { duration: STAGE / 2, delay: wait + STAGE / 2 };
+    } else if (!jump) {
+      first = second = grow = { duration: (values && positions ? 2 : 1) * STAGE };
+    }
+
+    const running: Promise<TweenResult>[] = [];
+    const move = <T>(value: Animated<T>, to: T, equal: (a: T, b: T) => boolean, timing: AnimateOptions | undefined): void => {
+      if (!busy(value, to, equal)) return;
+      if (timing) running.push(value.to(to, timing));
+      else value.set(to);
+    };
+    move(scale, frame.scale, sameFields, first);
+    move(bands, frame.bands, sameFields, second);
+    for (const tick of ticks.values()) move(tick.opacity, tick.wanted ? 1 : 0, same, first);
+    for (const record of staying) {
+      move(record.values, valuesOf(record.row), sameFields, first);
+      move(record.presence, 1, same, first);
+      move(record.slot, record.row.slot, same, second);
+    }
+    for (const record of arriving) {
+      record.slot.set(record.row.slot);
+      move(record.values, valuesOf(record.row), sameFields, grow);
+      move(record.presence, 1, same, grow);
+    }
+    for (const record of gone) {
+      move(record.values, zeros(record.values.value), sameFields, first);
+      move(record.presence, 0, same, first);
+    }
+    return running;
+  }
+
+  /**
+   * Moves to `next`, animated or at once, drawing every frame. Resolves when the transition settles.
+   * One still in flight is taken over: its waiters wait for this one instead.
+   */
+  function transitionTo(next: BarLayout<D>, jump: boolean): Promise<void> {
+    laidOut = next;
+    const running = retarget(next, jump);
+    draw();
+    const id = ++transitions;
+    return new Promise<void>((resolve) => {
+      transition = { id, waiters: [...(transition?.waiters ?? []), resolve] };
+      if (running.length === 0) {
+        settle(id);
+        return;
+      }
+      // Subscribed after the tweens just started, so each frame draws once they've all moved.
+      unfollow?.();
+      unfollow = clock.onFrame(() => draw());
+      void Promise.all(running).then(() => settle(id));
+    });
+  }
+
+  function settle(id: number): void {
+    if (destroyed || transition?.id !== id) return;
+    const { waiters } = transition;
+    transition = undefined;
+    unfollow?.();
+    unfollow = undefined;
+    land();
+    runner.settle();
+    sweep();
+    for (const resolve of waiters) resolve();
+  }
+
+  /** Removes leaving marks once they've faded out and their exit effects are done. */
+  function sweep(): void {
+    for (const record of [...leaving.values()]) {
+      const { leave } = record;
+      if (!leave?.exited || record.values.animating || record.presence.animating) continue;
+      leaving.delete(record.key);
+      record.leave = undefined;
+      record.group.remove();
+      leave.resolve();
+    }
   }
 
   // ── Hover ──────────────────────────────────────────────────────────────────
@@ -289,11 +547,14 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   syncMotion();
   const unsubscribeMotion = motion.subscribe(syncMotion);
 
-  /** Re-lays out without animating: a resize or fonts loading. Effects follow through change(). */
+  /** Re-lays out without animating: a resize or fonts loading. A transition in flight lands at once. Effects follow through change(). */
   function relayout(): void {
     if (destroyed) return;
-    const diff = render(layout(current));
-    for (const record of [...diff.changed.map((c) => c.record), ...diff.moved]) runner.change(record.row.geometry, record.row.data);
+    const next = layout(current);
+    // The same rows as now: only the sizes changed.
+    const rows = new Map(next.rows.map((row) => [row.key, row]));
+    for (const record of order) record.row = rows.get(record.key) ?? record.row;
+    void transitionTo(next, true);
   }
 
   let pendingWidth = measuredWidth;
@@ -327,7 +588,15 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   // ── First render ───────────────────────────────────────────────────────────
 
   describeChart(svg, current);
-  runner.enter(render(first).entering.map(input));
+  setAttributes(svg, sizeAttributes(laidOut.frame.bands));
+  for (const tick of laidOut.ticks) addTick(tick.value, 1);
+  for (const tick of ticks.values()) drawTick(tick, laidOut.frame);
+  order = laidOut.rows.map((row) => {
+    const record = createRecord(row, false);
+    records.set(row.key, record);
+    return record;
+  });
+  runner.enter(order.map(input));
 
   return {
     element: svg,
@@ -339,36 +608,36 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       const merged: BarChartOptions<D> = { ...current, ...next };
       checkOptions(merged);
       // Throws on data it can't draw, before anything changes.
-      const target = layout(merged);
+      const nextLayout = layout(merged);
       if ("colors" in next) colors = toColorAssignment(merged.colors);
       current = merged;
       describeChart(svg, current);
       if (current.dim === false) svg.classList.remove("ec-hovering");
       else if (hovered !== undefined) svg.classList.add("ec-hovering");
+      supersede?.();
 
-      // The order the runner expects: interrupt, then exit / update / enter, then change, then settle.
+      // The order the runner expects: interrupt, then exit / update / enter, then change() on every
+      // frame, then settle() once the transition has settled.
       runner.interrupt();
-      const diff = render(target);
+      const diff = arrange(nextLayout);
       if (hovered !== undefined && !records.has(hovered)) interaction.clear();
+      const leaves = diff.exiting.map((record) => record.leave!);
       const exited = runner.exit(diff.exiting.map(input));
+      void exited.then(() => {
+        for (const leave of leaves) leave.exited = true;
+        sweep();
+      });
       emitEach("exit", diff.exiting);
-      runner.update(diff.changed.map(({ record, from }) => ({ ...input(record), from: from.geometry })));
-      diff.changed.forEach(({ record, from }, index) =>
-        emit("update", { ...input(record), from: from.geometry, batch: { index, count: diff.changed.length } })
-      );
+      runner.update(diff.changed.map(({ record, from }) => ({ ...input(record), from })));
+      diff.changed.forEach(({ record, from }, index) => emit("update", { ...input(record), from, batch: { index, count: diff.changed.length } }));
       runner.enter(diff.entering.map(input));
       emitEach("enter", diff.entering);
-      // A jump is a transition of one frame.
-      for (const record of [...diff.changed.map((c) => c.record), ...diff.moved]) runner.change(record.row.geometry, record.row.data);
-      runner.settle();
 
-      await exited;
-      for (const record of diff.exiting) {
-        // Unless it came back meanwhile.
-        if (leaving.get(record.key) !== record) continue;
-        leaving.delete(record.key);
-        record.group.remove();
-      }
+      const settled = transitionTo(nextLayout, motion.mode === "off" || nextLayout.orientation !== orientation);
+      await new Promise<void>((resolve) => {
+        supersede = resolve;
+        void settled.then(() => Promise.all(leaves.map((leave) => leave.gone))).then(() => resolve());
+      });
     },
 
     on(type, listener) {
@@ -380,17 +649,27 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       };
     },
 
-    marks: () => order.map((record) => record.row.geometry),
+    marks: () => order.map((record) => record.shown.geometry),
 
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      transition = undefined;
+      unfollow?.();
       interaction.destroy();
       runner.destroy();
       unsubscribeMotion();
       observer?.disconnect();
       stopFrame?.();
       fonts?.removeEventListener?.("loadingdone", onFonts);
+      for (const record of [...order, ...leaving.values()]) {
+        for (const value of [record.values, record.slot, record.presence]) value.stop();
+        record.leave?.resolve();
+      }
+      scale.stop();
+      bands.stop();
+      for (const tick of ticks.values()) tick.opacity.stop();
+      supersede?.();
       for (const set of Object.values(listeners)) set.clear();
       records.clear();
       leaving.clear();
@@ -454,6 +733,10 @@ function containerWidth(container: Element): number {
   return width > 0 ? width : FALLBACK_WIDTH;
 }
 
+function sizeAttributes({ width, height }: { readonly width: number; readonly height: number }): Record<string, string | number> {
+  return { width, height, viewBox: `0 0 ${round(width, 3)} ${round(height, 3)}` };
+}
+
 function placeText(element: SVGTextElement, placement: TextPlacement): void {
   setAttributes(element, { x: placement.x, y: placement.y, "text-anchor": placement.anchor });
   if (element.textContent !== placement.text) element.textContent = placement.text;
@@ -470,13 +753,77 @@ function geometryChanged(from: MarkGeometry, to: MarkGeometry): boolean {
   return a.length !== b.length || a.some((segment, i) => segment.key !== b[i]!.key || segment.outline.d !== b[i]!.outline.d);
 }
 
+function valuesOf<D>(row: BarRow<D>): Values {
+  return Object.fromEntries(row.values.map((v) => [v.series, v.value]));
+}
+
+function zeros(values: Values): Values {
+  return Object.fromEntries(Object.keys(values).map((series) => [series, 0]));
+}
+
+/**
+ * The layout's series order, with series on their way out kept where they were: just after the
+ * series they followed, or first. So a stack that loses its base shrinks it in place.
+ */
+function mergeSeries(shown: readonly string[], next: readonly string[]): string[] {
+  const out = [...next];
+  shown.forEach((series, i) => {
+    if (out.includes(series)) return;
+    let at = 0;
+    for (let j = i - 1; j >= 0; j--) {
+      const found = out.indexOf(shown[j]!);
+      if (found >= 0) {
+        at = found + 1;
+        break;
+      }
+    }
+    out.splice(at, 0, series);
+  });
+  return out;
+}
+
+/** Still animating, or resting somewhere else than `to`. */
+function busy<T>(value: Animated<T>, to: T, equal: (a: T, b: T) => boolean): boolean {
+  return value.animating || !equal(value.value, to);
+}
+
+const same = (a: number, b: number): boolean => a === b;
+
+function sameFields<T extends object>(a: T, b: T): boolean {
+  const keys = Object.keys(a) as (keyof T)[];
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
+}
+
+/** Leaves to settle: a fresh token per departure, so a mark that comes back and leaves again starts over. */
+function leave(): Leave {
+  let resolve!: () => void;
+  const gone = new Promise<void>((r) => {
+    resolve = r;
+  });
+  return { exited: false, gone, resolve };
+}
+
+/** Decimal places a value is given to, up to 6: a counting label shows whole numbers between whole totals. */
+function decimals(value: number): number {
+  const text = String(Number(value.toPrecision(12)));
+  if (/e/i.test(text)) return 6;
+  const point = text.indexOf(".");
+  return point < 0 ? 0 : Math.min(6, text.length - point - 1);
+}
+
+function format<D>(options: BarChartOptions<D>): (value: number) => string {
+  return options.format ?? defaultFormat;
+}
+
 let numberFormat: Intl.NumberFormat | undefined;
 function defaultFormat(value: number): string {
   numberFormat ??= new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
   return numberFormat.format(value);
 }
 
-function round(value: number): number {
-  return Math.round(value * 1000) / 1000;
+function round(value: number, digits: number): number {
+  const factor = 10 ** digits;
+  const rounded = Math.round(value * factor) / factor;
+  // No "-0" on a label counting down to zero.
+  return rounded === 0 ? 0 : rounded;
 }
-

@@ -62,7 +62,7 @@
 
   <section class="card" aria-labelledby="chart-title">
     <h2 id="chart-title">Harbor City FC: goals by player</h2>
-    <p class="note">In Goals, a ball rolls the length of the bar. In Assists, a boot steps along it. In Goals + assists, the ball stops at the end of the goals and the boot carries on. Switching the metric or sort jumps for now; staged transitions arrive in step 8.</p>
+    <p class="note">In Goals, a ball rolls the length of the bar. In Assists, a boot steps along it. In Goals + assists, the ball stops at the end of the goals and the boot carries on. Switching the metric or sort animates: in Presentation the values change first and then the rows move; in Analysis it's one quick step; Off jumps.</p>
     <div class="bar">
       <div class="seg" id="metric" role="group" aria-label="Metric">
         <button type="button" data-value="goals" aria-pressed="true">Goals</button>
@@ -84,6 +84,7 @@
       <li>Icon size and placement: the ball isn't clipped, the boot's sole stays down.</li>
       <li>Hover timing: the 100 ms colour change and the dimming of the other bars.</li>
       <li>Off, and reduced motion (DevTools rendering emulation): the icons rest at their end positions.</li>
+      <li>Metric and sort changes: values first, then positions, in Presentation; one quick step in Analysis; a jump in Off. Click again mid-change: nothing jumps. A hovered bar replays its story once the change settles.</li>
     </ul>
   </section>
 </main>

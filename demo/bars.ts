@@ -1,4 +1,4 @@
-// M1 step 7: the prototype's ball-and-cleat card on the real library.
+// M1 steps 7 and 8: the prototype's ball-and-cleat card on the real library, with staged updates.
 import { barChart, motion, sequence, travel, type MotionMode } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
 

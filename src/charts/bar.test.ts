@@ -1,6 +1,7 @@
 import { createMotion, manualClock, type DataEffect, type EffectContext, type GeometryEffect, type MarkGeometry, type MotionMode } from "../core";
 import { createRegistry, type PresetFactory } from "../core/registry";
-import { barChart, type ChartEnv } from "./bar";
+import { play } from "../core/testing";
+import { barChart, type BarChart, type ChartEnv } from "./bar";
 import type { BarChartOptions } from "./types";
 
 interface Player {
@@ -30,7 +31,9 @@ function setup(options: Partial<BarChartOptions<Player>> = {}, more: Partial<Cha
   const svg = chart.element;
   const mark = (key: string) => svg.querySelector(`.ec-mark[data-key="${key}"]`) as SVGGElement;
   const keys = () => Array.from(svg.querySelectorAll(".ec-marks > .ec-mark"), (g) => g.getAttribute("data-key"));
-  return { container, chart, svg, clock, env, presets, mark, keys };
+  /** Plays the clock until the update settles. */
+  const settle = (running: Promise<unknown>) => play(clock, running);
+  return { container, chart, svg, clock, env, presets, mark, keys, settle };
 }
 
 function pointer(type: string, target: Element, pointerType = "mouse"): void {
@@ -170,25 +173,25 @@ describe("barChart: drawing", () => {
 
 describe("barChart: keys and colours", () => {
   it("keeps each mark's element and key across sorts", async () => {
-    const { chart, mark, keys } = setup();
+    const { chart, mark, keys, settle } = setup();
     const okafor = mark("Okafor");
-    await chart.update({ sort: "value" });
+    await settle(chart.update({ sort: "value" }));
     expect(keys()).toEqual(["Okafor", "Lindqvist", "Tanaka"]);
-    await chart.update({ sort: "key" });
+    await settle(chart.update({ sort: "key" }));
     expect(keys()).toEqual(["Lindqvist", "Okafor", "Tanaka"]);
     expect(chart.marks().map((m) => m.key)).toEqual(["Lindqvist", "Okafor", "Tanaka"]);
     expect(mark("Okafor")).toBe(okafor);
   });
 
   it("colours follow the series, never the rank or the view", async () => {
-    const { chart, mark } = setup({ stack: ["goals", "assists"] });
+    const { chart, mark, settle } = setup({ stack: ["goals", "assists"] });
     const color = (key: string, series: string) =>
       (mark(key).querySelector(`.ec-segment[data-series="${series}"]`) as SVGPathElement | null)?.style.getPropertyValue("--ec-mark");
     expect(color("Okafor", "goals")).toBe("var(--ec-series-1, #2a78d6)");
     expect(color("Okafor", "assists")).toBe("var(--ec-series-2, #eb6834)");
-    await chart.update({ sort: "value" });
+    await settle(chart.update({ sort: "value" }));
     expect(color("Tanaka", "assists")).toBe("var(--ec-series-2, #eb6834)");
-    await chart.update({ stack: ["assists"] });
+    await settle(chart.update({ stack: ["assists"] }));
     expect(color("Tanaka", "goals")).toBeUndefined();
     expect(color("Tanaka", "assists")).toBe("var(--ec-series-2, #eb6834)");
   });
@@ -330,35 +333,36 @@ describe("barChart: effects", () => {
   it("runs update effects only where values changed, with the previous geometry; moved marks get change()", async () => {
     const update = recorder();
     const decorate = recorder();
-    const { chart } = setup({ on: { update: update.effect, decorate: decorate.effect } });
+    const { chart, settle } = setup({ on: { update: update.effect, decorate: decorate.effect } });
     const events: string[] = [];
     chart.on("update", (e) => events.push(`update ${e.mark.key} ${e.batch.index}/${e.batch.count} from ${Math.round(e.from.bounds.width)}`));
     const before = Math.round(chart.marks()[1]!.bounds.width);
     decorate.log.length = 0;
-    await chart.update({ data: players.map((p) => (p.name === "Tanaka" ? { ...p, goals: 7 } : p)) });
-    // The runner's order is update, then change(): a jump is a transition of one frame.
-    expect(update.log).toEqual([`run Tanaka from ${before}`, "change Tanaka"]);
+    await settle(chart.update({ data: players.map((p) => (p.name === "Tanaka" ? { ...p, goals: 7 } : p)) }));
+    // The update run starts as the transition does, then hears every frame of it.
+    expect(update.log[0]).toBe(`run Tanaka from ${before}`);
+    expect(new Set(update.log.slice(1))).toEqual(new Set(["change Tanaka"]));
     expect(events).toEqual([`update Tanaka 0/1 from ${before}`]);
     // Nothing else changed value or place, so only Tanaka's decoration hears about it.
-    expect(decorate.log).toEqual(["change Tanaka"]);
+    expect(new Set(decorate.log)).toEqual(new Set(["change Tanaka"]));
     decorate.log.length = 0;
-    await chart.update({ sort: "value" });
+    await settle(chart.update({ sort: "value" }));
     expect(update.log.filter((entry) => entry.startsWith("run"))).toHaveLength(1);
-    expect(decorate.log.sort()).toEqual(["change Lindqvist", "change Tanaka"]);
+    expect(new Set(decorate.log)).toEqual(new Set(["change Lindqvist", "change Tanaka"]));
   });
 
   it("replays hover after an update", async () => {
     const hover = recorder();
-    const { chart, mark } = setup({ on: { hover: hover.effect } });
+    const { chart, mark, settle } = setup({ on: { hover: hover.effect } });
     pointer("pointerover", mark("Tanaka").querySelector(".ec-hit")!);
-    await chart.update({ sort: "key" });
+    await settle(chart.update({ sort: "key" }));
     expect(hover.log).toEqual(["run Tanaka", "clear", "run Tanaka"]);
     expect(mark("Tanaka").classList.contains("ec-hot")).toBe(true);
   });
 
   it("removes a mark once its exit effect is done", async () => {
     const exit = recorder({ hold: true });
-    const { chart, mark, keys } = setup({ on: { exit: exit.effect } });
+    const { chart, mark, keys, clock } = setup({ on: { exit: exit.effect } });
     const events: string[] = [];
     chart.on("exit", (e) => events.push(`exit ${e.mark.key}`));
     const updated = chart.update({ data: players.filter((p) => p.name !== "Tanaka") });
@@ -366,8 +370,11 @@ describe("barChart: effects", () => {
     expect(events).toEqual(["exit Tanaka"]);
     expect(mark("Tanaka").classList.contains("ec-leaving")).toBe(true);
     expect(chart.marks().map((m) => m.key)).toEqual(["Okafor", "Lindqvist"]);
+    // The transition settles with it faded out, but its exit effect is still running.
+    clock.advance(1000);
     await flush();
     expect(keys()).toContain("Tanaka");
+    expect(mark("Tanaka").querySelector(".ec-label")?.getAttribute("opacity")).toBe("0");
     exit.release();
     await updated;
     expect(keys()).toEqual(["Okafor", "Lindqvist"]);
@@ -376,30 +383,30 @@ describe("barChart: effects", () => {
   it("keeps the element of a mark that comes back mid-exit", async () => {
     const exit = recorder({ hold: true });
     const enter = recorder();
-    const { chart, mark } = setup({ on: { exit: exit.effect, enter: enter.effect } });
+    const { chart, mark, settle } = setup({ on: { exit: exit.effect, enter: enter.effect } });
     const tanaka = mark("Tanaka");
     const leaving = chart.update({ data: players.filter((p) => p.name !== "Tanaka") });
     const back = chart.update({ data: players });
-    await Promise.all([leaving, back]);
+    await settle(Promise.all([leaving, back]));
     expect(mark("Tanaka")).toBe(tanaka);
     expect(tanaka.classList.contains("ec-leaving")).toBe(false);
     expect(enter.log.filter((entry) => entry.startsWith("run"))).toEqual(["run Okafor", "run Tanaka", "run Lindqvist", "run Tanaka"]);
   });
 
   it("emits enter events with their batch", async () => {
-    const { chart } = setup();
+    const { chart, settle } = setup();
     const events: string[] = [];
     chart.on("enter", (e) => events.push(`${e.mark.key} ${e.batch.index}/${e.batch.count} ${e.data.datum.name}`));
-    await chart.update({ data: [...players, { name: "Moreau", goals: 8, assists: 3 }, { name: "Reyes", goals: 5, assists: 4 }] });
+    await settle(chart.update({ data: [...players, { name: "Moreau", goals: 8, assists: 3 }, { name: "Reyes", goals: 5, assists: 4 }] }));
     expect(events).toEqual(["Moreau 0/2 Moreau", "Reyes 1/2 Reyes"]);
   });
 
   it("leaves a hovered mark that exits", async () => {
-    const { chart, svg, mark } = setup();
+    const { chart, svg, mark, settle } = setup();
     const events: string[] = [];
     chart.on("leave", (e) => events.push(`leave ${e.mark.key}`));
     pointer("pointerover", mark("Tanaka").querySelector(".ec-hit")!);
-    await chart.update({ data: players.filter((p) => p.name !== "Tanaka") });
+    await settle(chart.update({ data: players.filter((p) => p.name !== "Tanaka") }));
     expect(events).toEqual(["leave Tanaka"]);
     expect(svg.classList.contains("ec-hovering")).toBe(false);
   });
@@ -438,24 +445,25 @@ describe("barChart: effects", () => {
 
   it("recolours overlays drawn in the mark's colour when that colour changes", async () => {
     const decorate = recorder({ draw: (mark, ctx) => ctx.layer.path(mark.outline.d, { stroke: "mark" }) });
-    const { chart, svg } = setup({ on: { decorate: decorate.effect } });
+    const { chart, svg, settle } = setup({ on: { decorate: decorate.effect } });
     const run = () => (svg.querySelector('.ec-run[data-key="Okafor"]') as SVGGElement).style.getPropertyValue("--ec-mark");
     expect(run()).toBe("var(--ec-series-1, #2a78d6)");
     await chart.update({ colors: { goals: 3 } });
     expect(run()).toBe("var(--ec-series-3, #1baf7a)");
     // A different first series: assists takes the first free slot.
-    await chart.update({ stack: ["assists"] });
+    await settle(chart.update({ stack: ["assists"] }));
     expect(run()).toBe("var(--ec-series-1, #2a78d6)");
   });
 });
 
 describe("barChart: update", () => {
-  it("jumps to the new state at once", () => {
-    const { chart, mark } = setup();
+  it("jumps to the new state at once when motion is off", () => {
+    const { chart, mark, clock } = setup({}, { motion: quietMotion("off") });
     void chart.update({ stack: ["goals", "assists"], label: "Goals and assists" });
     expect(mark("Okafor").querySelectorAll(".ec-segment")).toHaveLength(2);
     expect(mark("Okafor").querySelector(".ec-value")?.textContent).toBe("20");
     expect(chart.element.getAttribute("aria-label")).toBe("Goals and assists");
+    expect(clock.idle).toBe(true);
   });
 
   it("rejects what it can't take, leaving the chart as it was", async () => {
@@ -474,6 +482,265 @@ describe("barChart: update", () => {
     pointer("pointerover", mark("Okafor").querySelector(".ec-hit")!);
     expect(listener).not.toHaveBeenCalled();
     expect(() => chart.on("click" as never, () => {})).toThrow(/unknown event "click"/);
+  });
+});
+
+describe("barChart: transitions", () => {
+  /** Where a mark is on screen now. */
+  const at = (chart: BarChart<Player>, key: string) => chart.marks().find((m) => m.key === key)!.bounds;
+  // Goals and assists swapped: 4, 10 and 7 goals. The scale halves (0–20 becomes 0–10), and sorted by
+  // value Okafor goes from the top to the bottom.
+  const swapped = players.map((p) => ({ ...p, goals: p.assists }));
+  const tanakaScores = (goals: number) => players.map((p) => (p.name === "Tanaka" ? { ...p, goals } : p));
+
+  it("stages a change in presentation: values first, then positions, about 500 ms each", async () => {
+    const { chart, clock, svg, mark } = setup({ sort: "value" });
+    const ticks = () => Array.from(svg.querySelectorAll(".ec-axis .ec-tick"), (t) => [t.textContent, t.getAttribute("opacity")]);
+    const start = at(chart, "Okafor");
+    const updated = chart.update({ data: swapped });
+    expect(at(chart, "Okafor")).toEqual(start);
+
+    // Values: the bar resizes in place, its label counts, and the ticks the scale loses fade out.
+    clock.advance(250);
+    const resizing = at(chart, "Okafor");
+    expect(resizing.y).toBe(start.y);
+    expect(resizing.width).toBeLessThan(start.width);
+    expect(mark("Okafor").querySelector(".ec-value")?.textContent).toBe("10");
+    expect(ticks().filter(([text]) => text === "15" || text === "20")).toEqual([
+      ["15", "0.5"],
+      ["20", "0.5"]
+    ]);
+    clock.advance(250);
+    const resized = at(chart, "Okafor");
+    expect(resized.y).toBe(start.y);
+
+    // Positions: Okafor moves to the bottom, at its new size.
+    clock.advance(250);
+    const moving = at(chart, "Okafor");
+    expect(moving.width).toBeCloseTo(resized.width, 6);
+    expect(moving.y).toBeGreaterThan(start.y);
+    clock.advance(250);
+    await updated;
+    expect(at(chart, "Okafor").width).toBeCloseTo(resized.width, 6);
+    expect(at(chart, "Okafor").y).toBeGreaterThan(moving.y);
+    expect(chart.marks().map((m) => m.key)).toEqual(["Tanaka", "Lindqvist", "Okafor"]);
+    expect(ticks()).toEqual([
+      ["0", null],
+      ["5", null],
+      ["10", null]
+    ]);
+  });
+
+  it("runs the whole change as one short stage in analysis", async () => {
+    const { chart, clock } = setup({ sort: "value" }, { motion: quietMotion("analysis") });
+    const start = at(chart, "Okafor");
+    let settled = false;
+    void chart.update({ data: swapped }).then(() => (settled = true));
+    clock.advance(100);
+    await flush();
+    // Resizing and moving at once.
+    expect(at(chart, "Okafor").width).toBeLessThan(start.width);
+    expect(at(chart, "Okafor").y).toBeGreaterThan(start.y);
+    expect(settled).toBe(false);
+    clock.advance(100);
+    await flush();
+    expect(settled).toBe(true);
+  });
+
+  it("jumps under reduced motion until the viewer picks a mode", async () => {
+    const motion = createMotion({ reducedMotion: { matches: true, subscribe: () => () => {} } });
+    const { chart, clock, settle } = setup({ sort: "value" }, { motion });
+    void chart.update({ data: swapped });
+    expect(clock.idle).toBe(true);
+    expect(at(chart, "Okafor").y).toBeGreaterThan(at(chart, "Tanaka").y);
+    motion.chooseMode("presentation");
+    const back = chart.update({ data: players });
+    expect(clock.idle).toBe(false);
+    expect(await settle(back)).toBeGreaterThanOrEqual(1000);
+  });
+
+  it("skips a stage with nothing to do", async () => {
+    const { chart, clock, settle } = setup();
+    // A re-sort only moves rows, so they start at once.
+    const start = at(chart, "Okafor").y;
+    const sorted = chart.update({ sort: "key" });
+    clock.advance(100);
+    expect(at(chart, "Okafor").y).toBeGreaterThan(start);
+    expect(100 + (await settle(sorted))).toBeLessThan(540);
+    // A new value that keeps the order and the scale only resizes.
+    expect(await settle(chart.update({ data: tanakaScores(7) }))).toBeLessThan(540);
+    // Both: the full second.
+    expect(await settle(chart.update({ data: swapped, sort: "value" }))).toBeGreaterThanOrEqual(1000);
+    // Nothing at all settles at once.
+    let settled = false;
+    void chart.update({ label: "Assists by player" }).then(() => (settled = true));
+    expect(clock.idle).toBe(true);
+    await flush();
+    expect(settled).toBe(true);
+  });
+
+  it("retargets values from where they are when another update arrives mid-flight", async () => {
+    const { chart, clock, settle } = setup();
+    const start = at(chart, "Tanaka").width;
+    let superseded = false;
+    void chart.update({ data: tanakaScores(2) }).then(() => (superseded = true));
+    clock.advance(250);
+    const mid = at(chart, "Tanaka").width;
+    expect(mid).toBeLessThan(start);
+    const back = chart.update({ data: players });
+    // Nothing jumps, and the first update resolves now that it's been superseded.
+    expect(at(chart, "Tanaka").width).toBe(mid);
+    await flush();
+    expect(superseded).toBe(true);
+    // It heads back at once, easing out rather than stalling.
+    clock.advance(16);
+    expect(at(chart, "Tanaka").width - mid).toBeGreaterThan(0.05 * (start - mid));
+    await settle(back);
+    expect(at(chart, "Tanaka").width).toBeCloseTo(start, 6);
+  });
+
+  it("retargets rows mid-move", async () => {
+    const { chart, clock, settle } = setup();
+    const start = at(chart, "Okafor").y;
+    void chart.update({ sort: "key" });
+    clock.advance(250);
+    const mid = at(chart, "Okafor").y;
+    expect(mid).toBeGreaterThan(start);
+    const back = chart.update({ sort: "none" });
+    expect(at(chart, "Okafor").y).toBe(mid);
+    clock.advance(16);
+    expect(at(chart, "Okafor").y).toBeLessThan(mid);
+    await settle(back);
+    expect(at(chart, "Okafor").y).toBe(start);
+  });
+
+  it("grows entering bars in at their slots in the second half of the positions stage", async () => {
+    const { chart, clock, svg, mark } = setup();
+    const height = Number(svg.getAttribute("height"));
+    const updated = chart.update({ data: [...players, { name: "Moreau", goals: 8, assists: 3 }] });
+    const label = () => mark("Moreau").querySelector(".ec-label")?.getAttribute("opacity");
+    expect(label()).toBe("0");
+    expect(at(chart, "Moreau").width).toBe(0);
+    // No value changes, so positions start at once: the chart grows to make room.
+    clock.advance(125);
+    expect(Number(svg.getAttribute("height"))).toBeGreaterThan(height);
+    expect(at(chart, "Moreau").width).toBe(0);
+    clock.advance(250);
+    expect(at(chart, "Moreau").width).toBeGreaterThan(0);
+    expect(Number(label())).toBeGreaterThan(0);
+    expect(Number(label())).toBeLessThan(1);
+    expect(mark("Moreau").querySelector(".ec-value")?.textContent).toBe("8");
+    clock.advance(125);
+    await updated;
+    expect(label()).toBeNull();
+    expect(at(chart, "Moreau").y).toBeGreaterThan(at(chart, "Lindqvist").y);
+    expect(Number(svg.getAttribute("height"))).toBe(height + 34);
+  });
+
+  it("shrinks and fades leaving bars first, then closes the gap", async () => {
+    const { chart, clock, mark, keys } = setup();
+    const tanaka = mark("Tanaka");
+    const tip = () => Number(tanaka.querySelector(".ec-value")?.getAttribute("x"));
+    const opacity = () => tanaka.querySelector(".ec-label")?.getAttribute("opacity");
+    const start = { tip: tip(), tanaka: at(chart, "Tanaka").y, lindqvist: at(chart, "Lindqvist").y };
+    const updated = chart.update({ data: players.filter((p) => p.name !== "Tanaka") });
+    clock.advance(250);
+    expect(tanaka.classList.contains("ec-leaving")).toBe(true);
+    expect(tip()).toBeLessThan(start.tip);
+    expect(opacity()).toBe("0.5");
+    // Its value label keeps its value rather than counting down.
+    expect(tanaka.querySelector(".ec-value")?.textContent).toBe("6");
+    expect(at(chart, "Lindqvist").y).toBe(start.lindqvist);
+    clock.advance(250);
+    expect(opacity()).toBe("0");
+    expect(at(chart, "Lindqvist").y).toBe(start.lindqvist);
+    clock.advance(250);
+    expect(at(chart, "Lindqvist").y).toBeLessThan(start.lindqvist);
+    expect(keys()).toContain("Tanaka");
+    clock.advance(250);
+    await updated;
+    expect(keys()).toEqual(["Okafor", "Lindqvist"]);
+    expect(at(chart, "Lindqvist").y).toBe(start.tanaka);
+  });
+
+  it("clears hover while a change plays and replays it after, with the final geometry", async () => {
+    const ys: number[] = [];
+    const hover = recorder({ draw: (mark) => ys.push(mark.bounds.y) });
+    const { chart, clock, mark, settle } = setup({ on: { hover: hover.effect } });
+    pointer("pointerover", mark("Tanaka").querySelector(".ec-hit")!);
+    const updated = chart.update({ sort: "value" });
+    expect(hover.log).toEqual(["run Tanaka", "clear"]);
+    clock.advance(250);
+    // A mark hovered mid-change waits for it to settle.
+    pointer("pointerover", mark("Lindqvist").querySelector(".ec-hit")!);
+    expect(hover.log).toEqual(["run Tanaka", "clear"]);
+    await settle(updated);
+    expect(hover.log).toEqual(["run Tanaka", "clear", "run Lindqvist"]);
+    expect(ys[ys.length - 1]).toBe(at(chart, "Lindqvist").y);
+  });
+
+  it("fires update effects only when values change, never for a re-sort alone", async () => {
+    const update = recorder();
+    const { chart, clock, settle } = setup({ on: { update: update.effect } });
+    const events = vi.fn();
+    chart.on("update", events);
+    await settle(chart.update({ sort: "key" }));
+    expect(update.log).toEqual([]);
+    void chart.update({ data: tanakaScores(7) });
+    clock.advance(100);
+    // A re-sort mid-change carries the change on without firing update again.
+    await settle(chart.update({ sort: "value" }));
+    expect(update.log.filter((entry) => entry.startsWith("run"))).toEqual([expect.stringMatching(/^run Tanaka/)]);
+    expect(events).toHaveBeenCalledOnce();
+  });
+
+  it("clamps in-between values, so a stack can turn negative without an undrawable frame", async () => {
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    const rows = [
+      { name: "Okafor", goals: 3, assists: 2 },
+      { name: "Tanaka", goals: 1, assists: 1 }
+    ];
+    const { chart, clock, settle } = setup({ data: rows, stack: ["goals", "assists"] });
+    const updated = chart.update({ data: [{ name: "Okafor", goals: -1, assists: -4 }, rows[1]!] });
+    const sizes: number[] = [];
+    for (let t = 0; t < 1000; t += 20) {
+      clock.advance(20);
+      sizes.push(...chart.marks()[0]!.segments!.map((segment) => segment.length));
+    }
+    await settle(updated);
+    expect(reportError).not.toHaveBeenCalled();
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(0);
+    // It grows to the left of zero now.
+    expect(chart.marks()[0]!.angle(0)).toBeCloseTo(Math.PI);
+  });
+
+  it("animates columns the same way", async () => {
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    const { chart, clock, settle } = setup({ x: "name", y: "goals", sort: "value" });
+    const start = at(chart, "Okafor");
+    const updated = chart.update({ data: swapped });
+    clock.advance(250);
+    expect(at(chart, "Okafor").height).toBeLessThan(start.height);
+    expect(at(chart, "Okafor").x).toBe(start.x);
+    clock.advance(500);
+    expect(at(chart, "Okafor").x).toBeGreaterThan(start.x);
+    await settle(updated);
+    expect(chart.marks().map((m) => m.key)).toEqual(["Tanaka", "Lindqvist", "Okafor"]);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it("lands at once when the viewer turns motion off mid-change", async () => {
+    const motion = quietMotion();
+    const { chart, clock } = setup({ sort: "value" }, { motion });
+    const updated = chart.update({ data: swapped });
+    clock.advance(250);
+    motion.chooseMode("off");
+    clock.advance(16);
+    await updated;
+    expect(at(chart, "Okafor").y).toBeGreaterThan(at(chart, "Tanaka").y);
+    expect(clock.idle).toBe(true);
   });
 });
 
@@ -509,6 +776,22 @@ describe("barChart: size", () => {
     expect(svg.getAttribute("viewBox")).toMatch(/^0 0 420 /);
     expect(decorate.log).toEqual(["change Okafor", "change Tanaka", "change Lindqvist"]);
     expect(updates).not.toHaveBeenCalled();
+  });
+
+  it("lands a change in flight when the width changes", async () => {
+    const { resize } = stubResizeObserver();
+    const { chart, svg, clock } = setup({ width: undefined });
+    let settled = false;
+    void chart.update({ sort: "key" }).then(() => (settled = true));
+    clock.advance(100);
+    resize(420);
+    clock.advance(16);
+    await flush();
+    expect(settled).toBe(true);
+    expect(svg.getAttribute("width")).toBe("420");
+    expect(clock.idle).toBe(true);
+    expect(chart.marks()[0]!.key).toBe("Lindqvist");
+    expect(chart.marks()[0]!.bounds.y).toBe(11);
   });
 
   it("keeps a fixed width", () => {

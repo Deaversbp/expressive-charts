@@ -148,7 +148,7 @@ fx.refresh(svg.selectAll("rect"));                   // after the page redraws: 
 
 For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Other shapes take a `geometry` callback built with `describe`.
 
-Charts follow the device's light or dark setting, with eight series colours checked for contrast and colour-vision deficiencies in both. Theme them with `--ec-*` custom properties, which your CSS always overrides, and pin a theme with `data-theme` on any ancestor:
+Charts follow the device's light or dark setting, with eight series colours checked for contrast and colour-vision deficiencies in both. Theme them with `--ec-*` custom properties, which your CSS always overrides, and pin a theme with `data-theme` on any ancestor ([Rendering](docs/architecture.md#rendering) has the details):
 
 ```html
 <html data-theme="light">  <!-- a page without a dark theme of its own -->
@@ -165,7 +165,7 @@ import "expressive-charts/style.css"; // or the same rules as a file (dist/expre
 configure({ injectStyles: false });   // ...and nothing injected
 ```
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Rendering](docs/architecture.md#rendering) for theming and CSP.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, and [Adapters](docs/architecture.md#adapters) for `expressive()`.
 
 ## Demo
 

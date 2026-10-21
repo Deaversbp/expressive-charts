@@ -26,6 +26,8 @@ Charts and effects both depend on core. They never depend on each other. Icons (
 
 `createClock(source?)` runs one shared frame loop for the whole page. It requests a frame only while something is subscribed, so an idle page costs nothing. Outside the browser it falls back to a 16 ms timer. `defaultClock` is the page-wide instance. `manualClock()` only moves when a test calls `advance(ms)`, which makes every timing test deterministic.
 
+**Driving it in a real browser.** The screenshot tests in `tests/visual/` need frames at exact times on a real page. They use Playwright's fake clock rather than a hook in the library. `page.clock` replaces `performance.now()` and `requestAnimationFrame` before any page script runs, and `defaultClock` looks both up only when it asks for a frame, so `page.clock.runFor(ms)` drives the page-wide clock directly. That keeps the public API as it is: no `setDefaultClock()`, no testing export, no flag in the demo. Two details make the frames repeatable. The fake clock's frames fall every 16 ms. And each test moves the clock to the same reading before it acts, because a page starts at however much real time passed while Playwright installed the clock.
+
 ### Easing
 
 An easing is any `(t: number) => number`. Built in: `easeInOutCubic` for data transitions, `easeOutCubic` for travel and for retargeted animations, and `linear` for playback.

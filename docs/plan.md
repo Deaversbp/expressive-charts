@@ -678,7 +678,7 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
 - Phone widths and touch.
 - No dropped frames in the Performance panel.
 
-Automated visual regression (Playwright screenshots on a manual clock) is worth adding in M2 but needs a new dev dependency (§10).
+Automated visual regression (Playwright screenshots on a manual clock) is worth adding in M2 but needs a new dev dependency (§10). *Built in M2 step 6* (`tests/visual/`, on Playwright's fake clock).
 
 ---
 
@@ -727,8 +727,8 @@ Steps 5–7 come first so the motion can be judged in a browser before staged up
 - the conformance suite on bar marks from both sources.
 
 Two things haven't been checked in a browser:
-- **Reduced motion.** The browser pane can't emulate `prefers-reduced-motion`. It's covered by the motion core's tests and by Off, which takes the same path.
-- **The smoothness of staged transitions.** That needs a visible pane, because a hidden one throttles frames.
+- **Reduced motion.** The browser pane can't emulate `prefers-reduced-motion`. It's covered by the motion core's tests and by Off, which takes the same path. *Now checked in Chromium by M2 step 6:* the switch shows Off with its note and follows the setting live, hovering shows the icons at their end positions on both charts, a metric switch jumps, and picking a mode on the page overrides it.
+- **The smoothness of staged transitions.** That needs a visible pane, because a hidden one throttles frames. *M2 step 6 checks staged frames at fixed times* (values first, then positions), *but not smoothness at real frame rates.*
 
 ### M2: Bars at prototype parity
 
@@ -776,10 +776,18 @@ Each step names the files it owns, so steps in the same wave can run in parallel
    - Table: `table: boolean | "hidden"`, default on, a `<details>` "Data table" after the chart. It follows the current sort and updates with the data. Columns are the category, each series, and a total, plus any extra fields the page lists in a `columns` option (the prototype's table includes the position).
    - ARIA roles: pick the structure, then write a short listening script in `docs/a11y-check.md`. **You run it** with NVDA + Chrome or VoiceOver + Safari, and the roles are adjusted to what you hear.
    - An optional polite live region (`announce`) is off by default (open question 4).
-6. **Playwright screenshot tests.** Owns the Playwright dev dependency, `playwright.config.ts`, `tests/visual/`, a CI job, and a small hook that lets tests drive the page-wide clock.
+6. ✅ **Playwright screenshot tests.** Owns the Playwright dev dependency, `playwright.config.ts`, `tests/visual/`, a CI job, and a small hook that lets tests drive the page-wide clock.
    - Screenshots of the demo in light and dark, at rest and mid-travel at fixed clock times, in each motion mode, plus focus rings on both charts.
    - Chromium only, with the browser cached in CI. A documented command updates the baselines.
    - Baselines are captured once steps 1–3 have landed, so they don't churn.
+   - **Built** ([CONTRIBUTING.md](../CONTRIBUTING.md#visual-tests), [architecture.md](architecture.md#clock)): `tests/visual/` has 17 tests and 25 baselines. They cover the list above, plus the tooltip and legend, a staged metric switch, and reduced motion in a real browser, with DOM checks beside the screenshots. Decisions:
+     - **No hook in the library.** Playwright's `page.clock` fakes `performance.now()` and `requestAnimationFrame`, which `defaultClock` looks up only when it asks for a frame, so tests drive the page-wide clock with `runFor(ms)`. Each test first moves the clock to the same reading, so frames (every 16 ms) fall at the same times on every machine.
+     - **CI runs in the official Playwright image**, pinned to the `@playwright/test` version (1.64.1). The image comes with Chromium and its fonts, so nothing is downloaded per run, which does the job of a browser cache. It also means baselines made locally in the same image (`npm run test:visual:update`, through Docker) match CI's exactly. The **Update visual baselines** workflow (`workflow_dispatch`) does the same on GitHub and uploads the screenshots as an artifact.
+     - Baselines have no platform suffix and are compared only on Linux. Elsewhere `npm run test:visual` runs just the DOM checks.
+     - Tolerance: a per-pixel threshold of 0.1 (the default is 0.2) and at most 10 differing pixels; an icon one pixel off changes dozens. Three repeated runs matched exactly. There are no retries, so a flaky picture shows up.
+     - The viewport (1000 × 2000) is taller than the page, so an element screenshot never scrolls. A scroll moved the page under the resting pointer, which then hovered the next bar.
+     - Reduced motion is checked in the DOM against the same story animated: the icons end at identical transforms, and nothing runs after the jump. Pictures are shared between the two only where the page above the chart is the same: the reduced-motion note is a line longer, which moves the charts by half a pixel and changes every anti-aliased edge.
+   - **Found:** on the hand-written chart, the focus ring can't be seen on a goals bar. `expressive()` strokes a 2 px ring in `--ec-focus` centred on the outline, with no gap, and `--ec-series-1` is the same blue. barChart's ring keeps a 2 px gap in the surface colour. `focus-host.png` shows it as it is today; the fix will update it.
 
 **Wave 3:**
 
@@ -848,7 +856,7 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 2. **CSS delivery.** *Decided in M2 planning: both* (M2 step 1). Auto-injected `<style>` vs a CSS file. *Recommendation:* both, with injection on by default (§7.1).
 3. **Persisting the viewer's motion choice** across pages (`localStorage`). *Decided: opt-in `persist`* (M2 step 4). *Recommendation:* opt-in `motionSwitch(el, motion, { persist: "key" })`.
 4. **Live-region announcements** on update, on or off by default. *Decided: off by default, with an `announce` option* (M2 step 5). *Recommendation:* off by default, with a one-line option.
-5. **Playwright for visual regression** needs a new dev dependency plus browsers in CI. *Decided in M2 planning: yes, Chromium only* (M2 step 6). *Recommendation:* decide at M2.
+5. **Playwright for visual regression** needs a new dev dependency plus browsers in CI. *Decided in M2 planning: yes, Chromium only; built in M2 step 6.* *Recommendation:* decide at M2.
 6. **More subpath exports** (`expressive-charts/core`, `/effects`) for smaller bundles. The first one (`/icons/sport`) is needed in M1. *Recommendation:* decide the rest in M6 using real bundle numbers.
 7. **TypeScript 7** (the native compiler) is a separate upgrade. *Recommendation:* after M1, once there's real code to typecheck.
 8. **Framework wrappers** (React, Vue, Svelte) are out of scope for 0.1. The imperative `update()` API is designed to be easy to wrap.

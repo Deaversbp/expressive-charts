@@ -202,6 +202,7 @@ npm run dev
 | `npm run dev` | Serves the `demo/` folder with live reload |
 | `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` entry), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
 | `npm test` | Runs the test suite |
+| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
 | `npm run typecheck` | Checks types without building |
 
 Requires Node.js 22 or newer (CI tests 22 and 24).

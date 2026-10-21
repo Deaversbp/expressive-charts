@@ -6,18 +6,18 @@
  * MarkData, the drawing API, EffectContext, the effect kinds, Icon, the effect slots), the geometry
  * (describe.bar, .arc, .line, .point, matrix, offset), the preset and icon registries
  * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
- * options, accessors, colorAssignment), the icons (defineIcon, iconFromSvg, icons) and the first
- * effects (travel with its gaits, sequence, parallel, only). Everything still declared here is
- * planned. Lines marked NEW were added because writing the examples in ./examples exposed a gap in
- * docs/plan.md.
+ * options, accessors, colorAssignment), the icons (defineIcon, iconFromSvg, icons), the first
+ * effects (travel with its gaits, sequence, parallel, only) and the adapter's types (MarkSource,
+ * Attachment, ExpressiveOptions). Everything still declared here is planned. Lines marked NEW were
+ * added because writing the examples in ./examples exposed a gap in docs/plan.md.
  */
 
 export * from "../../src/index";
 import type {
   Accessor,
   AnyMarkEffect,
+  Attachment,
   BarChartOptions as BuiltBarChartOptions,
-  Baseline,
   Chart as BuiltChart,
   ChartOptions as BuiltChartOptions,
   Color,
@@ -26,13 +26,13 @@ import type {
   describe as builders,
   Easing,
   EffectContext,
-  EffectSlots,
+  ExpressiveOptions as BuiltExpressiveOptions,
   GeometryEffect,
   MarkData,
   MarkEvents,
   MarkGeometry,
+  MarkSource,
   Motion,
-  MotionMode,
   MotionView,
   NumericKey,
   Sample,
@@ -130,38 +130,23 @@ export declare function samplesAlong(
 
 // ── Adapters: effects on charts built with other libraries ───────────────────
 
-/** A CSS selector, elements, or anything shaped like a D3 selection (its data types the callbacks). */
-export type MarkSource<D> = string | Element | ArrayLike<Element> | { nodes(): Element[]; data(): D[] };
+// MarkSource, Attachment (with refresh() and focus()) and ExpressiveOptions are built, in
+// src/charts/adapter, and so is expressive() itself (M1 step 10, for rects). Changed from the sketch:
+// `key` may return a number (converted with String()), `datum` defaults to a selection's data() before
+// element.__data__, `geometry` is called once per mark with its first element, and `baseline: "auto"`
+// also finds negative bars (a mark whose far edge is on the shared line grows the other way).
 
-export interface ExpressiveOptions<D> {
-  /** Marks that share a key are one mark; see `segment`. */
-  key: (datum: D, element: Element) => string;
-  /** Default: the D3 convention, element.__data__. */
-  datum?: (element: Element) => D;
-  /** Marks sharing a key become segments of one mark, ordered from the baseline. */
-  segment?: (datum: D, element: Element) => string;
-  /** Default by tag: rect → bar, circle → point, anything else → describe.shape. */
-  geometry?: (element: Element, datum: D, key: string) => MarkGeometry;
-  /** For rects. "auto" picks the edge all marks share. */
-  baseline?: Baseline | "auto";
+/** Planned for M4: data effects' samples, and following the host's own transitions. */
+interface PlannedExpressiveOptions<D> {
   /** For data effects. */
-  samples?: (datum: D, mark: MarkGeometry) => readonly Sample[];
-  motion?: Motion | MotionMode;
-  /** NoInfer: a generic effect like threshold() must not widen D to unknown. */
-  on?: EffectSlots<NoInfer<D>>;
-  /** Make marks focusable (roving tabindex); focus plays hover effects. */
-  keyboard?: boolean;
-  /** Dim other marks on hover. Default false: the host chart owns its styling. */
-  dim?: boolean;
+  readonly samples?: (datum: D, mark: MarkGeometry) => readonly Sample[];
   /** Re-read geometry on every attribute change, so decorations follow the host's own transitions. */
-  watch?: boolean;
+  readonly watch?: boolean;
 }
 
-export interface Attachment<D> extends MarkSourceHandle<D> {
-  /** Call after the host re-renders: re-reads marks and fires enter, update and exit by key. */
-  refresh(source?: MarkSource<D>): void;
-}
+export interface ExpressiveOptions<D> extends BuiltExpressiveOptions<D>, PlannedExpressiveOptions<D> {}
 
+/** Built in M1 step 10 (src/charts/adapter); declared here until it has `samples` and `watch` (M4). */
 export declare function expressive<D = unknown>(target: MarkSource<D>, options: ExpressiveOptions<D>): Attachment<D>;
 
 // ── Reference charts ─────────────────────────────────────────────────────────

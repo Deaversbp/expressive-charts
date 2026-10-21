@@ -3,6 +3,7 @@
 
 import type { Icon, IconShape, Matrix, Point, Rect } from "../core";
 import { matrix } from "../core";
+import { parseTransform } from "../core/geometry";
 import { defineIcon, type IconSpec } from "./define";
 import { formatPath, parsePath, transformPath, type PathCommand } from "./path";
 
@@ -170,40 +171,8 @@ function inherit(parent: Inherited, attributes: Map<string, string>): Inherited 
     width: width >= 0 ? width : parent.width,
     linecap: linecap === "butt" || linecap === "round" ? linecap : parent.linecap,
     linejoin: linejoin === "miter" || linejoin === "round" ? linejoin : parent.linejoin,
-    transform: transform ? matrix.multiply(parent.transform, readTransform(transform)) : parent.transform
+    transform: transform ? matrix.multiply(parent.transform, parseTransform(transform)) : parent.transform
   };
-}
-
-/** An SVG transform list. An unknown function is skipped. */
-function readTransform(source: string): Matrix {
-  const parts: Matrix[] = [];
-  for (const [, name, rawArgs = ""] of source.matchAll(/(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g)) {
-    const args = rawArgs.trim().split(/[\s,]+/).filter(Boolean).map(Number);
-    if (!args.every(Number.isFinite)) continue;
-    const [a = 0, b, c, d = 0, e = 0, f = 0] = args;
-    const radians = (degrees: number): number => (degrees * Math.PI) / 180;
-    switch (name) {
-      case "matrix":
-        if (args.length === 6) parts.push([a, b!, c!, d, e, f]);
-        break;
-      case "translate":
-        parts.push(matrix.translate(a, b ?? 0));
-        break;
-      case "scale":
-        parts.push(matrix.scale(a, b ?? a));
-        break;
-      case "rotate":
-        parts.push(matrix.rotate(radians(a), b !== undefined && c !== undefined ? { x: b, y: c } : undefined));
-        break;
-      case "skewX":
-        parts.push([1, 0, Math.tan(radians(a)), 1, 0, 0]);
-        break;
-      case "skewY":
-        parts.push([1, Math.tan(radians(a)), 0, 1, 0, 0]);
-        break;
-    }
-  }
-  return matrix.multiply(...parts);
 }
 
 function toShape(tag: string, attributes: Map<string, string>, state: Inherited): IconShape | undefined {

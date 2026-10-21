@@ -10,4 +10,5 @@ Chart components (bar, line, donut, and later more). Each chart gives every mark
 | `colors.ts` | `colorAssignment`: palette slots that follow the entity |
 | `motion.ts` | A chart's motion from its `motion` option |
 | `interaction.ts` | Pointer and touch hover, delegated from the `<svg>` |
+| `adapter/` | `expressive()`: effects on SVG marks drawn by other code. Reading the source (`source.ts`), coordinates through CTMs (`space.ts`), bars from rects (`bars.ts`), the host-mark style handle (`host-style.ts`) and the record of every change to the host's DOM, so `destroy()` can undo it (`edits.ts`) |
 | `render/` | The drawing API in SVG: `svgSurface` (the runner's surface), `svgLayer`, `svgMarkHandle`; theme tokens and the shared stylesheet; text measurement |

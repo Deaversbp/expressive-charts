@@ -2,7 +2,16 @@
 // Exports are added here as each layer is built. See docs/architecture.md for the design.
 
 import { motion } from "./core";
-import { barChart as drawBarChart, type BarChart, type BarChartOptions, type ChartEnv } from "./charts";
+import {
+  barChart as drawBarChart,
+  expressive as attach,
+  type Attachment,
+  type BarChart,
+  type BarChartOptions,
+  type ChartEnv,
+  type ExpressiveOptions,
+  type MarkSource
+} from "./charts";
 import { iconRegistry, presetRegistry } from "./registries";
 
 export const VERSION = "0.0.0";
@@ -12,7 +21,21 @@ export * from "./effects";
 export * from "./icons";
 export { registerIcon, registerIcons, registerPreset } from "./registries";
 export { colorAssignment } from "./charts";
-export type { Accessor, BarChart, BarChartOptions, Chart, ChartOptions, ColorAssignment, KeyOfType, MarkEvent, MarkEvents, NumericKey } from "./charts";
+export type {
+  Accessor,
+  Attachment,
+  BarChart,
+  BarChartOptions,
+  Chart,
+  ChartOptions,
+  ColorAssignment,
+  ExpressiveOptions,
+  KeyOfType,
+  MarkEvent,
+  MarkEvents,
+  MarkSource,
+  NumericKey
+} from "./charts";
 
 /** Charts resolve preset and icon names through the page-wide registries and follow the page-wide motion. */
 const env: ChartEnv = { presets: presetRegistry, icons: iconRegistry, motion };
@@ -23,4 +46,13 @@ const env: ChartEnv = { presets: presetRegistry, icons: iconRegistry, motion };
  */
 export function barChart<D>(target: string | Element, options: BarChartOptions<D>): BarChart<D> {
   return drawBarChart(target, options, env);
+}
+
+/**
+ * Adds effects to SVG marks drawn by other code: a selector, elements, or a D3 selection (whose data
+ * types the callbacks). `key` is required; `on` attaches effects by slot, as on the charts. Call
+ * `refresh()` after the host re-renders.
+ */
+export function expressive<D = unknown>(target: MarkSource<D>, options: ExpressiveOptions<D>): Attachment<D> {
+  return attach(target, options, env);
 }

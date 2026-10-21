@@ -13,7 +13,7 @@ import { EFFECT_SLOTS, resolveEffects, type PresetFactory, type Registry } from 
 import { report } from "../core/report";
 import { createRunner, type RunInput, type SlotEffects } from "../core/runner";
 import { chartAnnouncer, changeText, type Announcer, type SortName } from "./announce";
-import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLayout, type BarRow, type TextPlacement } from "./bar-layout";
+import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLayout, type BarRow, type BarValue, type TextPlacement } from "./bar-layout";
 import { toColorAssignment } from "./colors";
 import { pointerHover, type HoverTarget } from "./interaction";
 import { keyboardFocus } from "./keyboard";
@@ -24,6 +24,7 @@ import { svgSurface } from "./render/surface";
 import { setAttributes, setStyles, svgElement, transformAttribute } from "./render/svg";
 import { textMeasure } from "./render/text";
 import { injectStyles, markColorStyles, seriesColors } from "./render/theme";
+import { checkSeriesLabels, seriesLabel } from "./series";
 import { chartTable, checkTableOption, tableModel, type TableModel } from "./table";
 import { chartTooltip, summaryContent } from "./tooltip";
 import type { BarChartOptions, Chart, MarkEvents } from "./types";
@@ -311,7 +312,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   /** The tooltip beside the hovered mark as it is on screen, moved with its effects, with the text for where it's heading. */
   function showTooltip(record: MarkRecord<D>): void {
     const { row } = record;
-    tooltip.show(record.shown.geometry, row, () => summaryContent(row.label.text, row.values, format(current)), record.handle.style.transform);
+    tooltip.show(record.shown.geometry, row, () => summaryContent(row.label.text, labelled(row.values, current), format(current)), record.handle.style.transform);
   }
 
   /** An effect restyled a mark: the focus ring and the tooltip follow its transform. */
@@ -321,7 +322,12 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     if (record && key === hovered?.key) showTooltip(record);
   }
 
-  const syncLegend = (): void => legend.update(barEncoding(current).series.map((s) => s.series), colors, current.legend !== false);
+  const syncLegend = (): void =>
+    legend.update(
+      barEncoding(current).series.map((s) => ({ series: s.series, label: seriesLabel(current.seriesLabels, s.series) })),
+      colors,
+      current.legend !== false
+    );
 
   /** The data table for `opts`, laid out as `next`: its rows in visual order. Throws on a column it can't read. */
   function tableFor(opts: BarChartOptions<D>, next: BarLayout<D>): TableModel | undefined {
@@ -332,6 +338,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       caption: opts.label,
       category: typeof field === "string" ? field : undefined,
       series: encoding.series.map((s) => s.series),
+      label: (series) => seriesLabel(opts.seriesLabels, series),
       rows: next.rows.map((row) => ({ key: row.key, category: row.label.text, datum: row.datum, index: row.index, values: row.values, total: row.total })),
       format: format(opts)
     });
@@ -348,7 +355,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const changed = diff.changed.map(({ record }) => record);
     const text = changeText({
       ...(current.label !== previous.label ? { label: current.label } : {}),
-      ...(series.join("\n") !== before.join("\n") ? { series } : {}),
+      // New series are said by their labels; new labels alone show the same view, so say nothing.
+      ...(series.join("\n") !== before.join("\n") ? { series: series.map((s) => seriesLabel(current.seriesLabels, s)) } : {}),
       ...(sort !== sortName(previous.sort) || (sort === "custom" && current.sort !== previous.sort) ? { sort } : {}),
       changed: changed.map(name),
       added: diff.entering.map(name),
@@ -914,6 +922,7 @@ function checkOptions<D>(options: BarChartOptions<D>): void {
   if (tooltip !== undefined && typeof tooltip !== "boolean" && typeof tooltip !== "function") throw new TypeError("barChart: tooltip must be true, false or a function that returns a row's text.");
   if (markLabel !== undefined && typeof markLabel !== "function") throw new TypeError("barChart: markLabel must be a function that returns a mark's accessible name.");
   if (legend !== undefined && typeof legend !== "boolean") throw new TypeError("barChart: legend must be true or false.");
+  checkSeriesLabels(options.seriesLabels, "barChart");
   checkTableOption(options.table, "barChart");
   if (announce !== undefined && typeof announce !== "boolean" && typeof announce !== "function") throw new TypeError("barChart: announce must be true, false or a function that returns the text to announce.");
 }
@@ -962,25 +971,28 @@ function placeText(element: SVGTextElement, placement: TextPlacement): void {
 }
 
 /**
- * "Okafor: 16 goals, 4 assists", or the page's wording from `markLabel`. A lone value read by a function
- * (its series is "value") goes unnamed: "Okafor: 16". An empty name, or a throw (reported), keeps the
- * default, so a focusable mark is never left unnamed.
+ * "Okafor: 16 goals, 4 assists", each series said by its label, or the page's wording from `markLabel`.
+ * A lone value read by a function (its series is "value") goes unnamed unless it's labelled: "Okafor:
+ * 16". An empty name, or a throw (reported), keeps the default, so a focusable mark is never left unnamed.
  */
 function markLabel<D>(row: BarRow<D>, options: BarChartOptions<D>): string {
   const formatted = format(options);
-  const lone = row.values.length === 1 && row.values[0]!.series === "value";
-  const values = row.values.map((v) => (lone ? formatted(v.value) : `${formatted(v.value)} ${v.series}`));
-  const text = `${row.label.text}: ${values.join(", ")}`;
+  const values = labelled(row.values, options);
+  const lone = values.length === 1 && values[0]!.series === "value" && values[0]!.label === "value";
+  const text = `${row.label.text}: ${values.map((v) => (lone ? formatted(v.value) : `${formatted(v.value)} ${v.label}`)).join(", ")}`;
   if (!options.markLabel) return text;
   try {
-    // Copies of the values, so the page can't change the layout's.
-    const shown = row.values.map((v) => ({ series: v.series, value: v.value }));
-    const named: unknown = options.markLabel(row.datum, { key: row.key, category: row.label.text, values: shown, total: row.total, format: formatted, text });
+    const named: unknown = options.markLabel(row.datum, { key: row.key, category: row.label.text, values, total: row.total, format: formatted, text });
     if (named !== undefined && named !== null && String(named).trim() !== "") return String(named);
   } catch (error) {
     report(error);
   }
   return text;
+}
+
+/** The row's values, each with its series' label: what the tooltip and the mark's name say. Copies, so a page can't change the layout's. */
+function labelled<D>(values: readonly BarValue[], options: BarChartOptions<D>): { series: string; label: string; value: number }[] {
+  return values.map((v) => ({ series: v.series, label: seriesLabel(options.seriesLabels, v.series), value: v.value }));
 }
 
 function valuesChanged<D>(from: BarRow<D>, to: BarRow<D>): boolean {

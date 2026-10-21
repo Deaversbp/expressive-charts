@@ -56,7 +56,7 @@ Start in browse mode, NVDA's default. NVDA+Space switches between browse mode an
 | 9 | Tab once, into the chart. Then Up arrow 3 times (browse mode). | "Okafor: 17 goals, 4 assists, graphic". Then the bars above it in A–Z order, ending "graphic, Lindqvist: 11 goals, 8 assists". | |
 | 10 | Tab once, to "Data table". Press Space. | "Data table, button, collapsed", then "expanded". | |
 | 11 | Press T (next table). If nothing happens, you're in focus mode: press NVDA+Space until NVDA says "Browse mode", then T. | "Harbor City FC: goals and assists by player, table with 9 rows and 5 columns", then "row 1, column 1, Player". | |
-| 12 | Ctrl+Alt+Down, then Ctrl+Alt+Right 4 times. | "row 2, Adeyemi". Then "Position, column 2, Midfielder", "goals, column 3, 4", "assists, column 4, 6", "Total, column 5, 10". | |
+| 12 | Ctrl+Alt+Down, then Ctrl+Alt+Right 4 times. | "row 2, Adeyemi". Then "Position, column 2, Midfielder", "Goals, column 3, 4", "Assists, column 4, 6", "Total, column 5, 10". | |
 | 13 | Ctrl+Alt+Down. | "Castillo, row 3, 6": the row header with the new row. | |
 
 ## B. VoiceOver + Safari (macOS)
@@ -80,7 +80,7 @@ VO means Control+Option.
 | 8 | Tab once, into the chart, then Up arrow 3 times. | "Okafor: 17 goals, 4 assists, image", then "Novak …", "Moreau …", "Lindqvist: 11 goals, 8 assists, image". | |
 | 9 | Tab once, to "Data table". Press Space. | "Data table, collapsed, disclosure triangle" (or "summary"), then "expanded". | |
 | 10 | VO+Right until you reach the table. | "Harbor City FC: goals and assists by player, table, 5 columns, 9 rows" (in either order). | |
-| 11 | VO+Down, then VO+Right 4 times. | "Adeyemi, row 2". Then each cell with its column header: "Midfielder, Position", "4, goals", "6, assists", "10, Total". | |
+| 11 | VO+Down, then VO+Right 4 times. | "Adeyemi, row 2". Then each cell with its column header: "Midfielder, Position", "4, Goals", "6, Assists", "10, Total". | |
 | 12 | VO+Down. | "6, Castillo", or the row header and value in some order. | |
 
 ## C. The second chart: `expressive()` on the page's own SVG
@@ -125,10 +125,10 @@ If a bar is read twice or in pieces here but not on the first chart, the differe
 ## Results
 
 **NVDA + Chrome on Windows 11, 21 October 2026: passed.** Steps 1–13 read as expected, with the default settings, so every "Listen for" item passed. The roles (`group` on the `<svg>`, `img` on each bar), the table and the announcements stay as built. Versions weren't noted.
-- That run heard "Castillo: 1 goals" in step 3, a known issue then. The demo now words its bars' names with `markLabel`, so the steps above say "1 goal". Only the wording changed, not the roles or the structure.
+- That run heard "Castillo: 1 goals" in step 3, a known issue then. The demo now words its bars' names with `markLabel`, so the steps above say "1 goal". Only the wording changed, not the roles or the structure. **The new wording was heard as "Castillo: 1 goal" with NVDA + Chrome and with VoiceOver + Safari (October 2026).**
 - The one hitch was the tester's, not the page's. In step 11, T did nothing because NVDA was still in focus mode; after NVDA+Space back to browse mode, it found the table. Step 11 now says so.
 
-**VoiceOver + Safari:** not run yet. It needs a Mac.
+**VoiceOver + Safari:** the full script hasn't been run yet. It was used to hear the "1 goal" wording above.
 
 **The second chart (section C):** not run yet, with either screen reader.
 

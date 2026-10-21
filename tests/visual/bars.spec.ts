@@ -121,7 +121,7 @@ test.describe("tooltip and legend", () => {
       await page.emulateMedia({ colorScheme });
       await openDemo(page);
       await pickMetric(page, "Goals + assists");
-      await expect(chart(page).locator(".ec-legend-item")).toHaveText(["goals", "assists"]);
+      await expect(chart(page).locator(".ec-legend-item")).toHaveText(["Goals", "Assists"]);
 
       await bar(page, "Okafor").hover();
       await page.clock.runFor(REST);

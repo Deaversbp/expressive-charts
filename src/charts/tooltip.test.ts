@@ -120,8 +120,17 @@ describe("summaryContent", () => {
     expect(summaryContent("Okafor", values.slice(0, 1), format)).toEqual({ title: "Okafor", lines: ["16.0 goals"] });
   });
 
-  it("leaves a lone value read by a function unnamed", () => {
+  it("leaves a lone value read by a function unnamed, unless it's labelled", () => {
     expect(summaryContent("Okafor", [{ series: "value", value: 16 }], format)).toEqual({ title: "Okafor", lines: ["16.0"] });
+    expect(summaryContent("Okafor", [{ series: "value", label: "points", value: 16 }], format)).toEqual({ title: "Okafor", lines: ["16.0 points"] });
+  });
+
+  it("says each series by its label when it has one", () => {
+    const values = [
+      { series: "goals", label: "Goals", value: 16 },
+      { series: "assists", value: 4 }
+    ];
+    expect(summaryContent("Okafor", values, format)).toEqual({ title: "Okafor", lines: ["16.0 Goals · 4.0 assists", "20.0 total"] });
   });
 });
 

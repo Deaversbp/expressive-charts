@@ -8,7 +8,7 @@ export type SortName = "value" | "key" | "none" | "custom";
 export interface ChangeFacts {
   /** The chart's new label, when it changed. */
   readonly label?: string;
-  /** The new series, when they changed. */
+  /** The new series, by their labels, when they changed. */
   readonly series?: readonly string[];
   /** The new sort, when it changed. */
   readonly sort?: SortName;

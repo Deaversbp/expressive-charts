@@ -8,6 +8,7 @@ Chart components (bar, line, donut, and later more). Each chart gives every mark
 | `bar-layout.ts` | The bar chart's layout, pure: encoding, sorting, the nice scale, the frame (scale and bands), and `placeRow` / `placeTick`, which draw a laid-out row or any state in between |
 | `types.ts` | What charts share: options, `MarkEvent(s)`, `Chart`, accessors |
 | `colors.ts` | `colorAssignment`: palette slots that follow the entity |
+| `series.ts` | `seriesLabels`: a series' name for people, and checking the option |
 | `motion.ts` | A chart's motion from its `motion` option |
 | `keyboard.ts` | Keyboard focus, shared by `barChart` and `expressive()`: the roving tabindex, arrow keys, Home, End and Escape, whether focus followed a key press, and where focus goes when its mark leaves or its element is replaced |
 | `interaction.ts` | Pointer and touch hover, delegated from the `<svg>` |

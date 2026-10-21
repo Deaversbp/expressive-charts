@@ -48,6 +48,13 @@ export interface ChartOptions<D> {
   readonly format?: (value: number) => string;
   /** Palette slots (1–8) by series, pinned or shared. Colours follow the entity, never its rank. */
   readonly colors?: ColorAssignment | Readonly<Record<string, number>>;
+  /**
+   * Names for people, by series (its field, or "value" for a value read by a function): { goals:
+   * "Goals", xg: "Expected goals" }. Used as given wherever the chart names a series: the legend, the
+   * table's headers, the default tooltip and mark names ("16 Goals"), and announcements. A series
+   * without one goes by its own name. Labels for series the chart doesn't show are kept for when it does.
+   */
+  readonly seriesLabels?: Readonly<Record<string, string>>;
   /** Fixed width in px. Default: the container's width, followed with a ResizeObserver. */
   readonly width?: number;
   readonly height?: number;
@@ -109,8 +116,11 @@ export interface MarkSummary {
   readonly key: string;
   /** The category, as the axis shows it. */
   readonly category: string;
-  /** Each series the mark shows, from the baseline, with its signed value. A lone value read by a function is the series "value". */
-  readonly values: readonly { readonly series: string; readonly value: number }[];
+  /**
+   * Each series the mark shows, from the baseline, with its name for people (from `seriesLabels`, or
+   * the series itself) and its signed value. A lone value read by a function is the series "value".
+   */
+  readonly values: readonly { readonly series: string; readonly label: string; readonly value: number }[];
   /** The values added up. */
   readonly total: number;
   /** The chart's `format`, or its default. */

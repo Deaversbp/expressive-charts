@@ -75,13 +75,13 @@ export function placeTooltip(anchor: TooltipAnchor, size: Size, box: Size, side?
 }
 
 /**
- * The default text: the category, then each series' value in `format` ("16 goals · 4 assists"), then
- * the total when there's more than one. A lone value read by a function (its series is "value") goes
- * unnamed, as in the marks' labels.
+ * The default text: the category, then each series' value in `format` with its label, or its name
+ * when it has none ("16 goals · 4 assists"), then the total when there's more than one. A lone value
+ * read by a function (its series is "value") goes unnamed unless it's labelled, as in the marks' names.
  */
-export function summaryContent(category: string, values: readonly { readonly series: string; readonly value: number }[], format: (value: number) => string): TooltipContent {
-  const lone = values.length === 1 && values[0]!.series === "value";
-  const lines = [values.map((v) => (lone ? format(v.value) : `${format(v.value)} ${v.series}`)).join(" · ")];
+export function summaryContent(category: string, values: readonly { readonly series: string; readonly label?: string; readonly value: number }[], format: (value: number) => string): TooltipContent {
+  const lone = values.length === 1 && values[0]!.series === "value" && (values[0]!.label ?? "value") === "value";
+  const lines = [values.map((v) => (lone ? format(v.value) : `${format(v.value)} ${v.label ?? v.series}`)).join(" · ")];
   if (values.length > 1) lines.push(`${format(values.reduce((sum, v) => sum + v.value, 0))} total`);
   return { title: category, lines };
 }

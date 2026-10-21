@@ -1028,6 +1028,54 @@ describe("expressive: markLabel", () => {
     expect(host.svg.outerHTML).toBe(before);
   });
 
+  it("shows the element it names even if the host hid it, and hides it again on destroy", () => {
+    const host = d3Stack();
+    host.rect("Okafor", "goals").setAttribute("aria-hidden", "true");
+    const { fx } = setup(host.selection(), { ...stacked, markLabel: label });
+    expect(aria(host.rect("Okafor", "goals"))).toBe("role=img aria-label=Okafor: 16 goals, 4 assists aria-hidden=-");
+    fx.destroy();
+    expect(aria(host.rect("Okafor", "goals"))).toBe("role=- aria-label=- aria-hidden=true");
+  });
+
+  it("keeps what the host writes between refreshes, and puts that back rather than what it had at first", () => {
+    const host = d3Stack();
+    const rect = host.rect("Okafor", "goals");
+    rect.setAttribute("aria-label", "Okafor: 16 goals");
+    let quiet = false;
+    const { fx } = setup(host.selection(), { ...stacked, markLabel: (d, mark) => (quiet ? "" : label!(d, mark)) });
+    // The host reuses the rect and writes its own name again, as a D3 join's update does.
+    rect.setAttribute("aria-label", "Okafor: 17 goals");
+    fx.refresh();
+    expect(rect.getAttribute("aria-label")).toBe("Okafor: 16 goals, 4 assists");
+    fx.destroy();
+    expect(aria(rect)).toBe("role=- aria-label=Okafor: 17 goals aria-hidden=-");
+
+    // An empty name after the host's write leaves the host's, too.
+    rect.setAttribute("aria-label", "Okafor: 16 goals");
+    const again = setup(host.selection(), { ...stacked, markLabel: (d, mark) => (quiet ? "" : label!(d, mark)) });
+    rect.setAttribute("aria-label", "Okafor: 18 goals");
+    quiet = true;
+    again.fx.refresh();
+    expect(aria(rect)).toBe("role=- aria-label=Okafor: 18 goals aria-hidden=-");
+  });
+
+  it("moves focus from a hidden segment to the element that carries the mark's name", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true, markLabel: label });
+    const events = hoverLog(fx);
+    const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
+    // A click on Tanaka's assists rect, which is hidden: focus lands on the goals rect, named for both.
+    pointer("pointerdown", host.rect("Tanaka", "assists"));
+    host.rect("Tanaka", "assists").focus();
+    expect(document.activeElement).toBe(host.rect("Tanaka", "goals"));
+    expect(host.rect("Tanaka", "goals").getAttribute("tabindex")).toBe("0");
+    expect(ring.getAttribute("visibility")).toBe("hidden");
+    expect(events).toEqual([]);
+    key(host.rect("Tanaka", "goals"), "ArrowDown");
+    expect(document.activeElement).toBe(host.rect("Lindqvist", "goals"));
+    expect(events).toEqual(["hover Lindqvist keyboard"]);
+  });
+
   it('warns once when the <svg> is role="img", which hides the marks keyboard focus reaches', () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const host = d3Stack();

@@ -335,8 +335,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
   /**
    * With `markLabel`, a mark is read as one item: the element that takes its focus is an image named
-   * by it, and its other parts are hidden. Each is written again on every read, since a part can
-   * become the first (a stack gains a segment) or stop being it.
+   * by it (and shown, even if the host hid it), and its other parts are hidden. Each is written again
+   * on every read, since a part can become the first (a stack gains a segment) or stop being it.
    */
   function nameMark(record: MarkRecord<D>): void {
     if (!options.markLabel) return;
@@ -345,7 +345,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       const named = label !== undefined && index === 0;
       edits.attribute(part.element, "role", named ? "img" : null);
       edits.attribute(part.element, "aria-label", named ? label : null);
-      edits.attribute(part.element, "aria-hidden", label !== undefined && index > 0 ? "true" : null);
+      if (named) edits.remove(part.element, "aria-hidden");
+      else edits.attribute(part.element, "aria-hidden", label === undefined ? null : "true");
     });
   }
 

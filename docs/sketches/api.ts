@@ -6,7 +6,7 @@
  * MarkData, the drawing API, EffectContext, the effect kinds, Icon, the effect slots), the geometry
  * (describe.bar, .arc, .line, .point, matrix, offset), the preset and icon registries
  * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
- * options, accessors, colorAssignment), the icons (defineIcon, iconFromSvg, icons), the first
+ * options, accessors, colorAssignment), the donut chart's options, the icons (defineIcon, iconFromSvg, icons), the first
  * effects (travel with its gaits, flash, wiggle, pulse, sequence, parallel, only, stagger), the
  * viewer's motionSwitch and the adapter's types (MarkSource, Attachment, ExpressiveOptions).
  * Everything still declared here is planned. Lines marked NEW were
@@ -24,6 +24,7 @@ import type {
   ColorAssignment,
   DataEffect,
   describe as builders,
+  DonutChartOptions,
   Easing,
   EffectContext,
   ExpressiveOptions as BuiltExpressiveOptions,
@@ -168,15 +169,14 @@ export interface LineChart<D> extends Chart<D, LineChartOptions<D>> {
   reveal(x: number): void;
 }
 
-export interface DonutChartOptions<D> extends ChartOptions<D> {
-  readonly value: NumericKey<D> | ((d: D) => number);
-  readonly center?: (total: number) => string;
-  readonly sort?: "value" | "none";
-}
-
 /** Built in M1 step 5 (src/charts); declared here until its handle has focus(). */
 export declare function barChart<D>(target: string | Element, options: BarChartOptions<D>): Chart<D, BarChartOptions<D>>;
 export declare function lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D>;
+/**
+ * Built in M3 step 4 (src/charts), with its options, which are the real DonutChartOptions (`category`
+ * names each slice; the sketch's `key` is the optional key, as on bars). Declared here until its
+ * handle has focus(), like barChart.
+ */
 export declare function donutChart<D>(target: string | Element, options: DonutChartOptions<D>): Chart<D, DonutChartOptions<D>>;
 
 export interface ChartSwitch<V extends string> {

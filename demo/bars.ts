@@ -28,9 +28,16 @@ const stacks = {
 } as const;
 type Metric = keyof typeof stacks;
 
+// The chart's accessible name and the visible heading follow the metric, so neither says "goals" while showing assists.
+const titles: Record<Metric, string> = {
+  goals: "Harbor City FC: goals by player",
+  assists: "Harbor City FC: assists by player",
+  ga: "Harbor City FC: goals and assists by player"
+};
+
 // One story for all three views: a segment that isn't in the stack makes its step a no-op.
 const chart = barChart<Player>("#chart", {
-  label: "Harbor City FC: goals by player",
+  label: titles.goals,
   data: players,
   y: "name",
   stack: stacks.goals,
@@ -58,7 +65,12 @@ function segmented(id: string, onPick: (value: string) => void): (value: string)
   return show;
 }
 
-segmented("metric", (value) => void chart.update({ stack: stacks[value as Metric] }));
+const heading = document.getElementById("chart-title");
+segmented("metric", (value) => {
+  const metric = value as Metric;
+  if (heading) heading.textContent = titles[metric];
+  void chart.update({ stack: stacks[metric], label: titles[metric] });
+});
 segmented("sort", (value) => void chart.update({ sort: value as "value" | "key" }));
 
 // The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.

@@ -871,7 +871,7 @@ The flash is checked by tests, not by eye: `src/matchweek.test.ts` (only changed
 5. **Donut drawing and updates.**
    - The inner radius is 0.6 × the outer, as in the lab. Slices are separated by 2 px strokes in `--ec-surface` rather than `padAngle`, so the angles stay true to the data.
    - A legend with one entry per category, plus labels outside the ring (the category and the share) on slices of 15° or more; a label that would overlap the one before it is dropped. Every slice is still named in the legend, the tooltip, the table and its ARIA name.
-   - `sort: "none"` (data order, the default) or `"value"` (largest first), starting at 12 o'clock and going clockwise. Colours are per category through `ColorAssignment`, so a donut and a bar chart can share them (M5's morph needs that). A slice's `series` is the value field (`"shots"`, or `"value"` for a function), as a plain bar's one segment is.
+   - `sort: "none"` (data order, the default) or `"value"` (largest first), starting at 12 o'clock and going clockwise. Colours are per category, through a `ColorAssignment` keyed by category. Bars still colour by series (`colors.slot(series)` in `bar.ts`), so sharing one assignment with a bar chart won't match colours until bars can colour by category, which M5 adds for its morph. A slice's `series` is the value field (`"shots"`, or `"value"` for a function), as a plain bar's one segment is.
    - A slice is named by `category` (a field or a function), which is also its key unless `key` is given, as on bars. The sketch's `key: "outcome"` becomes `category: "outcome"`.
    - Halos (`flash`, `pulse`) are drawn in the overlay, masked to outside the slice, so they show evenly on every side. While it runs, a halo can cover half its width of a neighbour.
    - Updates animate the values in data units, so slices stay joined and every frame's angles are true shares. Presentation stages them: values for 500 ms, while leaving slices shrink to nothing; then a re-order for 500 ms, in which slices rotate the shorter way to their new places (as bars pass each other when sorted) and entering slices grow in at their places in the second half. Analysis runs one stage of at most 200 ms, and Off jumps. `update` fires only for slices whose own value changed, not for ones whose share moved.
@@ -886,7 +886,7 @@ The flash is checked by tests, not by eye: `src/matchweek.test.ts` (only changed
     - The guide is `docs/effects-guide.md`: the contract, the context and drawing API, timing through `ctx.tween`, end states (Principle 3), the data guardrails (Principle 2), data effects and `needs`, composing, testing with `checkEffect`, `trace` and `delta` (sketch 06) as type-checked worked examples, and a review checklist.
     - It goes public in M3's last wave. M4's line chart can still force a 0.2.
 11. **Demo and baselines.**
-    - `demo/donut.html` is the lab's card 3 without the morph: the shot outcomes as a donut and as columns sharing one `ColorAssignment`, plus a D3 pie through `expressive()`. One effect picker (Ball, Wiggle, Pulse) and a "Next match" button (`update: stagger(flash())`) drive all three.
+    - `demo/donut.html` is the lab's card 3 without the morph: the shot outcomes as a donut and as columns, plus a D3 pie through `expressive()`. The columns are one colour, since a single-series bar chart colours by series; matching each outcome's colour across the donut and the columns waits for M5 (decision 5). One effect picker (Ball, Wiggle, Pulse) and a "Next match" button (`update: stagger(flash())`) drive all three.
     - `demo/bars.html` doesn't change, so its 27 baselines don't either.
     - New screenshots in `tests/visual/donut.spec.ts`, with names starting `donut-` because names are shared across files: light and dark at rest; the ball mid-roll and at rest on both donuts; a wiggle at its peak and a pulse half-way; the focus ring in both themes; the tooltip. Reduced motion is checked in the DOM, as in M2. The baselines are made in Docker.
 
@@ -962,7 +962,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 ### M5: Morph
 
-The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label tweening, and shared colour assignment.
+The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label tweening, and shared colour assignment. That includes colouring bars by category: today `barChart` colours by series, so the lab's columns would all be one colour. With category colours, one `ColorAssignment` keeps each outcome's colour from slice to column (found in the PR #30 review).
 
 **Demo:** card 3 of the lab.
 

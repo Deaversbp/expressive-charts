@@ -142,7 +142,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         const parts = group.map((p) => part(p, outlineOf(geometry, p.series, group.length)));
         return { key, geometry, data: markData(parts), parts, label: labelOf(key, parts) };
       });
-      return { root: svg, ancestor: common, marks };
+      return { root: svg, ancestor: common, marks: ringOrder(marks) };
     }
 
     const rects = keys.map((key) =>
@@ -620,6 +620,29 @@ function markData<D>(parts: readonly Part<D>[]): MarkData<D> {
     return found && of(found);
   };
   return of(parts[0]!);
+}
+
+/**
+ * The visual order of marks described with `geometry`. Around one pivot (a pie's slices) it's
+ * clockwise from 12 o'clock, by the angle of each mark's centre about the pivot, as a ring is read:
+ * d3.pie() sorts slices by value but returns them in data order, so document order jumps around the
+ * ring. Otherwise, or if any pivot is more than 0.5 px from the first, it's document order.
+ */
+function ringOrder<D>(marks: readonly ReadMark<D>[]): readonly ReadMark<D>[] {
+  const pivot = marks[0]?.geometry.pivot;
+  if (!pivot || marks.some(({ geometry }) => Math.hypot(geometry.pivot.x - pivot.x, geometry.pivot.y - pivot.y) > 0.5)) return marks;
+  const TURN = 2 * Math.PI;
+  const clockwise = ({ geometry: { center } }: ReadMark<D>): number => {
+    // In [0, 2π): 0 straight up (y points down), turning towards +x.
+    const angle = Math.atan2(center.x - pivot.x, pivot.y - center.y);
+    const turned = angle < 0 ? angle + TURN : angle;
+    return turned >= TURN ? 0 : turned;
+  };
+  // A stable sort: marks at one angle (dots on the pivot) keep document order.
+  return marks
+    .map((mark) => ({ mark, angle: clockwise(mark) }))
+    .sort((a, b) => a.angle - b.angle)
+    .map(({ mark }) => mark);
 }
 
 /** For a mark described with `geometry`: the part's own segment, or the whole mark for a lone part. */

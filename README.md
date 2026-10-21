@@ -189,7 +189,24 @@ const fx = expressive(svg.selectAll("rect"), {
 fx.refresh(svg.selectAll("rect"));                   // after the page redraws: enter, update and exit by key
 ```
 
-For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Other shapes take a `geometry` callback built with `describe`. Without `value`, the adapter compares lengths, so a resize or a new axis maximum counts as an update for every bar (and `update: "flash"` flashes them all); with it, only bars whose values changed get one, as on `barChart`.
+For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Without `value`, the adapter compares lengths, so a resize or a new axis maximum counts as an update for every bar (and `update: "flash"` flashes them all); with it, only bars whose values changed get one, as on `barChart`.
+
+Other shapes take a `geometry` callback built with `describe`. A D3 donut, for example, drawn with `d3.pie()` and `d3.arc().innerRadius(70).outerRadius(116)` in a `<g>` centred on the donut:
+
+```js
+import { describe, expressive, travel } from "expressive-charts";
+import { soccerBall } from "expressive-charts/icons/sport";
+
+const fx = expressive(svg.selectAll("path.slice"), {
+  key: (d) => d.data.outcome,
+  value: (d) => d.value,   // or one new value updates every slice: the total changes, so every arc does
+  geometry: (_el, d, key) => describe.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle }),
+  keyboard: true,          // the arrow keys go clockwise from 12 o'clock
+  on: { hover: travel(soccerBall) }
+});
+```
+
+The radii live in the arc generator, not in the row, so the page passes them to `describe.arc`. `d3.pie()` sorts slices by value but leaves the paths in data order; the adapter orders slices that share a centre clockwise from 12 o'clock, so keyboard focus goes round the ring.
 
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 

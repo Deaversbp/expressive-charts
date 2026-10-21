@@ -2,8 +2,10 @@
 // in SVG. A closed <details> "Data table" after the chart, or, with `table: "hidden"`, a table that's
 // visually hidden but still read. Its rows are the chart's, in visual order, so it follows the sort;
 // its columns are the category (each row's header), any extra columns the page lists, each series,
-// and the total of a stack, in the chart's format. Text is only ever set as text, never parsed as HTML.
+// and the total of a stack, in the chart's format. A donut adds each row's share and a total row.
+// Text is only ever set as text, never parsed as HTML.
 
+import { percent } from "./shell/format";
 import type { ChartOptions, TableColumn, TableOptions } from "./types";
 
 /** The `table` option. */
@@ -33,6 +35,11 @@ export interface TableInput<D> {
   /** In visual order. */
   readonly rows: readonly TableRow<D>[];
   readonly format: (value: number) => string;
+  /**
+   * A donut's: a Share column after the values, each row's share of the rows' total as a whole
+   * percent, and a total row in <tfoot>: "Total", the values added up, and 100%.
+   */
+  readonly shares?: boolean;
 }
 
 export interface TableCell {
@@ -48,6 +55,8 @@ export interface TableModel {
   readonly caption: string;
   readonly headers: readonly TableCell[];
   readonly rows: readonly { readonly key: string; readonly cells: readonly TableCell[] }[];
+  /** The total row's cells, in <tfoot>; the first is its header. */
+  readonly footer?: readonly TableCell[];
 }
 
 export interface ChartTable {
@@ -66,9 +75,9 @@ export function checkTableOption(option: unknown, chart: string): void {
     throw new TypeError(`${chart}: ${what}`);
   };
   if (typeof option !== "object" || option === null) fail('table must be true, false, "hidden" or an object of table options.');
-  const { hidden, columns, category, total, summary } = option as TableOptions<unknown>;
+  const { hidden, columns, category, total, share, summary } = option as TableOptions<unknown>;
   if (hidden !== undefined && typeof hidden !== "boolean") fail("table.hidden must be true or false.");
-  for (const [name, text] of Object.entries({ category, total, summary })) {
+  for (const [name, text] of Object.entries({ category, total, share, summary })) {
     if (text !== undefined && typeof text !== "string") fail(`table.${name} must be a string.`);
   }
   if (columns === undefined) return;
@@ -89,12 +98,15 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
   const columns = options.columns ?? [];
   const stacked = input.series.length > 1;
   const number = (value: number): TableCell => ({ text: format(value), numeric: true });
+  const grand = input.rows.reduce((sum, row) => sum + row.total, 0);
+  const share = (value: number): TableCell[] => (input.shares ? [{ text: percent(grand > 0 ? value / grand : 0), numeric: true }] : []);
 
   const headers: TableCell[] = [
     { text: options.category ?? input.category ?? "Category", numeric: false },
     ...columns.map((column) => ({ text: column.label, numeric: false })),
     ...input.series.map((series) => ({ text: input.label?.(series) ?? series, numeric: true })),
-    ...(stacked ? [{ text: options.total ?? "Total", numeric: true }] : [])
+    ...(stacked ? [{ text: options.total ?? "Total", numeric: true }] : []),
+    ...(input.shares ? [{ text: options.share ?? "Share", numeric: true }] : [])
   ];
   const rows = input.rows.map((row) => {
     const values = new Map(row.values.map((v) => [v.series, v.value]));
@@ -104,10 +116,21 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
         { text: row.category, numeric: false },
         ...columns.map((column) => columnCell(column, row, format)),
         ...input.series.map((series) => number(values.get(series) ?? 0)),
-        ...(stacked ? [number(row.total)] : [])
+        ...(stacked ? [number(row.total)] : []),
+        ...share(row.total)
       ]
     };
   });
+  const sum = (series: string): number => input.rows.reduce((total, row) => total + (row.values.find((v) => v.series === series)?.value ?? 0), 0);
+  const footer: TableCell[] | undefined = input.shares
+    ? [
+        { text: options.total ?? "Total", numeric: false },
+        ...columns.map(() => ({ text: "", numeric: false })),
+        ...input.series.map((series) => number(sum(series))),
+        ...(stacked ? [number(grand)] : []),
+        ...share(grand)
+      ]
+    : undefined;
   // A column of numbers is right-aligned, header and all.
   columns.forEach((_, i) => {
     const cells = rows.map((row) => row.cells[1 + i]!).filter((cell) => cell.text !== "");
@@ -118,7 +141,8 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
     summary: options.summary ?? "Data table",
     caption: input.caption,
     headers,
-    rows
+    rows,
+    ...(footer ? { footer } : {})
   };
 }
 
@@ -140,6 +164,8 @@ export function chartTable(svg: SVGSVGElement): ChartTable {
   let caption: HTMLTableCaptionElement | undefined;
   let head: HTMLTableRowElement | undefined;
   let body: HTMLTableSectionElement | undefined;
+  /** The total row's <tfoot>, while the model has one. */
+  let foot: HTMLTableSectionElement | undefined;
   /** The body's rows by key. */
   const rows = new Map<string, HTMLTableRowElement>();
   /** The headers drawn, so a change of columns redraws the rows. */
@@ -191,7 +217,7 @@ export function chartTable(svg: SVGSVGElement): ChartTable {
 
   function remove(): void {
     wrapper?.remove();
-    wrapper = summary = table = caption = head = body = undefined;
+    wrapper = summary = table = caption = head = body = foot = undefined;
     rows.clear();
     drawn = "";
   }
@@ -243,6 +269,27 @@ export function chartTable(svg: SVGSVGElement): ChartTable {
         // In visual order, moving only rows that are out of place.
         if (body!.children[i] !== tr) body!.insertBefore(tr, body!.children[i] ?? null);
       });
+
+      if (!model.footer) {
+        foot?.remove();
+        foot = undefined;
+        return;
+      }
+      const cells = model.footer;
+      let total = foot?.rows[0];
+      if (!foot || !total || total.cells.length !== cells.length) {
+        foot?.remove();
+        foot = element("tfoot");
+        total = element("tr");
+        cells.forEach((_, j) => {
+          const cell = element(j === 0 ? "th" : "td");
+          if (j === 0) (cell as HTMLTableCellElement).scope = "row";
+          total!.appendChild(cell);
+        });
+        foot.appendChild(total);
+        table!.appendChild(foot);
+      }
+      cells.forEach((cell, j) => fill(total!.cells[j]!, cell));
     },
     destroy: remove
   };

@@ -104,8 +104,10 @@ export interface TableOptions<D> {
   readonly columns?: readonly TableColumn<D>[];
   /** The category column's header. Default: the category's field name, or "Category" when a function reads it. */
   readonly category?: string;
-  /** The total column's header, shown when there's more than one series. Default "Total". */
+  /** The total column's header, shown when there's more than one series, or a donut's total row's. Default "Total". */
   readonly total?: string;
+  /** A donut's share column's header. Default "Share". */
+  readonly share?: string;
   /** The text of the <summary> that opens the table. Default "Data table". */
   readonly summary?: string;
 }
@@ -161,6 +163,40 @@ export interface BarChartOptions<D> extends ChartOptions<D> {
   readonly orientation?: "horizontal" | "vertical";
   /** A swatch and name per series, above the chart, when it shows more than one series. Default true. */
   readonly legend?: boolean;
+}
+
+/** What a donut's `markLabel` is given beside the row: the slice as it's heading, as a bar's `MarkSummary` says it, and its share. */
+export interface SliceSummary extends MarkSummary {
+  /** The slice's share of the total, from 0 to 1. */
+  readonly share: number;
+}
+
+export interface DonutChartOptions<D> extends Omit<ChartOptions<D>, "colors" | "markLabel"> {
+  /** Names each slice: a field or a function. It's the slice's key too, unless `key` is given. */
+  readonly category: Accessor<D, string | number>;
+  /**
+   * Sizes each slice: a numeric field or a function. A missing value counts as 0, and a negative or
+   * non-finite one throws. The slices' series is the field's name ("shots"), or "value" for a function.
+   */
+  readonly value: Accessor<D, number | null | undefined>;
+  /** Default "none": data order. "value": the largest first. Either way from 12 o'clock, clockwise. */
+  readonly sort?: "none" | "value";
+  /**
+   * The text in the hole, for the total: "\n" breaks a line, and the first line is drawn large. Default
+   * the total in `format` over the value's series label: "406" over "shots". `false` shows none. It's
+   * aria-hidden, and its text is added to the chart's description.
+   */
+  readonly center?: false | ((total: number, format: (value: number) => string) => string);
+  /** A swatch and name per category, above the chart, in the slices' order. Default true. */
+  readonly legend?: boolean;
+  /** Palette slots (1–8) by slice: its key, which is its category unless `key` is given. Pinned or shared. */
+  readonly colors?: ColorAssignment | Readonly<Record<string, number>>;
+  /**
+   * Words each slice's accessible name, which by default is its category, its value in `format` with
+   * its series' label, and its share as a whole percent: "Saved: 112 shots, 28%". Given the row and the
+   * slice as it's heading, with its share. An empty string, or a throw (reported), keeps the default.
+   */
+  readonly markLabel?: (d: NoInfer<D>, mark: SliceSummary) => string;
 }
 
 export interface Chart<D, O> {

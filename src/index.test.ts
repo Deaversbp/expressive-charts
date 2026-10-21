@@ -1,4 +1,4 @@
-import { barChart, colorAssignment, expressive, motion, motionSwitch, registerPreset, travel, VERSION } from "./index";
+import { barChart, colorAssignment, donutChart, expressive, motion, motionSwitch, registerPreset, travel, VERSION } from "./index";
 
 describe("expressive-charts", () => {
   it("exposes a version", () => {
@@ -39,6 +39,34 @@ describe("barChart from the composition root", () => {
     expect(runs).toEqual(["North"]);
     expect(chart.marks().map((mark) => mark.key)).toEqual(["North"]);
     expect(() => barChart(container, { label: "Typo", data: [] as { region: string; revenue: number }[], y: "region", x: "revenue", on: { hover: "test-wigle" } })).toThrow(/Unknown preset "test-wigle"/);
+    chart.destroy();
+  });
+});
+
+describe("donutChart from the composition root", () => {
+  afterEach(() => {
+    document.body.textContent = "";
+  });
+
+  it("plays the built-in presets by name on its slices", () => {
+    const container = document.body.appendChild(document.createElement("div"));
+    const chart = donutChart(container, {
+      label: "Shot outcomes",
+      data: [
+        { outcome: "Goal", shots: 58 },
+        { outcome: "Saved", shots: 112 }
+      ],
+      category: "outcome",
+      value: "shots",
+      width: 400,
+      motion: "off",
+      on: { hover: "wiggle", update: "pulse", enter: "flash" }
+    });
+    expect(chart.marks().map((mark) => mark.key)).toEqual(["Goal", "Saved"]);
+    container.querySelector('[data-key="Saved"] .ec-slice')!.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+    // With motion off, a wiggle ends where it started: no transform.
+    expect(container.querySelector('[data-key="Saved"] .ec-body')!.getAttribute("transform")).toBeNull();
+    expect(() => donutChart(container, { label: "Typo", data: [] as { outcome: string; shots: number }[], category: "outcome", value: "shots", on: { hover: "test-wigle" } })).toThrow(/Unknown preset "test-wigle"/);
     chart.destroy();
   });
 });

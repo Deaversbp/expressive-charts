@@ -5,17 +5,23 @@
  * the sketch builds on the real thing: the motion core, the shared contracts (MarkGeometry,
  * MarkData, the drawing API, EffectContext, the effect kinds, Icon, the effect slots), the geometry
  * (describe.bar, .arc, .line, .point, matrix, offset), the preset and icon registries
- * (registerPreset, registerIcon, registerIcons), the icons (defineIcon, iconFromSvg, icons) and
- * the first effects (travel with its gaits, sequence, parallel, only). Everything still declared
- * here is planned. Lines marked NEW were added because writing the examples in ./examples exposed
- * a gap in docs/plan.md.
+ * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
+ * options, accessors, colorAssignment), the icons (defineIcon, iconFromSvg, icons) and the first
+ * effects (travel with its gaits, sequence, parallel, only). Everything still declared here is
+ * planned. Lines marked NEW were added because writing the examples in ./examples exposed a gap in
+ * docs/plan.md.
  */
 
 export * from "../../src/index";
 import type {
+  Accessor,
   AnyMarkEffect,
+  BarChartOptions as BuiltBarChartOptions,
   Baseline,
+  Chart as BuiltChart,
+  ChartOptions as BuiltChartOptions,
   Color,
+  ColorAssignment,
   DataEffect,
   describe as builders,
   Easing,
@@ -23,14 +29,16 @@ import type {
   EffectSlots,
   GeometryEffect,
   MarkData,
+  MarkEvents,
   MarkGeometry,
   Motion,
   MotionMode,
   MotionView,
+  NumericKey,
   Sample,
   Timing,
   TransitionEffect
-} from "../../src/core/index";
+} from "../../src/index";
 
 // ── Shared contracts and drawing API: built, in src/core/contracts ───────────
 // MarkGeometry, Outline, Sample, MarkData (with previous), Paint, MarkStyle, MarkHandle, IconHandle,
@@ -94,23 +102,10 @@ export declare function defineDataEffect<D = unknown>(spec: DataEffectSpec<D>): 
 // ── Events and effect slots (shared by reference charts and adapters) ───────
 
 // EffectOption and EffectSlots are built, in src/core/contracts. NEW: slots are grouped under `on`,
-// so the `update` slot no longer collides with `chart.update()`.
+// so the `update` slot no longer collides with `chart.update()`. MarkEvent and MarkEvents are built,
+// in src/charts.
 
-export interface MarkEvent<D> {
-  readonly mark: MarkGeometry;
-  readonly data: MarkData<D>;
-  readonly batch: { readonly index: number; readonly count: number };
-}
-
-export interface MarkEvents<D> {
-  enter: MarkEvent<D>;
-  update: MarkEvent<D> & { readonly from: MarkGeometry };
-  exit: MarkEvent<D>;
-  hover: MarkEvent<D> & { readonly source: "pointer" | "keyboard" | "touch"; readonly segment?: string };
-  leave: MarkEvent<D>;
-}
-
-/** What reference charts and adapters have in common. */
+/** What reference charts and adapters have in common. focus() comes with keyboard support (M1 step 9). */
 export interface MarkSourceHandle<D> {
   on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void;
   marks(): readonly MarkGeometry[];
@@ -171,49 +166,21 @@ export declare function expressive<D = unknown>(target: MarkSource<D>, options: 
 
 // ── Reference charts ─────────────────────────────────────────────────────────
 
-/** Field names of D whose values are T. */
-export type KeyOfType<D, T> = { [K in keyof D]-?: D[K] extends T ? K : never }[keyof D] & string;
-/** A field name whose values are T, or a function returning T. */
-export type Accessor<D, T> = KeyOfType<D, T> | ((d: D, i: number) => T);
-/** Field names whose values are numbers, so `stack: ["name"]` is a type error. */
-export type NumericKey<D> = KeyOfType<D, number>;
+// KeyOfType, Accessor, NumericKey, ColorAssignment and colorAssignment are built, in src/charts. So are
+// the chart options and the chart handle; the sketch adds what's still planned to them.
 
-export interface ColorAssignment {
-  slot(key: string): number;
-}
-export declare function colorAssignment(fixed?: Readonly<Record<string, number>>): ColorAssignment;
-
-export interface ChartOptions<D> {
-  readonly data: readonly D[];
-  /** Accessible name; required. */
-  readonly label: string;
-  readonly description?: string;
-  /** A string or numeric field (numeric IDs are converted with String()), or a function. */
-  readonly key?: Accessor<D, string | number>;
-  readonly motion?: Motion | MotionMode;
-  /** NEW NoInfer: without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
-  readonly on?: EffectSlots<NoInfer<D>>;
+/** Planned for M2: tooltips and the data table. */
+interface PlannedChartOptions<D> {
   readonly tooltip?: boolean | ((d: D) => string);
   readonly table?: boolean | "hidden";
-  readonly format?: (value: number) => string;
-  readonly colors?: ColorAssignment | Readonly<Record<string, number>>;
-  readonly width?: number;
-  readonly height?: number;
-  readonly dim?: boolean;
 }
 
-export interface Chart<D, O> extends MarkSourceHandle<D> {
-  update(next: Partial<O>): Promise<void>;
-  readonly element: SVGSVGElement;
-}
+/** NEW NoInfer on `on` (built): without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
+export interface ChartOptions<D> extends BuiltChartOptions<D>, PlannedChartOptions<D> {}
 
-export interface BarChartOptions<D> extends ChartOptions<D> {
-  readonly x?: Accessor<D, number | string>;
-  readonly y?: Accessor<D, number | string>;
-  readonly stack?: readonly NumericKey<D>[];
-  readonly sort?: "value" | "key" | "none" | ((a: D, b: D) => number);
-  readonly orientation?: "horizontal" | "vertical";
-}
+export interface Chart<D, O> extends BuiltChart<D, O>, MarkSourceHandle<D> {}
+
+export interface BarChartOptions<D> extends BuiltBarChartOptions<D>, PlannedChartOptions<D> {}
 
 export interface LineChartOptions<D> extends ChartOptions<D> {
   readonly x: Accessor<D, number | Date>;
@@ -233,6 +200,7 @@ export interface DonutChartOptions<D> extends ChartOptions<D> {
   readonly sort?: "value" | "none";
 }
 
+/** Built in M1 step 5 (src/charts); declared here until it has focus() (step 9), tooltips and the table (M2). */
 export declare function barChart<D>(target: string | Element, options: BarChartOptions<D>): Chart<D, BarChartOptions<D>>;
 export declare function lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D>;
 export declare function donutChart<D>(target: string | Element, options: DonutChartOptions<D>): Chart<D, DonutChartOptions<D>>;

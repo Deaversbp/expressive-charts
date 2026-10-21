@@ -212,7 +212,7 @@ describe("barChart: tooltip", () => {
   });
 
   it("stays clear of a mark an effect scales up", () => {
-    // A pulse: 1.5× about the bar's centre (y 89), so its top rises from 79 to 74.
+    // A scale: 1.5× about the bar's centre (y 89), so its top rises from 79 to 74.
     const { hit, geometry, tip } = setup({ on: { hover: moving((mark) => matrix.scale(1.5, 1.5, mark.center)) } });
     pointer("pointerover", hit("Lindqvist"));
     expect(tip()!.style.top).toBe(px(74 - 12 - TIP.height));

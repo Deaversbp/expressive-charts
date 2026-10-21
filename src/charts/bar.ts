@@ -5,18 +5,17 @@
 // in analysis, at once when motion is off.
 //
 // The chart never names an effect: it resolves `on` through the presets it's handed and plays them
-// through the runner, which draws on the SVG surface.
+// through the runner, which draws on the SVG surface. What doesn't depend on bars (events, hover and
+// focus, transitions and leaving marks, DOM order, size and fonts) is in shell/.
 
-import type { AnimateOptions, Animated, Clock, IconSource, MarkGeometry, Motion, TweenResult } from "../core";
+import type { AnimateOptions, Animated, MarkGeometry, TweenResult } from "../core";
 import { animated, defaultClock, interpolateNumber, interpolateRecord } from "../core";
-import { EFFECT_SLOTS, resolveEffects, type PresetFactory, type Registry } from "../core/registry";
+import { resolveEffects } from "../core/registry";
 import { report } from "../core/report";
-import { createRunner, type RunInput, type SlotEffects } from "../core/runner";
+import { createRunner, type RunInput } from "../core/runner";
 import { chartAnnouncer, changeText, type Announcer, type SortName } from "./announce";
 import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLayout, type BarRow, type BarValue, type TextPlacement } from "./bar-layout";
 import { toColorAssignment } from "./colors";
-import { pointerHover, type HoverTarget } from "./interaction";
-import { keyboardFocus } from "./keyboard";
 import { chartLegend } from "./legend";
 import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
@@ -25,21 +24,19 @@ import { setAttributes, setStyles, svgElement, transformAttribute } from "./rend
 import { textMeasure } from "./render/text";
 import { injectStyles, markColorStyles, seriesColors } from "./render/theme";
 import { checkSeriesLabels, seriesLabel } from "./series";
+import { chartEvents } from "./shell/events";
+import { decimals, format, round } from "./shell/format";
+import { chartHover } from "./shell/hover";
+import { leavingMarks, type Leave } from "./shell/leaving";
+import { orderElements } from "./shell/order";
+import { checkNeeds, containerWidth, describeChart, resolveTarget, type ChartEnv } from "./shell/setup";
+import { chartTransitions, playUpdate, type ChartDiff } from "./shell/transitions";
+import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
 import { chartTable, checkTableOption, tableModel, type TableModel } from "./table";
 import { chartTooltip, summaryContent } from "./tooltip";
-import type { BarChartOptions, Chart, MarkEvents } from "./types";
+import type { BarChartOptions, Chart } from "./types";
 
-/** What the composition root hands every chart, so charts never import the registries or effects. */
-export interface ChartEnv {
-  /** Resolves preset names in `on`. */
-  readonly presets: Pick<Registry<PresetFactory>, "resolve">;
-  /** Resolves icon names for effects. */
-  readonly icons: IconSource;
-  /** The page-wide motion: the default, and what a mode given as a string follows. */
-  readonly motion: Motion;
-  /** Default: the page-wide clock. */
-  readonly clock?: Clock;
-}
+export type { ChartEnv } from "./shell/setup";
 
 export type BarChart<D> = Chart<D, BarChartOptions<D>>;
 
@@ -75,14 +72,6 @@ interface MarkRecord<D> {
   leave: Leave | undefined;
 }
 
-interface Leave {
-  /** Its exit effects are done. */
-  exited: boolean;
-  /** Resolves when its element is removed, or the mark comes back. */
-  readonly gone: Promise<void>;
-  readonly resolve: () => void;
-}
-
 interface TickRecord {
   readonly value: number;
   readonly line: SVGLineElement;
@@ -93,19 +82,9 @@ interface TickRecord {
   wanted: boolean;
 }
 
-interface Diff<D> {
-  readonly entering: MarkRecord<D>[];
-  readonly exiting: MarkRecord<D>[];
-  /** Values changed: update effects run. A re-sort or a new scale only moves a mark. */
-  readonly changed: { readonly record: MarkRecord<D>; readonly from: MarkGeometry }[];
-}
+/** What an update changed. A re-sort or a new scale only moves a mark: its values didn't change. */
+type Diff<D> = ChartDiff<MarkRecord<D>>;
 
-type Listeners<D> = { [K in keyof MarkEvents<D>]: Set<(event: MarkEvents<D>[K]) => void> };
-type HoverSource = MarkEvents<unknown>["hover"]["source"];
-
-/** Used when the container has no width yet (hidden, or no layout as in jsdom); the prototype's width. */
-const FALLBACK_WIDTH = 640;
-const ONE = { index: 0, count: 1 } as const;
 /** Base ms for each stage of a data change: values, then positions. Unstaged, a change takes as long as its stages together, which analysis scales down. */
 const STAGE = 500;
 /** The focus ring's px: a gap in the surface colour around the mark, then the ring. */
@@ -113,7 +92,7 @@ const RING_GAP = 2;
 const RING = 2;
 
 export function barChart<D>(target: string | Element, options: BarChartOptions<D>, env: ChartEnv): BarChart<D> {
-  const container = resolveTarget(target);
+  const container = resolveTarget(target, "barChart");
   checkOptions(options);
   let current = options;
   const motion = chartMotion(options.motion, env.motion);
@@ -141,12 +120,9 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   let order: MarkRecord<D>[] = [];
   const records = new Map<string, MarkRecord<D>>();
   /** Marks on their way out: fading, or waiting for their exit effects. */
-  const leaving = new Map<string, MarkRecord<D>>();
+  const leaving = leavingMarks<MarkRecord<D>>((record) => record.values.animating || record.presence.animating);
   const byGroup = new WeakMap<Element, MarkRecord<D>>();
-  const listeners: Listeners<D> = { enter: new Set(), update: new Set(), exit: new Set(), hover: new Set(), leave: new Set() };
-  let hovered: { readonly key: string; readonly source: HoverSource } | undefined;
-  /** The mark showing the focus ring: focused from the keyboard. */
-  let ringKey: string | undefined;
+  const events = chartEvents<D>("barChart");
   let measuredWidth = containerWidth(container);
   let destroyed = false;
 
@@ -169,11 +145,11 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     mark: (key) => ({
       set: (style) => {
         find(key)?.handle.set(style);
-        restyled(key);
+        hover.restyled(key);
       },
       reset: () => {
         find(key)?.handle.reset();
-        restyled(key);
+        hover.restyled(key);
       }
     }),
     colors: (key) => find(key)?.parts[0]?.colors
@@ -197,18 +173,13 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   const scale = animated(laidOut.frame.scale, interpolateRecord, { clock, motion, onChange: () => (frameMoved = true) });
   const bands = animated(laidOut.frame.bands, interpolateRecord, { clock, motion, onChange: () => (frameMoved = true) });
 
-  /** The transition in flight: resolved when it settles. */
-  let transition: { readonly id: number; readonly waiters: readonly (() => void)[] } | undefined;
-  let transitions = 0;
-  let unfollow: (() => void) | undefined;
-  /** Resolves the latest update()'s promise early, when another update() supersedes it. */
-  let supersede: (() => void) | undefined;
+  const transitions = chartTransitions({ clock, runner, leaving, draw, land });
 
   // ── Drawing ────────────────────────────────────────────────────────────────
 
   function layout(opts: BarChartOptions<D>): BarLayout<D> {
     const encoding = barEncoding(opts);
-    checkNeeds(effects, encoding.series.map((s) => s.series));
+    checkNeeds(effects, encoding.series.map((s) => s.series), "barChart");
     return layoutBars({
       data: opts.data,
       encoding,
@@ -286,12 +257,12 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     record.handle.repaint();
     // A new palette or a different first series: overlays already drawn in "mark" follow.
     if (record.parts[0]?.colors.color !== before) surface.recolor(record.key);
-    if (record.key === ringKey) drawRing();
+    if (record.key === hover.ringKey) drawRing(record.key);
   }
 
   /** The focus ring follows the outline of the mark as it is on screen, moved with its body when an effect moves it. */
-  function drawRing(): void {
-    const record = ringKey === undefined ? undefined : records.get(ringKey);
+  function drawRing(key: string | undefined): void {
+    const record = key === undefined ? undefined : records.get(key);
     if (!record) {
       ring.setAttribute("visibility", "hidden");
       return;
@@ -306,20 +277,13 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const moved = geometryChanged(record.shown.geometry, row.geometry);
     drawMark(record, row);
     if (moved) runner.change(row.geometry, row.data);
-    if (record.key === hovered?.key) showTooltip(record);
+    if (record.key === hover.key) showTooltip(record);
   }
 
   /** The tooltip beside the hovered mark as it is on screen, moved with its effects, with the text for where it's heading. */
   function showTooltip(record: MarkRecord<D>): void {
     const { row } = record;
     tooltip.show(record.shown.geometry, row, () => summaryContent(row.label.text, labelled(row.values, current), format(current)), record.handle.style.transform);
-  }
-
-  /** An effect restyled a mark: the focus ring and the tooltip follow its transform. */
-  function restyled(key: string): void {
-    if (key === ringKey) drawRing();
-    const record = records.get(key);
-    if (record && key === hovered?.key) showTooltip(record);
   }
 
   const syncLegend = (): void =>
@@ -458,11 +422,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     for (const record of order) {
       if (keys.has(record.key)) continue;
       records.delete(record.key);
-      leaving.set(record.key, record);
-      record.group.classList.add("ec-leaving");
-      // On its way out: no longer read.
-      record.group.setAttribute("aria-hidden", "true");
-      record.leave = leave();
+      leaving.start(record);
       record.count = undefined;
       diff.exiting.push(record);
     }
@@ -474,16 +434,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
         record.count = Math.max(decimals(record.row.total), decimals(row.total));
       } else {
         // A mark that comes back mid-exit keeps its element; the runner cancels its exit.
-        record = leaving.get(row.key);
-        if (record) {
-          leaving.delete(row.key);
-          record.group.classList.remove("ec-leaving");
-          record.group.removeAttribute("aria-hidden");
-          record.leave?.resolve();
-          record.leave = undefined;
-        } else {
-          record = createRecord(row, true);
-        }
+        record = leaving.recall(row.key) ?? createRecord(row, true);
         record.count = undefined;
         records.set(row.key, record);
         diff.entering.push(record);
@@ -493,17 +444,13 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       labelMark(record);
       return record;
     });
-    // DOM order follows visual order, for screen readers. The focused mark stays put and the others
-    // move around it, because moving a focused element blurs it.
-    if (order.some((record, i) => previous[i] !== record)) {
-      const active = keyboard.active();
-      const pivot = order.findIndex((record) => record.group === active);
-      const anchor = order[pivot]?.group ?? null;
-      order.forEach((record, i) => {
-        if (i < pivot) marksLayer.insertBefore(record.group, anchor);
-        else if (i > pivot) marksLayer.appendChild(record.group);
-      });
-    }
+    // DOM order follows visual order, for screen readers.
+    orderElements(
+      marksLayer,
+      previous.map((record) => record.group),
+      order.map((record) => record.group),
+      hover.active
+    );
     return diff;
   }
 
@@ -583,44 +530,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
    */
   function transitionTo(next: BarLayout<D>, jump: boolean): Promise<void> {
     laidOut = next;
-    const running = retarget(next, jump);
-    draw();
-    const id = ++transitions;
-    return new Promise<void>((resolve) => {
-      transition = { id, waiters: [...(transition?.waiters ?? []), resolve] };
-      if (running.length === 0) {
-        settle(id);
-        return;
-      }
-      // Subscribed after the tweens just started, so each frame draws once they've all moved.
-      unfollow?.();
-      unfollow = clock.onFrame(() => draw());
-      void Promise.all(running).then(() => settle(id));
-    });
-  }
-
-  function settle(id: number): void {
-    if (destroyed || transition?.id !== id) return;
-    const { waiters } = transition;
-    transition = undefined;
-    unfollow?.();
-    unfollow = undefined;
-    land();
-    runner.settle();
-    sweep();
-    for (const resolve of waiters) resolve();
-  }
-
-  /** Removes leaving marks once they've faded out and their exit effects are done. */
-  function sweep(): void {
-    for (const record of [...leaving.values()]) {
-      const { leave } = record;
-      if (!leave?.exited || record.values.animating || record.presence.animating) continue;
-      leaving.delete(record.key);
-      record.leave = undefined;
-      record.group.remove();
-      leave.resolve();
-    }
+    return transitions.run(retarget(next, jump));
   }
 
   // ── Hover ──────────────────────────────────────────────────────────────────
@@ -638,108 +548,38 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     return record && records.get(record.key) === record ? record : undefined;
   }
 
-  /** Pointer and keyboard hover share this: the mark's emphasis, the others' dimming, the hover runs and the event. */
-  function startHover(record: MarkRecord<D>, source: HoverSource, segment?: string): void {
-    hovered = { key: record.key, source };
-    record.group.classList.add("ec-hot");
-    if (current.dim !== false) svg.classList.add("ec-hovering");
-    showTooltip(record);
-    runner.hover([onScreen(record)]);
-    emit("hover", { ...onScreen(record), batch: ONE, source, ...(segment === undefined ? {} : { segment }) });
-  }
-
-  function endHover(): void {
-    const key = hovered?.key;
-    hovered = undefined;
-    svg.classList.remove("ec-hovering");
-    tooltip.hide();
-    const record = key === undefined ? undefined : find(key);
-    if (key === undefined || !record) return;
-    record.group.classList.remove("ec-hot");
-    runner.leave([key]);
-    emit("leave", { ...onScreen(record), batch: ONE });
-  }
-
-  const interaction = pointerHover(svg, {
+  // Pointer, touch and keyboard focus share one hover: see shell/hover.ts.
+  const hover = chartHover<D>({
+    svg,
+    runner,
+    events,
+    dim: () => current.dim !== false,
     find(eventTarget) {
       const record = liveRecordOf(eventTarget);
       if (!record) return undefined;
       const segment = (eventTarget as Element).closest(".ec-segment")?.getAttribute("data-series") ?? undefined;
       return segment === undefined ? { key: record.key } : { key: record.key, segment };
     },
-    hover(target: HoverTarget, source) {
-      const record = records.get(target.key);
-      // Already playing for keyboard focus: it goes on.
-      if (!record || hovered?.key === target.key) return;
-      endHover();
-      startHover(record, source, target.segment);
-    },
-    leave() {
-      // Focus holds a keyboard hover until blur or Escape.
-      if (hovered?.source !== "keyboard") endHover();
-    }
-  });
-
-  const keyboard = keyboardFocus(() => svg, {
-    find: (eventTarget) => liveRecordOf(eventTarget)?.key,
+    live: (key) => records.has(key),
     order: () => order.map((record) => record.key),
     element: (key) => find(key)?.group,
-    focus(key, visible) {
-      ringKey = visible ? key : undefined;
-      drawRing();
-      const record = records.get(key);
-      if (!record) return;
-      if (!visible) {
-        // Focus from a click or tap: the pointer's own hover plays.
-        if (hovered?.source === "keyboard" && hovered.key !== key) endHover();
-        return;
-      }
-      if (hovered?.key === key) {
-        // Already playing for the pointer: it goes on, held by focus now.
-        hovered = { key, source: "keyboard" };
-        return;
-      }
-      endHover();
-      startHover(record, "keyboard");
+    onScreen(key) {
+      const record = find(key);
+      return record && onScreen(record);
     },
-    blur() {
-      ringKey = undefined;
-      drawRing();
-      if (hovered?.source !== "keyboard") return;
-      // The pointer is still over it: the hover goes on, held by the pointer now.
-      if (interaction.current === hovered.key) hovered = { key: hovered.key, source: "pointer" };
-      else endHover();
-    },
-    escape() {
-      if (!hovered) return false;
-      endHover();
-      return true;
+    ring: drawRing,
+    tooltip: {
+      show(key) {
+        const record = records.get(key);
+        if (record) showTooltip(record);
+      },
+      hide: () => tooltip.hide()
     }
   });
-
-  // ── Events ─────────────────────────────────────────────────────────────────
-
-  function emit<K extends keyof MarkEvents<D>>(type: K, event: MarkEvents<D>[K]): void {
-    for (const listener of [...listeners[type]]) {
-      try {
-        listener(event);
-      } catch (error) {
-        report(error);
-      }
-    }
-  }
-
-  function emitEach(type: "enter" | "exit", marks: readonly MarkRecord<D>[]): void {
-    const read = type === "exit" ? onScreen : input;
-    marks.forEach((record, index) => emit(type, { ...read(record), batch: { index, count: marks.length } }));
-  }
 
   // ── Motion, size and fonts ─────────────────────────────────────────────────
 
-  // CSS hover transitions read their duration from motion, like everything else.
-  const syncMotion = (): void => svg.style.setProperty("--ec-hover-duration", `${motion.duration(100, "feedback")}ms`);
-  syncMotion();
-  const unsubscribeMotion = motion.subscribe(syncMotion);
+  const unwatchHoverDuration = watchHoverDuration(svg, motion);
 
   /** Re-lays out without animating: a resize or fonts loading. A transition in flight lands at once. Effects follow through change(). */
   function relayout(): void {
@@ -751,33 +591,17 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     void transitionTo(next, true);
   }
 
-  let pendingWidth = measuredWidth;
-  let stopFrame: (() => void) | undefined;
-  const observer =
-    typeof ResizeObserver === "function"
-      ? new ResizeObserver((entries) => {
-        const width = entries[entries.length - 1]?.contentRect.width ?? 0;
-        if (!(width > 0) || Math.abs(width - pendingWidth) < 0.5) return;
-        pendingWidth = width;
-        // Once per frame, outside the observer callback, so the new height can't loop back into it.
-        stopFrame ??= clock.onFrame(() => {
-          stopFrame?.();
-          stopFrame = undefined;
-          if (Math.abs(pendingWidth - measuredWidth) < 0.5) return;
-          measuredWidth = pendingWidth;
-          if (current.width === undefined) relayout();
-        });
-      })
-    : undefined;
-  observer?.observe(container);
+  const unwatchWidth = watchWidth(container, clock, measuredWidth, (width) => {
+    measuredWidth = width;
+    // A fixed `width` ignores the container.
+    if (current.width === undefined) relayout();
+  });
 
   // Label margins are measured; measure again once web fonts arrive.
-  const fonts = (doc as Document & { fonts?: EventTarget }).fonts;
-  const onFonts = (): void => {
+  const unwatchFonts = watchFonts(doc, () => {
     measure.clear();
     relayout();
-  };
-  fonts?.addEventListener?.("loadingdone", onFonts);
+  });
 
   // ── First render ───────────────────────────────────────────────────────────
 
@@ -793,7 +617,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     labelMark(record);
     return record;
   });
-  keyboard.sync();
+  hover.sync();
   runner.enter(order.map(input));
 
   return {
@@ -821,68 +645,39 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
         announcer.destroy();
         announcer = undefined;
       }
-      if (current.dim === false) svg.classList.remove("ec-hovering");
-      else if (hovered !== undefined) svg.classList.add("ec-hovering");
-      supersede?.();
+      hover.syncDim();
+      transitions.supersede();
 
-      // The order the runner expects: interrupt, then exit / update / enter, then change() on every
-      // frame, then settle() once the transition has settled.
-      runner.interrupt();
-      const diff = arrange(nextLayout);
-      if (hovered !== undefined && !records.has(hovered.key)) {
-        interaction.clear();
-        endHover();
-      }
-      const leaves = diff.exiting.map((record) => record.leave!);
-      const exited = runner.exit(diff.exiting.map(onScreen));
-      void exited.then(() => {
-        for (const leave of leaves) leave.exited = true;
-        sweep();
-      });
-      emitEach("exit", diff.exiting);
-      runner.update(diff.changed.map(({ record, from }) => ({ ...input(record), from })));
-      diff.changed.forEach(({ record, from }, index) => emit("update", { ...input(record), from, batch: { index, count: diff.changed.length } }));
-      runner.enter(diff.entering.map(input));
-      emitEach("enter", diff.entering);
-      if (announcing) announceChange(previous, diff);
-      // Focus stayed with its key. If that mark is leaving, focus moves to its nearest neighbour, whose
-      // hover the runner holds until the change settles.
-      keyboard.sync();
-
+      // The runner hears exit / update / enter now, then change() on every frame, then settle().
+      const leaves = playUpdate(
+        { runner, events, hover, leaving, input, onScreen },
+        () => arrange(nextLayout),
+        (diff) => {
+          if (announcing) announceChange(previous, diff);
+        }
+      );
       const settled = transitionTo(nextLayout, motion.mode === "off" || nextLayout.orientation !== orientation);
-      await new Promise<void>((resolve) => {
-        supersede = resolve;
-        void settled.then(() => Promise.all(leaves.map((leave) => leave.gone))).then(() => resolve());
-      });
+      await transitions.wait(settled, leaves);
     },
 
-    on(type, listener) {
-      const set = listeners[type] as Set<typeof listener> | undefined;
-      if (!set) throw new TypeError(`barChart: unknown event "${String(type)}". Use one of: ${Object.keys(listeners).join(", ")}.`);
-      set.add(listener);
-      return () => {
-        set.delete(listener);
-      };
-    },
+    on: events.on,
 
     marks: () => order.map((record) => record.shown.geometry),
 
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      transition = undefined;
-      unfollow?.();
-      interaction.destroy();
-      keyboard.destroy();
+      // Ends the transition in flight, and resolves the latest update()'s promise.
+      transitions.destroy();
+      hover.destroy();
       runner.destroy();
       tooltip.destroy();
       legend.destroy();
       table.destroy();
       announcer?.destroy();
-      unsubscribeMotion();
-      observer?.disconnect();
-      stopFrame?.();
-      fonts?.removeEventListener?.("loadingdone", onFonts);
+      unwatchHoverDuration();
+      unwatchWidth();
+      unwatchFonts();
       for (const record of [...order, ...leaving.values()]) {
         for (const value of [record.values, record.slot, record.presence]) value.stop();
         record.leave?.resolve();
@@ -890,24 +685,13 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       scale.stop();
       bands.stop();
       for (const tick of ticks.values()) tick.opacity.stop();
-      supersede?.();
-      for (const set of Object.values(listeners)) set.clear();
+      events.clear();
       records.clear();
       leaving.clear();
       order = [];
       svg.remove();
     }
   };
-}
-
-function resolveTarget(target: string | Element): Element {
-  if (typeof target === "string") {
-    const found = typeof document === "undefined" ? null : document.querySelector(target);
-    if (!found) throw new TypeError(`barChart: no element matches "${target}".`);
-    return found;
-  }
-  if (!target || typeof (target as Element).appendChild !== "function") throw new TypeError("barChart needs a container element or a selector.");
-  return target;
 }
 
 function checkOptions<D>(options: BarChartOptions<D>): void {
@@ -928,40 +712,6 @@ function checkOptions<D>(options: BarChartOptions<D>): void {
   checkSeriesLabels(options.seriesLabels, "barChart");
   checkTableOption(options.table, "barChart");
   if (announce !== undefined && typeof announce !== "boolean" && typeof announce !== "function") throw new TypeError("barChart: announce must be true, false or a function that returns the text to announce.");
-}
-
-/**
- * Data effects name the series they read through `needs.related`. A chart without one of them
- * throws when it's created or updated, rather than the effect finding nothing when it runs.
- */
-function checkNeeds<D>(effects: SlotEffects<D>, series: readonly string[]): void {
-  for (const slot of EFFECT_SLOTS) {
-    const effect = effects[slot];
-    if (effect?.kind !== "data") continue;
-    for (const name of effect.needs?.related ?? []) {
-      if (series.includes(name)) continue;
-      throw new RangeError(`barChart: on.${slot} needs the series "${name}", but the chart's series are ${series.map((s) => `"${s}"`).join(", ")}.`);
-    }
-  }
-}
-
-function describeChart<D>(svg: SVGSVGElement, options: BarChartOptions<D>): void {
-  svg.setAttribute("aria-label", options.label);
-  let desc = svg.querySelector(":scope > desc");
-  if (options.description) {
-    desc ??= svg.insertBefore(svgElement("desc", {}, svg), svg.firstChild);
-    desc.textContent = options.description;
-  } else {
-    desc?.remove();
-  }
-}
-
-/** The container's content width in px; a fallback when it has none (hidden, or no layout). */
-function containerWidth(container: Element): number {
-  const style = container.ownerDocument.defaultView?.getComputedStyle(container);
-  const padding = (parseFloat(style?.paddingLeft ?? "") || 0) + (parseFloat(style?.paddingRight ?? "") || 0);
-  const width = container.clientWidth - padding;
-  return width > 0 ? width : FALLBACK_WIDTH;
 }
 
 function sizeAttributes({ width, height }: { readonly width: number; readonly height: number }): Record<string, string | number> {
@@ -1050,40 +800,6 @@ function sameFields<T extends object>(a: T, b: T): boolean {
   return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
 }
 
-/** Leaves to settle: a fresh token per departure, so a mark that comes back and leaves again starts over. */
-function leave(): Leave {
-  let resolve!: () => void;
-  const gone = new Promise<void>((r) => {
-    resolve = r;
-  });
-  return { exited: false, gone, resolve };
-}
-
-/** Decimal places a value is given to, up to 6: a counting label shows whole numbers between whole totals. */
-function decimals(value: number): number {
-  const text = String(Number(value.toPrecision(12)));
-  if (/e/i.test(text)) return 6;
-  const point = text.indexOf(".");
-  return point < 0 ? 0 : Math.min(6, text.length - point - 1);
-}
-
 function sortName<D>(sort: BarChartOptions<D>["sort"]): SortName {
   return typeof sort === "function" ? "custom" : (sort ?? "none");
-}
-
-function format<D>(options: BarChartOptions<D>): (value: number) => string {
-  return options.format ?? defaultFormat;
-}
-
-let numberFormat: Intl.NumberFormat | undefined;
-function defaultFormat(value: number): string {
-  numberFormat ??= new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
-  return numberFormat.format(value);
-}
-
-function round(value: number, digits: number): number {
-  const factor = 10 ** digits;
-  const rounded = Math.round(value * factor) / factor;
-  // No "-0" on a label counting down to zero.
-  return rounded === 0 ? 0 : rounded;
 }

@@ -215,7 +215,7 @@ flash({ width?, opacity?, color? })   // or the preset: on: { update: "flash" }
 
 - **End state: nothing.** That's deliberate. A flash is emphasis, not information: the change it points at (the bar's new length and value label) stays on the chart, so with motion off or reduced the viewer misses nothing.
 - **Any mark.** It reads nothing of the geometry. The renderer strokes the halo along the outline as it is on screen, so in the `update` slot it follows the bar through the transition it runs alongside, and a stacked bar's segments each get their own halo.
-- **Where it runs.** In the `update` slot it runs on the marks whose values changed: on our charts, not on a re-sort or a new scale. `expressive()` can't see values, so there an update means a mark's length changed, which a new axis maximum or a resize also does (see [Adapters](#adapters)).
+- **Where it runs.** In the `update` slot it runs on the marks whose values changed, not on a re-sort or a new scale: on our charts, and on `expressive()` when the page passes `value`. Without `value` the adapter can't see values, so there an update means a mark's length changed, which a new axis maximum or a resize also does (see [Adapters](#adapters)).
 
 ### Combinators
 
@@ -355,6 +355,7 @@ barChart("#goals", { label: "Goals by player", data: players, y: "name", stack: 
 const fx = expressive(d3.selectAll("#goals rect"), {
   key: (d) => d.data.name,                          // required: marks are matched by key
   segment: (_d, el) => el.parentNode.__data__.key,  // rects sharing a key are one mark's segments
+  value: (d) => d[1] - d[0],                        // what each rect shows, so a resize isn't an update
   keyboard: true,
   on: { hover: sequence(travel("soccer-ball", { along: "goals" }), travel("cleat", { along: "assists" })) }
 });
@@ -362,6 +363,9 @@ fx.refresh(d3.selectAll("#goals rect"));             // after the host re-render
 ```
 
 - **Rows and keys.** `datum` defaults to a selection's `data()`, then to `element.__data__` (D3's convention). When `__data__` is a number and no `datum` is given, the adapter warns that it looks like Plot. Keys are converted with `String()`. Elements that share a key throw unless `segment` names each part, and a part named twice throws.
+- **Values.** `value(datum, element)` returns what an element shows (a stack point's `d[1] - d[0]`, a row's field), so `refresh()` can tell a change in values from a re-layout. With it, an `update` means a part's value changed or the mark gained or lost a segment, as on the reference charts, and a resize or a new axis maximum only moves the marks. Values compare with `===`, except that NaN equals NaN, so it should return a number or a string (a date's `getTime()`, or several values joined). Without `value`, the adapter compares lengths: an `update` means a mark's length or segments changed, so a redraw at a new width or with a new axis maximum updates every bar, and with `update: "flash"` every bar flashes.
+  - It compares values, not rows: Vega binds new scenegraph items on every render, a page that copies its rows makes every row new, and a row holds fields its bar doesn't show (a goals bar's row has the assists too).
+  - A flag on `refresh()` saying that only the layout changed would be simpler, but it can't help when values and the axis change in the same redraw, which is just when a growing value pushes the axis out.
 - **Geometry.** `<rect>` marks are described with `describe.bar`, in the coordinates of the marks' nearest common ancestor (a lone mark's parent). Each rect's box is converted with its CTM: `getScreenCTM()` where there's layout, otherwise the transform attributes, as in jsdom, which can't see nested `<svg>` viewports or CSS transforms. A mark's segments are ordered from the baseline by position, never by DOM order, since Vega-Lite stacks alphabetically. A gap the host leaves between segments becomes `describe.bar`'s `gap`, and the tip takes the tip rect's `rx`. A rect its transforms rotate or skew (anything but scales, flips and quarter turns) isn't an upright bar, so it throws. Other shapes, and such rects, need `geometry(element, datum, key)`, which is called once per mark with its first element and must return a geometry with that key. Reading circles, and `describe.shape`, are planned.
 - **Baseline.** `"auto"` (the default) finds the line every mark has an edge on. A mark whose near edge (left, or bottom for columns) is on it grows away from it; one whose far edge is on it grows the other way, like a negative bar. When bars and columns both fit (one mark, or marks of one size), marks spread down the page are bars and marks spread across are columns. If no line is shared it throws: pass the edge.
 - **Overlay.** Runs draw in `<g class="ec-overlay">`, the root `<svg>`'s last child, with the common ancestor's transform. So they share the marks' coordinates but never sit inside a group the host manages (Vega removes foreign children from its groups when it redraws). It holds the halos, the run groups and the focus ring, and `refresh()` moves it back to the end and recomputes its transform.
@@ -377,20 +381,20 @@ fx.refresh(d3.selectAll("#goals rect"));             // after the host re-render
   - `opacity` is the element's opacity;
   - `emphasis` mixes the host's fill toward a darker shade, and the "mark" colour token is the host's fill;
   - `halo` is drawn in the overlay, masked to outside the mark, so it shows only where it would behind the mark.
-- **Refresh.** `refresh(source?)` re-reads the marks: from `source` if given (and from then on), otherwise from the last source, running a selector again. Like a chart's update, it calls the runner in order: `interrupt()`, then `exit`, `update` and `enter` by key, `change()` for marks that moved, and `settle()`. The adapter can't see values, so an `update` means a mark's length or segments changed; a mark that only moved, or got a new row, follows through `change()`. A redraw at a new width or with a new axis maximum changes every bar's length, so it's an update for all of them: with `update: "flash"`, every bar flashes. A new root `<svg>` (Plot draws one each time) takes the overlay and the listeners. Marks it can't read throw before anything changes.
+- **Refresh.** `refresh(source?)` re-reads the marks: from `source` if given (and from then on), otherwise from the last source, running a selector again. Like a chart's update, it calls the runner in order: `interrupt()`, then `exit`, `update` and `enter` by key, `change()` for marks that moved, and `settle()`. An `update` is a change in values (see Values above); a mark that only moved, or got a new row, follows through `change()`. A new root `<svg>` (Plot draws one each time) takes the overlay and the listeners. Marks it can't read throw before anything changes.
 - **Destroy.** `destroy()` clears every run, removes the overlay and the listeners, and puts back every attribute, style property and class the adapter changed. When nothing else has changed them, attributes get their exact text back, so the host's markup reads as it did before.
 - **Data effects** get the mark's row (its first segment's, with the other segments through `related(series)`), but no samples until the `samples` option lands in M4, with `watch`.
 
 What each library needs (from the [adapter spike](ideas/adapter-spike.md)):
 
-- **D3** works as is: `__data__` holds the row, and a stack's series key is on the parent `<g>`.
+- **D3** works as is: `__data__` holds the row, and a stack's series key is on the parent `<g>`. A stack point's value is `d[1] - d[0]`.
 - **Observable Plot** binds indices, not rows, so the page passes a `datum` accessor. Pass the marks, not the `<svg>`: `refresh(newSvg.querySelectorAll('g[aria-label="bar"] > rect'))`. Which accessor depends on the mark:
-  - one element per row, with no transform that derives new data (bars, dots): `datum: (el) => rows[el.__data__]`;
+  - one element per row, with no transform that derives new data (bars, dots): `datum: (el) => rows[el.__data__]`, and then `value` reads that row, `value: (d) => d.goals`;
   - a line path: `el.__data__` is that series' array of row indices, with `-1` at gaps, so `el.__data__.filter((i) => i >= 0).map((i) => rows[i])`;
   - after a group, bin or other reducing transform: the index points into the derived data, so `rows[i]` is silently the wrong row. Read the channel values through the mark's `render` option instead.
 
   Plot has no pie mark.
-- **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, so for now they need `datum` and `geometry`; a small helper that reads the View is planned with arcs (M3).
+- **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, new on every render, so for now they need `datum` (the row is `el.__data__.datum`) and `geometry`, and `value` reads the row's field; a small helper that reads the View is planned with arcs (M3).
 
 Adapters follow the chart rules:
 

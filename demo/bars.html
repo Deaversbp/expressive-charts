@@ -81,7 +81,7 @@
 
   <section class="card" aria-labelledby="host-title">
     <h2 id="host-title">The same story on someone else's chart</h2>
-    <p class="note">A plain SVG chart drawn by hand, the way D3 code would draw it. It knows nothing about the library and redraws from scratch on every change, with no animation of its own. <code>expressive()</code> adds the same hover story, keyboard focus (Tab, then the arrow keys) and dimming, and <code>refresh()</code> keeps the effects in step after each redraw. It can't see values, only lengths, so <code>update: "flash"</code> flashes the bars whose length changed: the ones that scored, and every bar when the axis grows or the window is resized.</p>
+    <p class="note">A plain SVG chart drawn by hand, the way D3 code would draw it. It knows nothing about the library and redraws from scratch on every change, with no animation of its own. <code>expressive()</code> adds the same hover story, keyboard focus (Tab, then the arrow keys) and dimming, and <code>refresh()</code> keeps the effects in step after each redraw. A <code>value</code> accessor tells it what each rect shows, so <code>update: "flash"</code> flashes the same bars as above: the ones whose numbers changed, not every bar when the axis grows or the window is resized.</p>
     <svg id="host-chart" role="img" aria-label="Harbor City FC: goals by player"></svg>
   </section>
 

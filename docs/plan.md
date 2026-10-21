@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1 is complete, and M2 is complete apart from a short screen-reader re-check (October 2026, §9); M3 is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 is complete, and M2 is complete apart from a short screen-reader re-check (October 2026, §9). M3 is planned step by step in §9 and is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -14,7 +14,7 @@ The goal for v0.1 is expressive motion that works on any SVG chart. We prove it 
 | Drawing | Effects draw through a small, renderer-neutral context: place an icon, restyle a mark, draw an overlay path. SVG implements it now, and Canvas can implement it later without changing any effect. Icons are stored as path data plus paint, not as raw SVG markup. |
 | Product | **Effects first.** Effects plus small adapters are the core, so they also work on SVG marks from D3 and Plot, and on Vega views rendered as SVG (through a small helper; see [ideas/adapter-spike.md](ideas/adapter-spike.md)). Our bar, line and donut charts are reference implementations: complete enough for the demos and everyday use, not a full chart library. (Design session, §11.) |
 | Guardrail | **Never distort data.** Effects may add personality or explain a change, but never move, resize or hide data while it's being read. |
-| Effect authors | The effect-author API becomes public after M3, once three chart types have proven it. Until then it's marked experimental. |
+| Effect authors | The effect-author API becomes public in M3's last wave, once the same effects have run unchanged on bars, the donut, D3 pies and the line and point fixtures. From 0.1.0 it keeps the 0.x promise (M3 decision 10): breaking changes only in a minor release, with a migration note. Until then it's marked experimental. |
 | Domain | A neutral core (generic icons and gaits). The ball and cleat move to an optional pack, `expressive-charts/icons/sport`, which the demos use. |
 
 ## Principles
@@ -141,7 +141,7 @@ Marks with no direction (future scatter dots) have `length` 0 and `start = end =
 | Effect | Reads | Bar | Stacked | Line series | Line point | Slice | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `travel` | walk, `length`, `thickness`, `segments` | ✓ | ✓ via `along` | ✓ rides the stroke | ✓ rides up to the point | ✓ rolls around the ring | Insets need `length`, rolling needs distance, sizing needs `thickness`. Polyline corners need angle smoothing. |
-| `wiggle` | `pivot`, `length` | ✓ rotates about the baseline | ✓ whole row | ✓ (barely visible on long marks, by design) | ✓ | ✓ rotates about the donut centre | The swing is capped so the far end moves ≤ 3 px and data stays readable. |
+| `wiggle` | `pivot`, `outline` | ✓ rotates about the baseline | ✓ whole row | ✓ (barely visible on long marks, by design) | ✓ | ✓ rotates about the donut centre | The swing is capped so the far end moves ≤ 3 px and data stays readable. The far end is the outline point farthest from `pivot` (from `outline.sample()`), not `length`: on a slice it's on the outer radius, which the mid-radius walk doesn't reach (corrected in M3 planning). |
 | `pulse` | `outline`, `thickness` | ✓ halo | ✓ | ✓ glow along the stroke | ✓ | ✓ | Uses a halo, never a scale change, so values don't look bigger. |
 | `flash` | `outline` | ✓ | ✓ | ✓ | ✓ | ✓ | A single halo blink, as in the prototype. |
 | `threshold` | `slice`, `samples`, `related` | ✓ against a constant (colours the part below a target, or past it with `when: "above"`) | ✓ | ✓ against another series | n/a (series level) | allowed but meaningless | Data effect. |
@@ -254,6 +254,7 @@ Starting values, taken from the prototype and tuned in the demo:
 | `transition` | data changes | base, staged (≈500 + 500 ms) | base × 0.35, max 200 ms, not staged | 0 |
 | `effect` | travel, wiggle, flash, pulse | base | base × 0.35, min 140, max 300 ms | 0, so `end()` is used |
 | `playback` | "Play season" | base | base × 0.3 | 0: jumps to the end |
+| `stagger` | `stagger`'s delays between marks (planned in M3) | base | 0 | 0 |
 
 A rule is `{ factor, min?, max? }`, and the result is `clamp(base × factor, min(base, min), max)`. A floor never makes an animation longer than its base.
 
@@ -279,7 +280,7 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 
 > Updated by the design session: `ctx.previous`, `data.previous`, `Layer.text()` and the author helpers are in [`sketches/api.ts`](sketches/api.ts) (§11).
 >
-> **The contracts in §4.1 and §4.2 are built in M1 step 3** (`src/core/contracts/`), along with `matrix`, `offset` and the recording layer in `src/core/testing/`. [architecture.md](architecture.md#effects) is now the reference. Additions: `AnyMarkEffect` is exported for combinator signatures; the icon resolver is named `IconSource`; `mark.set()` merges the fields given (undefined resets one), so parallel effects don't undo each other; an icon is hidden until first placed; `matrix.apply(m, point)`; and `testContext()`, a ready-made `EffectContext` on a manual clock. The runner (§4.3) is built in M1 step 4. `travel` with its gaits and the combinators `sequence`, `parallel` and `only` are built in M1 step 6 (§4.4–§4.6); the other effects and `stagger` are still to come.
+> **The contracts in §4.1 and §4.2 are built in M1 step 3** (`src/core/contracts/`), along with `matrix`, `offset` and the recording layer in `src/core/testing/`. [architecture.md](architecture.md#effects) is now the reference. Additions: `AnyMarkEffect` is exported for combinator signatures; the icon resolver is named `IconSource`; `mark.set()` merges the fields given (undefined resets one), so parallel effects don't undo each other; an icon is hidden until first placed; `matrix.apply(m, point)`; and `testContext()`, a ready-made `EffectContext` on a manual clock. The runner (§4.3) is built in M1 step 4. `travel` with its gaits and the combinators `sequence`, `parallel` and `only` are built in M1 step 6 (§4.4–§4.6), and `flash` in M2 step 2. `wiggle`, `pulse`, `stagger`, `defineEffect` and `defineDataEffect` are planned in M3 (§9); `threshold` and `morph` come later.
 
 ### 4.1 Interfaces
 
@@ -382,8 +383,8 @@ This is the entire surface effects draw through. It's deliberately small and cov
 ```ts
 sequence(...effects)            // run in order; abort stops the chain; end() = every child's end() in order
 parallel(...effects)            // run together; resolves when all finish
-stagger(effect, { delay })      // offset each mark's start by batch.index × delay; total spread capped;
-                                // 0 in analysis and off; never a default (research: little benefit)
+stagger(effect, { delay = 50 }) // offset each mark's start by batch.index × delay; total spread capped at 500 ms;
+                                // "stagger" timing: 0 in analysis and off; never a default (research: little benefit)
 only(filter, effect)            // run only on matching marks: a series name, a key, or a predicate
 ```
 
@@ -396,8 +397,8 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 | Effect | Kind | What it does | End state |
 | --- | --- | --- | --- |
 | `travel(icon, { along?, gait?, size?, orient?, ride? })` | geometry | Moves an icon along the walk (or along a named segment), inset by the icon's footprint so it stays inside the mark. The duration's base is `max(260 ms, length ÷ 360 px/s)` with `effect` timing. | The icon rests at the end. |
-| `wiggle({ swing? })` | geometry | A short damped rotation about `pivot`, with the angle capped so the far end moves ≤ 3 px. | No transform. |
-| `pulse({ times = 2 })` | geometry | A halo along the outline that grows and fades. Repeats are bounded, and `times` is capped so it finishes in under 5 s. | Nothing. |
+| `wiggle({ swing = 3 })` | geometry | A short damped rotation about `pivot` (about 450 ms base), with the angle capped so the outline point farthest from the pivot moves at most `swing` px. `swing` is more than 0 and at most 3, or it throws. | No transform. |
+| `pulse({ times = 2, width, color })` | geometry | A halo along the outline that widens to 12 px while fading from 0.4 to 0, 600 ms base each. `times` is a whole number from 1 to 6, and repeats that would end after 5 s (after the motion's scaling) are dropped. | Nothing. |
 | `flash()` | geometry | One halo blink (the prototype's `stroke-width` 0 → 8 → 0). | Nothing. |
 | `threshold({ compareTo, when = "below", color = "negative" })` | data | Finds where `samples` fall below (or, with `when: "above"`, above) the reference (a series or a constant), interpolates the crossings, and draws `slice()` overlays. Redraws on `onChange`. | The overlays drawn. |
 | `morph({ points = 160 })` | transition | Interpolates `outline.sample(n)` side by side between two geometries. | The target outline. |
@@ -503,8 +504,8 @@ lineChart<Week>("#xg", {
 });
 chart.reveal(24.5);                   // show data up to x, instantly; used by playback
 
-// Donut
-donutChart<Outcome>("#shots", { label: "Shot outcomes", data: outcomes, key: "outcome", value: "shots", center: (total) => `${total} shots` });
+// Donut. `category` names each slice and is its key, as on bars (M3 decision 5; the first sketch said `key`).
+donutChart<Outcome>("#shots", { label: "Shot outcomes", data: outcomes, category: "outcome", value: "shots", center: (total) => `${total}\nshots` });
 ```
 
 ### 5.3 Events
@@ -661,7 +662,7 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
   3. Aborting mid-run settles the promise and leaves nothing behind.
   4. With mode off, no frames are scheduled.
 
-  This suite is how CONTRIBUTING's "check the effect against every built-in chart" becomes automatic.
+  This suite is how CONTRIBUTING's "check the effect against every built-in chart" becomes automatic. M3 step 5 exports it as `checkEffect` from `expressive-charts/testing`, for effects written outside the project too.
 - **Charts.** Diffing by key (keys stay stable across sorts), ARIA attributes, roving focus with keyboard events, table contents, pointer events → hover/leave, and fixed `width` (jsdom has no layout).
 - **Types.** `expectTypeOf` for kind propagation through combinators, accessor keys checked against `D`, and transition effects rejected in mark slots.
 - **Importing in Node** with no DOM must not throw (no top-level DOM access).
@@ -830,21 +831,138 @@ The flash is checked by tests, not by eye: `src/matchweek.test.ts` (only changed
 
 ### M3: Donut, plus the proof that effects are chart-agnostic
 
-`donutChart` (slice geometry from `describe.arc`, built in M1, and a centre label). The same `travel`, now rolling around slices, with **no change to effect code**, on our donut and on D3-style pie paths through `expressive({ geometry })`. `wiggle`, `pulse`, `stagger` and string presets, shown on both bars and donut (`on: { hover: "wiggle" }`).
+`donutChart` (slice geometry from `describe.arc`, built in M1, and a centre label). The same `travel`, now rolling around slices, with **no change to effect code**, on our donut and on D3 pie paths through `expressive({ geometry })`. `wiggle`, `pulse`, `stagger` and string presets, shown on bars and on the donut (`on: { hover: "wiggle" }`).
 
-**Then the effect API goes public:** drop `@experimental` from `defineEffect`, `defineDataEffect`, `matrix` and `offset`, export the conformance suite, and write the effect-authoring guide.
+**Then the effect API goes public:** `defineEffect` and `defineDataEffect` are built, `@experimental` comes off them and off `matrix` and `offset`, the conformance suite is exported as `expressive-charts/testing`, and the effect-authoring guide is written.
 
 **Demo:** `demo/donut.html`.
+
+**Where M3 starts** (checked against main while planning, October 2026):
+
+- **Already built.**
+  - `describe.arc`, in the `d3.pie()` angle convention. `src/effects/conformance.test.ts` already runs `travel` and `flash` on a slice, so "no change to effect code" holds in unit tests; M3 proves it on real donut and D3 pie marks.
+  - `expressive({ geometry })` accepts any shape, arcs included (M1 step 10).
+  - `matrix` and `offset`, marked `@experimental` in `src/core/geometry/matrix.ts`. `PresetName` already lists `wiggle` and `pulse`, and the runner already gives each run its `batch`.
+- **Assumed by the plan but not built.**
+  - `defineEffect` and `defineDataEffect` exist only as declarations in `docs/sketches/api.ts`, so they're built before they can lose `@experimental`.
+  - There's no conformance suite to export. The §8 checks are a loop copied into `src/effects/conformance.test.ts` and `src/conformance.test.ts`, for geometry effects only, and `src/core/testing` is internal.
+  - `stagger` has no way to reach 0 in Analysis: a tween's `delay` is scaled like its duration, and `effect` timing's 140 ms floor leaves a short delay whole.
+- **Gaps.**
+  - §2.5 had `wiggle` reading `length`; it reads `outline` instead (corrected there). `MarkGeometry` needs no change for M3.
+  - `barChart` is one ~790-line function. Its helpers (tooltip, legend, table, announcer, keyboard, pointer, render) are separate modules, but the legend is per series (a donut's is per category), the table has no total row or share, and `MarkSummary` has no share.
+  - The bar chart draws its focus ring and halos behind each mark. On slices that touch, the next slice covers their straight edges, unevenly by DOM order. The adapter's ring and halo, drawn above the marks and masked to outside the mark, suit marks that touch.
+  - The adapter orders marks described with `geometry` as they are in the document. `d3.pie()` sorts by value by default, so the document order isn't the order around the ring, and the arrow keys would jump.
+  - Without `value`, the adapter reports every slice as updated when one value changes, since every arc's length changes.
+  - `update()` can't change `on`, so the demo's effect picker recreates its charts.
+- **Out of date** (each fixed by a step below): architecture.md says the Vega helper comes "with arcs (M3)"; the sketch still declares `flash` and `motionSwitch`, which hides the real ones from the examples; `src/charts/tooltip.test.ts` calls a 1.5× scale "a pulse"; `src/core/testing/index.ts` says the suite is exported "after M3".
+
+**Decided while planning M3 (October 2026):**
+
+1. **D3 is a dev dependency** (open question 12): `d3-shape` and `d3-selection` only, with their `@types`, pinned to exact versions, never a runtime dependency. The adapter's tests and `demo/donut.html` use them. Real `d3.pie()` catches conventions a hand-written fixture misses, such as its default sort.
+2. **The Vega helper moves to M4.** `fromVegaView()` pays off with lines, whose items give samples for free, and the adapter gets `samples` in M4. It needs vega and vega-lite as dev dependencies and reads Vega internals, and D3 pies already prove arcs through `geometry`.
+3. **Shared chart code comes first.** Wave 1 moves the parts of `barChart` that don't know about bars into small modules, with no change in behaviour, and the donut is built on them. The alternative, copying them into the donut and extracting with the line chart in M4, would fix every transition and focus bug twice in the meantime.
+4. **Donut accessibility.**
+   - Roles as on bars: the `<svg>` is `role="group"`, named by `label`. Each slice is `role="img"`, named "Saved: 112 shots, 28%": the category, the value in `format` with its series' label, and the share as a whole percent. `markLabel` gets the bar chart's `MarkSummary` plus `share`.
+   - Keyboard order is clockwise from 12 o'clock, so it follows `sort`, with the bar chart's keys (Right and Down to the next slice, Left and Up to the previous, Home and End) and no wrap-around. The adapter does the same for marks that share a pivot.
+   - Data table: the category, the value and a Share column, with a total row ("Total, 406, 100%"), as in the lab.
+   - The centre label is `aria-hidden`, and its text is added to the chart's description, so the total is heard on entering the chart. The table's total row has it too.
+   - The focus ring is drawn above the slices, masked to outside the focused one (the adapter's ring), so it shows on every side. It can cover a 2 px band of a neighbour, 2 px out, and the neighbours are dimmed while a slice is focused.
+   - You run a short donut listening script with NVDA + Chrome, as in M2.
+5. **Donut drawing and updates.**
+   - The inner radius is 0.6 × the outer, as in the lab. Slices are separated by 2 px strokes in `--ec-surface` rather than `padAngle`, so the angles stay true to the data.
+   - A legend with one entry per category, plus labels outside the ring (the category and the share) on slices of 15° or more; a label that would overlap the one before it is dropped. Every slice is still named in the legend, the tooltip, the table and its ARIA name.
+   - `sort: "none"` (data order, the default) or `"value"` (largest first), starting at 12 o'clock and going clockwise. Colours are per category, through a `ColorAssignment` keyed by category. Bars still colour by series (`colors.slot(series)` in `bar.ts`), so sharing one assignment with a bar chart won't match colours until bars can colour by category, which M5 adds for its morph. A slice's `series` is the value field (`"shots"`, or `"value"` for a function), as a plain bar's one segment is.
+   - A slice is named by `category` (a field or a function), which is also its key unless `key` is given, as on bars. The sketch's `key: "outcome"` becomes `category: "outcome"`.
+   - Halos (`flash`, `pulse`) are drawn in the overlay, masked to outside the slice, so they show evenly on every side. While it runs, a halo can cover half its width of a neighbour.
+   - Updates animate the values in data units, so slices stay joined and every frame's angles are true shares. Presentation stages them: values for 500 ms, while leaving slices shrink to nothing; then a re-order for 500 ms, in which slices rotate the shorter way to their new places (as bars pass each other when sorted) and entering slices grow in at their places in the second half. Analysis runs one stage of at most 200 ms, and Off jumps. `update` fires only for slices whose own value changed, not for ones whose share moved.
+6. **`wiggle({ swing = 3 })`.** A damped rotation about `pivot`, about 450 ms base with `effect` timing. The angle is capped so the outline point farthest from the pivot (from `outline.sample(64)`) moves at most `swing` px. `swing` must be more than 0 and at most 3, or it throws a `RangeError`, as `flash` does for its options. A mark whose farthest point is under 0.5 px from its pivot doesn't move. End state: no transform.
+7. **`pulse({ times = 2, width = 12, color })`.** Each pulse is a halo that widens from 0 to `width` while its opacity falls from 0.4 to 0, 600 ms base with `effect` timing. Each repeat is its own tween, so Analysis still plays every repeat, shorter. `times` must be a whole number from 1 to 6, or it throws. Repeats that would end after 5 s, after the motion's scaling, are dropped, so it stays within WCAG 2.2.2 under an author's own scaling too. End state: nothing (it's emphasis, like `flash`).
+8. **Presets.** The built-ins are exactly `flash`, `wiggle` and `pulse`, each with its defaults. There are no combined or icon presets in the core (`travel` needs an icon, which would bring a domain in), and no preset staggers.
+9. **`stagger(effect, { delay = 50 })`.** Each mark starts `batch.index × delay` ms after the first, and the whole spread is capped at 500 ms base (the delay shrinks for a big batch). The wait goes through a new `"stagger"` timing (§3.4): ×1 in Presentation, 0 in Analysis and Off, so authors can tune it with `createMotion({ scaling })`. It's never on by default: no chart, adapter or preset staggers. A single-mark event (a hover) isn't delayed, and `end()` doesn't wait. It returns an effect of the same kind and needs, as `only` does.
+10. **What "public" means.**
+    - The surface: `defineEffect` and `defineDataEffect` (built in M3), `matrix`, `offset`, `describe.*`, the effect, context and drawing contracts, and `expressive-charts/testing`.
+    - The promise is 0.x semver. From 0.1.0, a breaking change to that surface comes only in a minor release (0.1 → 0.2), listed in a new `CHANGELOG.md` with a migration note, and a deprecated name stays for one minor release.
+    - The conformance suite is exported from `expressive-charts/testing`, a third build entry like `icons/sport`, and isn't in the script-tag bundle. `checkEffect(effect, { marks, icons, data })` imports no test runner: it runs the four §8 checks on the fixture marks (bars, a slice, a line, a point) and throws one error listing every failure, so it works in Vitest, Jest, `node:test` or Mocha. `testContext`, `play` and the fixtures come with it, and our own conformance tests switch to it.
+    - The guide is `docs/effects-guide.md`: the contract, the context and drawing API, timing through `ctx.tween`, end states (Principle 3), the data guardrails (Principle 2), data effects and `needs`, composing, testing with `checkEffect`, `trace` and `delta` (sketch 06) as type-checked worked examples, and a review checklist.
+    - It goes public in M3's last wave. M4's line chart can still force a 0.2.
+11. **Demo and baselines.**
+    - `demo/donut.html` is the lab's card 3 without the morph: the shot outcomes as a donut and as columns, plus a D3 pie through `expressive()`. The columns are one colour, since a single-series bar chart colours by series; matching each outcome's colour across the donut and the columns waits for M5 (decision 5). One effect picker (Ball, Wiggle, Pulse) and a "Next match" button (`update: stagger(flash())`) drive all three.
+    - `demo/bars.html` doesn't change, so its 27 baselines don't either.
+    - New screenshots in `tests/visual/donut.spec.ts`, with names starting `donut-` because names are shared across files: light and dark at rest; the ball mid-roll and at rest on both donuts; a wiggle at its peak and a pulse half-way; the focus ring in both themes; the tooltip. Reduced motion is checked in the DOM, as in M2. The baselines are made in Docker.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `src/index.ts`, `src/registries.ts`, `src/effects/index.ts`, `src/charts/index.ts`, `package.json`, the two conformance test files, `docs/architecture.md`, `README.md`, `docs/sketches/api.ts` and this plan.
+
+**Wave 1** (parallel):
+
+1. **Shared chart code.** Owns `src/charts/bar.ts` and new modules in `src/charts/shell/`.
+   - Move what doesn't know about bars out of `barChart`, with no change in behaviour:
+     - **events:** the listener sets, `emit`, `emitEach` and the handle's `on()`;
+     - **hover:** the hovered mark and its source; starting and ending a hover (emphasis, dimming, tooltip, runner, event); the wiring of `pointerHover` and `keyboardFocus` (pointer and focus share one hover; Escape, blur and focus from a click); the mark that shows the focus ring; and keeping the ring and tooltip with an effect's `transform`. The chart supplies how to find a mark from an event target, its element, and how to draw its ring;
+     - **transitions:** one transition in flight, earlier `update()` promises taken over (`supersede`), `settle()` calling `runner.settle()`, leaving marks (`leave()`, `sweep()`), and the runner's order for an update (interrupt; exit, update and enter with their events; the announcement; `keyboard.sync()`);
+     - **DOM order:** moving mark elements into visual order while the focused one stays put;
+     - **size and motion:** the once-a-frame `ResizeObserver`, fonts' `loadingdone`, and `--ec-hover-duration` from `motion`;
+     - **helpers:** `resolveTarget`, `containerWidth`, `describeChart`, `checkNeeds`, the default `format`, and `ChartEnv` (still exported from `src/charts/index.ts`).
+   - Layout, drawing, ticks and `retarget` stay in `bar.ts`. Write the modules for one more chart (the donut, step 4), not for every chart that might come.
+   - Fix the comment in `src/charts/tooltip.test.ts` that calls a 1.5× scale "a pulse": a pulse never scales a mark.
+   - **Done when** `bar.test.ts`, the conformance, matchweek and adapter tests, and every visual baseline pass, with no test or baseline changed.
+2. **`wiggle`, `pulse`, `stagger` and the built-in presets.** Owns `src/effects/wiggle.ts`, `src/effects/pulse.ts` and their tests, `stagger` in `src/effects/combinators.ts`, the `"stagger"` timing in `src/core/motion.ts`, and the `wiggle` and `pulse` presets in `src/registries.ts`.
+   - The effects as decisions 6, 7 and 9 describe, and the presets as decision 8.
+   - Tests on the manual clock with the recording layer, including the guardrails on every conformance fixture: no outline point moves more than `swing` px at any frame; a pulse's last frame comes before 5 s even with `effect` timing scaled ×2 in Presentation; stagger's waits are 0 in Analysis and Off, and the spread never passes 500 ms; and `expectTypeOf` checks that `stagger` keeps the kind and the row needs. The new effects join the record in `src/effects/conformance.test.ts`.
+   - Docs: architecture.md (Effects, the timing table, presets), README and `src/effects/README.md`. Delete the sketch's declarations of `wiggle`, `pulse` and `stagger`, and the stale ones of `flash` and `motionSwitch`, so the examples use the real exports.
+3. **D3 as a dev dependency, and pies through `expressive()`.** Owns the devDependencies in `package.json`, `package-lock.json`, `src/charts/adapter/`, and the D3 pie source in `src/conformance.test.ts`.
+   - Add `d3-shape`, `d3-selection`, `@types/d3-shape` and `@types/d3-selection`, pinned to exact versions. `src/package.test.ts` gains a check that `package.json` has no `dependencies`.
+   - Order of marks described with `geometry`: when they all share one pivot (within 0.5 px), keyboard focus and `marks()` go clockwise by the angle of each mark's `center` about the pivot, from 12 o'clock. Otherwise they keep document order, as now.
+   - jsdom tests on a real `d3.pie()` (default sort, so data order isn't ring order) with `d3.arc()` paths in a centred `<g>`: hover, keyboard order around the ring, `markLabel`, `refresh()` with new data (with `value`, only slices whose value changed update), `travel` rolling around a slice, and `destroy()` putting everything back.
+   - The D3 pie joins the sources in `src/conformance.test.ts`.
+   - Docs: a D3 pie example in README and in architecture.md's Adapters. The page passes the arc generator's radii to `describe.arc`, plus `value: (d) => d.value`; without `value`, every slice updates when one value changes. Also record the Vega helper's move to M4. The sketch keeps its `d3-shim.ts`.
+
+**Wave 2** (after wave 1 lands):
+
+4. **`donutChart`.** Owns `src/charts/donut.ts`, `src/charts/donut-layout.ts` (pure, like `bar-layout.ts`) and their tests, `DonutChartOptions` in `src/charts/types.ts`, category entries in `src/charts/legend.ts` if it needs any change, the total row in `src/charts/table.ts`, a shared masked focus ring and halo in `src/charts/render/` (moved out of `src/charts/adapter/expressive.ts`, a small edit there), and the donut source in `src/conformance.test.ts`.
+   - `donutChart(target, { label, data, category, value, key?, sort?, center?, legend?, … })`, with the shared chart options (`on`, `tooltip`, `markLabel`, `markDescription`, `table`, `announce`, `format`, `colors`, `seriesLabels`, `dim`, `width`, `height`, `motion`), exported from `src/index.ts`. The layout and drawing are decision 5, and the accessibility is decision 4.
+   - `center` is `false` or `(total, format) => string`, with `"\n"` breaking lines and the first line drawn large. By default it's the total in `format`, then the value's series label: "406" over "shots", as in the lab.
+   - Values: a missing value counts as 0, a negative or non-finite one throws, and a total of 0 draws no slices. The default height is 300 px, and the ring is as large as the room left for labels allows. Resizes re-lay out without animating.
+   - Each slice is a `describe.arc`. Data effects get its row and samples from 0 to its share (§2.4).
+   - The default tooltip is the category, then "112 shots · 28%".
+   - Hover, focus, the tooltip, transitions, sizing and the update order come from step 1's modules, shared with bars.
+   - **The proof:** the conformance checks pass for `travel`, `flash`, `wiggle`, `pulse` and `stagger` on real slices from `donutChart`, and this step changes nothing in `src/effects/`.
+   - Docs: a Donut chart section in architecture.md, and the README. Replace the sketch's `donutChart` declaration with the real export, and use `category` in examples 03 and 07.
+   - Suggested as two PRs: the drawn, interactive donut first, then animated updates.
+5. **The effect API goes public.** Owns `src/effects/define.ts` (new), a new `src/testing/` entry, `tsup.config.ts`, the `exports` in `package.json`, `src/package.test.ts`, `docs/effects-guide.md`, `CHANGELOG.md` (new), and switching both conformance test files to `checkEffect`. It merges after step 4, since it states what the donut proved.
+   - `defineEffect(spec)` and `defineDataEffect<D>(spec)` fill in `kind` and a no-op `clear`, throw a `TypeError` unless `run` and `end` are functions (every effect needs an end state), and freeze the result. `expectTypeOf` tests keep the sketch's row-type checks.
+   - `expressive-charts/testing` as decision 10. `checkEffect` takes data effects too: `data(mark)` gives each fixture's `MarkData`. Without it the suite makes one (no datum, samples from 0 to 1, no related series), so a data effect with `needs.related` must pass `data`. `src/package.test.ts` checks the new export.
+   - Remove `@experimental` from `matrix` and `offset`, and the "experimental until M3" and "internal for now" notes in architecture.md and `src/core/testing/index.ts`.
+   - The guide; `CHANGELOG.md` with the 0.x promise; and a README section on writing effects. Replace the sketch's `defineEffect` and `defineDataEffect` declarations with the real exports, so sketch 06 compiles against them.
+
+**Wave 3:**
+
+6. **`demo/donut.html`, its screenshots and the listening script.** Owns `demo/donut.html`, `demo/donut.ts`, a hand-written D3 pie in `demo/`, the link in `demo/index.html`, `tests/visual/donut.spec.ts` with its `donut-` baselines, a small edit to `tests/visual/demo.ts` (opening a given page), the donut section of `docs/a11y-check.md`, and the visual-tests paragraph in CONTRIBUTING.md.
+   - The page as decision 11, with the lab's shot outcomes (Goal 58, Saved 112, Off target 149, Blocked 87), the motion switch, and a checklist that is the "Done when" list below. "Next match" adds a seeded match's shots, announced, and stops after a fixed number of matches.
+   - The screenshots as decision 11, made in Docker (`npm run test:visual:update`).
+   - A donut listening script in `docs/a11y-check.md`. **You run it** with NVDA + Chrome, and the names and roles are adjusted to what you hear.
+   - Then check the "Done when" list in the browser with you.
+
+**Done when:**
+- `donutChart` draws the lab's card 3 donut on the library: slices with separators, outside labels, the centre total, a legend, the tooltip, a data table with share and total, ARIA names, keyboard order around the ring, and staged updates. Light and dark come from the library's defaults.
+- The same `travel` rolls around slices on `donutChart` and on a real `d3.pie()` through `expressive({ geometry })`, with no change to `src/effects/travel.ts` or `src/effects/gaits.ts` during M3.
+- `wiggle`, `pulse` and `stagger` are built, and `on: { hover: "wiggle" }` and `"pulse"` work on bars, the donut and the D3 pie. Tests enforce the guardrails: 3 px, under 5 s, and no stagger in Analysis or Off.
+- `checkEffect` passes for every built-in effect on every fixture, and on real marks from `barChart`, `donutChart`, `expressive()` bars and D3 pies.
+- `defineEffect`, `defineDataEffect`, `matrix` and `offset` aren't experimental; `expressive-charts/testing` is exported; the guide's examples are type-checked; and `CHANGELOG.md` states the 0.x promise.
+- `demo/donut.html` passes its checklist in the browser. The donut screenshots are green in CI, and the bar baselines haven't changed.
+- Your donut screen-reader check passes.
+- The package still has no runtime dependencies, and `typecheck`, `test` and `build` are green.
 
 ### M4: Line chart and data effects
 
 `lineChart` with series and point marks and crosshair hover across series. `MarkData` samples, plus `samplesAlong` and `watch` for adapters. `threshold` in `on.decorate`, following `onChange`. The `playback()` controller with `playButton()` (WCAG 2.2.2) and `reveal()`. A ball riding the line (`ride: "on"`).
 
+**Moved here from M3:** the Vega helper, `fromVegaView(view, mark = "marks")` ([adapter spike](ideas/adapter-spike.md), recommendation 3). Vega's line items carry every vertex with its row, so they give `samples` without `samplesAlong`. It needs vega and vega-lite as dev dependencies, pinned to a major version, because it reads Vega internals. Plan it as the milestone's last step, so it can slip to M6 without holding up the line chart.
+
 **Demo:** card 2 of the lab.
 
 ### M5: Morph
 
-The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label tweening, and shared colour assignment.
+The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label tweening, and shared colour assignment. That includes colouring bars by category: today `barChart` colours by series, so the lab's columns would all be one colour. With category colours, one `ColorAssignment` keeps each outcome's colour from slice to column (found in the PR #30 review).
 
 **Demo:** card 3 of the lab.
 
@@ -891,8 +1009,11 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 9. **Line smoothing.** v0.1 lines are straight polylines, which keeps `threshold` crossings exact and arc length cheap. Curves would mean sampled arc-length tables and approximate crossings.
 10. **Naming.** Keep the draft's `path` and `angle`, or rename them to `walk` and `heading` to avoid confusion with `outline`? *Recommendation:* keep them; the doc comments carry the meaning.
 11. **Releasing.** Check that the npm name is available, and publish from CI with provenance.
-12. **D3 in demos and tests.** Adapter demos and tests are most convincing against real D3, but D3 would be a new dev dependency (never a runtime one). *Recommendation:* M1 uses a hand-written SVG chart; decide on D3 as a dev dependency in M3, when pie paths need it.
+12. **D3 in demos and tests.** Adapter demos and tests are most convincing against real D3, but D3 would be a new dev dependency (never a runtime one). *Decided in M3 planning: yes, `d3-shape` and `d3-selection` only, pinned, as dev dependencies* (M3 decision 1). *Recommendation:* M1 uses a hand-written SVG chart; decide on D3 as a dev dependency in M3, when pie paths need it.
 13. **Cost of `watch`.** Following a host's transition through attribute changes means re-reading geometry on every frame. *Recommendation:* measure it in M4 before making it more than opt-in.
+14. **Changing effects with `update({ on })`.** Charts can't change `on` after they're created, so M3's demo recreates its charts when the viewer picks another effect. A page that switches effects loses focus and replays its enter effects. *Recommendation:* add it when a page needs it, by M6 at the latest. The runner would clear the slots' runs and resolve the new ones.
+15. **Donut labels at narrow widths.** M3 drops a label that would overlap the one before it, and every slice stays named in the legend, the tooltip, the table and its ARIA name. Leader lines, or labels inside large slices, would keep more of them. *Recommendation:* look at the demo at phone width in M3 step 6 and decide then. Don't add a label-placement engine before a page needs one.
+16. **A test-runner flavour of `checkEffect`.** M3 exports one runner-agnostic function that throws. A Vitest helper that makes one test per fixture would report failures more readably, but it would tie the package to one runner. *Recommendation:* wait until effect authors ask for it.
 
 ### Risks
 
@@ -910,6 +1031,10 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 - **Reduced-motion override confusing viewers.** Mitigation: the motion switch says when the device prefers reduced motion and that picking a mode overrides it.
 - **Screen reader support for ARIA in SVG is uneven.** Mitigations: test in M2, and keep the data table as the dependable fallback.
 - **Text measurement** differs between the browser and jsdom. Mitigations: measurement is injectable, and tests use fixed widths.
+- **Refactoring `barChart` for the donut** (M3 step 1) can break what M1 and M2 tuned: staging, focus that follows its key, and a hover that waits out a transition. Mitigation: the step changes no test and no baseline, and it extracts only what the donut needs.
+- **Marks that touch.** On a donut, effects and focus can reach a neighbour. A wiggle moves a slice's rim by at most 3 px, a masked halo covers at most half its width, and the focus ring covers a 2 px band. Each is bounded, brief or deliberate, and the neighbours are dimmed while a slice is hovered or focused. Mitigation: the donut screenshots show each case.
+- **Going public too early.** The effect API is public before the line chart, its hardest test, is built. Mitigation: the 0.x promise allows a break in 0.2 with a migration note; the conformance fixtures already include a line and a point; and M4 runs `checkEffect` on the real line chart's marks, as M3 does on the donut's.
+- **Real D3 in tests** can change under us. Mitigation: exact versions, dev dependencies only, and a test that the package has no runtime dependencies.
 - **Host charts we don't control.** Adapters run inside other libraries' SVG: transforms on parent groups, marks re-created on every render, and the host's own CSS. Mitigations: geometry in the marks' nearest common ancestor's coordinates (converted with each element's CTM), an overlay on the root `<svg>` with that ancestor's transform (Vega removes foreign children from its own groups when it redraws), keys rather than elements as identity, and never writing a host element's `transform` without composing it with the host's own.
 
 ---

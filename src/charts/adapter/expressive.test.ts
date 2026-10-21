@@ -218,6 +218,65 @@ describe("expressive: keys and segments", () => {
     expect(fx.marks()[0]!.key).toBe("Saved");
     expect(() => setup([slice], { key: () => "a", geometry: (_el, _d) => build.point({ key: "b", x: 0, y: 0, r: 2 }) })).toThrow(/with the key "a"/);
   });
+
+  it("orders marks around one pivot clockwise from 12 o'clock, and others in document order", () => {
+    type Slice = { outcome: string; start: number; end: number; cx: number };
+    const draw = (slices: Slice[]): SVGPathElement[] => {
+      const svg = el("svg", {}, document.body);
+      const g = el("g", { transform: "translate(320,150)" }, svg);
+      return slices.map((d) => Object.assign(el("path", { d: "M0,0L1,1" }, g), { __data__: d }));
+    };
+    const options: ExpressiveOptions<Slice> = {
+      key: (d) => d.outcome,
+      keyboard: true,
+      geometry: (_el, d, k) => build.arc({ key: k, cx: d.cx, cy: 0, inner: 70, outer: 116, start: d.start, end: d.end })
+    };
+    // In data order, as d3.pie() returns them. Off target starts at a negative angle and is centred at
+    // about 10:40, so it comes last. Saved's pivot is 0.4 px off, which still counts as the same.
+    const slices: Slice[] = [
+      { outcome: "Blocked", start: Math.PI, end: 1.5 * Math.PI, cx: 0 },
+      { outcome: "Goal", start: 0.2, end: 1, cx: 0 },
+      { outcome: "Saved", start: 1, end: Math.PI, cx: 0.4 },
+      { outcome: "Off target", start: -0.5 * Math.PI, end: 0.2, cx: 0 }
+    ];
+    const paths = draw(slices);
+    const { fx } = setup<Slice>(paths, options);
+    expect(fx.marks().map((m) => m.key)).toEqual(["Goal", "Saved", "Blocked", "Off target"]);
+    // The tab stop is the first mark clockwise, and the arrows go round.
+    expect(paths.map((p) => p.getAttribute("tabindex"))).toEqual(["-1", "0", "-1", "-1"]);
+    fx.focus("Saved");
+    key(paths[2]!, "ArrowRight");
+    expect(document.activeElement).toBe(paths[0]);
+    fx.destroy();
+
+    // A pivot more than 0.5 px from the first: not one ring, so document order.
+    const apart = setup<Slice>(draw(slices.map((d) => (d.outcome === "Saved" ? { ...d, cx: 0.6 } : d))), options);
+    expect(apart.fx.marks().map((m) => m.key)).toEqual(["Blocked", "Goal", "Saved", "Off target"]);
+  });
+
+  it("keeps lines that start at one point in document order: they share a pivot but don't go round it", () => {
+    // Cumulative goals and xG both start at 0 in week 1, so both lines' pivot, their first point, is (0, 100).
+    const series: Record<string, { x: number; y: number }[]> = {
+      goals: [
+        { x: 0, y: 100 },
+        { x: 50, y: 90 },
+        { x: 100, y: 10 }
+      ],
+      xG: [
+        { x: 0, y: 100 },
+        { x: 50, y: 20 },
+        { x: 100, y: 80 }
+      ]
+    };
+    const host = d3Stack();
+    const traces = Object.keys(series).map((name) => Object.assign(el("path", { d: "M0,0L1,1" }, host.plot), { __data__: { name } }));
+    const { fx } = setup<{ name: string }>(traces, { key: (d) => d.name, keyboard: true, geometry: (_el, d, k) => build.line({ key: k, points: series[d.name]! }) });
+    expect(fx.marks().map((m) => [m.key, m.pivot])).toEqual([
+      ["goals", { x: 0, y: 100 }],
+      ["xG", { x: 0, y: 100 }]
+    ]);
+    expect(traces.map((trace) => trace.getAttribute("tabindex"))).toEqual(["0", "-1"]);
+  });
 });
 
 describe("expressive: baseline", () => {

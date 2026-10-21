@@ -590,6 +590,51 @@ describe("barChart: keyboard", () => {
   });
 });
 
+describe("barChart: ARIA structure", () => {
+  it("is a group named by the chart's label, its marks images named by their values", () => {
+    const { svg, mark, keys } = setup({ stack: ["goals", "assists"], x: undefined, description: "Season to date" });
+    expect(svg.getAttribute("role")).toBe("group");
+    expect(svg.getAttribute("aria-label")).toBe("Goals by player");
+    expect(svg.querySelector(":scope > desc")?.textContent).toBe("Season to date");
+    for (const key of keys()) {
+      const group = mark(key!);
+      expect(group.getAttribute("role")).toBe("img");
+      expect(group.getAttribute("aria-label")).toMatch(new RegExp(`^${key}: \\d+ goals, \\d+ assists$`));
+    }
+    // One tab stop: the roving tabindex is on the images themselves.
+    expect(keys().map((key) => mark(key!).getAttribute("tabindex"))).toEqual(["0", "-1", "-1"]);
+  });
+
+  it("reads nothing but the marks' names: text and decoration are hidden", () => {
+    const { svg, mark } = setup();
+    for (const text of svg.querySelectorAll("text")) expect(text.closest('[aria-hidden="true"]')).not.toBeNull();
+    for (const name of ["ec-grid", "ec-axis", "ec-focus", "ec-overlay"]) expect(svg.querySelector(`.${name}`)!.getAttribute("aria-hidden")).toBe("true");
+    expect(mark("Okafor").querySelector(".ec-label")!.getAttribute("aria-hidden")).toBe("true");
+    expect(mark("Okafor").querySelector(".ec-value")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("keeps a tooltip function's text as the image's description", () => {
+    const { mark } = setup({ tooltip: (d) => `${d.name} plays up front` });
+    const okafor = mark("Okafor");
+    expect(okafor.getAttribute("role")).toBe("img");
+    expect(okafor.getAttribute("aria-label")).toBe("Okafor: 16 goals");
+    expect(document.getElementById(okafor.getAttribute("aria-describedby")!)!.textContent).toBe("Okafor plays up front");
+  });
+
+  it("hides a mark while it leaves, and shows one that comes back", async () => {
+    const { chart, mark, settle } = setup();
+    const leaving = chart.update({ data: players.filter((p) => p.name !== "Tanaka") });
+    const tanaka = mark("Tanaka");
+    expect(tanaka.getAttribute("aria-hidden")).toBe("true");
+    expect(tanaka.hasAttribute("tabindex")).toBe(false);
+    const back = chart.update({ data: players });
+    expect(mark("Tanaka")).toBe(tanaka);
+    expect(tanaka.hasAttribute("aria-hidden")).toBe(false);
+    expect(tanaka.getAttribute("role")).toBe("img");
+    await settle(Promise.all([leaving, back]));
+  });
+});
+
 describe("barChart: effects", () => {
   it("starts decorate and enter on every mark, in order", () => {
     const enter = recorder();

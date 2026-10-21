@@ -60,6 +60,53 @@ export interface ChartOptions<D> {
    * each mark's aria-label says the same.
    */
   readonly tooltip?: boolean | ((d: NoInfer<D>) => string);
+  /**
+   * The data table: the fallback every screen reader can read. Default true: a closed <details>
+   * "Data table" after the chart, listing the rows in the chart's order with the category, each series
+   * and, for a stack, the total, in `format`. "hidden": visually hidden but still read. An object adds
+   * columns or changes its text.
+   */
+  readonly table?: boolean | "hidden" | TableOptions<NoInfer<D>>;
+  /**
+   * A polite live region that sums up each update for screen readers ("Sorted A to Z", "Okafor and
+   * Tanaka changed"). Default false. A function is given the change and returns the text to announce
+   * instead; "" or undefined announces nothing.
+   */
+  readonly announce?: boolean | ((change: ChartChange) => string | undefined);
+}
+
+export interface TableOptions<D> {
+  /** Visually hidden, but still read by screen readers, as with `table: "hidden"`. Default false. */
+  readonly hidden?: boolean;
+  /** Extra columns, after the category's: the prototype's player position, say. */
+  readonly columns?: readonly TableColumn<D>[];
+  /** The category column's header. Default: the category's field name, or "Category" when a function reads it. */
+  readonly category?: string;
+  /** The total column's header, shown when there's more than one series. Default "Total". */
+  readonly total?: string;
+  /** The text of the <summary> that opens the table. Default "Data table". */
+  readonly summary?: string;
+}
+
+export interface TableColumn<D> {
+  /** Its header. */
+  readonly label: string;
+  /** A field of the row, or a function of the row and its index in `data`. */
+  readonly field: Accessor<D, unknown>;
+  /** Default: numbers in the chart's `format`, anything else as text, and nothing for null or undefined. */
+  readonly format?: (value: unknown) => string;
+}
+
+/** What `announce` is given: the chart's own summary of an update, and the marks it changed. */
+export interface ChartChange {
+  /** What the chart announces by default: "Sorted A to Z. Okafor and Tanaka changed". "" when it would say nothing. */
+  readonly text: string;
+  /** Keys of the marks whose values changed, in visual order. */
+  readonly changed: readonly string[];
+  /** Keys of the marks that appeared, in visual order. */
+  readonly added: readonly string[];
+  /** Keys of the marks that left. */
+  readonly removed: readonly string[];
 }
 
 export interface BarChartOptions<D> extends ChartOptions<D> {

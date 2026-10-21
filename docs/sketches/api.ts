@@ -152,19 +152,15 @@ export declare function expressive<D = unknown>(target: MarkSource<D>, options: 
 // ── Reference charts ─────────────────────────────────────────────────────────
 
 // KeyOfType, Accessor, NumericKey, ColorAssignment and colorAssignment are built, in src/charts. So are
-// the chart options and the chart handle; the sketch adds what's still planned to them.
-
-/** Planned for M2: the data table. (Tooltips are built.) */
-interface PlannedChartOptions<D> {
-  readonly table?: boolean | "hidden";
-}
+// the chart options (tooltips and the data table too, since M2) and the chart handle; the sketch adds
+// what's still planned to the handle.
 
 /** NEW NoInfer on `on` (built): without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
-export interface ChartOptions<D> extends BuiltChartOptions<D>, PlannedChartOptions<D> {}
+export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 
 export interface Chart<D, O> extends BuiltChart<D, O>, MarkSourceHandle<D> {}
 
-export interface BarChartOptions<D> extends BuiltBarChartOptions<D>, PlannedChartOptions<D> {}
+export interface BarChartOptions<D> extends BuiltBarChartOptions<D> {}
 
 export interface LineChartOptions<D> extends ChartOptions<D> {
   readonly x: Accessor<D, number | Date>;
@@ -184,7 +180,7 @@ export interface DonutChartOptions<D> extends ChartOptions<D> {
   readonly sort?: "value" | "none";
 }
 
-/** Built in M1 step 5 (src/charts); declared here until it has focus() (step 9), tooltips and the table (M2). */
+/** Built in M1 step 5 (src/charts); declared here until its handle has focus(). */
 export declare function barChart<D>(target: string | Element, options: BarChartOptions<D>): Chart<D, BarChartOptions<D>>;
 export declare function lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D>;
 export declare function donutChart<D>(target: string | Element, options: DonutChartOptions<D>): Chart<D, DonutChartOptions<D>>;

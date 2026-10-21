@@ -29,6 +29,7 @@ export type {
   BarChart,
   BarChartOptions,
   Chart,
+  ChartChange,
   ChartOptions,
   ColorAssignment,
   ExpressiveOptions,
@@ -37,7 +38,9 @@ export type {
   MarkEvents,
   MarkSource,
   NumericKey,
-  StyleOptions
+  StyleOptions,
+  TableColumn,
+  TableOptions
 } from "./charts";
 export type { MotionSwitch, MotionSwitchOptions } from "./charts/controls";
 

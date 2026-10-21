@@ -522,6 +522,24 @@ describe("barChart: keyboard", () => {
     expect(ring.getAttribute("visibility")).toBe("hidden");
   });
 
+  it("moves the focus ring with an effect that moves the mark", () => {
+    const hover = recorder({ draw: (_mark, ctx) => ctx.mark.set({ transform: [1, 0, 0, 1, 5, -2] }) });
+    const { svg, mark } = setup({ on: { hover: hover.effect } });
+    const ring = svg.querySelector(".ec-focus")!;
+    tabTo(mark("Okafor"));
+    const body = mark("Okafor").querySelector(".ec-body")!;
+    expect(body.getAttribute("transform")).toBe("matrix(1 0 0 1 5 -2)");
+    expect(ring.getAttribute("transform")).toBe(body.getAttribute("transform"));
+    // The next mark's ring starts where that mark is, and moves with its own effect.
+    press(mark("Okafor"), "ArrowDown");
+    expect(mark("Okafor").querySelector(".ec-body")!.getAttribute("transform")).toBeNull();
+    expect(ring.getAttribute("transform")).toBe(mark("Tanaka").querySelector(".ec-body")!.getAttribute("transform"));
+    // Escape clears the effect, and the ring, still showing, goes back with the mark.
+    press(mark("Tanaka"), "Escape");
+    expect(ring.getAttribute("transform")).toBeNull();
+    expect(ring.getAttribute("visibility")).toBeNull();
+  });
+
   it("labels each mark with its values, in the chart's format", async () => {
     const { chart, mark } = setup({ stack: ["goals", "assists"], format: (v) => v.toFixed(1) });
     expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16.0 goals, 4.0 assists");

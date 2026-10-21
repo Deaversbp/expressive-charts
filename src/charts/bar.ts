@@ -18,7 +18,7 @@ import { keyboardFocus } from "./keyboard";
 import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
 import { svgSurface } from "./render/surface";
-import { setAttributes, setStyles, svgElement } from "./render/svg";
+import { setAttributes, setStyles, svgElement, transformAttribute } from "./render/svg";
 import { textMeasure } from "./render/text";
 import { injectStyles, markColorStyles, seriesColors } from "./render/theme";
 import type { BarChartOptions, Chart, MarkEvents } from "./types";
@@ -157,8 +157,14 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     overlay,
     // Looked up on each call, so the handle follows the mark's record.
     mark: (key) => ({
-      set: (style) => find(key)?.handle.set(style),
-      reset: () => find(key)?.handle.reset()
+      set: (style) => {
+        find(key)?.handle.set(style);
+        if (key === ringKey) drawRing();
+      },
+      reset: () => {
+        find(key)?.handle.reset();
+        if (key === ringKey) drawRing();
+      }
     }),
     colors: (key) => find(key)?.parts[0]?.colors
   });
@@ -268,7 +274,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     if (record.key === ringKey) drawRing();
   }
 
-  /** The focus ring follows the outline of the mark as it is on screen. */
+  /** The focus ring follows the outline of the mark as it is on screen, moved with its body when an effect moves it. */
   function drawRing(): void {
     const record = ringKey === undefined ? undefined : records.get(ringKey);
     if (!record) {
@@ -276,7 +282,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       return;
     }
     for (const path of ringPaths) path.setAttribute("d", record.shown.geometry.outline.d);
-    ring.removeAttribute("visibility");
+    const { transform } = record.handle.style;
+    setAttributes(ring, { transform: transform && transformAttribute(transform), visibility: undefined });
   }
 
   /** Draws the mark as `row`. Its runs hear about it when its geometry changed, so decorations follow. */

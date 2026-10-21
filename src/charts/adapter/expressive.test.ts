@@ -640,6 +640,32 @@ describe("expressive: keyboard", () => {
     expect(story.log.filter((line) => line.startsWith("run"))).toHaveLength(5);
   });
 
+  it("draws the ring outside the mark and a clear gap, so it shows on a bar in the focus colour", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const overlay = overlayOf(host.svg);
+    const ring = overlay.querySelector(".ec-focus-ring")!;
+    fx.focus("Okafor");
+    const outline = fx.marks().find((mark) => mark.key === "Okafor")!.outline.d;
+
+    // An 8 px stroke on the outline, masked to more than 2 px outside it: a 2 px ring past a 2 px gap.
+    expect(ring.getAttribute("d")).toBe(outline);
+    expect(ring.getAttribute("stroke-width")).toBe("8");
+    const id = /^url\(#(.+)\)$/.exec(ring.getAttribute("mask") ?? "")?.[1];
+    const mask = overlay.querySelector(`mask#${id}`)!;
+    expect(mask.querySelector("rect")?.getAttribute("fill")).toBe("white");
+    const hole = mask.querySelector("path")!;
+    expect(["d", "fill", "stroke", "stroke-width"].map((name) => hole.getAttribute(name))).toEqual([outline, "black", "black", "4"]);
+
+    fx.focus("Tanaka");
+    expect(hole.getAttribute("d")).toBe(fx.marks().find((mark) => mark.key === "Tanaka")!.outline.d);
+
+    // Another attachment's mask has its own id.
+    const other = d3Stack();
+    setup(other.selection(), { ...stacked, keyboard: true });
+    expect(overlayOf(other.svg).querySelector(".ec-focus-ring")?.getAttribute("mask")).not.toBe(ring.getAttribute("mask"));
+  });
+
   it("shows the ring for a Tab after a click on the chart's background", () => {
     const host = d3Stack();
     setup(host.selection(), { ...stacked, keyboard: true });

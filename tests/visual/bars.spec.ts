@@ -91,24 +91,28 @@ test.describe("motion modes", () => {
 });
 
 test.describe("keyboard focus", () => {
-  test("the focus ring on both charts, from Tab and the arrow keys", async ({ page }) => {
-    await openDemo(page);
+  // Lindqvist's goals bar is in --ec-series-1, the same blue as --ec-focus: the ring must still show.
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`the focus ring on both charts, from Tab and the arrow keys, ${colorScheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openDemo(page);
 
-    await tabInto(page, chart(page));
-    await expect(bar(page, "Okafor")).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(bar(page, "Lindqvist")).toBeFocused();
-    await page.clock.runFor(REST);
-    await expect(chart(page).locator(".ec-focus")).not.toHaveAttribute("visibility", "hidden");
-    await expect(chart(page)).toHaveScreenshot("focus-chart.png");
+      await tabInto(page, chart(page));
+      await expect(bar(page, "Okafor")).toBeFocused();
+      await page.keyboard.press("ArrowDown");
+      await expect(bar(page, "Lindqvist")).toBeFocused();
+      await page.clock.runFor(REST);
+      await expect(chart(page).locator(".ec-focus")).not.toHaveAttribute("visibility", "hidden");
+      await expect(chart(page)).toHaveScreenshot(`focus-chart-${colorScheme}.png`);
 
-    await tabInto(page, hostChart(page));
-    await page.keyboard.press("ArrowDown");
-    await expect(hostBar(page, 1)).toBeFocused();
-    await page.clock.runFor(REST);
-    await expect(hostChart(page).locator(".ec-focus-ring")).not.toHaveAttribute("visibility", "hidden");
-    await expect(hostChart(page)).toHaveScreenshot("focus-host.png");
-  });
+      await tabInto(page, hostChart(page));
+      await page.keyboard.press("ArrowDown");
+      await expect(hostBar(page, 1)).toBeFocused();
+      await page.clock.runFor(REST);
+      await expect(hostChart(page).locator(".ec-focus-ring")).not.toHaveAttribute("visibility", "hidden");
+      await expect(hostChart(page)).toHaveScreenshot(`focus-host-${colorScheme}.png`);
+    });
+  }
 });
 
 test.describe("tooltip and legend", () => {

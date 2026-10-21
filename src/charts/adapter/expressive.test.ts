@@ -640,6 +640,56 @@ describe("expressive: keyboard", () => {
     expect(story.log.filter((line) => line.startsWith("run"))).toHaveLength(5);
   });
 
+  it("draws the ring outside the mark and a clear gap, so it shows on a bar in the focus colour", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const overlay = overlayOf(host.svg);
+    const ring = overlay.querySelector(".ec-focus-ring")!;
+    fx.focus("Okafor");
+    const outline = fx.marks().find((mark) => mark.key === "Okafor")!.outline.d;
+
+    // An 8 px stroke on the outline, masked to more than 2 px outside it: a 2 px ring past a 2 px gap.
+    expect(ring.getAttribute("d")).toBe(outline);
+    expect(ring.getAttribute("stroke-width")).toBe("8");
+    const id = /^url\(#(.+)\)$/.exec(ring.getAttribute("mask") ?? "")?.[1];
+    const mask = overlay.querySelector(`mask#${id}`)!;
+    expect(mask.querySelector("rect")?.getAttribute("fill")).toBe("white");
+    const hole = mask.querySelector("path")!;
+    expect(["d", "fill", "stroke", "stroke-width"].map((name) => hole.getAttribute(name))).toEqual([outline, "black", "black", "4"]);
+
+    fx.focus("Tanaka");
+    expect(hole.getAttribute("d")).toBe(fx.marks().find((mark) => mark.key === "Tanaka")!.outline.d);
+
+    // Another attachment's mask has its own id.
+    const other = d3Stack();
+    setup(other.selection(), { ...stacked, keyboard: true });
+    expect(overlayOf(other.svg).querySelector(".ec-focus-ring")?.getAttribute("mask")).not.toBe(ring.getAttribute("mask"));
+  });
+
+  it("rings an open outline from geometry on both sides, outside its stroke", () => {
+    const host = d3Stack();
+    const points = [
+      { x: 0, y: 100 },
+      { x: 50, y: 20 },
+      { x: 100, y: 80 }
+    ];
+    const trace = el("path", { d: "M0,100L50,20L100,80" }, host.plot);
+    Object.assign(trace, { __data__: { name: "xG" } });
+    const { fx } = setup<{ name: string }>([trace], {
+      key: (d) => d.name,
+      keyboard: true,
+      geometry: (_el, _d, k) => build.line({ key: k, points, width: 3 })
+    });
+    fx.focus("xG");
+    const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
+    const hole = overlayOf(host.svg).querySelector("mask path")!;
+    expect(ring.getAttribute("visibility")).toBeNull();
+    // Unfilled: a fill would close the line into a triangle and mask the ring along its inside. The
+    // gap and ring start at the 3 px stroke's edge.
+    expect(["fill", "stroke-width"].map((name) => hole.getAttribute(name))).toEqual(["none", "7"]);
+    expect(ring.getAttribute("stroke-width")).toBe("11");
+  });
+
   it("shows the ring for a Tab after a click on the chart's background", () => {
     const host = d3Stack();
     setup(host.selection(), { ...stacked, keyboard: true });

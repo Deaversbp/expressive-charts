@@ -77,6 +77,12 @@ type Listeners<D> = { [K in keyof MarkEvents<D>]: Set<(event: MarkEvents<D>[K]) 
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ONE = { index: 0, count: 1 } as const;
+/** The focus ring's px, as barChart's: a gap around the mark, then the ring. */
+const RING_GAP = 2;
+const RING = 2;
+
+/** Focus-ring masks made in each document, for their ids: a page's markup doesn't depend on other pages. */
+const focusMasks = new WeakMap<Document, number>();
 
 export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<D>, env: ChartEnv): Attachment<D> {
   checkOptions(options);
@@ -224,7 +230,15 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   setStyles(overlay, { "pointer-events": "none" });
   const halos = make("g", { class: "ec-halos" }, overlay);
   const runs = make("g", { class: "ec-runs" }, overlay);
-  const ring = make("path", { class: "ec-focus-ring", visibility: "hidden", "stroke-width": "2", "stroke-linejoin": "round" }, overlay);
+  // The overlay is above the marks, so the ring is masked to outside the mark and its gap: it can't
+  // cover data or merge with a bar in the focus colour. The gap is left clear rather than painted in
+  // --ec-surface as on barChart, since a host's background may be another colour.
+  const maskNumber = (focusMasks.get(doc) ?? 0) + 1;
+  focusMasks.set(doc, maskNumber);
+  const ringMask = make("mask", { id: `ec-focus-mask-${maskNumber}`, maskUnits: "userSpaceOnUse", x: "-1e5", y: "-1e5", width: "2e5", height: "2e5" }, overlay);
+  make("rect", { x: "-1e5", y: "-1e5", width: "2e5", height: "2e5", fill: "white" }, ringMask);
+  const ringHole = make("path", { stroke: "black", "stroke-linejoin": "round" }, ringMask);
+  const ring = make("path", { class: "ec-focus-ring", visibility: "hidden", "stroke-linejoin": "round", mask: `url(#${ringMask.id})` }, overlay);
   setStyles(ring, { fill: "none", stroke: cssColor("focus") });
 
   const find = (key: string): MarkRecord<D> | undefined => records.get(key) ?? leaving.get(key);
@@ -398,8 +412,17 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   /** The focus ring follows the mark's outline, drawn in the overlay. */
   function drawRing(): void {
     const record = ringKey === undefined ? undefined : records.get(ringKey);
-    if (record) setAttributes(ring, { d: record.mark.geometry.outline.d, visibility: undefined });
-    else setAttributes(ring, { visibility: "hidden" });
+    if (!record) {
+      setAttributes(ring, { visibility: "hidden" });
+      return;
+    }
+    const { outline, thickness } = record.mark.geometry;
+    // An open outline (a line from `geometry`) is the stroke's centre: the gap and ring start at the
+    // stroke's edge, and the hole isn't filled, which would close the line into a polygon and hide
+    // the ring on one side.
+    const stroke = outline.closed ? 0 : thickness;
+    setAttributes(ringHole, { d: outline.d, fill: outline.closed ? "black" : "none", "stroke-width": stroke + 2 * RING_GAP });
+    setAttributes(ring, { d: outline.d, "stroke-width": stroke + 2 * (RING_GAP + RING), visibility: undefined });
   }
 
   // barChart's keyboard focus, with the same hover rules: on the host's elements, written through

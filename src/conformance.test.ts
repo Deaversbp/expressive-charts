@@ -1,9 +1,9 @@
-// The plan §8 conformance checks for travel, on real bar marks from both sources: the reference
+// The plan §8 conformance checks for the built-in effects, on real bar marks from both sources: the reference
 // barChart, and expressive() on bars drawn by other code. This test brings charts and effects
 // together, so it lives beside src/index.ts, the only module allowed to.
 
 import { play, testContext } from "./core/testing";
-import { barChart, expressive, sequence, travel, type GeometryEffect, type MarkGeometry } from "./index";
+import { barChart, expressive, flash, parallel, sequence, travel, type GeometryEffect, type MarkGeometry } from "./index";
 import { cleat, soccerBall } from "./icons/sport";
 
 interface Player {
@@ -58,7 +58,9 @@ function adapterMarks(): readonly MarkGeometry[] {
 const effects: Record<string, GeometryEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
-  "ball then cleat": sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" }))
+  "ball then cleat": sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" })),
+  flash: flash(),
+  "flash while the ball rolls": parallel(flash(), travel(soccerBall, { along: "goals" }))
 };
 
 const sources: Record<string, () => readonly MarkGeometry[]> = { barChart: chartMarks, "expressive()": adapterMarks };
@@ -67,7 +69,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-describe.each(Object.entries(sources))("travel on bar marks from %s", (_source, marksOf) => {
+describe.each(Object.entries(sources))("effects on bar marks from %s", (_source, marksOf) => {
   it("finds a stacked mark with goals and assists segments for every player", () => {
     const marks = marksOf();
     expect(marks.map((mark) => mark.key).sort()).toEqual(["Castillo", "Okafor", "Tanaka"]);
@@ -76,13 +78,14 @@ describe.each(Object.entries(sources))("travel on bar marks from %s", (_source, 
 
   for (const [effectName, effect] of Object.entries(effects)) {
     describe(effectName, () => {
-      it("ends a full run with the same picture as end()", async () => {
+      it("ends a full run with the same picture and mark style as end()", async () => {
         for (const mark of marksOf()) {
           const ran = testContext();
           await play(ran.clock, effect.run(mark, ran));
           const ended = testContext();
           effect.end(mark, ended);
           expect(ran.layer.picture()).toEqual(ended.layer.picture());
+          expect(ran.mark.style).toEqual(ended.mark.style);
         }
       });
 
@@ -108,6 +111,7 @@ describe.each(Object.entries(sources))("travel on bar marks from %s", (_source, 
           effect.clear(ctx);
           ctx.clear();
           expect(ctx.layer.drawn).toEqual([]);
+          expect(ctx.mark.style).toEqual({});
           expect(ctx.clock.idle).toBe(true);
         }
       });
@@ -121,6 +125,7 @@ describe.each(Object.entries(sources))("travel on bar marks from %s", (_source, 
           const ended = testContext({ mode: "off" });
           effect.end(mark, ended);
           expect(ctx.layer.picture()).toEqual(ended.layer.picture());
+          expect(ctx.mark.style).toEqual(ended.mark.style);
         }
       });
     });

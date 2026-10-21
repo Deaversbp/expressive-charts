@@ -1,4 +1,4 @@
-import { barChart, colorAssignment, expressive, registerPreset, travel, VERSION } from "./index";
+import { barChart, colorAssignment, expressive, motion, motionSwitch, registerPreset, travel, VERSION } from "./index";
 
 describe("expressive-charts", () => {
   it("exposes a version", () => {
@@ -72,5 +72,20 @@ describe("expressive from the composition root", () => {
     expect(() => expressive(selection, { key: (d) => d.region, on: { hover: "test-wigle" } })).toThrow(/Unknown preset "test-wigle"/);
     fx.destroy();
     expect(svg.querySelector(".ec-overlay")).toBeNull();
+  });
+});
+
+describe("motionSwitch from the composition root", () => {
+  afterEach(() => {
+    motion.clearChoice();
+    document.body.textContent = "";
+  });
+
+  it("switches the page-wide motion by default, which every chart follows", () => {
+    const control = motionSwitch(document.body.appendChild(document.createElement("div")));
+    control.element.querySelector<HTMLButtonElement>('button[data-mode="analysis"]')!.click();
+    expect(motion.viewerChoice).toBe("analysis");
+    expect(motion.mode).toBe("analysis");
+    control.destroy();
   });
 });

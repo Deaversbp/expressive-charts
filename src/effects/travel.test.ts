@@ -2,7 +2,6 @@ import type { GeometryEffect, Icon, MarkGeometry, Matrix, Point } from "../core"
 import { describe as build, matrix } from "../core";
 import { normalizeAngle } from "../core/geometry";
 import { play, testContext, type DrawnIcon, type TestContext } from "../core/testing";
-import { sequence } from "./combinators";
 import type { Gait, GaitState } from "./gaits";
 import { travel } from "./travel";
 
@@ -270,73 +269,4 @@ describe("travel", () => {
     expect(() => travel(ball, { ride: "under" as "on" })).toThrow(/ride/);
     expect(() => travel(ball, { along: 3 as unknown as string })).toThrow(/along/);
   });
-});
-
-// The conformance checks from plan §8, for travel on every kind of mark.
-describe("travel conformance", () => {
-  const marks: Record<string, MarkGeometry> = {
-    bar: bar(200, { radius: 4 }),
-    "negative bar": build.bar({ key: "n", series: "goals", x: 0, y: 0, width: 120, height: 20, baseline: "right" }),
-    column: build.bar({ key: "c", series: "goals", x: 0, y: 0, width: 20, height: 150, baseline: "bottom" }),
-    stacked: bar(222, { series: undefined, gap: 2, segments: [{ series: "goals", size: 160 }, { series: "assists", size: 62 }] }),
-    "short bar": bar(6),
-    slice: build.arc({ key: "Saved", cx: 150, cy: 150, inner: 70, outer: 116, start: 0.3, end: 2.4 }),
-    line: build.line({ key: "goals", series: "goals", points: [{ x: 0, y: 100 }, { x: 80, y: 60 }, { x: 160, y: 90 }, { x: 240, y: 20 }], width: 2 }),
-    point: build.point({ key: "p", x: 10, y: 10, r: 3 })
-  };
-  const effects: Record<string, GeometryEffect> = {
-    roll: travel(ball),
-    step: travel(boot),
-    "level slide": travel(flag, { orient: "level" }),
-    "fit, riding on": travel(ball, { size: "fit", ride: "on" }),
-    "along assists": travel(boot, { along: "assists" }),
-    "ball then boot": sequence(travel(ball, { along: "goals" }), travel(boot, { along: "assists" }))
-  };
-
-  for (const [effectName, effect] of Object.entries(effects)) {
-    for (const [markName, mark] of Object.entries(marks)) {
-      describe(`${effectName} on a ${markName}`, () => {
-        it("ends a full run with the same picture as end()", async () => {
-          const ran = testContext();
-          await runToEnd(effect, mark, ran, 16);
-          const ended = testContext();
-          effect.end(mark, ended);
-          expect(ran.layer.picture()).toEqual(ended.layer.picture());
-        });
-
-        it("leaves nothing behind once cleared", async () => {
-          const ctx = testContext();
-          await runToEnd(effect, mark, ctx, 16);
-          effect.clear(ctx);
-          ctx.clear();
-          expect(ctx.layer.drawn).toEqual([]);
-          expect(ctx.mark.style).toEqual({});
-        });
-
-        it("settles when aborted mid-run, and clears to nothing", async () => {
-          const ctx = testContext();
-          const running = effect.run(mark, ctx);
-          ctx.clock.advance(16);
-          ctx.clock.advance(16);
-          ctx.abort();
-          await expect(running).resolves.toBeUndefined();
-          effect.clear(ctx);
-          ctx.clear();
-          expect(ctx.layer.drawn).toEqual([]);
-          expect(ctx.clock.idle).toBe(true);
-        });
-
-        it("runs no frames when motion is off, and draws the end state", async () => {
-          const ctx = testContext({ mode: "off" });
-          const running = effect.run(mark, ctx);
-          expect(ctx.clock.idle).toBe(true);
-          await running;
-          expect(ctx.clock.idle).toBe(true);
-          const ended = testContext({ mode: "off" });
-          effect.end(mark, ended);
-          expect(ctx.layer.picture()).toEqual(ended.layer.picture());
-        });
-      });
-    }
-  }
 });

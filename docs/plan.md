@@ -266,7 +266,7 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 - `prefers-reduced-motion` is read live and re-evaluated when it changes.
 - `chooseMode()` is only called by on-page controls the viewer operates. The library ships `motionSwitch(element, motion)`, the prototype's segmented control, which calls it. While the OS asks for reduced motion and no viewer choice has been made, the switch shows Off as selected along with a short note explaining why.
 - An author's `motion: "presentation"` in code is a `setMode()` call, so it never beats the OS setting.
-- The viewer's choice lasts for the page session. Persisting it is an open question (§10).
+- The viewer's choice lasts for the page session, unless the page opts in to keeping it with `motionSwitch`'s `persist` (built in M2 step 4).
 - **CLAUDE.md rule 6 changes in M1 to:** "When the effective mode is `off` (the mode is off, or the user prefers reduced motion and hasn't picked a mode on the page), every animation jumps to its end state."
 
 ### 3.6 Staging
@@ -749,17 +749,20 @@ Each step names the files it owns, so steps in the same wave can run in parallel
    - Validate the eight series colours and their `-strong` variants: each mark at least 3:1 against the surface in both themes, distinguishable from its neighbours, and slots 1–4 kept as in the prototype.
    - CSS delivery: charts inject one `<style>` by default, with a `nonce` option; `injectStyles: false` turns injection off; `dist/expressive-charts.css` is generated from the same source in `theme.ts` and exported as `expressive-charts/style.css`. `package.json` must list CSS in `sideEffects` (for example `["*.css"]`) instead of `false`; otherwise bundlers can drop `import "expressive-charts/style.css"`, which is a side-effect import, and the strict-CSP path silently loses its styles.
    - The demo drops the dark tokens it sets itself.
-2. **`flash` and "Play next matchweek".** Owns `src/effects/flash.ts` and the `flash` preset in `src/registries.ts`.
+2. ✅ **`flash` and "Play next matchweek".** Owns `src/effects/flash.ts` and the `flash` preset in `src/registries.ts`.
    - `flash()` is one halo blink along the outline, the prototype's `stroke-width` 0 → 8 → 0 at 35% opacity, with `effect` timing.
    - Its end state is nothing. That's deliberate: a flash is emphasis, and the change it points at (the new length and value label) stays visible anyway.
    - The demo gets "Play next matchweek": seeded updates as in the prototype, with `on: { update: "flash" }` on both charts, and the button stopping after matchweek 38.
+   - **Built** as planned ([architecture.md](architecture.md#flash)). Additions: the 900 ms base peaks a quarter of the way through, each half eased like CSS's `ease-out`, as the prototype's keyframes are; `flash({ width, opacity, color })` takes the halo's peak width, opacity and colour. The §8 conformance checks moved to `src/effects/conformance.test.ts` for every built-in effect and now compare mark styles as well as pictures. Checked in a browser over matchweeks 25–38: on `barChart` exactly the bars whose values changed flash, and a re-sort flashes nothing.
+   - **Differs from the prototype:** a metric switch flashes every bar, since every value changes (the prototype flashed only on a matchweek). And `expressive()` sees lengths, not values, so on the hand-written chart every bar flashes when the axis grows (once per view over the season, now that its axis takes the prototype's nice maximum) or when the window is resized.
 3. **Tooltip and legend.** Owns `src/charts/tooltip.ts`, `src/charts/legend.ts`, and their hooks in `bar.ts`.
    - Tooltip: an HTML box near the hovered or focused mark that flips at the edges and follows a touch tap. The box is `aria-hidden`, so it isn't read twice. Its text also becomes the mark's accessible description (`aria-describedby`), so anything a custom tooltip adds beyond the series values (the prototype shows the player's position) still reaches screen readers. `tooltip: boolean | ((d) => string)` takes plain text, never HTML. Show and hide use `feedback` timing.
    - Legend: series swatches for stacked charts, coloured through the chart's `ColorAssignment`, with the text in theme text colours. A single series has no legend.
-4. **`motionSwitch` helper.** Owns `src/charts/controls/`.
+4. ✅ **`motionSwitch` helper.** Owns `src/charts/controls/`.
    - It builds the Presentation / Analysis / Off segmented control: buttons with `aria-pressed`, calling `motion.chooseMode()`, with the reduced-motion hint.
    - `persist: "key"` is an opt-in that remembers the viewer's choice in `localStorage` (open question 3).
    - The demo replaces its own switch with this one.
+   - **Built** as planned ([architecture.md](architecture.md#controls)): `motionSwitch(target, motion?, { label, labels, hints, persist })` returns `{ element, destroy() }`. The group is named by its visible label; the note is its description and a polite live region. `clearChoice()` also clears the stored choice. Its few `.ec-motion-*` rules are in the shared stylesheet in `theme.ts` (step 1's file), so they're in `expressive-charts/style.css` too, and it injects the stylesheet as charts do, so `configure({ nonce, injectStyles })` covers it.
 
 **Wave 2** (after wave 1 lands):
 

@@ -1,6 +1,7 @@
 // M1: the prototype's ball-and-cleat card on the real library (steps 7 and 8), and the same story on a
-// hand-written SVG chart through expressive() (step 11).
-import { barChart, expressive, motion, sequence, travel, type MotionMode } from "../src/index";
+// hand-written SVG chart through expressive() (step 11). M2: "Play next matchweek" flashes the bars
+// that changed (step 2), and the motion switch is the library's own (step 4).
+import { barChart, expressive, motionSwitch, sequence, travel } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
 import { drawHostChart, type DrawOptions, type Segment } from "./host-chart";
 
@@ -11,8 +12,8 @@ interface Player {
   assists: number;
 }
 
-// The prototype's sample data for a fictional club.
-const players: Player[] = [
+// The prototype's sample data for a fictional club, after matchweek 24.
+let players: Player[] = [
   { name: "Okafor", pos: "Forward", goals: 16, assists: 4 },
   { name: "Lindqvist", pos: "Forward", goals: 10, assists: 7 },
   { name: "Moreau", pos: "Winger", goals: 8, assists: 3 },
@@ -47,7 +48,8 @@ const chart = barChart<Player>("#chart", {
   stack: stacks.goals,
   sort: "value",
   colors: { goals: 1, assists: 4 },
-  on: { hover: ballThenCleat }
+  // Only bars whose values changed flash: a re-sort or a new scale only moves them.
+  on: { hover: ballThenCleat, update: "flash" }
 });
 
 // The hand-written chart redraws itself from scratch; refresh() tells the effects about the new marks.
@@ -59,7 +61,8 @@ const host = expressive<Segment>(drawHost(), {
   segment: (d) => d.series, // ...and become that player's two segments, ordered from the baseline
   keyboard: true,
   dim: true,
-  on: { hover: ballThenCleat }
+  // expressive() can't see values, so an update here means a bar's length changed.
+  on: { hover: ballThenCleat, update: "flash" }
 });
 function updateHost(next: Partial<DrawOptions>): void {
   hostState = { ...hostState, ...next };
@@ -99,23 +102,36 @@ segmented("sort", (value) => {
   updateHost({ sort });
 });
 
-// The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.
-const hints: Record<MotionMode, string> = {
-  presentation: "Staged, unhurried motion. Best for walking someone through the chart.",
-  analysis: "Quick, unstaged motion. Best for exploring.",
-  off: "No motion: effects jump to their end state."
+// "Play next matchweek": the prototype's seeded results, so every visit plays the same season.
+let seed = 7;
+const random = (): number => {
+  seed = (seed * 16807) % 2147483647;
+  return (seed - 1) / 2147483646;
 };
-const showMode = segmented("motion", (value) => motion.chooseMode(value as MotionMode));
-const hint = document.getElementById("motion-hint");
+const scoring: Record<string, number> = { Forward: 0.45, Winger: 0.3, Midfielder: 0.2, Defender: 0.08 };
+const LAST_MATCHWEEK = 38;
+let matchweek = 24;
+const nextButton = document.querySelector<HTMLButtonElement>("#next-matchweek");
+const status = document.getElementById("matchweek-status");
 
-function renderMotion(): void {
-  showMode(motion.mode);
-  if (!hint) return;
-  hint.textContent =
-    motion.prefersReduced && motion.viewerChoice === undefined
-      ? "Your device asks for reduced motion, so motion is off. Picking a mode here overrides it."
-      : hints[motion.mode];
+function playMatchweek(): void {
+  if (matchweek >= LAST_MATCHWEEK) return;
+  let changed = false;
+  players = players.map((player) => {
+    const goals = player.goals + (random() < (scoring[player.pos] ?? 0) ? 1 : 0);
+    const assists = player.assists + (random() < 0.22 ? 1 : 0);
+    changed ||= goals !== player.goals || assists !== player.assists;
+    return { ...player, goals, assists };
+  });
+  // As in the prototype, a matchweek always changes something: the first player scores.
+  if (!changed) players = players.map((player, i) => (i === 0 ? { ...player, goals: player.goals + 1 } : player));
+  matchweek++;
+  if (status) status.textContent = `After matchweek ${matchweek}`;
+  if (nextButton && matchweek >= LAST_MATCHWEEK) nextButton.disabled = true;
+  void chart.update({ data: players });
+  updateHost({});
 }
+nextButton?.addEventListener("click", playMatchweek);
 
-motion.subscribe(renderMotion);
-renderMotion();
+// The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.
+motionSwitch("#motion");

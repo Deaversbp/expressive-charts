@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: proposal, October 2026. M1 steps 1–6 are built (§9); the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 is complete (October 2026, §9); M2 is next. the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -685,7 +685,7 @@ Automated visual regression (Playwright screenshots on a manual clock) is worth 
 
 Each milestone ends with a page in `demo/` and is split into small PRs that keep `typecheck`, `test` and `build` green. `lab.html` stays untouched as the reference.
 
-### M1: Ball and cleat on real bars
+### M1: Ball and cleat on real bars ✅
 
 1. ✅ **Docs.** Update CLAUDE.md rule 6 (§3.5) and architecture.md, including the contract sections.
 2. ✅ **Core motion.** Clock, manual clock, easing, tween, `animated`, `createMotion` with the scaling table, reduced motion, viewer choice.
@@ -719,10 +719,15 @@ Steps 5–7 come first so the motion can be judged in a browser before staged up
 
 **Done when:** all three hover stories match the prototype, on our chart and on the hand-written one; sorting is staged in presentation, fast in analysis, and instant in off and under reduced motion; keyboard focus plays the same stories; and the conformance suite passes for `travel` on bar marks from both sources.
 
-**Status after step 11 (October 2026):**
-- **Met:** the hover stories on both charts, checked in a browser; staging order in Presentation; Off showing end states; keyboard focus playing the stories on the hand-written chart; and the conformance suite on both sources.
-- **Still open:** keyboard focus on the reference chart, which is step 9, in progress.
-- **Not checked in a browser:** reduced motion, because the browser pane can't emulate `prefers-reduced-motion`. It's covered by the motion core's tests and by Off, which takes the same path. The smoothness of staged transitions also needs a visible pane, since a hidden one throttles frames.
+**Status: complete (October 2026).** Everything on the "Done when" list is met:
+- the hover stories on both charts, checked in a browser;
+- staging in Presentation, and Off showing end states;
+- keyboard focus playing the stories on both charts: steps 9 and 10, then PR #16 (no extra tab stop on the host's `<svg>`) and PR #17 (the adapter shares barChart's keyboard code);
+- the conformance suite on bar marks from both sources.
+
+Two things haven't been checked in a browser:
+- **Reduced motion.** The browser pane can't emulate `prefers-reduced-motion`. It's covered by the motion core's tests and by Off, which takes the same path.
+- **The smoothness of staged transitions.** That needs a visible pane, because a hidden one throttles frames.
 
 ### M2: Bars at prototype parity
 

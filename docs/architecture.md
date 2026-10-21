@@ -72,7 +72,7 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 ```
 
 - `setMode(mode)` is the page author's default. It never overrides `prefers-reduced-motion`.
-- `chooseMode(mode)` is for on-page controls the viewer operates, like the demo's motion switch. The viewer's own choice does override the device setting. `clearChoice()` goes back to following the device.
+- `chooseMode(mode)` is for on-page controls the viewer operates, like [`motionSwitch()`](#controls). The viewer's own choice does override the device setting. `clearChoice()` goes back to following the device.
 - `prefers-reduced-motion` is followed live. `subscribe()` notifies on any change and watches the media query only while someone is listening.
 
 `motion` is the page-wide instance every chart follows unless it's given its own.
@@ -156,7 +156,7 @@ barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("so
 
 ## Effects
 
-The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The first effect, [`travel`](#travel), and the combinators `sequence`, `parallel` and `only` are in `src/effects/`.
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The first effects, [`travel`](#travel) and [`flash`](#flash), and the combinators `sequence`, `parallel` and `only` are in `src/effects/`.
 
 There are three kinds, distinguished by a `kind` field:
 
@@ -177,7 +177,7 @@ Each one has `run`, `end` (the final state, used for reduced motion) and `clear`
 | `onChange()` | Called when the geometry moves |
 | `previous` | The geometry before this update, on update events |
 
-Planned: `wiggle()`, `pulse()`, `flash()`, `threshold({ compareTo, color })`, `morph()`; the combinator `stagger`; and the experimental author helpers `defineEffect` and `defineDataEffect`.
+Planned: `wiggle()`, `pulse()`, `threshold({ compareTo, color })`, `morph()`; the combinator `stagger`; and the experimental author helpers `defineEffect` and `defineDataEffect`.
 
 ### travel
 
@@ -204,6 +204,18 @@ sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists
 | `roll()` | spin = distance ÷ radius | default |
 | `step({ stride: 42, lift: 3.2, tilt: 9 })` | a whole number of steps, at least one; each lifts by `lift` and raises the front by `tilt` degrees, easing off to 70% over the trip; flat at every landing | eased in and out, 15% longer (the prototype's cleat) |
 | `slide()` | still | default |
+
+### flash
+
+```ts
+flash({ width?, opacity?, color? })   // or the preset: on: { update: "flash" }
+```
+
+`flash` marks a change with one blink of a halo along the mark's outline, as the prototype's CSS flash does: the stroke grows from 0 to `width` (default 8 px, half of it outside the mark) by a quarter of the way through, then fades back to 0, each half eased like CSS's `ease-out`. It's drawn through `mark.set({ halo })` at `opacity` (default 0.35) in the mark's own colour unless `color` names a theme token or a CSS colour. The base duration is 900 ms with `effect` timing, so about 300 ms in Analysis.
+
+- **End state: nothing.** That's deliberate. A flash is emphasis, not information: the change it points at (the bar's new length and value label) stays on the chart, so with motion off or reduced the viewer misses nothing.
+- **Any mark.** It reads nothing of the geometry. The renderer strokes the halo along the outline as it is on screen, so in the `update` slot it follows the bar through the transition it runs alongside, and a stacked bar's segments each get their own halo.
+- **Where it runs.** In the `update` slot it runs on the marks whose values changed: on our charts, not on a re-sort or a new scale. `expressive()` can't see values, so there an update means a mark's length changed, which a new axis maximum or a resize also does (see [Adapters](#adapters)).
 
 ### Combinators
 
@@ -235,7 +247,7 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 - `measurePath(d)` measures the path data the geometry writes: length, start, end and commands.
 - `play(clock, running)` advances a manual clock a frame at a time until a run settles, letting promise callbacks run between frames, and resolves with the ms it took.
 
-The `travel` tests run the conformance checks from plan §8 on bars (positive, negative, columns, stacked, too short), a donut slice, a line and a point: a full run ends with the same picture as `end()`, clearing leaves nothing, an abort mid-run settles, and with motion off no frames run.
+`src/effects/conformance.test.ts` runs the conformance checks from plan §8 for every built-in effect (`travel` with each gait and option, `flash`, and combinations of them) on bars (positive, negative, columns, stacked, too short), a donut slice, a line and a point: a full run ends with the same picture and mark style as `end()`, clearing leaves nothing, an abort mid-run settles, and with motion off no frames run. `src/conformance.test.ts` runs the same checks on real bar marks from `barChart` and `expressive()`.
 
 ## Runner
 
@@ -269,7 +281,7 @@ The renderer implements `RunnerSurface`: `group(key, slot, order)` returns a new
 
 A slot can name a preset instead of holding an effect, `on: { hover: "wiggle" }`, and an effect can name an icon, `travel("cleat")`. Charts resolve names through registries the composition root (`src/index.ts`) hands them, so a chart never knows what a name means.
 
-- `registerPreset(name, factory)` makes a name usable in any chart's `on`. The factory returns a fresh effect that works on any rows. The built-in presets (`wiggle`, `pulse`, `flash`) are registered when their effects land in M3.
+- `registerPreset(name, factory)` makes a name usable in any chart's `on`. The factory returns a fresh effect that works on any rows. `flash` is a built-in preset; `wiggle` and `pulse` join it in M3.
 - `registerIcon(icon)` and `registerIcons(icons)` make icons usable by their `name`, through each run's `ctx.icons`. The core icons (`dot`, `arrow`, `chevron`) are registered from the start; the sport pack is opt-in, with `registerIcons(sport)`.
 - A later registration replaces an earlier one with the same name.
 - Charts call `resolveEffects(on, presets)` when they're created. An unknown preset name throws a `RangeError` that lists the registered names. A transition effect in a mark slot, or a slot that doesn't exist, throws a `TypeError` naming the slot. Misspelled names aren't type errors (custom names are allowed), so this is where they're caught.
@@ -365,7 +377,7 @@ fx.refresh(d3.selectAll("#goals rect"));             // after the host re-render
   - `opacity` is the element's opacity;
   - `emphasis` mixes the host's fill toward a darker shade, and the "mark" colour token is the host's fill;
   - `halo` is drawn in the overlay, masked to outside the mark, so it shows only where it would behind the mark.
-- **Refresh.** `refresh(source?)` re-reads the marks: from `source` if given (and from then on), otherwise from the last source, running a selector again. Like a chart's update, it calls the runner in order: `interrupt()`, then `exit`, `update` and `enter` by key, `change()` for marks that moved, and `settle()`. The adapter can't see values, so an `update` means a mark's length or segments changed; a mark that only moved, or got a new row, follows through `change()`. A new root `<svg>` (Plot draws one each time) takes the overlay and the listeners. Marks it can't read throw before anything changes.
+- **Refresh.** `refresh(source?)` re-reads the marks: from `source` if given (and from then on), otherwise from the last source, running a selector again. Like a chart's update, it calls the runner in order: `interrupt()`, then `exit`, `update` and `enter` by key, `change()` for marks that moved, and `settle()`. The adapter can't see values, so an `update` means a mark's length or segments changed; a mark that only moved, or got a new row, follows through `change()`. A redraw at a new width or with a new axis maximum changes every bar's length, so it's an update for all of them: with `update: "flash"`, every bar flashes. A new root `<svg>` (Plot draws one each time) takes the overlay and the listeners. Marks it can't read throw before anything changes.
 - **Destroy.** `destroy()` clears every run, removes the overlay and the listeners, and puts back every attribute, style property and class the adapter changed. When nothing else has changed them, attributes get their exact text back, so the host's markup reads as it did before.
 - **Data effects** get the mark's row (its first segment's, with the other segments through `related(series)`), but no samples until the `samples` option lands in M4, with `watch`.
 
@@ -385,6 +397,24 @@ Adapters follow the chart rules:
 - They never know specific effects.
 - They express geometry in the marks' nearest common ancestor's coordinates, and draw their overlay on the root `<svg>` with that ancestor's transform.
 - They leave the host's styling, axes and tooltips alone, and undo everything they change.
+
+## Controls
+
+On-page controls the viewer operates are in `src/charts/controls/`. Like the charts, they import only core, and the composition root hands them the page-wide motion by default.
+
+### Motion switch
+
+```ts
+motionSwitch(target, motion?, { label?, labels?, hints?, persist? }) // → { element, destroy() }
+```
+
+`motionSwitch` builds the prototype's segmented control in `target` (an element or a selector): Presentation, Analysis and Off. It's the library's one caller of `motion.chooseMode()`, because the viewer operates it, so a click overrides the device's reduced-motion setting.
+
+- **Structure.** A `role="group"` named by its visible label ("Motion"), with real `<button type="button">`s that carry `aria-pressed`, so Tab, Enter and Space work as they do on any button. A note beside them says what the mode does; it's the group's description and a polite live region, so a screen reader hears the new note after a click.
+- **What it shows.** The pressed button is the effective mode. While the device asks for reduced motion and the viewer hasn't picked, Off is pressed and the note says so ("Your device asks for reduced motion…"); picking any mode, Off included, makes it the viewer's choice. It follows `motion.subscribe`, so it stays right when the author, the device or another control changes the mode.
+- **Persisting.** `persist: "key"` is opt-in: the viewer's choice is saved in `localStorage` under the key and restored when the switch is made, so it carries across pages and visits; `clearChoice()` removes it. A stored value that isn't a mode is ignored, and storage that's blocked or full is skipped (every access is guarded).
+- `label`, `labels` and `hints` replace the text, for other languages. `destroy()` removes the switch and stops following the motion; the viewer's choice stays.
+- **Styles.** Its rules are in the shared stylesheet, with `:where()` like the charts' and in theme tokens (`--ec-text`, `--ec-text-muted`, `--ec-surface`, `--ec-focus`), so host CSS restyles it without specificity fights.
 
 ## Rendering
 

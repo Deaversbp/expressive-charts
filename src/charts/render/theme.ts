@@ -164,6 +164,14 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-segment) { fill: var(--ec-mark); transition: fill var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-segment) { fill: var(--ec-mark-strong); }
 :where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot)) { opacity: var(--ec-dim-opacity, 0.3); }
+:where(.ec-motion-switch) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--ec-text, ${TOKENS.text}); font-size: 13px; }
+:where(.ec-motion-label) { font-weight: 600; }
+:where(.ec-motion-modes) { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ec-ring, color-mix(in srgb, currentColor 12%, transparent)); border-radius: 8px; background: var(--ec-surface, ${TOKENS.surface}); }
+:where(.ec-motion-modes button) { font: inherit; color: inherit; border: 0; background: transparent; padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+:where(.ec-motion-modes button:hover, .ec-motion-modes button[aria-pressed="true"]) { background: color-mix(in srgb, var(--ec-focus, ${TOKENS.focus}) 12%, transparent); }
+:where(.ec-motion-modes button[aria-pressed="true"]) { font-weight: 600; }
+:where(.ec-motion-modes button:focus-visible) { outline: 2px solid var(--ec-focus, ${TOKENS.focus}); outline-offset: 2px; }
+:where(.ec-motion-hint) { flex: 1 1 220px; min-width: 0; color: var(--ec-text-muted, ${TOKENS["text-muted"]}); }
 :where(.ec-chart .ec-leaving, .ec-chart .ec-overlay) { pointer-events: none; }
 :where(.ec-attached.ec-dimmed) { opacity: var(--ec-dim-opacity, 0.3); }
 :where(.ec-attached) { transition: opacity var(--ec-hover-duration, 100ms) ease-out; }

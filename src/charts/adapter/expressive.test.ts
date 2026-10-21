@@ -594,6 +594,43 @@ describe("expressive: keyboard", () => {
     expect(events).toEqual(["leave Lindqvist", "hover Okafor pointer"]);
   });
 
+  it("focus(key) plays the hover with the ring after a click too, on another mark or the clicked one", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const events = hoverLog(fx);
+    const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
+    pointer("pointerdown", host.rect("Tanaka", "assists"));
+    host.rect("Tanaka", "assists").focus();
+    expect(events).toEqual([]);
+    fx.focus("Tanaka");
+    expect(document.activeElement).toBe(host.rect("Tanaka", "assists"));
+    expect(ring.getAttribute("visibility")).toBeNull();
+    pointer("pointerdown", host.rect("Tanaka", "assists"));
+    fx.focus("Lindqvist");
+    expect(document.activeElement).toBe(host.rect("Lindqvist", "goals"));
+    expect(ring.getAttribute("visibility")).toBeNull();
+    expect(events).toEqual(["hover Tanaka keyboard", "leave Tanaka", "hover Lindqvist keyboard"]);
+  });
+
+  it("moves focus to a mark's new element when the host keeps the old one in the page", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const events = hoverLog(fx);
+    const datum = (rect: Element) => (rect as unknown as { __data__: StackPoint }).__data__;
+    fx.focus("Tanaka");
+    // The old rect stays while it exits (a D3 transition); a new one takes its place in the mark.
+    const old = host.rect("Tanaka", "goals");
+    const fresh = Object.assign(old.cloneNode() as SVGRectElement, { __data__: datum(old) });
+    old.after(fresh);
+    const nodes = host.rects().filter((rect) => rect !== old);
+    fx.refresh({ nodes: () => nodes, data: () => nodes.map(datum) });
+    expect(document.activeElement).toBe(fresh);
+    expect(fresh.getAttribute("tabindex")).toBe("0");
+    key(fresh, "ArrowDown");
+    expect(document.activeElement).toBe(host.rect("Lindqvist", "goals"));
+    expect(events).toEqual(["hover Tanaka keyboard", "leave Tanaka", "hover Lindqvist keyboard"]);
+  });
+
   it("holds a hover while focus is on its mark, and hands it back to a pointer still over it on blur", () => {
     const host = d3Stack();
     const { fx } = setup(host.selection(), { ...stacked, keyboard: true });

@@ -28,7 +28,7 @@ export interface KeyboardFocusOptions {
 export interface KeyboardFocus {
   /** The element with focus in the chart's document or shadow root, even while the window is in the background. */
   active(): Element | null;
-  /** Moves the tab stop and focus to a mark. */
+  /** Moves the tab stop and focus to a mark as a key press would, whatever the last input was: it shows the ring and plays the hover. */
   focus(key: string): void;
   /**
    * After the marks changed: keeps the tab stop on its key, or, when that mark left, moves it to its
@@ -184,7 +184,12 @@ export function keyboardFocus(svg: () => SVGSVGElement | undefined, options: Key
 
   return {
     active: () => on?.scope.activeElement ?? null,
-    focus: focusKey,
+    focus(key) {
+      keyboardInput = true;
+      // Already focused (from a click, say): no focusin comes, so it's told here.
+      if (key === current && focused?.element === on?.scope.activeElement) options.focus(key, true);
+      else focusKey(key);
+    },
     sync() {
       listen();
       const keys = options.order();
@@ -203,8 +208,9 @@ export function keyboardFocus(svg: () => SVGSVGElement | undefined, options: Key
         if (tabStop !== undefined) focusKey(tabStop);
         else if (had.element.isConnected) had.element.blur();
         else leave();
-      } else if (had && !had.element.isConnected) {
-        // The host replaced its element (Vega does): focus the new one.
+      } else if (had && options.find(had.element) !== had.key) {
+        // The host replaced its element (Vega does), even if the old one is still in the page, as in a
+        // D3 exit transition: focus the new one.
         focusKey(had.key);
       }
       applyTabIndex(keys);

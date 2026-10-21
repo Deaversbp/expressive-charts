@@ -68,6 +68,14 @@ describe("package.json", () => {
     for (const file of scripts) expect(hasSideEffects(pkg.sideEffects, file), file).toBe(false);
   });
 
+  it("exports the conformance suite as its own entry, free of side effects", async () => {
+    const pkg = await packageJson();
+    expect(pkg.exports["./testing"]).toEqual({ types: "./dist/testing.d.ts", import: "./dist/testing.js", require: "./dist/testing.cjs" });
+    for (const file of entryFiles(pkg).filter((file) => file.startsWith("./dist/testing."))) expect(hasSideEffects(pkg.sideEffects, file), file).toBe(false);
+    const testing = await import("./testing");
+    expect(Object.keys(testing).sort()).toEqual(["checkEffect", "fixtures", "play", "testContext"]);
+  });
+
   it("has no runtime dependencies: D3 and the other libraries the tests use are dev dependencies", async () => {
     const pkg = await packageJson();
     expect(Object.keys(pkg.dependencies ?? {})).toEqual([]);

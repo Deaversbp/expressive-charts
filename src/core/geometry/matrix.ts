@@ -1,4 +1,4 @@
-// Transform helpers for effect authors (experimental until M3).
+// Transform helpers for effect authors: matrix and offset are public (docs/effects-guide.md).
 
 import type { Matrix } from "../contracts/drawing";
 import type { Point } from "../contracts/geometry";
@@ -51,7 +51,7 @@ function around(m: Matrix, about: Point | undefined): Matrix {
   return [a, b, c, d, about.x - a * about.x - c * about.y, about.y - b * about.x - d * about.y];
 }
 
-/** @experimental */
+/** Builds and applies 2D transforms in SVG order, for `mark.set({ transform })` and `IconHandle.place()`. */
 export const matrix = { translate, rotate, scale, multiply, apply };
 
 // Internal: iconFromSvg and the adapter read SVG transforms with these.
@@ -96,7 +96,7 @@ export function parseTransform(source: string): Matrix {
   return multiply(...parts);
 }
 
-/** @experimental A point `distance` px from `point` in direction `angle` (screen radians). */
+/** A point `distance` px from `point` in direction `angle` (screen radians). */
 export function offset(point: Point, angle: number, distance: number): Point {
   return { x: point.x + distance * Math.cos(angle), y: point.y + distance * Math.sin(angle) };
 }

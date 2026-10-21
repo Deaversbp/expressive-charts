@@ -40,7 +40,7 @@ The Docker image's tag follows `@playwright/test` in `package.json`. When you up
 2. Read only from `MarkGeometry` (and the datum, for data effects). Do not check chart types.
 3. Express durations as base values and pass them through the motion core.
 4. Implement `end()` so reduced motion shows a sensible final state.
-5. Add `src/effects/<name>.test.ts` and check the effect against every built-in chart.
+5. Add `src/effects/<name>.test.ts`, and add the effect to `src/effects/conformance.test.ts` and `src/conformance.test.ts`, which run `checkEffect` (`expressive-charts/testing`) on every kind of mark and on real marks from every chart and adapter. [docs/effects-guide.md](docs/effects-guide.md) has the rules and a review checklist.
 6. Add a demo to `demo/`.
 
 ## Adding a chart

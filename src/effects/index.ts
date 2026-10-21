@@ -7,3 +7,4 @@ export { wiggle, type WiggleOptions } from "./wiggle";
 export { pulse, type PulseOptions } from "./pulse";
 export { gaits, type Gait, type GaitName, type GaitPose, type GaitState, type StepOptions } from "./gaits";
 export { only, parallel, sequence, stagger, type StaggerOptions } from "./combinators";
+export { defineDataEffect, defineEffect, type DataEffectSpec, type GeometryEffectSpec } from "./define";

@@ -9,9 +9,10 @@ async function writeFile(path: string, text: string): Promise<void> {
 
 export default defineConfig([
   {
-    // npm package: ES module + CommonJS + type declarations. The sport icon pack is its own entry
-    // ("expressive-charts/icons/sport"), so the core build doesn't carry it.
-    entry: { index: "src/index.ts", "icons/sport": "src/icons/sport/index.ts" },
+    // npm package: ES module + CommonJS + type declarations. The sport icon pack
+    // ("expressive-charts/icons/sport") and the conformance suite for effect authors
+    // ("expressive-charts/testing") are their own entries, so the core build carries neither.
+    entry: { index: "src/index.ts", "icons/sport": "src/icons/sport/index.ts", testing: "src/testing/index.ts" },
     format: ["esm", "cjs"],
     dts: true,
     sourcemap: true,

@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a first bar chart, the `expressive()` adapter for bars drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle` and `pulse`, with `sequence`, `parallel`, `only` and `stagger`) and the viewer's `motionSwitch` are built ([below](#available-now-the-motion-core-mark-geometry-a-bar-chart-travel-and-the-adapter)). The other built-in effects are next, so `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a first bar chart, the `expressive()` adapter for bars drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle` and `pulse`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-a-bar-chart-travel-and-the-adapter)). The other built-in effects are next, so `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -219,7 +219,36 @@ The radii live in the arc generator, not in the row, so the page passes them to 
 
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
+
+## Writing effects
+
+Effects of your own work everywhere the built-in ones do. `defineEffect` takes a `run` that animates the mark and an `end` that draws where the run ends, which is all reduced motion shows. Both read only the mark's shared description, so this one draws along a bar, around a donut slice or along a line, on our charts and through `expressive()`:
+
+```js
+import { barChart, defineEffect } from "expressive-charts";
+
+const underline = defineEffect({
+  async run(mark, ctx) {
+    const line = ctx.layer.path(mark.slice(0, 0), { stroke: "text-muted", width: 2 });
+    await ctx.tween({ duration: 300, timing: "effect", update: (p) => line.update(mark.slice(0, p)) }).finished;
+  },
+  end(mark, ctx) {
+    ctx.layer.path(mark.slice(0, 1), { stroke: "text-muted", width: 2 });
+  }
+});
+barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue", on: { hover: underline } });
+```
+
+`ctx.tween` keeps every duration under the motion modes. `defineDataEffect` makes effects that read the mark's row and values, with the row type checked against the chart's. `expressive-charts/testing` has the conformance suite the built-in effects pass, for any test runner:
+
+```js
+import { checkEffect } from "expressive-charts/testing";
+
+await checkEffect(underline); // throws one Error listing every check that failed, on every kind of mark
+```
+
+The [effects guide](docs/effects-guide.md) covers the mark contract, drawing, timing, end states, keeping data readable, data effects, composing and testing, with two worked examples and a review checklist. This author API is covered by the 0.x promise in [CHANGELOG.md](CHANGELOG.md): from 0.1.0, it breaks only in a minor release, with a migration note.
 
 ## Demo
 
@@ -235,7 +264,7 @@ npm run dev
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Serves the `demo/` folder with live reload |
-| `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` entry), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
+| `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` and `testing` entries), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
 | `npm test` | Runs the test suite |
 | `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
 | `npm run typecheck` | Checks types without building |

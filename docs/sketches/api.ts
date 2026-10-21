@@ -8,7 +8,8 @@
  * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
  * options, accessors, colorAssignment), the icons (defineIcon, iconFromSvg, icons), the first
  * effects (travel with its gaits, flash, wiggle, pulse, sequence, parallel, only, stagger), the
- * viewer's motionSwitch and the adapter's types (MarkSource, Attachment, ExpressiveOptions).
+ * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch and the adapter's
+ * types (MarkSource, Attachment, ExpressiveOptions). The conformance suite is ./testing.ts.
  * Everything still declared here is planned. Lines marked NEW were
  * added because writing the examples in ./examples exposed a gap in docs/plan.md.
  */
@@ -25,10 +26,7 @@ import type {
   DataEffect,
   describe as builders,
   Easing,
-  EffectContext,
   ExpressiveOptions as BuiltExpressiveOptions,
-  GeometryEffect,
-  MarkData,
   MarkEvents,
   MarkGeometry,
   MarkSource,
@@ -62,24 +60,11 @@ export declare function threshold(options: {
 }): DataEffect;
 export declare function morph(options?: { readonly points?: number }): TransitionEffect;
 
-// NEW: helpers for effect authors. Experimental until M3, when the effect API goes public.
-export interface GeometryEffectSpec {
-  run(mark: MarkGeometry, ctx: EffectContext): Promise<void>;
-  end(mark: MarkGeometry, ctx: EffectContext): void;
-  clear?(ctx: EffectContext): void;
-}
-export interface DataEffectSpec<D> {
-  readonly needs?: { readonly related?: readonly string[] };
-  run(mark: MarkGeometry, data: MarkData<D>, ctx: EffectContext): Promise<void>;
-  end(mark: MarkGeometry, data: MarkData<D>, ctx: EffectContext): void;
-  clear?(ctx: EffectContext): void;
-}
-/** @experimental */
-export declare function defineEffect(spec: GeometryEffectSpec): GeometryEffect;
-/** @experimental */
-export declare function defineDataEffect<D = unknown>(spec: DataEffectSpec<D>): DataEffect<D>;
-
-// matrix (translate, rotate, scale, multiply, apply) and offset are built, in src/core/geometry.
+// NEW: helpers for effect authors. Built in M3 (src/effects/define.ts) and public, with
+// GeometryEffectSpec and DataEffectSpec<D>, as are matrix (translate, rotate, scale, multiply, apply)
+// and offset (src/core/geometry). Changed from the sketch: DataEffectSpec's run, end and clear are
+// function-typed properties, as on DataEffect, so a spec is checked against its row type strictly.
+// The conformance suite is "expressive-charts/testing" (./testing.ts); docs/effects-guide.md is the guide.
 
 // ── Icons: neutral core set; sports icons live in "expressive-charts/icons/sport" ─
 

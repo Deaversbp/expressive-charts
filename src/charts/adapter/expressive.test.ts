@@ -556,6 +556,52 @@ describe("expressive: keyboard", () => {
     expect(document.activeElement).toBe(host.rect("Lindqvist", "goals"));
   });
 
+  it("hears focus without focus listeners on its SVG elements, which Chrome would make tab stops", () => {
+    const add = vi.spyOn(EventTarget.prototype, "addEventListener");
+    const remove = vi.spyOn(EventTarget.prototype, "removeEventListener");
+    const focusCalls = (spy: { mock: { calls: unknown[][]; contexts: unknown[] } }) =>
+      spy.mock.contexts.map((target, i) => ({ target, call: spy.mock.calls[i]! })).filter(({ call }) => /^(focus|blur)/.test(String(call[0])));
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    // Plot draws a new <svg> each time: the listeners move with the marks, and still not onto it.
+    const next = d3Stack();
+    fx.refresh(next.selection());
+    document.body.appendChild(document.createElement("div")).attachShadow({ mode: "open" }).appendChild(next.svg);
+    fx.refresh();
+    expect(focusCalls(add).length).toBeGreaterThan(0);
+    expect(focusCalls(add).filter(({ target }) => target instanceof SVGElement)).toEqual([]);
+    fx.destroy();
+    expect(focusCalls(remove)).toEqual(focusCalls(add));
+  });
+
+  it("works inside a shadow root", () => {
+    const host = d3Stack();
+    document.body.appendChild(document.createElement("div")).attachShadow({ mode: "open" }).appendChild(host.svg);
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const events: string[] = [];
+    fx.on("hover", (e) => events.push(`hover ${e.mark.key} ${e.source}`));
+    fx.on("leave", (e) => events.push(`leave ${e.mark.key}`));
+    host.rect("Okafor", "goals").focus();
+    key(host.rect("Okafor", "goals"), "ArrowDown");
+    host.rect("Tanaka", "goals").blur();
+    expect(events).toEqual(["hover Okafor keyboard", "leave Okafor", "hover Tanaka keyboard", "leave Tanaka"]);
+  });
+
+  it("follows the <svg> into a shadow root on refresh()", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const events: string[] = [];
+    fx.on("hover", (e) => events.push(`hover ${e.mark.key} ${e.source}`));
+    document.body.appendChild(document.createElement("div")).attachShadow({ mode: "open" }).appendChild(host.svg);
+    fx.refresh();
+    host.rect("Okafor", "goals").focus();
+    // And back out into the document.
+    document.body.appendChild(host.svg);
+    fx.refresh();
+    host.rect("Tanaka", "goals").focus();
+    expect(events).toEqual(["hover Okafor keyboard", "hover Tanaka keyboard"]);
+  });
+
   it("without keyboard, marks aren't focusable", () => {
     const host = d3Stack();
     const { fx } = setup(host.selection(), stacked);

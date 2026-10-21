@@ -731,9 +731,50 @@ Two things haven't been checked in a browser:
 
 ### M2: Bars at prototype parity
 
-`flash` via `on.update`. "Play next matchweek". Tooltip, legend and data table. Theme tokens with dark mode and the eight validated colours. The `motionSwitch` helper. ARIA roles settled after screen reader testing. Optionally, Playwright visual tests.
+**Decided while planning M2 (October 2026):** Playwright screenshot tests, Chromium only. CSS is both injected and shipped as a file. You run the screen-reader check that settles the ARIA roles.
 
-**Demo:** the full card 1 of the lab.
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps (`src/index.ts`, `src/registries.ts`, `docs/architecture.md`, `README.md`, this plan, `demo/bars.*`) get small edits only, and whichever step lands second merges main first.
+
+**Wave 1** (parallel):
+
+1. **Theme: dark mode, the validated palette, and CSS delivery.** Owns `src/charts/render/theme.ts`, the CSS build, and the package's style export.
+   - Dark-mode defaults that follow `prefers-color-scheme`, overridable with `data-theme="light"|"dark"` on any ancestor. Default rules use `:where()`.
+   - Validate the eight series colours and their `-strong` variants: each mark at least 3:1 against the surface in both themes, distinguishable from its neighbours, and slots 1–4 kept as in the prototype.
+   - CSS delivery: charts inject one `<style>` by default, with a `nonce` option; `injectStyles: false` turns injection off; `dist/expressive-charts.css` is generated from the same source in `theme.ts` and exported as `expressive-charts/style.css`. `package.json` must list CSS in `sideEffects` (for example `["*.css"]`) instead of `false`; otherwise bundlers can drop `import "expressive-charts/style.css"`, which is a side-effect import, and the strict-CSP path silently loses its styles.
+   - The demo drops the dark tokens it sets itself.
+2. **`flash` and "Play next matchweek".** Owns `src/effects/flash.ts` and the `flash` preset in `src/registries.ts`.
+   - `flash()` is one halo blink along the outline, the prototype's `stroke-width` 0 → 8 → 0 at 35% opacity, with `effect` timing.
+   - Its end state is nothing. That's deliberate: a flash is emphasis, and the change it points at (the new length and value label) stays visible anyway.
+   - The demo gets "Play next matchweek": seeded updates as in the prototype, with `on: { update: "flash" }` on both charts, and the button stopping after matchweek 38.
+3. **Tooltip and legend.** Owns `src/charts/tooltip.ts`, `src/charts/legend.ts`, and their hooks in `bar.ts`.
+   - Tooltip: an HTML box near the hovered or focused mark that flips at the edges and follows a touch tap. The box is `aria-hidden`, so it isn't read twice. Its text also becomes the mark's accessible description (`aria-describedby`), so anything a custom tooltip adds beyond the series values (the prototype shows the player's position) still reaches screen readers. `tooltip: boolean | ((d) => string)` takes plain text, never HTML. Show and hide use `feedback` timing.
+   - Legend: series swatches for stacked charts, coloured through the chart's `ColorAssignment`, with the text in theme text colours. A single series has no legend.
+4. **`motionSwitch` helper.** Owns `src/charts/controls/`.
+   - It builds the Presentation / Analysis / Off segmented control: buttons with `aria-pressed`, calling `motion.chooseMode()`, with the reduced-motion hint.
+   - `persist: "key"` is an opt-in that remembers the viewer's choice in `localStorage` (open question 3).
+   - The demo replaces its own switch with this one.
+
+**Wave 2** (after wave 1 lands):
+
+5. **Data table and ARIA roles, with your screen-reader check.** Owns `src/charts/table.ts`, the ARIA structure in `bar.ts`, and `docs/a11y-check.md`.
+   - Table: `table: boolean | "hidden"`, default on, a `<details>` "Data table" after the chart. It follows the current sort and updates with the data. Columns are the category, each series, and a total, plus any extra fields the page lists in a `columns` option (the prototype's table includes the position).
+   - ARIA roles: pick the structure, then write a short listening script in `docs/a11y-check.md`. **You run it** with NVDA + Chrome or VoiceOver + Safari, and the roles are adjusted to what you hear.
+   - An optional polite live region (`announce`) is off by default (open question 4).
+6. **Playwright screenshot tests.** Owns the Playwright dev dependency, `playwright.config.ts`, `tests/visual/`, a CI job, and a small hook that lets tests drive the page-wide clock.
+   - Screenshots of the demo in light and dark, at rest and mid-travel at fixed clock times, in each motion mode, plus focus rings on both charts.
+   - Chromium only, with the browser cached in CI. A documented command updates the baselines.
+   - Baselines are captured once steps 1–3 have landed, so they don't churn.
+
+**Wave 3:**
+
+7. **Finish the demo: card 1 parity.** Put it all together in `demo/bars.html` and compare it with the lab's first card, then check the "Done when" list in the browser with you.
+
+**Done when:**
+- `demo/bars.html` reproduces the lab's first card on the library: the ball and cleat, staged sorting, the metric switch, "Play next matchweek" with a flash on changed bars, a tooltip, a legend for Goals + assists, a data table, and the motion switch.
+- Light and dark themes come from the library's defaults, not page CSS, and the palette meets 3:1 in both.
+- CSS works injected and as a file, including under a strict CSP.
+- Your screen-reader check passes.
+- The Playwright suite is green in CI.
 
 ### M3: Donut, plus the proof that effects are chart-agnostic
 
@@ -788,10 +829,10 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 ### Open questions (each has a recommendation; none blocks M1)
 
 1. **Morph correspondence.** Side-matched sampling (§2.2) *unrolls* a slice: its arc becomes the bar's height. The prototype instead *drops* the slice, so the outer arc becomes the bar's top. *Recommendation:* build the generic unroll in M5, compare it in the demo, and add a `morph({ align })` option only if the prototype's version reads better.
-2. **CSS delivery.** Auto-injected `<style>` vs a CSS file. *Recommendation:* both, with injection on by default (§7.1).
-3. **Persisting the viewer's motion choice** across pages (`localStorage`). *Recommendation:* opt-in `motionSwitch(el, motion, { persist: "key" })`.
-4. **Live-region announcements** on update, on or off by default. *Recommendation:* off by default, with a one-line option.
-5. **Playwright for visual regression** needs a new dev dependency plus browsers in CI. *Recommendation:* decide at M2.
+2. **CSS delivery.** *Decided in M2 planning: both* (M2 step 1). Auto-injected `<style>` vs a CSS file. *Recommendation:* both, with injection on by default (§7.1).
+3. **Persisting the viewer's motion choice** across pages (`localStorage`). *Decided: opt-in `persist`* (M2 step 4). *Recommendation:* opt-in `motionSwitch(el, motion, { persist: "key" })`.
+4. **Live-region announcements** on update, on or off by default. *Decided: off by default, with an `announce` option* (M2 step 5). *Recommendation:* off by default, with a one-line option.
+5. **Playwright for visual regression** needs a new dev dependency plus browsers in CI. *Decided in M2 planning: yes, Chromium only* (M2 step 6). *Recommendation:* decide at M2.
 6. **More subpath exports** (`expressive-charts/core`, `/effects`) for smaller bundles. The first one (`/icons/sport`) is needed in M1. *Recommendation:* decide the rest in M6 using real bundle numbers.
 7. **TypeScript 7** (the native compiler) is a separate upgrade. *Recommendation:* after M1, once there's real code to typecheck.
 8. **Framework wrappers** (React, Vue, Svelte) are out of scope for 0.1. The imperative `update()` API is designed to be easy to wrap.

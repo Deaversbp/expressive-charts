@@ -740,14 +740,14 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 1. **Theme: dark mode, the validated palette, and CSS delivery.** Owns `src/charts/render/theme.ts`, the CSS build, and the package's style export.
    - Dark-mode defaults that follow `prefers-color-scheme`, overridable with `data-theme="light"|"dark"` on any ancestor. Default rules use `:where()`.
    - Validate the eight series colours and their `-strong` variants: each mark at least 3:1 against the surface in both themes, distinguishable from its neighbours, and slots 1–4 kept as in the prototype.
-   - CSS delivery: charts inject one `<style>` by default, with a `nonce` option; `injectStyles: false` turns injection off; `dist/expressive-charts.css` is generated from the same source in `theme.ts` and exported as `expressive-charts/style.css`.
+   - CSS delivery: charts inject one `<style>` by default, with a `nonce` option; `injectStyles: false` turns injection off; `dist/expressive-charts.css` is generated from the same source in `theme.ts` and exported as `expressive-charts/style.css`. `package.json` must list CSS in `sideEffects` (for example `["*.css"]`) instead of `false`; otherwise bundlers can drop `import "expressive-charts/style.css"`, which is a side-effect import, and the strict-CSP path silently loses its styles.
    - The demo drops the dark tokens it sets itself.
 2. **`flash` and "Play next matchweek".** Owns `src/effects/flash.ts` and the `flash` preset in `src/registries.ts`.
    - `flash()` is one halo blink along the outline, the prototype's `stroke-width` 0 → 8 → 0 at 35% opacity, with `effect` timing.
    - Its end state is nothing. That's deliberate: a flash is emphasis, and the change it points at (the new length and value label) stays visible anyway.
    - The demo gets "Play next matchweek": seeded updates as in the prototype, with `on: { update: "flash" }` on both charts, and the button stopping after matchweek 38.
 3. **Tooltip and legend.** Owns `src/charts/tooltip.ts`, `src/charts/legend.ts`, and their hooks in `bar.ts`.
-   - Tooltip: an HTML box near the hovered or focused mark that flips at the edges and follows a touch tap. It's `aria-hidden`, because marks have `aria-label`s and there will be a data table. `tooltip: boolean | ((d) => string)` takes plain text, never HTML. Show and hide use `feedback` timing.
+   - Tooltip: an HTML box near the hovered or focused mark that flips at the edges and follows a touch tap. The box is `aria-hidden`, so it isn't read twice. Its text also becomes the mark's accessible description (`aria-describedby`), so anything a custom tooltip adds beyond the series values (the prototype shows the player's position) still reaches screen readers. `tooltip: boolean | ((d) => string)` takes plain text, never HTML. Show and hide use `feedback` timing.
    - Legend: series swatches for stacked charts, coloured through the chart's `ColorAssignment`, with the text in theme text colours. A single series has no legend.
 4. **`motionSwitch` helper.** Owns `src/charts/controls/`.
    - It builds the Presentation / Analysis / Off segmented control: buttons with `aria-pressed`, calling `motion.chooseMode()`, with the reduced-motion hint.
@@ -757,7 +757,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 **Wave 2** (after wave 1 lands):
 
 5. **Data table and ARIA roles, with your screen-reader check.** Owns `src/charts/table.ts`, the ARIA structure in `bar.ts`, and `docs/a11y-check.md`.
-   - Table: `table: boolean | "hidden"`, default on, a `<details>` "Data table" after the chart. It follows the current sort and updates with the data. Columns are the category, each series, and a total.
+   - Table: `table: boolean | "hidden"`, default on, a `<details>` "Data table" after the chart. It follows the current sort and updates with the data. Columns are the category, each series, and a total, plus any extra fields the page lists in a `columns` option (the prototype's table includes the position).
    - ARIA roles: pick the structure, then write a short listening script in `docs/a11y-check.md`. **You run it** with NVDA + Chrome or VoiceOver + Safari, and the roles are adjusted to what you hear.
    - An optional polite live region (`announce`) is off by default (open question 4).
 6. **Playwright screenshot tests.** Owns the Playwright dev dependency, `playwright.config.ts`, `tests/visual/`, a CI job, and a small hook that lets tests drive the page-wide clock.

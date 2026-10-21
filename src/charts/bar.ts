@@ -161,11 +161,11 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     mark: (key) => ({
       set: (style) => {
         find(key)?.handle.set(style);
-        if (key === ringKey) drawRing();
+        restyled(key);
       },
       reset: () => {
         find(key)?.handle.reset();
-        if (key === ringKey) drawRing();
+        restyled(key);
       }
     }),
     colors: (key) => find(key)?.parts[0]?.colors
@@ -298,10 +298,17 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     if (record.key === hovered?.key) showTooltip(record);
   }
 
-  /** The tooltip beside the hovered mark as it is on screen, with the text for where it's heading. */
+  /** The tooltip beside the hovered mark as it is on screen, moved with its effects, with the text for where it's heading. */
   function showTooltip(record: MarkRecord<D>): void {
     const { row } = record;
-    tooltip.show(record.shown.geometry, row, () => summaryContent(row.label.text, row.values, format(current)));
+    tooltip.show(record.shown.geometry, row, () => summaryContent(row.label.text, row.values, format(current)), record.handle.style.transform);
+  }
+
+  /** An effect restyled a mark: the focus ring and the tooltip follow its transform. */
+  function restyled(key: string): void {
+    if (key === ringKey) drawRing();
+    const record = records.get(key);
+    if (record && key === hovered?.key) showTooltip(record);
   }
 
   const syncLegend = (): void => legend.update(barEncoding(current).series.map((s) => s.series), colors, current.legend !== false);

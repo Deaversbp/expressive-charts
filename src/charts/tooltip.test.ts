@@ -1,4 +1,4 @@
-import { createMotion, manualClock, type MotionMode } from "../core";
+import { createMotion, manualClock, matrix, type GeometryEffect, type MarkGeometry, type Matrix, type MotionMode } from "../core";
 import { createRegistry, type PresetFactory } from "../core/registry";
 import { play } from "../core/testing";
 import { barChart, type ChartEnv } from "./bar";
@@ -59,6 +59,19 @@ function tabTo(target: SVGElement): void {
 }
 
 const px = (value: number) => `${Math.round(value)}px`;
+
+/** A hover effect that moves the mark by `transform` and holds it there until it's cleared. */
+function moving(transform: Matrix | ((mark: MarkGeometry) => Matrix)): GeometryEffect {
+  return {
+    kind: "geometry",
+    run(mark, ctx) {
+      ctx.mark.set({ transform: typeof transform === "function" ? transform(mark) : transform });
+      return new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve()));
+    },
+    end() {},
+    clear() {}
+  };
+}
 
 beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(() => TIP.width);
@@ -167,6 +180,34 @@ describe("barChart: tooltip", () => {
     // The first bar spans 11–31 in the viewBox: 5.5–15.5 on screen. No room above, so below.
     expect(tip()!.style.top).toBe(px(100.5 - 166 + 15.5 + 12));
     expect(tip()!.style.left).toBe(px(20 + geometry("Okafor").center.x / 2 - TIP.width / 2));
+  });
+
+  it("moves with an effect that moves the mark", () => {
+    const { svg, hit, geometry, tip, shown } = setup({ on: { hover: moving([1, 0, 0, 1, 40, 6]) } });
+    pointer("pointerover", hit("Okafor"));
+    // Below the first bar, as at rest, but 40 px right and 6 px down with it.
+    expect(tip()!.style.left).toBe(px(geometry("Okafor").center.x + 40 - TIP.width / 2));
+    expect(tip()!.style.top).toBe(px(11 + 20 + 6 + 12));
+    // Leaving clears the effect, which resets the mark; the tooltip stays hidden.
+    svg.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" }));
+    expect(shown()).toBe(false);
+  });
+
+  it("keeps the side it has at rest while an effect moves the mark", () => {
+    // Lifted 40 px, the third bar's top is at 39: too close to the top for the box to fit above. It
+    // stays above, so a wiggle near the edge can't flip it back and forth.
+    const { hit, tip } = setup({ on: { hover: moving([1, 0, 0, 1, 0, -40]) } });
+    pointer("pointerover", hit("Lindqvist"));
+    expect(tip()!.getAttribute("data-side")).toBe("above");
+    expect(tip()!.style.top).toBe(px(79 - 40 - 12 - TIP.height));
+  });
+
+  it("stays clear of a mark an effect scales up", () => {
+    // A pulse: 1.5× about the bar's centre (y 89), so its top rises from 79 to 74.
+    const { hit, geometry, tip } = setup({ on: { hover: moving((mark) => matrix.scale(1.5, 1.5, mark.center)) } });
+    pointer("pointerover", hit("Lindqvist"));
+    expect(tip()!.style.top).toBe(px(74 - 12 - TIP.height));
+    expect(tip()!.style.left).toBe(px(geometry("Lindqvist").center.x - TIP.width / 2));
   });
 
   it("sets a function's text as text, never as HTML", () => {

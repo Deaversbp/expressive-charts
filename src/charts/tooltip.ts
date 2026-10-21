@@ -3,7 +3,7 @@
 // and a tooltip function's text is also the mark's accessible description. Its text is only ever set
 // as text, never parsed as HTML, so a tooltip function can't inject markup.
 
-import type { MarkGeometry, MotionView } from "../core";
+import { matrix, type Matrix, type MarkGeometry, type MotionView } from "../core";
 import { report } from "../core/report";
 import { svgElement } from "./render/svg";
 
@@ -34,11 +34,12 @@ export interface TooltipPlacement {
 
 export interface Tooltip {
   /**
-   * Shows the tooltip beside `mark` (in the <svg>'s viewBox units), or moves it there. Its text is
-   * worked out again only when `row` or the option changes: the default `summary`, a function's
-   * result, or nothing with `tooltip: false`.
+   * Shows the tooltip beside `mark` (in the <svg>'s viewBox units), or moves it there. `transform` is
+   * an effect's transform on the mark, which the tooltip follows. Its text is worked out again only
+   * when `row` or the option changes: the default `summary`, a function's result, or nothing with
+   * `tooltip: false`.
    */
-  show(mark: MarkGeometry, row: { readonly datum: unknown }, summary: () => TooltipContent): void;
+  show(mark: MarkGeometry, row: { readonly datum: unknown }, summary: () => TooltipContent, transform?: Matrix): void;
   /**
    * Makes a tooltip function's text for `row` the accessible description of the mark's `element`
    * (aria-describedby, to a <desc> inside it), so what it adds beyond the values reaches screen
@@ -58,16 +59,17 @@ let described = 0;
 
 /**
  * Where the box goes: centred on the mark, above it, or below it when there isn't room above. When
- * neither side has room it takes the side with more. It's clamped to the box's left and right edges
- * (to the left edge when it's wider), but never moved over the mark it describes.
+ * neither side has room it takes the side with more. `side` picks it instead. It's clamped to the
+ * box's left and right edges (to the left edge when it's wider), but never moved over the mark it
+ * describes.
  */
-export function placeTooltip(anchor: TooltipAnchor, size: Size, box: Size, gap = GAP): TooltipPlacement {
-  const above = anchor.top - gap;
-  const below = box.height - anchor.bottom - gap;
-  const side = size.height <= above || above >= below ? "above" : "below";
+export function placeTooltip(anchor: TooltipAnchor, size: Size, box: Size, side?: TooltipPlacement["side"]): TooltipPlacement {
+  const above = anchor.top - GAP;
+  const below = box.height - anchor.bottom - GAP;
+  side ??= size.height <= above || above >= below ? "above" : "below";
   return {
     x: Math.max(0, Math.min(box.width - size.width, anchor.x - size.width / 2)),
-    y: side === "above" ? above - size.height : anchor.bottom + gap,
+    y: side === "above" ? above - size.height : anchor.bottom + GAP,
     side
   };
 }
@@ -129,7 +131,7 @@ export function chartTooltip<D>(svg: SVGSVGElement, options: { readonly motion: 
   }
 
   return {
-    show(mark, row, summary) {
+    show(mark, row, summary, transform) {
       const content = contentFor(row, summary);
       if (content === undefined) {
         hide();
@@ -146,12 +148,15 @@ export function chartTooltip<D>(svg: SVGSVGElement, options: { readonly motion: 
       const chart = svg.getBoundingClientRect();
       const k = chart.width > 0 && view.width > 0 ? chart.width / view.width : 1;
       const area = chart.width > 0 ? { width: chart.width, height: chart.height } : { width: view.width, height: view.height };
-      const anchor = {
-        x: (mark.center.x - view.x) * k,
-        top: (mark.bounds.y - view.y) * k,
-        bottom: (mark.bounds.y + mark.bounds.height - view.y) * k
+      const anchor = (m: Matrix | undefined): TooltipAnchor => {
+        const { x, y, width, height } = mark.bounds;
+        const ys = [{ x, y }, { x: x + width, y }, { x, y: y + height }, { x: x + width, y: y + height }].map((corner) => (m ? matrix.apply(m, corner).y : corner.y));
+        const center = m ? matrix.apply(m, mark.center) : mark.center;
+        return { x: (center.x - view.x) * k, top: (Math.min(...ys) - view.y) * k, bottom: (Math.max(...ys) - view.y) * k };
       };
-      const placed = placeTooltip(anchor, { width: tip.offsetWidth, height: tip.offsetHeight }, area);
+      const size = { width: tip.offsetWidth, height: tip.offsetHeight };
+      // The side is the mark's at rest, so an effect moving it (a wiggle) can't flip the box back and forth.
+      const placed = placeTooltip(anchor(transform), size, area, transform && placeTooltip(anchor(undefined), size, area).side);
       const origin = layer!.getBoundingClientRect();
       tip.style.left = `${Math.round(chart.left - origin.left + placed.x)}px`;
       tip.style.top = `${Math.round(chart.top - origin.top + placed.y)}px`;

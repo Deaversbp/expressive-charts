@@ -5,9 +5,11 @@ import type { MarkEvents } from "../types";
 
 /**
  * A CSS selector, an element, a list of elements (a NodeList, an array), or anything shaped like a D3
- * selection, whose `data()` types the callbacks.
+ * selection, whose `data()` types the callbacks. `each` is only there for the types: a D3
+ * selection's `data()` is overloaded, and TypeScript infers from the last overload, which takes new
+ * data, so the row type is found through `each` instead. The adapter never calls it.
  */
-export type MarkSource<D> = string | Element | ArrayLike<Element> | { nodes(): Element[]; data(): D[] };
+export type MarkSource<D> = string | Element | ArrayLike<Element> | { nodes(): Element[]; data(): D[]; each?(callback: (datum: D) => void): unknown };
 
 export interface ExpressiveOptions<D> {
   /**
@@ -51,7 +53,8 @@ export interface ExpressiveOptions<D> {
   readonly on?: EffectSlots<NoInfer<D>>;
   /**
    * Makes marks focusable with a roving tabindex: Tab reaches one mark, the arrow keys, Home and End
-   * move between them, and focus plays the hover effects. Escape or leaving the chart stops them.
+   * move between them in the order `marks()` gives (around a pie, clockwise from 12 o'clock), and
+   * focus plays the hover effects. Escape or leaving the chart stops them.
    */
   readonly keyboard?: boolean;
   /** Dim the other marks while one is hovered (to --ec-dim-opacity). Default false: the host owns its styling. */
@@ -84,7 +87,13 @@ export interface Attachment<D> {
   refresh(source?: MarkSource<D>): void;
   /** Listens for mark events; returns the unsubscribe. */
   on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void;
-  /** The marks now attached, in visual order (leaving marks excluded). */
+  /**
+   * The marks now attached, in visual order (leaving marks excluded): bars top to bottom and columns
+   * left to right. Marks described with `geometry` that go round one pivot (a pie's slices: each
+   * pivot within 0.5 px of the first, and each mark's `start`, `center` and `end` the same distance
+   * from it, more than 0.5 px away) go clockwise from 12 o'clock, by the angle of each mark's
+   * `center` about it. Other `geometry` marks keep document order, lines that start at one point too.
+   */
   marks(): readonly MarkGeometry[];
   /** With `keyboard: true`, moves focus to the mark, which plays its hover effects. Does nothing for an unknown key. */
   focus(key: string): void;

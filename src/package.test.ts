@@ -1,5 +1,6 @@
 // @vitest-environment node
-// package.json: bundlers keep `import "expressive-charts/style.css"`, and nothing else loses tree shaking.
+// package.json: bundlers keep `import "expressive-charts/style.css"`, nothing else loses tree shaking,
+// and installing the library installs nothing else.
 //
 // The CSS import has no bindings, so a bundler that honours "sideEffects" drops it unless the CSS
 // file is listed there, and the page that set injectStyles: false loses its styles without an error.
@@ -13,6 +14,7 @@ interface PackageJson {
   readonly module: string;
   readonly exports: Readonly<Record<string, string | Readonly<Record<string, string>>>>;
   readonly sideEffects: boolean | readonly string[];
+  readonly dependencies?: Readonly<Record<string, string>>;
 }
 
 async function packageJson(): Promise<PackageJson> {
@@ -64,6 +66,11 @@ describe("package.json", () => {
     const scripts = entryFiles(pkg).filter((file) => !file.endsWith(".css"));
     expect(scripts.length).toBeGreaterThan(4);
     for (const file of scripts) expect(hasSideEffects(pkg.sideEffects, file), file).toBe(false);
+  });
+
+  it("has no runtime dependencies: D3 and the other libraries the tests use are dev dependencies", async () => {
+    const pkg = await packageJson();
+    expect(Object.keys(pkg.dependencies ?? {})).toEqual([]);
   });
 
   it("reads patterns as bundlers do", () => {

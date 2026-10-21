@@ -708,8 +708,9 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
      - Focus from a click or tap moves the tab stop without starting a keyboard hover, so a tap still reports `source: "touch"`.
      - Focus listeners go on the document, not the `<svg>`: Chrome made the `<svg>` an extra tab stop when it had focus listeners of its own (found in the browser check).
      - Each mark's `aria-label` is "Okafor: 16 goals, 4 assists", from its category and values in the chart's `format`. Roles and a `describe` option wait for M2's screen-reader testing.
-10. **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`.
+10. ✅ **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`.
     - **Read first:** [ideas/adapter-spike.md](ideas/adapter-spike.md), which tested what D3, Plot and Vega expose on their SVG elements. Build to its recommendation 1: the overlay on the root `<svg>`, events delegated from the root, and `tabindex` re-applied on every `refresh()`.
+    - **Built** in `src/charts/adapter/` to that recommendation (see [architecture.md](architecture.md#adapters)). Beyond the plan: `baseline: "auto"` also finds negative bars; keyboard focus draws a ring from the mark's outline and survives a host replacing the focused element; and `destroy()` restores every attribute, style and class it touched. Tested in jsdom on hand-built D3-style SVG, including the ball-and-cleat story. Still to come: `samples` and `watch` (M4), circles and `describe.shape`, and the Vega helper (M3).
 11. **Finish `demo/bars.html`.** Animated metric switch and sort, keyboard support, and the same hover story on a hand-written SVG bar chart beside the reference one.
 
 Steps 5–7 come first so the motion can be judged in a browser before staged updates, keyboard support and the adapter are built around it.

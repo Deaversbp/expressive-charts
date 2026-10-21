@@ -2,8 +2,11 @@
 // along the assists. One sequence covers all three views of the prototype's bar chart, with icons
 // resolved by name, as a chart would.
 
+import { expressive } from "./charts";
 import type { Icon, MarkData, MarkGeometry, Matrix, MotionMode, Point } from "./core";
 import { createMotion, describe as build, manualClock, matrix } from "./core";
+import { parseTransform } from "./core/geometry";
+import { createRegistry, type PresetFactory } from "./core/registry";
 import { createRunner } from "./core/runner";
 import { flush, play, recordingSurface, testContext, type DrawnIcon, type Picture } from "./core/testing";
 import { sequence, travel } from "./effects";
@@ -105,6 +108,81 @@ describe("ball then cleat on a bar", () => {
           await flush();
         }
         expect(played.surface.picture("Okafor")).toEqual(end);
+      });
+    }
+  });
+
+  describe("on bars someone else drew, through expressive()", () => {
+    registerIcons(sport);
+    const SVG = "http://www.w3.org/2000/svg";
+
+    /** A D3-style stacked bar for one player: a margin group, one <g> per series, 2 px between segments. */
+    function host(view: keyof typeof views): { svg: SVGSVGElement; rects: SVGRectElement[] } {
+      const svg = document.body.appendChild(document.createElementNS(SVG, "svg"));
+      const plot = svg.appendChild(document.createElementNS(SVG, "g"));
+      plot.setAttribute("transform", "translate(60,10)");
+      const sizes = { goals: view === "assists" ? 0 : 160, assists: view === "goals" ? 0 : 60 };
+      const rects = (["goals", "assists"] as const)
+        .filter((series) => sizes[series] > 0)
+        .map((series) => {
+          const group = plot.appendChild(document.createElementNS(SVG, "g"));
+          Object.assign(group, { __data__: { key: series } });
+          const rect = group.appendChild(document.createElementNS(SVG, "rect"));
+          const x = series === "goals" ? 0 : sizes.goals > 0 ? 162 : 0;
+          for (const [name, value] of Object.entries({ x, y: 0, width: sizes[series], height: 20 })) rect.setAttribute(name, String(value));
+          Object.assign(rect, { __data__: { data: { name: "Okafor" } } });
+          return rect;
+        });
+      return { svg, rects };
+    }
+
+    async function hoverOn(view: keyof typeof views, mode: MotionMode): Promise<{ svg: SVGSVGElement; clock: ReturnType<typeof manualClock> }> {
+      const { svg, rects } = host(view);
+      const clock = manualClock();
+      const motion = createMotion({ mode, reducedMotion: { matches: false, subscribe: () => () => {} } });
+      expressive<{ data: { name: string } }>(rects, {
+        key: (d) => d.data.name,
+        segment: (_d, el) => (el.parentElement as unknown as { __data__: { key: string } }).__data__.key,
+        on: { hover: story }
+      }, { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: iconRegistry, motion, clock });
+      rects[0]!.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+      for (let i = 0; i < 100 && !(clock.idle && i > 0); i++) {
+        clock.advance(16);
+        await flush();
+      }
+      return { svg, clock };
+    }
+
+    const placed = (svg: SVGSVGElement, icon: Icon): Point | undefined => {
+      const g = svg.querySelector(`.ec-overlay .ec-icon[data-icon="${icon.name}"]`);
+      return g ? anchorOf(icon, parseTransform(g.getAttribute("transform") ?? "")) : undefined;
+    };
+
+    afterEach(() => {
+      document.body.textContent = "";
+    });
+
+    const expected: Record<string, { ball?: number; cleat?: number }> = {
+      goals: { ball: 151.5 },
+      assists: { cleat: 34 },
+      both: { ball: 151.5, cleat: 196 }
+    };
+
+    for (const view of Object.keys(views) as (keyof typeof views)[]) {
+      it(`${view}: the same story as on our chart, in the plot's coordinates`, async () => {
+        const off = await hoverOn(view, "off");
+        const played = await hoverOn(view, "presentation");
+        for (const [name, icon] of [["ball", soccerBall], ["cleat", cleat]] as const) {
+          const x = expected[view]![name];
+          for (const { svg } of [off, played]) {
+            const at = placed(svg, icon);
+            if (x === undefined) expect(at).toBeUndefined();
+            else near(at!, x, 10);
+          }
+        }
+        // Presentation lands exactly where Off starts.
+        const runs = (svg: SVGSVGElement) => svg.querySelector(".ec-overlay .ec-runs")!.innerHTML.replace(/ec-clip-\d+/g, "clip");
+        expect(runs(played.svg)).toBe(runs(off.svg));
       });
     }
   });

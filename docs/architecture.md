@@ -136,11 +136,11 @@ offset(point, angle, distance); // offset(mark.end, mark.angle(1) - Math.PI / 2,
 
 A `Matrix` is `[a, b, c, d, e, f]` in SVG order. Positive rotations turn clockwise on screen, like SVG's `rotate()`.
 
-The rest of `src/core/geometry` is internal: path segments (lines and circular arcs), walks parameterised by distance, outlines with canonical sampling, and path-data writing. Charts and effects inside the library use it directly.
+The rest of `src/core/geometry` is internal: path segments (lines and circular arcs), walks parameterised by distance, outlines with canonical sampling, path-data writing, and reading SVG transform lists (`parseTransform`, `invert`, shared by `iconFromSvg` and the adapter). Charts and effects inside the library use it directly.
 
 ## Events and effect slots
 
-Charts and adapters emit `enter`, `update`, `exit`, `hover` and `leave` (the [bar chart](#reference-charts) does; adapters come in M1 step 10), each a `MarkEvent`: the mark's geometry, its data and its position in the batch. An `update` event also carries the previous geometry (`from`), and a `hover` event its `source` (`"pointer"`, `"touch"` or `"keyboard"`) and the `segment` under the pointer. Data events fire when a change starts: `enter` and `update` with the new geometry, `exit` with the geometry on screen. `hover` and `leave` carry the geometry on screen too, which is part way to the new one while a change plays. `chart.on(type, listener)` and the effect slots consume the same events. Effects attach to events through the `on` option, typed `EffectSlots<D>` (`src/core/contracts/slots.ts`); each slot takes an effect or a preset name:
+Charts and adapters emit `enter`, `update`, `exit`, `hover` and `leave` (the [bar chart](#reference-charts) and [`expressive()`](#adapters) do), each a `MarkEvent`: the mark's geometry, its data and its position in the batch. An `update` event also carries the previous geometry (`from`), and a `hover` event its `source` (`"pointer"`, `"touch"` or `"keyboard"` for focus) and the `segment` under the pointer. Data events fire when a change starts: `enter` and `update` with the new geometry, `exit` with the geometry on screen. `hover` and `leave` carry the geometry on screen too, which is part way to the new one while a change plays. `chart.on(type, listener)` and the effect slots consume the same events. Effects attach to events through the `on` option, typed `EffectSlots<D>` (`src/core/contracts/slots.ts`); each slot takes an effect or a preset name:
 
 ```ts
 barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("soccer-ball"), update: "flash" } });
@@ -335,30 +335,54 @@ barChart("#goals", { label: "Goals by player", data: players, y: "name", stack: 
 - **Colours** follow the series through a `ColorAssignment`: `colorAssignment(fixed?)` gives each key a palette slot (1–8), pinned or the next free one in the order keys are first seen, and never reassigns it. `colors` takes pinned slots or a shared assignment.
 - **Motion.** `motion` takes a `Motion`, or a mode as this chart's author default: the viewer's choice on the page-wide motion and the device's reduced-motion setting still win, as they do over `setMode()`.
 
-## Adapters (planned)
+## Adapters
 
-`expressive(marks, options)` attaches effects to SVG marks drawn by another library, such as a D3 selection, a NodeList or a selector:
+`expressive(target, options)` attaches effects to SVG marks drawn by other code (`src/charts/adapter/`, built in M1 step 10 for rects). `target` is a selector, an element, a list of elements, or anything with `nodes()` and `data()` like a D3 selection, whose data types the callbacks. Like a chart, it gets a `ChartEnv` from the composition root, resolves `on` through the preset registry and plays it through the runner.
 
-- It reads geometry from rects and circles itself. For other shapes, you describe the geometry with the public builders.
-- Marks that share a key become one mark, and `segment` orders them as segments.
-- `refresh()` re-reads the marks after the host re-renders, then fires enter, update and exit by key.
+```ts
+const fx = expressive(d3.selectAll("#goals rect"), {
+  key: (d) => d.data.name,                          // required: marks are matched by key
+  segment: (_d, el) => el.parentNode.__data__.key,  // rects sharing a key are one mark's segments
+  keyboard: true,
+  on: { hover: sequence(travel("soccer-ball", { along: "goals" }), travel("cleat", { along: "assists" })) }
+});
+fx.refresh(d3.selectAll("#goals rect"));             // after the host re-renders
+```
+
+- **Rows and keys.** `datum` defaults to a selection's `data()`, then to `element.__data__` (D3's convention). When `__data__` is a number and no `datum` is given, the adapter warns that it looks like Plot. Keys are converted with `String()`. Elements that share a key throw unless `segment` names each part, and a part named twice throws.
+- **Geometry.** `<rect>` marks are described with `describe.bar`, in the coordinates of the marks' nearest common ancestor (a lone mark's parent). Each rect's box is converted with its CTM: `getScreenCTM()` where there's layout, otherwise the transform attributes, as in jsdom, which can't see nested `<svg>` viewports or CSS transforms. A mark's segments are ordered from the baseline by position, never by DOM order, since Vega-Lite stacks alphabetically. A gap the host leaves between segments becomes `describe.bar`'s `gap`, and the tip takes the tip rect's `rx`. A rect its transforms rotate or skew (anything but scales, flips and quarter turns) isn't an upright bar, so it throws. Other shapes, and such rects, need `geometry(element, datum, key)`, which is called once per mark with its first element and must return a geometry with that key. Reading circles, and `describe.shape`, are planned.
+- **Baseline.** `"auto"` (the default) finds the line every mark has an edge on. A mark whose near edge (left, or bottom for columns) is on it grows away from it; one whose far edge is on it grows the other way, like a negative bar. When bars and columns both fit (one mark, or marks of one size), marks spread down the page are bars and marks spread across are columns. If no line is shared it throws: pass the edge.
+- **Overlay.** Runs draw in `<g class="ec-overlay">`, the root `<svg>`'s last child, with the common ancestor's transform. So they share the marks' coordinates but never sit inside a group the host manages (Vega removes foreign children from its groups when it redraws). It holds the halos, the run groups and the focus ring, and `refresh()` moves it back to the end and recomputes its transform.
+- **Events.** Pointer and touch hover, focus and keys are listened for once, on the root `<svg>`. An event's target is mapped to its mark through a lookup that `refresh()` rebuilds, so marks the host replaces keep working. Hover events carry the segment under the pointer.
+- **Keyboard.** `keyboard: true` gives one mark `tabindex="0"` (the first in visual order: bars top to bottom, columns left to right) and the others `-1`, re-applied on every `refresh()`.
+  - Focus plays the hover effects (`source: "keyboard"`). The arrow keys move to the next or previous mark, Home and End to the ends. Escape stops the effects; blur leaves.
+  - A ring follows the focused mark's outline in the overlay, in `--ec-focus`. As with `:focus-visible`, it shows unless the last input on the page was a pointer (a click or tap), and the element's own outline is turned off while it's focused.
+  - `focus(key)` moves focus to a mark. If the host replaces the focused element, `refresh()` focuses the new one.
+- **Styling.** The host owns it, so nothing dims unless `dim: true`. Then the attachment's mark elements get `ec-attached`, and while one is hovered the others get `ec-dimmed`, which the shared stylesheet fades with `:where()`, so host CSS still wins. The classes go on the attachment's own marks only, never on the root, so two attachments on one `<svg>` leave each other alone. Effects restyle marks with inline styles only:
+  - `transform` becomes a CSS transform composed with the element's own transform attribute, which is never written;
+  - `opacity` is the element's opacity;
+  - `emphasis` mixes the host's fill toward a darker shade, and the "mark" colour token is the host's fill;
+  - `halo` is drawn in the overlay, masked to outside the mark, so it shows only where it would behind the mark.
+- **Refresh.** `refresh(source?)` re-reads the marks: from `source` if given (and from then on), otherwise from the last source, running a selector again. Like a chart's update, it calls the runner in order: `interrupt()`, then `exit`, `update` and `enter` by key, `change()` for marks that moved, and `settle()`. The adapter can't see values, so an `update` means a mark's length or segments changed; a mark that only moved, or got a new row, follows through `change()`. A new root `<svg>` (Plot draws one each time) takes the overlay and the listeners. Marks it can't read throw before anything changes.
+- **Destroy.** `destroy()` clears every run, removes the overlay and the listeners, and puts back every attribute, style property and class the adapter changed. When nothing else has changed them, attributes get their exact text back, so the host's markup reads as it did before.
+- **Data effects** get the mark's row (its first segment's, with the other segments through `related(series)`), but no samples until the `samples` option lands in M4, with `watch`.
 
 What each library needs (from the [adapter spike](ideas/adapter-spike.md)):
 
-- **D3** works as is: `__data__` holds the row.
-- **Observable Plot** binds indices, not rows, so the page passes a `datum` accessor. Which accessor depends on the mark:
+- **D3** works as is: `__data__` holds the row, and a stack's series key is on the parent `<g>`.
+- **Observable Plot** binds indices, not rows, so the page passes a `datum` accessor. Pass the marks, not the `<svg>`: `refresh(newSvg.querySelectorAll('g[aria-label="bar"] > rect'))`. Which accessor depends on the mark:
   - one element per row, with no transform that derives new data (bars, dots): `datum: (el) => rows[el.__data__]`;
   - a line path: `el.__data__` is that series' array of row indices, with `-1` at gaps, so `el.__data__.filter((i) => i >= 0).map((i) => rows[i])`;
   - after a group, bin or other reducing transform: the index points into the derived data, so `rows[i]` is silently the wrong row. Read the channel values through the mark's `render` option instead.
 
   Plot has no pie mark.
-- **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, so a small helper that reads the View is planned.
+- **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, so for now they need `datum` and `geometry`; a small helper that reads the View is planned with arcs (M3).
 
 Adapters follow the chart rules:
 
 - They never know specific effects.
-- They express geometry in the marks' nearest common ancestor's coordinates. They draw their overlay as the last child of the root `<svg>`, with that ancestor's transform, because some hosts (Vega) remove foreign children from their own groups when they redraw.
-- They leave the host's styling, axes and tooltips alone.
+- They express geometry in the marks' nearest common ancestor's coordinates, and draw their overlay on the root `<svg>` with that ancestor's transform.
+- They leave the host's styling, axes and tooltips alone, and undo everything they change.
 
 ## Rendering
 

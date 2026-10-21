@@ -84,6 +84,8 @@ const STYLES = `
 :where(.ec-chart .ec-hot .ec-segment) { fill: var(--ec-mark-strong); }
 :where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot)) { opacity: var(--ec-dim-opacity, 0.3); }
 :where(.ec-chart .ec-leaving, .ec-chart .ec-overlay) { pointer-events: none; }
+:where(.ec-attached.ec-dimmed) { opacity: var(--ec-dim-opacity, 0.3); }
+:where(.ec-attached) { transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
 `;
 
 const MARKER = "data-expressive-charts";

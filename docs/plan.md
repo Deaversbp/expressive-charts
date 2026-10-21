@@ -266,7 +266,7 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 - `prefers-reduced-motion` is read live and re-evaluated when it changes.
 - `chooseMode()` is only called by on-page controls the viewer operates. The library ships `motionSwitch(element, motion)`, the prototype's segmented control, which calls it. While the OS asks for reduced motion and no viewer choice has been made, the switch shows Off as selected along with a short note explaining why.
 - An author's `motion: "presentation"` in code is a `setMode()` call, so it never beats the OS setting.
-- The viewer's choice lasts for the page session. Persisting it is an open question (§10).
+- The viewer's choice lasts for the page session, unless the page opts in to keeping it with `motionSwitch`'s `persist` (built in M2 step 4).
 - **CLAUDE.md rule 6 changes in M1 to:** "When the effective mode is `off` (the mode is off, or the user prefers reduced motion and hasn't picked a mode on the page), every animation jumps to its end state."
 
 ### 3.6 Staging
@@ -616,7 +616,7 @@ The two built-ins, converted from the prototype:
 
 ### 7.1 Theme tokens
 
-> **Partly built in M1 step 5:** the tokens below are read with the prototype's light palette as fallbacks (eight series slots, the last four provisional), through one injected stylesheet using `:where()`. Dark-mode defaults, `data-theme`, the validated eight colours and the `nonce` option are still to come (M2).
+> **Built in M1 step 5 and M2 step 1.** [architecture.md](architecture.md#rendering) is now the reference. Every token has a light and a dark default, set on the root and on `data-theme` elements by the shared stylesheet, and the eight series colours are validated by a test (`src/charts/render/theme.test.ts`). `configure({ nonce, injectStyles })` is page-wide, because the stylesheet is one per document. M2 adds `--ec-ring`.
 
 The prefix is `--ec-`. Defaults come from the prototype palette:
 
@@ -629,11 +629,12 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
 | `--ec-series-1` … `--ec-series-8`, each with a `-strong` variant | marks; `-strong` for hover emphasis |
 | `--ec-negative` | below-threshold (the prototype's `--under`) |
 | `--ec-dim-opacity` | opacity of other marks on hover (0.3) |
+| `--ec-ring` | hairline borders on controls and the tooltip |
 | `--ec-hover-duration` | set by the chart from `motion` |
 
 - **Light and dark.** Dark mode follows `prefers-color-scheme` and can be overridden with `data-theme="light"|"dark"` on any ancestor, which generalises the prototype's `:root` rule. Default rules use `:where()` so host CSS overrides them without specificity fights.
-- **Delivery.** By default the chart injects one small `<style>` once, with a `nonce` option. `dist/expressive-charts.css` is also shipped with `injectStyles: false` for strict CSP sites (open question, §10).
-- **Categorical colours follow the entity.** A `ColorAssignment` maps series or category keys to palette slots in the order they're first seen and never reassigns them. Sorting, filtering and updates can't change a colour. It can be shared between charts (needed for morph) or pinned (`{ goals: 1, assists: 4 }`). The prototype's four colours expand to eight in M2, each checked for ≥ 3:1 contrast against both surfaces.
+- **Delivery.** By default the first chart, adapter or control on a page injects one small `<style>`, with the nonce from `configure({ nonce })`. `dist/expressive-charts.css` (`expressive-charts/style.css`) has the same text, for strict-CSP sites that use `configure({ injectStyles: false })`.
+- **Categorical colours follow the entity.** A `ColorAssignment` maps series or category keys to palette slots in the order they're first seen and never reassigns them. Sorting, filtering and updates can't change a colour. It can be shared between charts (needed for morph) or pinned (`{ goals: 1, assists: 4 }`). The prototype's four colours expand to eight (M2 step 1), each at least 3:1 against both surfaces, with neighbouring slots apart under the common colour-vision deficiencies.
 
 ### 7.2 Accessibility
 
@@ -737,15 +738,24 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 **Wave 1** (parallel):
 
-1. **Theme: dark mode, the validated palette, and CSS delivery.** Owns `src/charts/render/theme.ts`, the CSS build, and the package's style export.
+1. ✅ **Theme: dark mode, the validated palette, and CSS delivery.** Owns `src/charts/render/theme.ts`, the CSS build, and the package's style export.
+   - **Built** ([architecture.md](architecture.md#rendering), §7.1). Decisions:
+     - The tokens are set on the root, not on the chart, so host elements (a hand-drawn chart, the tooltip, the motion switch) read the same values, and host CSS on any ancestor still wins. A `data-theme` element resets the tokens for its subtree, so page overrides of a token need to cover `[data-theme]` too.
+     - Light slots 3 and 4 were under 3:1 (2.7 and 2.1), so they're darkened along their own hue until they pass (`#02a471`, `#c28409`). Dark slots 1–4 are the prototype's. Slots 5–8 are new: violet, cyan, olive and pink. The provisional brown read as grey, and pink beside it merged under deuteranopia. There's no red, which would be confused with `--ec-negative`.
+     - Thresholds, from the dataviz palette method: neighbours (8 wraps to 1) at least 15 apart in OKLab ×100 for normal vision and 8 under protanopia, deuteranopia and tritanopia (Machado 2009); any two slots at least 9 apart; `-strong` within 5° of hue, 1.3× the contrast, and 8 apart. Light `--ec-text-muted` moved to `#75736d` to reach 4.5:1 for 11 px ticks. Dark `--ec-dim-opacity` stays 0.3, since dimmed marks keep about the contrast they have in light.
+     - `nonce` and `injectStyles` are page-wide (`configure()`), not chart options: one chart's option would only count if it came first, and controls inject too.
+     - `tsup.config.ts` writes the file from the same constant the charts inject. A test checks that a page with the file and `injectStyles: false` gets the same rules and the same markup, and the demo's computed styles matched in the browser in both themes.
    - Dark-mode defaults that follow `prefers-color-scheme`, overridable with `data-theme="light"|"dark"` on any ancestor. Default rules use `:where()`.
    - Validate the eight series colours and their `-strong` variants: each mark at least 3:1 against the surface in both themes, distinguishable from its neighbours, and slots 1–4 kept as in the prototype.
    - CSS delivery: charts inject one `<style>` by default, with a `nonce` option; `injectStyles: false` turns injection off; `dist/expressive-charts.css` is generated from the same source in `theme.ts` and exported as `expressive-charts/style.css`. `package.json` must list CSS in `sideEffects` (for example `["*.css"]`) instead of `false`; otherwise bundlers can drop `import "expressive-charts/style.css"`, which is a side-effect import, and the strict-CSP path silently loses its styles.
    - The demo drops the dark tokens it sets itself.
-2. **`flash` and "Play next matchweek".** Owns `src/effects/flash.ts` and the `flash` preset in `src/registries.ts`.
+2. ✅ **`flash` and "Play next matchweek".** Owns `src/effects/flash.ts` and the `flash` preset in `src/registries.ts`.
    - `flash()` is one halo blink along the outline, the prototype's `stroke-width` 0 → 8 → 0 at 35% opacity, with `effect` timing.
    - Its end state is nothing. That's deliberate: a flash is emphasis, and the change it points at (the new length and value label) stays visible anyway.
    - The demo gets "Play next matchweek": seeded updates as in the prototype, with `on: { update: "flash" }` on both charts, and the button stopping after matchweek 38.
+   - **Built** as planned ([architecture.md](architecture.md#flash)). Additions: the 900 ms base peaks a quarter of the way through, each half eased like CSS's `ease-out`, as the prototype's keyframes are; `flash({ width, opacity, color })` takes the halo's peak width, opacity and colour. The §8 conformance checks moved to `src/effects/conformance.test.ts` for every built-in effect and now compare mark styles as well as pictures. Checked in a browser over matchweeks 25–38: on `barChart` exactly the bars whose values changed flash, and a re-sort flashes nothing.
+   - **Differs from the prototype:** a metric switch flashes every bar, since every value changes (the prototype flashed only on a matchweek). And `expressive()` saw lengths, not values, so on the hand-written chart every bar flashed when the axis grew (once per view over the season, now that its axis takes the prototype's nice maximum) or when the window was resized.
+   - **Follow-up:** `expressive()` takes `value(datum, element)`, what each element shows, and compares values instead of lengths when it's given ([architecture.md](architecture.md#adapters)). The demo passes it, so the hand-written chart flashes the same bars as `barChart`.
 3. ✅ **Tooltip and legend.** Owns `src/charts/tooltip.ts`, `src/charts/legend.ts`, and their hooks in `bar.ts`.
    - Tooltip: an HTML box near the hovered or focused mark that flips at the edges and follows a touch tap. The box is `aria-hidden`, so it isn't read twice. Its text also becomes the mark's accessible description (`aria-describedby`), so anything a custom tooltip adds beyond the series values (the prototype shows the player's position) still reaches screen readers. `tooltip: boolean | ((d) => string)` takes plain text, never HTML. Show and hide use `feedback` timing.
    - Legend: series swatches for stacked charts, coloured through the chart's `ColorAssignment`, with the text in theme text colours. A single series has no legend.
@@ -753,11 +763,12 @@ Each step names the files it owns, so steps in the same wave can run in parallel
      - The tooltip sits above the mark and flips below when there's no room. It's clamped to the chart's left and right edges, but never moved over the mark it describes.
      - Only a tooltip function's text becomes the description. The default text would repeat the mark's `aria-label`.
      - The legend shows series names as given ("goals"). A shared option for display names, used by the legend, tooltip, labels and table, would suit step 5.
-     - The tooltip border is a new optional token, `--ec-ring`, which defaults to the text colour at 12%.
-4. **`motionSwitch` helper.** Owns `src/charts/controls/`.
+     - The tooltip's border is `--ec-ring`, step 1's hairline token.
+4. ✅ **`motionSwitch` helper.** Owns `src/charts/controls/`.
    - It builds the Presentation / Analysis / Off segmented control: buttons with `aria-pressed`, calling `motion.chooseMode()`, with the reduced-motion hint.
    - `persist: "key"` is an opt-in that remembers the viewer's choice in `localStorage` (open question 3).
    - The demo replaces its own switch with this one.
+   - **Built** as planned ([architecture.md](architecture.md#controls)): `motionSwitch(target, motion?, { label, labels, hints, persist })` returns `{ element, destroy() }`. The group is named by its visible label; the note is its description and a polite live region. `clearChoice()` also clears the stored choice. Its few `.ec-motion-*` rules are in the shared stylesheet in `theme.ts` (step 1's file), so they're in `expressive-charts/style.css` too, and it injects the stylesheet as charts do, so `configure({ nonce, injectStyles })` covers it.
 
 **Wave 2** (after wave 1 lands):
 

@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a first bar chart, the `expressive()` adapter for bars drawn by other code, icons and the first effect (`travel`, with `sequence`, `parallel` and `only`) are built ([below](#available-now-the-motion-core-mark-geometry-a-bar-chart-travel-and-the-adapter)). The other built-in effects are next, so `wiggle`, `pulse`, `flash`, `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a first bar chart, the `expressive()` adapter for bars drawn by other code, icons, the first effects (`travel` and `flash`, with `sequence`, `parallel` and `only`) and the viewer's `motionSwitch` are built ([below](#available-now-the-motion-core-mark-geometry-a-bar-chart-travel-and-the-adapter)). The other built-in effects are next, so `wiggle`, `pulse`, `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -116,6 +116,23 @@ chart.on("hover", (e) => console.log(e.mark.key, e.data.datum));
 await chart.update({ stack: ["goals", "assists"] }); // resolves once the change has settled
 ```
 
+Charts follow the device's light or dark setting, with eight series colours checked for contrast and colour-vision deficiencies in both. Theme them with `--ec-*` custom properties, which your CSS always overrides, and pin a theme with `data-theme` on any ancestor ([Rendering](docs/architecture.md#rendering) has the details):
+
+```html
+<html data-theme="light">  <!-- a page without a dark theme of its own -->
+<style>.sales { --ec-series-1: #0f766e; }</style>
+```
+
+Under a Content-Security-Policy, give the stylesheet the charts inject your nonce, or load it as a file and inject nothing. The package lists its CSS under `sideEffects`, so bundlers keep the CSS import even though it imports no names. Call `configure()` before creating charts:
+
+```js
+import { configure } from "expressive-charts";
+configure({ nonce: cspNonce });       // the injected <style> takes it
+
+import "expressive-charts/style.css"; // or the same rules as a file (dist/expressive-charts.css)...
+configure({ injectStyles: false });   // ...and nothing injected
+```
+
 The first effect carries an icon along a mark: a ball rolling out a bar, around a donut slice or along a line. Combinators put effects together, and a step with nothing to do (a segment the chart isn't showing) finishes at once:
 
 ```js
@@ -132,6 +149,22 @@ const arrows = only("revenue", travel(icons.arrow, { size: "fit" }));
 const pin = iconFromSvg(svgMarkup, { name: "pin", size: 16, anchor: { x: 12, y: 22 } }); // keeps only plain shapes
 ```
 
+`flash` marks a change: one halo blink along the outline, the prototype's 900 ms. In the `update` slot it runs on the bars whose values changed, not on a re-sort. With motion off it draws nothing, since the new value it points at is on the chart anyway:
+
+```js
+const chart = barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { update: "flash" } });
+chart.update({ data: afterMatchweek }); // the bars that scored blink as they grow
+```
+
+`motionSwitch()` is the viewer's own control: Presentation, Analysis and Off as buttons with `aria-pressed`, and a note on what the mode does. A click is the viewer's choice, so it overrides the device's reduced-motion setting; until then, Off is pressed and the note says why. It follows the motion whoever changes it, and `persist` (opt-in) keeps the choice in `localStorage`:
+
+```js
+import { motion, motionSwitch } from "expressive-charts";
+
+const control = motionSwitch("#motion", motion, { persist: "site:motion" }); // motion defaults to the page-wide one
+control.destroy();                                                            // removes it; the choice stays
+```
+
 The same effects run on bars someone else drew. `expressive()` reads keys, rows and geometry from the host's `<rect>` elements and draws on an overlay at the end of its `<svg>`. It leaves the host's styling alone, and `destroy()` puts back everything it changed:
 
 ```js
@@ -141,6 +174,7 @@ import { expressive, sequence, travel } from "expressive-charts";
 const fx = expressive(svg.selectAll("rect"), {
   key: (d) => d.data.name,                          // required: the mark's identity
   segment: (_d, el) => el.parentNode.__data__.key,  // a player's rects become one bar's segments
+  value: (d) => d[1] - d[0],                        // what each rect shows: updates follow values, not lengths
   baseline: "auto",                                 // the edge every bar grows from (the default)
   keyboard: true,                                   // focusable bars; focus plays the hover story
   on: { hover: ballThenCleat }
@@ -148,9 +182,9 @@ const fx = expressive(svg.selectAll("rect"), {
 fx.refresh(svg.selectAll("rect"));                   // after the page redraws: enter, update and exit by key
 ```
 
-For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Other shapes take a `geometry` callback built with `describe`.
+For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Other shapes take a `geometry` callback built with `describe`. Without `value`, the adapter compares lengths, so a resize or a new axis maximum counts as an update for every bar (and `update: "flash"` flashes them all); with it, only bars whose values changed get one, as on `barChart`.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, and [Adapters](docs/architecture.md#adapters) for `expressive()`.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`.
 
 ## Demo
 
@@ -166,7 +200,7 @@ npm run dev
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Serves the `demo/` folder with live reload |
-| `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` entry) and a script-tag bundle (`dist/expressive-charts.global.js`) |
+| `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` entry), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
 | `npm test` | Runs the test suite |
 | `npm run typecheck` | Checks types without building |
 

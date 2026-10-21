@@ -72,7 +72,7 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 ```
 
 - `setMode(mode)` is the page author's default. It never overrides `prefers-reduced-motion`.
-- `chooseMode(mode)` is for on-page controls the viewer operates, like the demo's motion switch. The viewer's own choice does override the device setting. `clearChoice()` goes back to following the device.
+- `chooseMode(mode)` is for on-page controls the viewer operates, like [`motionSwitch()`](#controls). The viewer's own choice does override the device setting. `clearChoice()` goes back to following the device.
 - `prefers-reduced-motion` is followed live. `subscribe()` notifies on any change and watches the media query only while someone is listening.
 
 `motion` is the page-wide instance every chart follows unless it's given its own.
@@ -156,7 +156,7 @@ barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("so
 
 ## Effects
 
-The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The first effect, [`travel`](#travel), and the combinators `sequence`, `parallel` and `only` are in `src/effects/`.
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The first effects, [`travel`](#travel) and [`flash`](#flash), and the combinators `sequence`, `parallel` and `only` are in `src/effects/`.
 
 There are three kinds, distinguished by a `kind` field:
 
@@ -177,7 +177,7 @@ Each one has `run`, `end` (the final state, used for reduced motion) and `clear`
 | `onChange()` | Called when the geometry moves |
 | `previous` | The geometry before this update, on update events |
 
-Planned: `wiggle()`, `pulse()`, `flash()`, `threshold({ compareTo, color })`, `morph()`; the combinator `stagger`; and the experimental author helpers `defineEffect` and `defineDataEffect`.
+Planned: `wiggle()`, `pulse()`, `threshold({ compareTo, color })`, `morph()`; the combinator `stagger`; and the experimental author helpers `defineEffect` and `defineDataEffect`.
 
 ### travel
 
@@ -204,6 +204,18 @@ sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists
 | `roll()` | spin = distance ÷ radius | default |
 | `step({ stride: 42, lift: 3.2, tilt: 9 })` | a whole number of steps, at least one; each lifts by `lift` and raises the front by `tilt` degrees, easing off to 70% over the trip; flat at every landing | eased in and out, 15% longer (the prototype's cleat) |
 | `slide()` | still | default |
+
+### flash
+
+```ts
+flash({ width?, opacity?, color? })   // or the preset: on: { update: "flash" }
+```
+
+`flash` marks a change with one blink of a halo along the mark's outline, as the prototype's CSS flash does: the stroke grows from 0 to `width` (default 8 px, half of it outside the mark) by a quarter of the way through, then fades back to 0, each half eased like CSS's `ease-out`. It's drawn through `mark.set({ halo })` at `opacity` (default 0.35) in the mark's own colour unless `color` names a theme token or a CSS colour. The base duration is 900 ms with `effect` timing, so about 300 ms in Analysis.
+
+- **End state: nothing.** That's deliberate. A flash is emphasis, not information: the change it points at (the bar's new length and value label) stays on the chart, so with motion off or reduced the viewer misses nothing.
+- **Any mark.** It reads nothing of the geometry. The renderer strokes the halo along the outline as it is on screen, so in the `update` slot it follows the bar through the transition it runs alongside, and a stacked bar's segments each get their own halo.
+- **Where it runs.** In the `update` slot it runs on the marks whose values changed, not on a re-sort or a new scale: on our charts, and on `expressive()` when the page passes `value`. Without `value` the adapter can't see values, so there an update means a mark's length changed, which a new axis maximum or a resize also does (see [Adapters](#adapters)).
 
 ### Combinators
 
@@ -235,7 +247,7 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 - `measurePath(d)` measures the path data the geometry writes: length, start, end and commands.
 - `play(clock, running)` advances a manual clock a frame at a time until a run settles, letting promise callbacks run between frames, and resolves with the ms it took.
 
-The `travel` tests run the conformance checks from plan §8 on bars (positive, negative, columns, stacked, too short), a donut slice, a line and a point: a full run ends with the same picture as `end()`, clearing leaves nothing, an abort mid-run settles, and with motion off no frames run.
+`src/effects/conformance.test.ts` runs the conformance checks from plan §8 for every built-in effect (`travel` with each gait and option, `flash`, and combinations of them) on bars (positive, negative, columns, stacked, too short), a donut slice, a line and a point: a full run ends with the same picture and mark style as `end()`, clearing leaves nothing, an abort mid-run settles, and with motion off no frames run. `src/conformance.test.ts` runs the same checks on real bar marks from `barChart` and `expressive()`.
 
 ## Runner
 
@@ -269,7 +281,7 @@ The renderer implements `RunnerSurface`: `group(key, slot, order)` returns a new
 
 A slot can name a preset instead of holding an effect, `on: { hover: "wiggle" }`, and an effect can name an icon, `travel("cleat")`. Charts resolve names through registries the composition root (`src/index.ts`) hands them, so a chart never knows what a name means.
 
-- `registerPreset(name, factory)` makes a name usable in any chart's `on`. The factory returns a fresh effect that works on any rows. The built-in presets (`wiggle`, `pulse`, `flash`) are registered when their effects land in M3.
+- `registerPreset(name, factory)` makes a name usable in any chart's `on`. The factory returns a fresh effect that works on any rows. `flash` is a built-in preset; `wiggle` and `pulse` join it in M3.
 - `registerIcon(icon)` and `registerIcons(icons)` make icons usable by their `name`, through each run's `ctx.icons`. The core icons (`dot`, `arrow`, `chevron`) are registered from the start; the sport pack is opt-in, with `registerIcons(sport)`.
 - A later registration replaces an earlier one with the same name.
 - Charts call `resolveEffects(on, presets)` when they're created. An unknown preset name throws a `RangeError` that lists the registered names. A transition effect in a mark slot, or a slot that doesn't exist, throws a `TypeError` naming the slot. Misspelled names aren't type errors (custom names are allowed), so this is where they're caught.
@@ -331,7 +343,7 @@ barChart("#goals", { label: "Goals by player", data: players, y: "name", stack: 
   - `tooltip` defaults to `true`: the category in bold, each series' value in `format` ("16 goals · 4 assists"), and the total for a stack. A function `(d) => string` gives a row's text instead, with `\n` for line breaks. Its result is only ever set as `textContent`, never parsed as HTML. An empty string shows nothing, and a function that throws is reported and shows nothing. `false` turns it off; `update()` can change it.
   - The box is `aria-hidden`, so it isn't read twice. A tooltip function's text is also each mark's accessible description: `aria-describedby` points to a `<desc class="ec-description">` inside the mark, kept in step with updates, so whatever it adds beyond the values (a player's position, say) reaches screen readers. The default text describes nothing, because the mark's `aria-label` already has its values (the data table will have the total).
   - Showing and hiding fade over `motion.duration(100, "feedback")`, so they're instant with motion off. A function is called once per row and data change, not on every frame.
-  - Its styles use theme tokens: `--ec-surface`, `--ec-text`, and a border in `--ec-ring`, which defaults to the text colour at 12%.
+  - Its styles use theme tokens: `--ec-surface`, `--ec-text`, and a hairline border in `--ec-ring`, so it follows light and dark like the chart.
 - **Legend** (`src/charts/legend.ts`). A swatch and a name for each series, in stack order, in `<div class="ec-legend">` just before the `<svg>`. A single series has none. `legend: false` turns it off.
   - The swatches take their colours from the chart's `ColorAssignment`, through `--ec-mark` as the segments do, so a series keeps its colour when the stack changes. The names are in `--ec-text`: text never takes a series colour.
   - It follows `stack` and `colors` as soon as an update starts. A rejected update leaves it as it was.
@@ -353,6 +365,7 @@ barChart("#goals", { label: "Goals by player", data: players, y: "name", stack: 
 const fx = expressive(d3.selectAll("#goals rect"), {
   key: (d) => d.data.name,                          // required: marks are matched by key
   segment: (_d, el) => el.parentNode.__data__.key,  // rects sharing a key are one mark's segments
+  value: (d) => d[1] - d[0],                        // what each rect shows, so a resize isn't an update
   keyboard: true,
   on: { hover: sequence(travel("soccer-ball", { along: "goals" }), travel("cleat", { along: "assists" })) }
 });
@@ -360,6 +373,9 @@ fx.refresh(d3.selectAll("#goals rect"));             // after the host re-render
 ```
 
 - **Rows and keys.** `datum` defaults to a selection's `data()`, then to `element.__data__` (D3's convention). When `__data__` is a number and no `datum` is given, the adapter warns that it looks like Plot. Keys are converted with `String()`. Elements that share a key throw unless `segment` names each part, and a part named twice throws.
+- **Values.** `value(datum, element)` returns what an element shows (a stack point's `d[1] - d[0]`, a row's field), so `refresh()` can tell a change in values from a re-layout. With it, an `update` means a part's value changed or the mark gained or lost a segment, as on the reference charts, and a resize or a new axis maximum only moves the marks. Values compare with `===`, except that NaN equals NaN, so it should return a number or a string (a date's `getTime()`, or several values joined). Without `value`, the adapter compares lengths: an `update` means a mark's length or segments changed, so a redraw at a new width or with a new axis maximum updates every bar, and with `update: "flash"` every bar flashes.
+  - It compares values, not rows: Vega binds new scenegraph items on every render, a page that copies its rows makes every row new, and a row holds fields its bar doesn't show (a goals bar's row has the assists too).
+  - A flag on `refresh()` saying that only the layout changed would be simpler, but it can't help when values and the axis change in the same redraw, which is just when a growing value pushes the axis out.
 - **Geometry.** `<rect>` marks are described with `describe.bar`, in the coordinates of the marks' nearest common ancestor (a lone mark's parent). Each rect's box is converted with its CTM: `getScreenCTM()` where there's layout, otherwise the transform attributes, as in jsdom, which can't see nested `<svg>` viewports or CSS transforms. A mark's segments are ordered from the baseline by position, never by DOM order, since Vega-Lite stacks alphabetically. A gap the host leaves between segments becomes `describe.bar`'s `gap`, and the tip takes the tip rect's `rx`. A rect its transforms rotate or skew (anything but scales, flips and quarter turns) isn't an upright bar, so it throws. Other shapes, and such rects, need `geometry(element, datum, key)`, which is called once per mark with its first element and must return a geometry with that key. Reading circles, and `describe.shape`, are planned.
 - **Baseline.** `"auto"` (the default) finds the line every mark has an edge on. A mark whose near edge (left, or bottom for columns) is on it grows away from it; one whose far edge is on it grows the other way, like a negative bar. When bars and columns both fit (one mark, or marks of one size), marks spread down the page are bars and marks spread across are columns. If no line is shared it throws: pass the edge.
 - **Overlay.** Runs draw in `<g class="ec-overlay">`, the root `<svg>`'s last child, with the common ancestor's transform. So they share the marks' coordinates but never sit inside a group the host manages (Vega removes foreign children from its groups when it redraws). It holds the halos, the run groups and the focus ring, and `refresh()` moves it back to the end and recomputes its transform.
@@ -370,25 +386,25 @@ fx.refresh(d3.selectAll("#goals rect"));             // after the host re-render
   - `refresh()` keeps focus on its key: on the mark's new element if the host replaced the focused one (Vega does), even when the old one stays in the page for a while (a D3 exit transition), or, if the mark left, on its nearest neighbour, the next mark or else the previous one. With no marks left, focus leaves the chart. Focus that has moved elsewhere on the page meanwhile is never pulled back. Chrome fires a blur on a focused element the host removes, while it's still in the page, so a blur that leaves focus nowhere counts as the host removing the element only if the element is gone by the end of that task.
   - A ring follows the focused mark's outline in the overlay, in `--ec-focus`. As with `:focus-visible`, it shows unless the last input on the page was a pointer (a click or tap). It stands in for the marks' own focus outline, which is turned off.
   - `focus(key)` moves focus to a mark as a key press would, whatever the last input was: the ring shows and its hover effects play.
-- **Styling.** The host owns it, so nothing dims unless `dim: true`. Then the attachment's mark elements get `ec-attached`, and while one is hovered the others get `ec-dimmed`, which the shared stylesheet fades with `:where()`, so host CSS still wins. The classes go on the attachment's own marks only, never on the root, so two attachments on one `<svg>` leave each other alone. Effects restyle marks with inline styles only:
+- **Styling.** The host owns it, so nothing dims unless `dim: true`. The adapter still injects the shared stylesheet, for the theme tokens its overlay and focus ring draw in; its rules only match the library's own classes. Then the attachment's mark elements get `ec-attached`, and while one is hovered the others get `ec-dimmed`, which the shared stylesheet fades with `:where()`, so host CSS still wins. The classes go on the attachment's own marks only, never on the root, so two attachments on one `<svg>` leave each other alone. Effects restyle marks with inline styles only:
   - `transform` becomes a CSS transform composed with the element's own transform attribute, which is never written;
   - `opacity` is the element's opacity;
   - `emphasis` mixes the host's fill toward a darker shade, and the "mark" colour token is the host's fill;
   - `halo` is drawn in the overlay, masked to outside the mark, so it shows only where it would behind the mark.
-- **Refresh.** `refresh(source?)` re-reads the marks: from `source` if given (and from then on), otherwise from the last source, running a selector again. Like a chart's update, it calls the runner in order: `interrupt()`, then `exit`, `update` and `enter` by key, `change()` for marks that moved, and `settle()`. The adapter can't see values, so an `update` means a mark's length or segments changed; a mark that only moved, or got a new row, follows through `change()`. A new root `<svg>` (Plot draws one each time) takes the overlay and the listeners. Marks it can't read throw before anything changes.
+- **Refresh.** `refresh(source?)` re-reads the marks: from `source` if given (and from then on), otherwise from the last source, running a selector again. Like a chart's update, it calls the runner in order: `interrupt()`, then `exit`, `update` and `enter` by key, `change()` for marks that moved, and `settle()`. An `update` is a change in values (see Values above); a mark that only moved, or got a new row, follows through `change()`. A new root `<svg>` (Plot draws one each time) takes the overlay and the listeners. Marks it can't read throw before anything changes.
 - **Destroy.** `destroy()` clears every run, removes the overlay and the listeners, and puts back every attribute, style property and class the adapter changed. When nothing else has changed them, attributes get their exact text back, so the host's markup reads as it did before.
 - **Data effects** get the mark's row (its first segment's, with the other segments through `related(series)`), but no samples until the `samples` option lands in M4, with `watch`.
 
 What each library needs (from the [adapter spike](ideas/adapter-spike.md)):
 
-- **D3** works as is: `__data__` holds the row, and a stack's series key is on the parent `<g>`.
+- **D3** works as is: `__data__` holds the row, and a stack's series key is on the parent `<g>`. A stack point's value is `d[1] - d[0]`.
 - **Observable Plot** binds indices, not rows, so the page passes a `datum` accessor. Pass the marks, not the `<svg>`: `refresh(newSvg.querySelectorAll('g[aria-label="bar"] > rect'))`. Which accessor depends on the mark:
-  - one element per row, with no transform that derives new data (bars, dots): `datum: (el) => rows[el.__data__]`;
+  - one element per row, with no transform that derives new data (bars, dots): `datum: (el) => rows[el.__data__]`, and then `value` reads that row, `value: (d) => d.goals`;
   - a line path: `el.__data__` is that series' array of row indices, with `-1` at gaps, so `el.__data__.filter((i) => i >= 0).map((i) => rows[i])`;
   - after a group, bin or other reducing transform: the index points into the derived data, so `rows[i]` is silently the wrong row. Read the channel values through the mark's `render` option instead.
 
   Plot has no pie mark.
-- **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, so for now they need `datum` and `geometry`; a small helper that reads the View is planned with arcs (M3).
+- **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, new on every render, so for now they need `datum` (the row is `el.__data__.datum`) and `geometry`, and `value` reads the row's field; a small helper that reads the View is planned with arcs (M3).
 
 Adapters follow the chart rules:
 
@@ -396,16 +412,42 @@ Adapters follow the chart rules:
 - They express geometry in the marks' nearest common ancestor's coordinates, and draw their overlay on the root `<svg>` with that ancestor's transform.
 - They leave the host's styling, axes and tooltips alone, and undo everything they change.
 
+## Controls
+
+On-page controls the viewer operates are in `src/charts/controls/`. Like the charts, they import only core, and the composition root hands them the page-wide motion by default.
+
+### Motion switch
+
+```ts
+motionSwitch(target, motion?, { label?, labels?, hints?, persist? }) // → { element, destroy() }
+```
+
+`motionSwitch` builds the prototype's segmented control in `target` (an element or a selector): Presentation, Analysis and Off. It's the library's one caller of `motion.chooseMode()`, because the viewer operates it, so a click overrides the device's reduced-motion setting.
+
+- **Structure.** A `role="group"` named by its visible label ("Motion"), with real `<button type="button">`s that carry `aria-pressed`, so Tab, Enter and Space work as they do on any button. A note beside them says what the mode does; it's the group's description and a polite live region, so a screen reader hears the new note after a click.
+- **What it shows.** The pressed button is the effective mode. While the device asks for reduced motion and the viewer hasn't picked, Off is pressed and the note says so ("Your device asks for reduced motion…"); picking any mode, Off included, makes it the viewer's choice. It follows `motion.subscribe`, so it stays right when the author, the device or another control changes the mode.
+- **Persisting.** `persist: "key"` is opt-in: the viewer's choice is saved in `localStorage` under the key and restored when the switch is made, so it carries across pages and visits; `clearChoice()` removes it. A stored value that isn't a mode is ignored, and storage that's blocked or full is skipped (every access is guarded).
+- `label`, `labels` and `hints` replace the text, for other languages. `destroy()` removes the switch and stops following the motion; the viewer's choice stays.
+- **Styles.** Its rules are in the shared stylesheet, so `expressive-charts/style.css` and `configure()` cover them as they do the charts'. They use `:where()` and theme tokens (`--ec-text`, `--ec-text-muted`, `--ec-surface`, `--ec-ring`, `--ec-focus`), so they follow light and dark, and host CSS restyles them without specificity fights.
+
 ## Rendering
 
 SVG first, in `src/charts/render/`. Canvas or WebGL rendering is a later option for charts with thousands of marks; effects describe what to draw, so they should not need to change when a renderer is added.
 
 - **Structure.** A chart's `<svg class="ec-chart">` holds the grid, the axis, the focus ring, the marks and, last, the overlay where runs draw (one `<g class="ec-run">` per run, stacked by start order, with `--ec-mark` set to the mark's colour, and set again when that colour changes). Each mark is a `<g class="ec-mark" data-key>`, which takes focus and carries the `aria-label`, with its pointer target, label, body (the segments, which effects restyle) and value label. DOM order follows visual order. Beside the `<svg>`, in the container, are two HTML elements: the legend (`.ec-legend`) before it, and the tooltip's layer (`.ec-tooltip-layer`) after it.
-- **Theme.** Colours are `--ec-*` custom properties with the prototype's light palette as fallbacks: `--ec-text`, `--ec-text-muted`, `--ec-surface`, `--ec-grid`, `--ec-axis`, `--ec-focus`, `--ec-negative`, `--ec-series-1` … `--ec-series-8` with `-strong` variants, `--ec-ring` (the tooltip's border; by default the text colour at 12%), `--ec-dim-opacity` and `--ec-hover-duration`. Text uses the text tokens, never a series colour. Dark-mode defaults and the eight validated colours come in M2.
-- **Styles.** One small stylesheet is injected once per document (`<style data-expressive-charts>`). Its rules use `:where()`, so host CSS overrides them without specificity fights. Everything else is set through the CSSOM, which a strict CSP allows; a `nonce` option or a shipped CSS file for strict-CSP pages is still open (plan §10).
+- **Theme.** Colours are `--ec-*` custom properties: `--ec-text`, `--ec-text-muted`, `--ec-surface`, `--ec-grid`, `--ec-axis`, `--ec-focus`, `--ec-negative`, `--ec-ring` (hairline borders on controls and the tooltip), `--ec-series-1` … `--ec-series-8` with `-strong` variants, `--ec-dim-opacity`, and `--ec-hover-duration`, which the chart sets. Text uses the text tokens, never a series colour.
+  - **Light and dark.** The defaults are in `themes` in `src/charts/render/theme.ts`. The stylesheet sets light on `:root`; dark when the device prefers it, unless the root has `data-theme="light"`; and either one on any element with `data-theme="light"` or `"dark"`, for its subtree. They're on the root rather than the chart so that elements outside the `<svg>` (a host's own chart, the tooltip, controls) read the same values.
+  - **Overriding.** Every default rule is in `:where()`, so any host rule wins: `.my-card { --ec-series-1: teal }`. A `data-theme` element sets every token again for its subtree, so an override meant to hold everywhere should also name `[data-theme]` elements, or sit inside them. A page with no dark theme of its own sets `data-theme="light"` on `<html>`, so the charts don't turn dark on a light page.
+  - **The palette** is validated by `theme.test.ts` in both themes: every mark colour (and `--ec-negative` and `--ec-focus`) is at least 3:1 against the surface; neighbouring slots, with slot 8 next to slot 1, are at least 15 apart in OKLab ×100, and at least 8 apart under protanopia, deuteranopia and tritanopia (Machado 2009); any two slots are at least 9 apart; each `-strong` is within 5° of its colour's hue, with 1.3× its contrast; and text is at least 4.5:1. Slots 1–4 are the prototype's, except light 3 and 4, which are darkened along their hue to reach 3:1.
+  - Inline styles and the rules keep light values as `var()` fallbacks, for a page that sets some tokens but has no stylesheet.
+- **Styles.** One stylesheet holds the tokens and the default rules, and the first chart, adapter or control on a page injects it (`<style data-expressive-charts>`, once per document). Everything else is set through the CSSOM, which a strict CSP allows. `configure()` sets two page-wide options, which are page-wide because the stylesheet is: an option on one chart would only count if that chart came first.
+  - `configure({ nonce })` puts the nonce on the injected `<style>`, for a CSP with a `style-src` nonce.
+  - `configure({ injectStyles: false })` injects nothing. The page loads `expressive-charts/style.css` (`dist/expressive-charts.css`) instead, for a CSP with no inline styles at all. The build writes that file from the same constant the charts inject, so they can't drift apart.
+  - Call `configure()` before creating charts. The stylesheet stays when charts are destroyed, since others may share it.
 
 ## Build outputs
 
 - `dist/index.js` + `dist/index.d.ts`: ES module for npm and bundlers.
 - `dist/expressive-charts.global.js`: script-tag bundle exposing `window.ExpressiveCharts`.
+- `dist/expressive-charts.css`: the stylesheet the charts inject, as a file, exported as `expressive-charts/style.css` for pages that use `configure({ injectStyles: false })`. `package.json` lists CSS in `sideEffects`, so bundlers keep `import "expressive-charts/style.css"`, which imports no names; webpack would otherwise drop it. `src/package.test.ts` checks the patterns as bundlers read them, since the repo's own bundlers (Vite 8, esbuild) keep the import either way.
 - `dist/icons/sport.js`, `.cjs` and `.d.ts`: the optional sport icon pack, imported as `expressive-charts/icons/sport`. It's a separate entry, so the core build doesn't carry the ball and cleat. The script-tag bundle doesn't include it.

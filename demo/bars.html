@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ball and cleat · expressive-charts</title>
 <style>
-  /* Page chrome only. The chart reads the --ec-* tokens; until dark-mode defaults land (M2), the page sets them for dark. */
+  /* Page chrome only. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
   :root {
     --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #7d7b75;
     --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6;
@@ -14,9 +14,6 @@
     :root {
       --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
       --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5;
-      --ec-surface: #1a1a19; --ec-text: #f0efec; --ec-text-muted: #8f8d86; --ec-grid: #2c2c2a; --ec-axis: #45453f;
-      --ec-series-1: #3987e5; --ec-series-1-strong: #6da7ec;
-      --ec-series-4: #c98500; --ec-series-4-strong: #eda100;
       color-scheme: dark;
     }
   }
@@ -29,12 +26,14 @@
   .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
   .note { font-size: 14px; }
   .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
-  .bar .label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
-  .hint { font-size: 13px; color: var(--muted); flex: 1 1 220px; min-width: 0; }
+  .status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
   .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
   .seg button:hover { background: var(--wash); }
+  .btn { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  .btn:hover:not(:disabled) { background: var(--wash); }
+  .btn:disabled { color: var(--muted); cursor: default; }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; min-width: 0; }
   #chart { min-width: 0; }
@@ -46,7 +45,7 @@
   #host-chart .host-label { fill: var(--ink-2); }
   #host-chart .host-value { fill: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
   #host-chart .host-goals rect { fill: var(--ec-series-1, #2a78d6); }
-  #host-chart .host-assists rect { fill: var(--ec-series-4, #eda100); }
+  #host-chart .host-assists rect { fill: var(--ec-series-4, #c28409); }
 </style>
 </head>
 <body>
@@ -54,18 +53,11 @@
   <header>
     <p class="eyebrow">Milestone 1 · ball and cleat</p>
     <h1>Ball and cleat on the real library</h1>
-    <p class="lede">The prototype's first card, rebuilt on <code>barChart</code> and <code>travel</code>, and the same story on a chart the library didn't draw. Hover a bar, then switch the motion mode, the metric and the sort.</p>
+    <p class="lede">The prototype's first card, rebuilt on <code>barChart</code> and <code>travel</code>, and the same story on a chart the library didn't draw. Hover a bar, then switch the motion mode, the metric and the sort, and play the next matchweek.</p>
   </header>
 
-  <div class="bar" role="group" aria-label="Motion mode">
-    <span class="label">Motion</span>
-    <div class="seg" id="motion">
-      <button type="button" data-value="presentation">Presentation</button>
-      <button type="button" data-value="analysis">Analysis</button>
-      <button type="button" data-value="off">Off</button>
-    </div>
-    <span class="hint" id="motion-hint"></span>
-  </div>
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
 
   <div class="bar">
     <div class="seg" id="metric" role="group" aria-label="Metric">
@@ -77,17 +69,19 @@
       <button type="button" data-value="value" aria-pressed="true">Highest first</button>
       <button type="button" data-value="key" aria-pressed="false">A–Z</button>
     </div>
+    <button type="button" class="btn" id="next-matchweek">Play next matchweek</button>
+    <span class="status" id="matchweek-status" role="status">After matchweek 24</span>
   </div>
 
   <section class="card" aria-labelledby="chart-title">
     <h2 id="chart-title">Harbor City FC: goals by player</h2>
-    <p class="note">The library's own <code>barChart</code>. In Goals, a ball rolls the length of the bar. In Assists, a boot steps along it. In Goals + assists, the ball stops at the end of the goals and the boot carries on. Switching the metric or sort animates: in Presentation the values change first and then the rows move; in Analysis it's one quick step; Off jumps.</p>
+    <p class="note">The library's own <code>barChart</code>. In Goals, a ball rolls the length of the bar. In Assists, a boot steps along it. In Goals + assists, the ball stops at the end of the goals and the boot carries on. Switching the metric or sort animates: in Presentation the values change first and then the rows move; in Analysis it's one quick step; Off jumps. <b>Play next matchweek</b> flashes the bars whose numbers changed (<code>on: { update: "flash" }</code>), as does a metric switch, which changes them all; a re-sort or a new scale only moves them.</p>
     <div id="chart"></div>
   </section>
 
   <section class="card" aria-labelledby="host-title">
     <h2 id="host-title">The same story on someone else's chart</h2>
-    <p class="note">A plain SVG chart drawn by hand, the way D3 code would draw it. It knows nothing about the library and redraws from scratch on every change, with no animation of its own. <code>expressive()</code> adds the same hover story, keyboard focus (Tab, then the arrow keys) and dimming, and <code>refresh()</code> keeps the effects in step after each redraw.</p>
+    <p class="note">A plain SVG chart drawn by hand, the way D3 code would draw it. It knows nothing about the library and redraws from scratch on every change, with no animation of its own. <code>expressive()</code> adds the same hover story, keyboard focus (Tab, then the arrow keys) and dimming, and <code>refresh()</code> keeps the effects in step after each redraw. A <code>value</code> accessor tells it what each rect shows, so <code>update: "flash"</code> flashes the same bars as above: the ones whose numbers changed, not every bar when the axis grows or the window is resized.</p>
     <svg id="host-chart" role="img" aria-label="Harbor City FC: goals by player"></svg>
   </section>
 

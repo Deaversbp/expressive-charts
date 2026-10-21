@@ -591,7 +591,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     }
   });
 
-  const keyboard = keyboardFocus(svg, {
+  const keyboard = keyboardFocus(() => svg, {
     find: (eventTarget) => liveRecordOf(eventTarget)?.key,
     order: () => order.map((record) => record.key),
     element: (key) => find(key)?.group,

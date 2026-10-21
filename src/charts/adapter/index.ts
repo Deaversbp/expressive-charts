@@ -2,4 +2,4 @@
 // (and share the charts' SVG drawing layer) and never name an effect.
 
 export { expressive } from "./expressive";
-export type { Attachment, ExpressiveOptions, MarkSource } from "./types";
+export type { Attachment, ExpressiveOptions, HostMark, MarkSource } from "./types";

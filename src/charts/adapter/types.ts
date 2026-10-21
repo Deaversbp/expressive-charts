@@ -56,6 +56,22 @@ export interface ExpressiveOptions<D> {
   readonly keyboard?: boolean;
   /** Dim the other marks while one is hovered (to --ec-dim-opacity). Default false: the host owns its styling. */
   readonly dim?: boolean;
+  /**
+   * Names each mark for screen readers, as one item: "Okafor: 16 goals, 4 assists". The element that
+   * takes the mark's focus (its first part) becomes `role="img"` with this as its aria-label, and the
+   * mark's other parts are hidden (`aria-hidden`), so a stack isn't read in pieces. Given the mark's row
+   * (its first part's) and the mark. Called for every mark on each read, never per frame. An empty
+   * result, or a throw (reported), leaves that mark's ARIA as the host drew it. Default: the adapter
+   * writes no ARIA, and the host names its own marks.
+   */
+  readonly markLabel?: (datum: D, mark: HostMark<D>) => string;
+}
+
+/** What `markLabel` is given beside the row: the mark's key and its parts. */
+export interface HostMark<D> {
+  readonly key: string;
+  /** From the baseline, or in document order for marks described with `geometry`. `series` is the part's `segment`. */
+  readonly parts: readonly { readonly series: string | undefined; readonly datum: D }[];
 }
 
 export interface Attachment<D> {

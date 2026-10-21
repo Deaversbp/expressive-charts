@@ -640,8 +640,8 @@ describe("barChart: ARIA structure", () => {
       key: "Okafor",
       category: "Okafor",
       values: [
-        { series: "goals", value: 16 },
-        { series: "assists", value: 4 }
+        { series: "goals", label: "goals", value: 16 },
+        { series: "assists", label: "assists", value: 4 }
       ],
       total: 20,
       format,
@@ -722,6 +722,77 @@ describe("barChart: ARIA structure", () => {
     expect(tanaka.hasAttribute("aria-hidden")).toBe(false);
     expect(tanaka.getAttribute("role")).toBe("img");
     await settle(Promise.all([leaving, back]));
+  });
+});
+
+describe("barChart: series labels", () => {
+  const labels = { goals: "Goals", assists: "Assists" };
+  const stacked = { x: undefined, stack: ["goals", "assists"] } as const;
+  const legend = (container: Element) => Array.from(container.querySelectorAll(".ec-legend-item"), (item) => [item.getAttribute("data-series"), item.textContent]);
+  const headers = (container: Element) => Array.from(container.querySelectorAll(".ec-table thead th"), (th) => th.textContent);
+  const tooltip = (container: Element) => Array.from(container.querySelector(".ec-tooltip")?.children ?? [], (line) => line.textContent);
+
+  it("names each series by its label in the legend, the table's headers, the tooltip and the marks' names", () => {
+    const { container, mark } = setup({ ...stacked, seriesLabels: labels });
+    expect(legend(container)).toEqual([
+      ["goals", "Goals"],
+      ["assists", "Assists"]
+    ]);
+    expect(headers(container)).toEqual(["name", "Goals", "Assists", "Total"]);
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16 Goals, 4 Assists");
+    pointer("pointerover", mark("Okafor").querySelector(".ec-hit")!);
+    expect(tooltip(container)).toEqual(["Okafor", "16 Goals · 4 Assists", "20 total"]);
+    // Segments, colours and effects still go by the series' own names.
+    expect(Array.from(mark("Okafor").querySelectorAll(".ec-segment"), (path) => path.getAttribute("data-series"))).toEqual(["goals", "assists"]);
+  });
+
+  it("leaves a series without a label its own name, and gives markLabel each value's label", () => {
+    const seen: string[][] = [];
+    const { mark } = setup({
+      ...stacked,
+      seriesLabels: { goals: "Goals", shots: "Shots" },
+      markLabel: (d, m) => {
+        seen.push(m.values.map((v) => `${v.series}: ${v.label}`));
+        return m.text;
+      }
+    });
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16 Goals, 4 assists");
+    expect(seen[0]).toEqual(["goals: Goals", "assists: assists"]);
+  });
+
+  it("names a lone value read by a function only when it's labelled", () => {
+    const sum = (d: Player) => d.goals + d.assists;
+    expect(setup({ x: sum }).mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: 16");
+    const { container, mark } = setup({ x: sum, seriesLabels: { value: "goals and assists" } });
+    expect(mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: 16 goals and assists");
+    expect(headers(container)).toEqual(["name", "goals and assists"]);
+    pointer("pointerover", mark("Tanaka").querySelector(".ec-hit")!);
+    expect(tooltip(container)).toEqual(["Tanaka", "16 goals and assists"]);
+  });
+
+  it("renames as soon as an update starts, and announces new series by their labels", async () => {
+    const { container, chart, mark, settle } = setup({ ...stacked, announce: true });
+    const said = () => container.querySelector(".ec-announcer")!.textContent!.trim();
+    const renaming = chart.update({ seriesLabels: labels });
+    expect(legend(container).map(([, name]) => name)).toEqual(["Goals", "Assists"]);
+    expect(headers(container).slice(1, 3)).toEqual(["Goals", "Assists"]);
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16 Goals, 4 Assists");
+    // The same view, newly named: nothing to say.
+    expect(said()).toBe("");
+    await settle(renaming);
+    await settle(chart.update({ stack: ["assists"] }));
+    expect(said()).toBe("Showing Assists");
+    void chart.update({ seriesLabels: undefined });
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 4 assists");
+  });
+
+  it("rejects labels that aren't names", async () => {
+    expect(() => setup({ seriesLabels: ["Goals"] as never })).toThrow(/seriesLabels must be an object/);
+    expect(() => setup({ seriesLabels: { goals: " " } })).toThrow(/seriesLabels\.goals must be a name, not blank/);
+    expect(() => setup({ seriesLabels: { goals: 3 } as never })).toThrow(/seriesLabels\.goals must be a name, not 3/);
+    const { chart, mark } = setup();
+    await expect(chart.update({ seriesLabels: null as never })).rejects.toThrow(/seriesLabels must be an object/);
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16 goals");
   });
 });
 

@@ -73,6 +73,11 @@ describe("tableModel", () => {
     expect(model).toMatchObject({ hidden: false, summary: "Data table", caption: "Goals" });
   });
 
+  it("heads each series' column with its label", () => {
+    const model = tableModel(input({ label: (series) => (series === "goals" ? "Goals" : series) }))!;
+    expect(model.headers.map((header) => header.text)).toEqual(["name", "Goals", "assists", "Total"]);
+  });
+
   it("counts a series a row doesn't have as 0", () => {
     const model = tableModel(input({ rows: [{ key: "A", category: "A", datum: players[0]!, index: 0, values: [{ series: "goals", value: 3 }], total: 3 }] }))!;
     expect(model.rows[0]!.cells.map((cell) => cell.text)).toEqual(["A", "3", "0", "3"]);

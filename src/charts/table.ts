@@ -28,6 +28,8 @@ export interface TableInput<D> {
   readonly category: string | undefined;
   /** In stack order. */
   readonly series: readonly string[];
+  /** A series' column header: its label. Default: the series' own name. */
+  readonly label?: (series: string) => string;
   /** In visual order. */
   readonly rows: readonly TableRow<D>[];
   readonly format: (value: number) => string;
@@ -91,7 +93,7 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
   const headers: TableCell[] = [
     { text: options.category ?? input.category ?? "Category", numeric: false },
     ...columns.map((column) => ({ text: column.label, numeric: false })),
-    ...input.series.map((series) => ({ text: series, numeric: true })),
+    ...input.series.map((series) => ({ text: input.label?.(series) ?? series, numeric: true })),
     ...(stacked ? [{ text: options.total ?? "Total", numeric: true }] : [])
   ];
   const rows = input.rows.map((row) => {

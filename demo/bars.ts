@@ -1,8 +1,8 @@
 // M1: the prototype's ball-and-cleat card on the real library (steps 7 and 8), and the same story on a
 // hand-written SVG chart through expressive() (step 11). M2: "Play next matchweek" flashes the bars
 // that changed (step 2), the motion switch is the library's own (step 4), and the chart has a data
-// table with the players' positions and announces its updates to screen readers (step 5), and its bars'
-// accessible names say "1 goal" (markLabel).
+// table with the players' positions and announces its updates to screen readers (step 5), its bars'
+// accessible names say "1 goal" (markLabel), and its series are "Goals" and "Assists" (seriesLabels).
 import { barChart, expressive, motionSwitch, sequence, travel } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
 import { amount, drawHostChart, type DrawOptions, type Segment, type Series } from "./host-chart";
@@ -53,6 +53,8 @@ const chart = barChart<Player>("#chart", {
   stack: stacks.goals,
   sort: "value",
   colors: { goals: 1, assists: 4 },
+  // As in the prototype, the legend and the table's headers say "Goals" and "Assists".
+  seriesLabels: { goals: "Goals", assists: "Assists" },
   // Each bar's name in the same words as the second chart's, "Castillo: 1 goal, 5 assists", where the
   // default would say "1 goals". Only the series the metric shows.
   markLabel: (d, mark) => `${d.name}: ${mark.values.map((v) => amount(v.value, v.series as Series)).join(", ")}`,

@@ -63,8 +63,9 @@ export interface ChartOptions<D> {
   /**
    * A box beside the hovered or focused mark. Default true: the category, each series' value in
    * `format`, and the total of a stack. A function gives a row's text instead ("\n" breaks a line; an
-   * empty string shows none); it's set as text, never as HTML. Visual only: it's aria-hidden, since
-   * each mark's aria-label says the same.
+   * empty string shows none); it's set as text, never as HTML. The box itself is aria-hidden, so it
+   * isn't read twice, but a function's text also becomes the mark's accessible description
+   * (aria-describedby), so what it adds beyond the values (a player's position) reaches screen readers.
    */
   readonly tooltip?: boolean | ((d: NoInfer<D>) => string);
   /**
@@ -74,6 +75,13 @@ export interface ChartOptions<D> {
    * "1 goal". An empty string, or a throw (reported), keeps the default: a mark is never left unnamed.
    */
   readonly markLabel?: (d: NoInfer<D>, mark: MarkSummary) => string;
+  /**
+   * Each mark's accessible description (aria-describedby): what its name doesn't already say. Default:
+   * a tooltip function's text, so a custom tooltip's extra facts reach screen readers. When that text
+   * repeats the values the name already says, give only the extra facts here ("Forward"), so nothing
+   * is read twice. `false` describes nothing; so do an empty string and a throw (reported).
+   */
+  readonly markDescription?: false | ((d: NoInfer<D>) => string);
   /**
    * The data table: the fallback every screen reader can read. Default true: a closed <details>
    * "Data table" after the chart, listing the rows in the chart's order with the category, each series

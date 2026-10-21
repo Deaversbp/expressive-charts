@@ -179,7 +179,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     colors: (key) => find(key)?.parts[0]?.colors
   });
   const runner = createRunner<D>({ effects, motion, icons: env.icons, clock, surface });
-  const tooltip = chartTooltip<D>(svg, { motion, option: () => current.tooltip });
+  const tooltip = chartTooltip<D>(svg, { motion, option: () => current.tooltip, description: () => current.markDescription });
   const legend = chartLegend(svg);
   const table = chartTable(svg);
   let announcer: Announcer | undefined = current.announce ? chartAnnouncer(svg) : undefined;
@@ -507,7 +507,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     return diff;
   }
 
-  /** The mark's accessible name, from where it's heading, and a tooltip function's text as its description. */
+  /** The mark's accessible name, from where it's heading, and its description (`markDescription`, or a tooltip function's text). */
   function labelMark(record: MarkRecord<D>): void {
     record.group.setAttribute("aria-label", markLabel(record.row, current));
     tooltip.describe(record.group, record.row);
@@ -918,9 +918,12 @@ function checkOptions<D>(options: BarChartOptions<D>): void {
     const value = options[field];
     if (value !== undefined && !(Number.isFinite(value) && value > 0)) throw new RangeError(`barChart: ${field} must be a positive number of px, got ${String(value)}.`);
   }
-  const { tooltip, markLabel, legend, announce } = options;
+  const { tooltip, markLabel, markDescription, legend, announce } = options;
   if (tooltip !== undefined && typeof tooltip !== "boolean" && typeof tooltip !== "function") throw new TypeError("barChart: tooltip must be true, false or a function that returns a row's text.");
   if (markLabel !== undefined && typeof markLabel !== "function") throw new TypeError("barChart: markLabel must be a function that returns a mark's accessible name.");
+  if (markDescription !== undefined && markDescription !== false && typeof markDescription !== "function") {
+    throw new TypeError("barChart: markDescription must be false or a function that returns a mark's accessible description.");
+  }
   if (legend !== undefined && typeof legend !== "boolean") throw new TypeError("barChart: legend must be true or false.");
   checkSeriesLabels(options.seriesLabels, "barChart");
   checkTableOption(options.table, "barChart");

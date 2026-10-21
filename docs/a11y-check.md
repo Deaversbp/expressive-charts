@@ -8,7 +8,7 @@ A screen reader reads the page aloud, so "hear" means real speech. You don't nee
 
 ## What's being tested
 
-- **The chart.** The `<svg>` is `role="group"`, named by the chart's `label`. Each bar is `role="img"`, named by its `aria-label` ("Okafor: 16 goals, 4 assists"). Bars are focusable with a roving tabindex, so the chart is one tab stop and the arrow keys move between bars. Inside a bar, the text and shapes are hidden, so its name is the only thing read. A tooltip function's text becomes the bar's description; the demo uses the default tooltip, so it has no descriptions.
+- **The chart.** The `<svg>` is `role="group"`, named by the chart's `label`. Each bar is `role="img"`, named by its `aria-label` ("Okafor: 16 goals, 4 assists"). Bars are focusable with a roving tabindex, so the chart is one tab stop and the arrow keys move between bars. Inside a bar, the text and shapes are hidden, so its name is the only thing read. Each bar's description is `markDescription`'s text (by default a tooltip function's). The demo's tooltip names the position and both numbers, and its `markDescription` gives only the position, so each bar is read as its name and then its position ("Okafor: 16 goals", then "Forward"), never the name or numbers twice.
 - **The data table.** A `<details>` "Data table" after the chart. It has a `<caption>` (the chart's label; visually hidden), column headers (`<th scope="col">`), and each player's name as the row header (`<th scope="row">`). It follows the sort and the data.
 - **Announcements.** A polite live region (`role="status"`) says what each update changed. The demo turns it on (`announce`) and adds the matchweek.
 
@@ -122,11 +122,24 @@ Start from a fresh page (Goals, Highest first, after matchweek 24), with the set
 
 If a bar is read twice or in pieces here but not on the first chart, the difference is the structure: here the named element is a `<rect>` inside the page's own `<g>` for each series, where the first chart has a `<g role="img">` per bar.
 
+## Re-check after M2 step 7
+
+M2 step 7 gave each bar of the library's chart a description: the player's position. The roles, names, table and announcements are unchanged, so only these need hearing again:
+
+| Screen reader | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| NVDA + Chrome | Section A, steps 1 and 3. | After each bar's name and "graphic", its position, perhaps after a pause: "Okafor: 16 goals, graphic, Forward"; "Castillo: 1 goal, graphic, Midfielder". **Not** the name or numbers a second time. | |
+| VoiceOver + Safari | Section B, steps 1 and 2. | After each bar's name and "image", its position, perhaps after a pause (VoiceOver may read descriptions only after a delay, or with VO+Shift+H). **Not** the name or numbers a second time. | |
+
+If a description isn't read at all, that's acceptable: the position is also in the data table. If the name or numbers are read twice, the description isn't working as intended.
+
 ## Results
 
 **NVDA + Chrome on Windows 11, 21 October 2026: passed.** Steps 1–13 read as expected, with the default settings, so every "Listen for" item passed. The roles (`group` on the `<svg>`, `img` on each bar), the table and the announcements stay as built. Versions weren't noted.
 - That run heard "Castillo: 1 goals" in step 3, a known issue then. The demo now words its bars' names with `markLabel`, so the steps above say "1 goal". Only the wording changed, not the roles or the structure. **The new wording was heard as "Castillo: 1 goal" with NVDA + Chrome and with VoiceOver + Safari (October 2026).**
 - The one hitch was the tester's, not the page's. In step 11, T did nothing because NVDA was still in focus mode; after NVDA+Space back to browse mode, it found the table. Step 11 now says so.
+
+**M2 step 7's descriptions:** not re-checked yet; see [Re-check after M2 step 7](#re-check-after-m2-step-7).
 
 **VoiceOver + Safari:** the full script hasn't been run yet. It was used to hear the "1 goal" wording above.
 

@@ -5,7 +5,7 @@
 // accessible names say "1 goal" (markLabel).
 import { barChart, expressive, motionSwitch, sequence, travel } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
-import { amount, drawHostChart, type DrawOptions, type Segment } from "./host-chart";
+import { amount, drawHostChart, type DrawOptions, type Segment, type Series } from "./host-chart";
 
 interface Player {
   name: string;
@@ -40,10 +40,6 @@ const titles: Record<Metric, string> = {
   ga: "Harbor City FC: goals and assists by player"
 };
 
-// Each bar's accessible name in words, "Castillo: 1 goal, 5 assists", where the default would say "1 goals".
-const nouns: Record<string, readonly [one: string, other: string]> = { goals: ["goal", "goals"], assists: ["assist", "assists"] };
-const counted = (value: number, series: string, format: (value: number) => string): string => `${format(value)} ${nouns[series]?.[value === 1 ? 0 : 1] ?? series}`;
-
 // One story for all three views and both charts: a segment that isn't in the stack makes its step a no-op.
 const ballThenCleat = sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" }));
 
@@ -57,8 +53,9 @@ const chart = barChart<Player>("#chart", {
   stack: stacks.goals,
   sort: "value",
   colors: { goals: 1, assists: 4 },
-  // Only the series the metric shows, in the chart's own format.
-  markLabel: (d, mark) => `${d.name}: ${mark.values.map((v) => counted(v.value, v.series, mark.format)).join(", ")}`,
+  // Each bar's name in the same words as the second chart's, "Castillo: 1 goal, 5 assists", where the
+  // default would say "1 goals". Only the series the metric shows.
+  markLabel: (d, mark) => `${d.name}: ${mark.values.map((v) => amount(v.value, v.series as Series)).join(", ")}`,
   // As in the prototype, the table also lists each player's position.
   table: { category: "Player", columns: [{ label: "Position", field: "pos" }] },
   // The chart says what changed ("Sorted A to Z", "Okafor and Tanaka changed"); the page adds the matchweek.

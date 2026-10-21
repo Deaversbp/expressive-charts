@@ -84,9 +84,9 @@ export interface Layer {
    * size, and the anchor still lands where the transform puts it. Icon-space lengths (footprint,
    * radius, the pivot's offset from the anchor) scale by the same factor. A negative size throws.
    *
-   * Shapes are painted like SVG: filled in the "text" colour unless `fill` says otherwise (use
-   * "none" for a stroke-only shape), unstroked unless `stroke` is given (`width` in icon units,
-   * default 1), with round joins and caps. `clip` is path data in icon space.
+   * Each shape is one path, in order (the first at the bottom). An unset `fill` or `stroke` draws
+   * none; `width` is in icon units (default 1), so it scales with the icon. `clip` is path data in
+   * icon space.
    */
   icon(icon: Icon, options?: { readonly size?: number }): IconHandle;
   /** Draws an overlay path, unfilled unless `paint.fill` is given. */

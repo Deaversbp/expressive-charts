@@ -63,8 +63,11 @@ export function svgLayer(group: SVGGElement): Layer {
   };
 }
 
-/** An icon shape, painted like SVG would: filled (in the theme text colour) unless told otherwise, no stroke. */
-function drawShape(shape: IconShape, parent: SVGGElement): void {
+/** IconShape gains linecap and linejoin in M1 step 6; until both steps land, they're read through this type. */
+type Shape = IconShape & { readonly linecap?: "butt" | "round"; readonly linejoin?: "miter" | "round" };
+
+/** One path per shape. Unset fill or stroke draws none; the width is in icon units, so it scales with the icon. */
+function drawShape(shape: Shape, parent: SVGGElement): void {
   let clip: string | undefined;
   if (shape.clip !== undefined) {
     // userSpaceOnUse (the default) puts the clip path in the shape's own space: icon space.
@@ -78,13 +81,14 @@ function drawShape(shape: IconShape, parent: SVGGElement): void {
       d: shape.d,
       "clip-path": clip && `url(#${clip})`,
       "stroke-width": shape.stroke === undefined ? undefined : (shape.width ?? 1),
-      "stroke-linejoin": "round",
-      "stroke-linecap": "round"
+      "stroke-linecap": shape.linecap,
+      "stroke-linejoin": shape.linejoin
     },
     parent
   );
   setStyles(element, {
-    fill: cssColor(shape.fill ?? "text"),
+    // SVG's default fill is black, so "none" is set explicitly.
+    fill: shape.fill === undefined ? "none" : cssColor(shape.fill),
     stroke: shape.stroke === undefined ? undefined : cssColor(shape.stroke)
   });
 }

@@ -103,7 +103,7 @@ describe("svgLayer icons", () => {
     expect(() => surface.group("a", "hover", 1).icon(ball, { size: -1 })).toThrow(RangeError);
   });
 
-  it("paints shapes like SVG: filled in the text colour by default, clipped in icon space", () => {
+  it("draws one path per shape with its paint, clipped in icon space", () => {
     const { overlay, surface } = setup();
     surface.group("a", "hover", 1).icon(ball).place(matrix.translate(0, 0));
     surface.group("a", "enter", 2).icon(ball);
@@ -114,6 +114,9 @@ describe("svgLayer icons", () => {
     expect(seam!.style.getPropertyValue("fill")).toBe("none");
     expect(seam!.style.getPropertyValue("stroke")).toBe("var(--ec-text, #0b0b0b)");
     expect(seam!.getAttribute("stroke-width")).toBe("1.5");
+    // SVG's own caps and joins unless the shape asks.
+    expect(seam!.getAttribute("stroke-linecap")).toBeNull();
+    expect(seam!.getAttribute("stroke-linejoin")).toBeNull();
     const clipId = /^url\(#(.+)\)$/.exec(pattern!.getAttribute("clip-path") ?? "")?.[1];
     const clipPath = overlay.querySelector(`clipPath[id="${clipId}"]`);
     expect(clipPath?.querySelector("path")?.getAttribute("d")).toBe(ball.shapes[1]!.clip);
@@ -122,10 +125,23 @@ describe("svgLayer icons", () => {
     expect(new Set(ids).size).toBe(2);
   });
 
-  it("fills a shape with no paint in the theme text colour", () => {
+  it("draws no fill or stroke where a shape sets none", () => {
     const { overlay, surface } = setup();
     surface.group("a", "hover", 1).icon(boot);
-    expect((overlay.querySelector(".ec-icon path") as SVGPathElement).style.getPropertyValue("fill")).toBe("var(--ec-text, #0b0b0b)");
+    const path = overlay.querySelector(".ec-icon path") as SVGPathElement;
+    // Explicitly, since SVG's default fill is black.
+    expect(path.style.getPropertyValue("fill")).toBe("none");
+    expect(path.style.getPropertyValue("stroke")).toBe("");
+    expect(path.getAttribute("stroke-width")).toBeNull();
+  });
+
+  it("passes a shape's linecap and linejoin through", () => {
+    const { overlay, surface } = setup();
+    const laces = { d: "M7,-3L12,-9.5", stroke: "#ffffff", width: 1.4, linecap: "round", linejoin: "round" };
+    surface.group("a", "hover", 1).icon({ ...boot, shapes: [laces] });
+    const path = overlay.querySelector(".ec-icon path") as SVGPathElement;
+    expect(path.getAttribute("stroke-linecap")).toBe("round");
+    expect(path.getAttribute("stroke-linejoin")).toBe("round");
   });
 });
 

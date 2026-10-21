@@ -182,6 +182,15 @@ ${TOKEN_RULES}
 :where(.ec-legend) { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; color: var(--ec-text, ${TOKENS.text}); }
 :where(.ec-legend-item) { display: inline-flex; align-items: center; gap: 6px; }
 :where(.ec-legend-swatch) { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--ec-mark); forced-color-adjust: none; }
+:where(.ec-table) { margin-top: 8px; font-size: 13px; line-height: 1.4; color: var(--ec-text, ${TOKENS.text}); }
+:where(.ec-table summary) { cursor: pointer; color: var(--ec-text-muted, ${TOKENS["text-muted"]}); font-weight: 600; }
+:where(.ec-table summary:focus-visible) { outline: 2px solid var(--ec-focus, ${TOKENS.focus}); outline-offset: 2px; border-radius: 2px; }
+:where(.ec-table-scroll) { overflow-x: auto; margin-top: 8px; }
+:where(.ec-table table) { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+:where(.ec-table th, .ec-table td) { text-align: left; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--ec-grid, ${TOKENS.grid}); font-weight: 400; }
+:where(.ec-table thead th) { color: var(--ec-text-muted, ${TOKENS["text-muted"]}); font-size: 12px; font-weight: 600; }
+:where(.ec-table .ec-num) { text-align: right; }
+:where(.ec-table-caption, .ec-visually-hidden) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 `;
 
 const MARKER = "data-expressive-charts";

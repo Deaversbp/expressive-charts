@@ -1,6 +1,7 @@
 // M1: the prototype's ball-and-cleat card on the real library (steps 7 and 8), and the same story on a
 // hand-written SVG chart through expressive() (step 11). M2: "Play next matchweek" flashes the bars
-// that changed (step 2), and the motion switch is the library's own (step 4).
+// that changed (step 2), the motion switch is the library's own (step 4), and the chart has a data
+// table with the players' positions and announces its updates to screen readers (step 5).
 import { barChart, expressive, motionSwitch, sequence, travel } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
 import { drawHostChart, type DrawOptions, type Segment } from "./host-chart";
@@ -41,6 +42,9 @@ const titles: Record<Metric, string> = {
 // One story for all three views and both charts: a segment that isn't in the stack makes its step a no-op.
 const ballThenCleat = sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" }));
 
+/** Set while a matchweek updates the chart, so its announcement can say which one. */
+let announcing: string | undefined;
+
 const chart = barChart<Player>("#chart", {
   label: titles.goals,
   data: players,
@@ -48,6 +52,10 @@ const chart = barChart<Player>("#chart", {
   stack: stacks.goals,
   sort: "value",
   colors: { goals: 1, assists: 4 },
+  // As in the prototype, the table also lists each player's position.
+  table: { category: "Player", columns: [{ label: "Position", field: "pos" }] },
+  // The chart says what changed ("Sorted A to Z", "Okafor and Tanaka changed"); the page adds the matchweek.
+  announce: (change) => (announcing ? `${announcing}: ${change.text || "no change"}` : change.text),
   // Only bars whose values changed flash: a re-sort or a new scale only moves them.
   on: { hover: ballThenCleat, update: "flash" }
 });
@@ -129,7 +137,10 @@ function playMatchweek(): void {
   matchweek++;
   if (status) status.textContent = `After matchweek ${matchweek}`;
   if (nextButton && matchweek >= LAST_MATCHWEEK) nextButton.disabled = true;
+  // update() announces as the change starts, before it returns.
+  announcing = `Matchweek ${matchweek}`;
   void chart.update({ data: players });
+  announcing = undefined;
   updateHost({});
 }
 nextButton?.addEventListener("click", playMatchweek);

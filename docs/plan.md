@@ -431,7 +431,7 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 >
 > **A thin `barChart` is built in M1 step 5** (`src/charts`); [architecture.md](architecture.md#reference-charts) is now the reference for it. Differences from the sketch below and decisions made there:
 >
-> - `focus()` (step 9) and `table` (M2) aren't built, so `barChart` is still declared in the sketch, extending the built option and chart types. `tooltip` is built (M2), and so is a `legend` option for stacks.
+> - `barChart`'s handle has no `focus()` yet, so `barChart` is still declared in the sketch, extending the built chart type. `tooltip`, `table` and `announce` are built (M2), and so is a `legend` option for stacks.
 > - `update()` jumps to the new state (staged transitions are step 8) and can't change `on` or `motion` yet. It rejects, changing nothing, on data it can't draw.
 > - `sort` defaults to `"none"` (data order). `"key"` sorts keys with numbers in numeric order.
 > - Bars are coloured by series through a `ColorAssignment` (`colorAssignment()` is built). Colouring each category, as the morph example needs, is open until M5.
@@ -638,12 +638,12 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
 
 ### 7.2 Accessibility
 
-- **Structure.** Each mark gets an `aria-label` built from `describe(d)`, defaulting to "Okafor: 16 goals, 4 assists". The SVG gets the chart's `label` and `description`. The exact ARIA roles (`group`/`list`/`listitem` vs `graphics-*`) are picked in M2 after testing with NVDA + Chrome and VoiceOver + Safari.
+- **Structure.** Each mark gets an `aria-label` built from `describe(d)`, defaulting to "Okafor: 16 goals, 4 assists". The SVG gets the chart's `label` and `description`. The exact ARIA roles (`group`/`list`/`listitem` vs `graphics-*`) are picked in M2 after testing with NVDA + Chrome and VoiceOver + Safari. M2 step 5 picked `group` on the SVG and `img` on each mark, and the NVDA + Chrome check confirmed them ([a11y-check.md](a11y-check.md)).
 - **Keyboard.** Each chart is one tab stop (roving `tabindex`). Arrow keys move between marks in visual order, following the current sort, and Home/End jump to the ends. Focus fires `hover` (`source: "keyboard"`), so effects play. Escape or blur fires `leave`. The focus ring is drawn from `mark.outline` in `--ec-focus`, because browser focus outlines on SVG are inconsistent.
 - **Data table.** On by default: a `<details>` "Data table" after the chart, as in the prototype. It follows the current sort and updates with the data. `"hidden"` makes it visually hidden but readable by screen readers.
 - **Pause controls (WCAG 2.2.2).** Nothing auto-plays by default. The `playback()` controller (play, pause, seek, stop) comes with a `playButton()` helper whose label switches between Play and Pause. Effects can't loop forever in v0.1: `pulse` repeats are capped below 5 s. If looping is ever added, the chart must render a pause control.
 - **Tooltips** are `aria-hidden`, since the same text is in the mark's label and the table. On touch they follow the tap. A tooltip function's text is also the mark's description (M2 step 3, built).
-- **Updates.** An optional polite live region announces summaries like "Sorted A–Z". It's off by default (open question).
+- **Updates.** An optional polite live region announces summaries like "Sorted A to Z": `announce`, off by default (M2 step 5).
 
 ---
 
@@ -772,10 +772,18 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 **Wave 2** (after wave 1 lands):
 
-5. **Data table and ARIA roles, with your screen-reader check.** Owns `src/charts/table.ts`, the ARIA structure in `bar.ts`, and `docs/a11y-check.md`.
+5. ✅ **Data table and ARIA roles, with your screen-reader check.** Owns `src/charts/table.ts`, the ARIA structure in `bar.ts`, and `docs/a11y-check.md`.
    - Table: `table: boolean | "hidden"`, default on, a `<details>` "Data table" after the chart. It follows the current sort and updates with the data. Columns are the category, each series, and a total, plus any extra fields the page lists in a `columns` option (the prototype's table includes the position).
    - ARIA roles: pick the structure, then write a short listening script in `docs/a11y-check.md`. **You run it** with NVDA + Chrome or VoiceOver + Safari, and the roles are adjusted to what you hear.
    - An optional polite live region (`announce`) is off by default (open question 4).
+   - **Built, and your screen-reader check passed with NVDA + Chrome (October 2026)**: all 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run. [a11y-check.md](a11y-check.md) has the script and the results; details are in [architecture.md](architecture.md#bar-chart). Decisions:
+     - **Roles.** The `<svg>` is `role="group"`, named by `label`. Each focusable mark is `role="img"`, named by its `aria-label`, with its text and shapes `aria-hidden`, so it's read as one item. The graphics roles were left out, because screen readers announce `graphics-document` inconsistently and an unsupported role falls back to nothing. `list`/`listitem` were left out too: NVDA and JAWS often read a list item's text instead of its `aria-label`. A leaving mark is `aria-hidden`.
+     - **`table`** also takes an object: `columns` (`{ label, field, format? }`, `field` being a field name or `(d, i) => value`), the `category` and `total` headers, the `summary` text, and `hidden`. `columns` sits there rather than at the top level, where it could be taken for vertical bars. Extra columns go after the category, as the prototype's position did.
+     - The total column shows only for a stack, as the tooltip's total does. The caption (the chart's label) is visually hidden, since the chart's title is beside it. `"hidden"` is a visually hidden `<div>`, not a `<details>`, because a closed `<details>` hides its contents from screen readers.
+     - The table changes as soon as an update starts, like the labels and the legend, rather than once it settles (§5.5 step 6). Rows are kept by key, so an open table and a screen reader's place in it stay.
+     - **`announce`** is `boolean | (change) => string | undefined`. The chart's summary names a new label or new series, the sort, and the marks that changed (by name up to three, then "5 of 8 changed"), were added or were removed. A function gets that text and the keys and returns the page's own text; it's called before `update()` returns, so the demo adds the matchweek. Turned on by `update()`, it announces from the next update.
+     - The demo's table has a "Player" header and a Position column. Its "After matchweek N" status is no longer a live region, since the chart announces each matchweek.
+     - **Still open:** a `describe` option for the marks' labels ("1 goals" reads badly), and maybe a series display-names option shared by the legend, tooltip, labels and table headers.
 6. ✅ **Playwright screenshot tests.** Owns the Playwright dev dependency, `playwright.config.ts`, `tests/visual/`, a CI job, and a small hook that lets tests drive the page-wide clock.
    - Screenshots of the demo in light and dark, at rest and mid-travel at fixed clock times, in each motion mode, plus focus rings on both charts.
    - Chromium only, with the browser cached in CI. A documented command updates the baselines.

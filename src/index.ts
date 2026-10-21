@@ -38,6 +38,7 @@ export type {
   MarkEvent,
   MarkEvents,
   MarkSource,
+  MarkSummary,
   NumericKey,
   StyleOptions,
   TableColumn,

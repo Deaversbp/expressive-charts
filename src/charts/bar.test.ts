@@ -621,6 +621,96 @@ describe("barChart: ARIA structure", () => {
     expect(document.getElementById(okafor.getAttribute("aria-describedby")!)!.textContent).toBe("Okafor plays up front");
   });
 
+  it("words each image's name with markLabel, given the row and the mark as it's heading", () => {
+    const calls: unknown[][] = [];
+    const format = (v: number) => v.toFixed(1);
+    const { mark } = setup({
+      stack: ["goals", "assists"],
+      x: undefined,
+      format,
+      markLabel: (...args) => {
+        calls.push(args);
+        const [d, m] = args;
+        return `${m.category} (${d.name}): ${m.values.map((v) => `${m.format(v.value)} ${v.series === "goals" ? "goal" : "assist"}${v.value === 1 ? "" : "s"}`).join(", ")}`;
+      }
+    });
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor (Okafor): 16.0 goals, 4.0 assists");
+    expect(calls.map(([d]) => d)).toEqual(players);
+    expect(calls[0]![1]).toEqual({
+      key: "Okafor",
+      category: "Okafor",
+      values: [
+        { series: "goals", value: 16 },
+        { series: "assists", value: 4 }
+      ],
+      total: 20,
+      format,
+      text: "Okafor: 16.0 goals, 4.0 assists"
+    });
+    // A lone value read by a function is the series "value", as in the default name.
+    const lone = setup({ x: (d) => d.goals + d.assists, markLabel: (d, m) => `${m.text} (${m.values[0]!.series})` });
+    expect(lone.mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: 16 (value)");
+  });
+
+  it("renames as soon as an update starts: new data, a new stack, or a new markLabel", async () => {
+    const calls: string[] = [];
+    const markLabel = (d: Player, m: { readonly key: string; readonly values: readonly { readonly series: string; readonly value: number }[] }) => {
+      calls.push(m.key);
+      return `${d.name}: ${m.values.map((v) => `${v.series} ${v.value}`).join(" and ")}`;
+    };
+    const { chart, mark, settle } = setup({ markLabel });
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: goals 16");
+    calls.length = 0;
+    // Once per mark for the update, not once per frame.
+    const more = chart.update({ data: players.map((p) => (p.name === "Okafor" ? { ...p, goals: 1 } : p)) });
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: goals 1");
+    await settle(more);
+    expect(calls.sort()).toEqual(["Lindqvist", "Okafor", "Tanaka"]);
+    // Only the series the mark is heading for, while the one leaving the stack still shrinks.
+    void chart.update({ x: undefined, stack: ["goals", "assists"] });
+    expect(mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: goals 6 and assists 10");
+    const stack = chart.update({ stack: ["assists"] });
+    expect(mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: assists 10");
+    await settle(stack);
+    void chart.update({ markLabel: (d) => `${d.name}, assisted ${d.assists}` });
+    expect(mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka, assisted 10");
+    void chart.update({ markLabel: undefined });
+    expect(mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: 10 assists");
+  });
+
+  it("keeps the default name when markLabel gives none or throws, reporting the throw", () => {
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    const named: Record<string, () => string> = {
+      Okafor: () => "",
+      Tanaka: () => "  ",
+      Lindqvist: () => undefined as unknown as string
+    };
+    const { chart, mark } = setup({ markLabel: (d) => named[d.name]!() });
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16 goals");
+    expect(mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: 6 goals");
+    expect(mark("Lindqvist").getAttribute("aria-label")).toBe("Lindqvist: 10 goals");
+    expect(reportError).not.toHaveBeenCalled();
+    // A throw on one mark leaves the others named by the page.
+    void chart.update({
+      markLabel: (d) => {
+        if (d.name === "Tanaka") throw new Error("no name");
+        return `${d.name} scored ${d.goals}`;
+      }
+    });
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor scored 16");
+    expect(mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: 6 goals");
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: "no name" }));
+  });
+
+  it("rejects a markLabel that isn't a function", async () => {
+    expect(() => setup({ markLabel: "name" as never })).toThrow(/markLabel must be a function/);
+    const { chart, mark } = setup();
+    await expect(chart.update({ markLabel: true as never })).rejects.toThrow(/markLabel must be a function/);
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16 goals");
+  });
+
   it("hides a mark while it leaves, and shows one that comes back", async () => {
     const { chart, mark, settle } = setup();
     const leaving = chart.update({ data: players.filter((p) => p.name !== "Tanaka") });

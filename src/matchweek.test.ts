@@ -75,27 +75,32 @@ describe("update: \"flash\" on barChart", () => {
 describe("update: \"flash\" on expressive()", () => {
   const NS = "http://www.w3.org/2000/svg";
 
-  /** Bars drawn by hand at 20 px a goal, each rect's row on __data__, as D3 would bind it. */
-  function draw(svg: SVGSVGElement, rows: readonly Player[]): SVGRectElement[] {
+  /** Bars drawn by hand at 20 px a goal (or `unit`), each rect's row on __data__, as D3 would bind it. */
+  function draw(svg: SVGSVGElement, rows: readonly Player[], unit = 20): SVGRectElement[] {
     svg.replaceChildren();
     const plot = svg.appendChild(document.createElementNS(NS, "g"));
     plot.setAttribute("transform", "translate(90,4)");
     return rows.map((row, i) => {
       const rect = plot.appendChild(document.createElementNS(NS, "rect"));
-      for (const [name, value] of Object.entries({ x: 0, y: i * 34 + 7, width: row.goals * 20, height: 20 })) rect.setAttribute(name, String(value));
+      for (const [name, value] of Object.entries({ x: 0, y: i * 34 + 7, width: row.goals * unit, height: 20 })) rect.setAttribute(name, String(value));
       (rect as unknown as { __data__: Player }).__data__ = row;
       return rect;
     });
   }
 
-  it("flashes the bars whose length changed after refresh(), and nothing on a re-sort", () => {
+  function attach(value?: (d: Player) => number) {
     const svg = document.body.appendChild(document.createElementNS(NS, "svg"));
     const e = env();
-    const fx = expressive<Player>(draw(svg, players), { key: (d) => d.name, on: { update: "flash" } }, e);
+    const fx = expressive<Player>(draw(svg, players), { key: (d) => d.name, ...(value ? { value } : {}), on: { update: "flash" } }, e);
     const outlineOf = (key: string): string => fx.marks().find((mark) => mark.key === key)!.outline.d;
     // The adapter draws halos in its overlay, so each is told apart by the outline it strokes.
     const flashing = (): { d: string | null; width: string | null }[] =>
       Array.from(svg.querySelectorAll(".ec-halo > path"), (path) => ({ d: path.getAttribute("d"), width: path.getAttribute("stroke-width") }));
+    return { svg, e, fx, outlineOf, flashing };
+  }
+
+  it("flashes the bars whose length changed after refresh(), and nothing on a re-sort", () => {
+    const { svg, e, fx, outlineOf, flashing } = attach();
 
     const scored = players.map((p) => (p.name === "Tanaka" ? { ...p, goals: 7 } : p));
     fx.refresh(draw(svg, scored));
@@ -108,6 +113,21 @@ describe("update: \"flash\" on expressive()", () => {
     fx.refresh(draw(svg, [...scored].reverse()));
     e.clock.advance(225);
     expect(flashing()).toEqual([]);
+    fx.destroy();
+  });
+
+  it("with value, flashes only the bars whose values changed: nothing on a resize, only the scorer when the axis grows", () => {
+    const { svg, e, fx, outlineOf, flashing } = attach((d) => d.goals);
+    // The window narrows: every bar gets shorter, no value changes.
+    fx.refresh(draw(svg, players, 15));
+    e.clock.advance(225);
+    expect(flashing()).toEqual([]);
+    e.clock.advance(675);
+
+    // Okafor scores four and the axis grows: every bar shrinks, only Okafor flashes.
+    fx.refresh(draw(svg, players.map((p) => (p.name === "Okafor" ? { ...p, goals: 20 } : p)), 12));
+    e.clock.advance(225);
+    expect(flashing()).toEqual([{ d: outlineOf("Okafor"), width: "8" }]);
     fx.destroy();
   });
 });

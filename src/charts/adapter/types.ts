@@ -23,6 +23,14 @@ export interface ExpressiveOptions<D> {
   /** Names the parts of a mark that share a key: a stack's series. Segments are ordered from the baseline. */
   readonly segment?: (datum: D, element: Element) => string;
   /**
+   * The value an element shows, so refresh() can tell a change in values from a re-layout. Given, an
+   * update means a part's value changed or the mark gained or lost a segment, as on our charts: a resize
+   * or a new axis maximum only moves marks. Without it, an update means a length changed. Called for
+   * every element, like `key`. Return a number or a string (a date's getTime(), or several values
+   * joined), since objects would compare by identity.
+   */
+  readonly value?: (datum: D, element: Element) => number | string | boolean | null | undefined;
+  /**
    * Describes a mark yourself, for shapes the adapter can't read (anything but a `<rect>`). Called once
    * per mark, with its first element in document order, in the coordinates of the marks' nearest
    * common ancestor. Build it with `describe` and give it the key passed in.
@@ -53,8 +61,9 @@ export interface ExpressiveOptions<D> {
 export interface Attachment<D> {
   /**
    * Call after the host re-renders: re-reads the marks (from `source` if given, and from then on) and
-   * fires enter, update and exit by key. An update means the mark's length or segments changed; a mark
-   * that only moved follows without one. Throws, changing nothing, on marks it can't read.
+   * fires enter, update and exit by key. An update means a part's `value` changed, or without `value`
+   * the mark's length; either way, gaining or losing a segment. A mark that only moved follows without
+   * one. Throws, changing nothing, on marks it can't read.
    */
   refresh(source?: MarkSource<D>): void;
   /** Listens for mark events; returns the unsubscribe. */

@@ -59,9 +59,10 @@ const drawHost = (): SVGRectElement[] => (hostSvg ? drawHostChart(hostSvg, playe
 const host = expressive<Segment>(drawHost(), {
   key: (d) => d.row.name, // a player's goals rect and assists rect share a key...
   segment: (d) => d.series, // ...and become that player's two segments, ordered from the baseline
+  // What each rect shows, so refresh() flashes the players who scored, not every bar on a resize or a new axis maximum.
+  value: (d) => d.value,
   keyboard: true,
   dim: true,
-  // expressive() can't see values, so an update here means a bar's length changed.
   on: { hover: ballThenCleat, update: "flash" }
 });
 function updateHost(next: Partial<DrawOptions>): void {

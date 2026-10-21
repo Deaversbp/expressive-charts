@@ -32,7 +32,7 @@ function el<K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<str
 /**
  * What a D3 page draws for a horizontal stacked bar chart: a margin group, the host's own axis, one
  * <g> per series (its datum the series, with .key) and one <rect> per player, whose datum is a stack
- * point. 10 px per goal, 34 px rows with 20 px bars.
+ * point. 10 px per goal unless redrawn at another scale, 34 px rows with 20 px bars.
  */
 function d3Stack(rows: Player[] = players, { gap = 0 } = {}) {
   const svg = el("svg", { width: 400, height: 140, viewBox: "0 0 400 140" }, document.body);
@@ -52,11 +52,11 @@ function d3Stack(rows: Player[] = players, { gap = 0 } = {}) {
   };
   const rect = (name: string, series: (typeof SERIES)[number]): SVGRectElement =>
     rects().find((r) => (r as unknown as { __data__: StackPoint }).__data__.data.name === name && (r.parentElement as Element | null) === groups[SERIES.indexOf(series)])!;
-  return { svg, plot, groups, rects, selection, rect, redraw: (next: Player[]) => draw(groups, next, gap) };
+  return { svg, plot, groups, rects, selection, rect, redraw: (next: Player[], unit?: number) => draw(groups, next, gap, unit) };
 }
 
 /** A D3 join without keys would reuse elements by index; this one keys by name, as a careful page does. */
-function draw(groups: SVGGElement[], rows: Player[], gap: number): void {
+function draw(groups: SVGGElement[], rows: Player[], gap: number, unit = 10): void {
   SERIES.forEach((key, s) => {
     const group = groups[s]!;
     const existing = new Map(Array.from(group.children, (child) => [(child as unknown as { __data__: StackPoint }).__data__.data.name, child as SVGRectElement]));
@@ -65,9 +65,9 @@ function draw(groups: SVGGElement[], rows: Player[], gap: number): void {
       const x0 = s === 0 ? 0 : row.goals;
       const point = Object.assign([x0, x0 + row[key]], { data: row }) as StackPoint;
       const rect = existing.get(row.name) ?? el("rect", {}, group);
-      rect.setAttribute("x", String(x0 * 10 + (s === 0 ? 0 : gap)));
+      rect.setAttribute("x", String(x0 * unit + (s === 0 ? 0 : gap)));
       rect.setAttribute("y", String(i * 34 + 7));
-      rect.setAttribute("width", String(Math.max(0, row[key] * 10 - (s === 0 ? 0 : gap))));
+      rect.setAttribute("width", String(Math.max(0, row[key] * unit - (s === 0 ? 0 : gap))));
       rect.setAttribute("height", "20");
       Object.assign(rect, { __data__: point });
       keep.add(rect);
@@ -201,6 +201,7 @@ describe("expressive: keys and segments", () => {
     const path = el("path", { d: "M0,0L10,0" }, host.plot);
     expect(() => setup([path], { key: () => "line" })).toThrow(/can't read the geometry of a <path>/);
     expect(() => setup(host.selection(), { ...stacked, baseline: "middle" as "left" })).toThrow(/baseline must be/);
+    expect(() => setup(host.selection(), { ...stacked, value: 3 as never })).toThrow(/value must be a function/);
     expect(() => setup(host.selection(), {} as ExpressiveOptions<StackPoint>)).toThrow(/needs a key function/);
   });
 
@@ -465,6 +466,16 @@ describe("expressive: refresh", () => {
     expect(fx.marks().map((m) => m.key)).toEqual(["Okafor", "Tanaka", "Lindqvist"]);
   });
 
+  it("without value, an update means a length changed, so a resize updates every mark", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), stacked);
+    const updates: string[] = [];
+    fx.on("update", (e) => updates.push(e.mark.key));
+    host.redraw(players, 8);
+    fx.refresh(host.selection());
+    expect(updates).toEqual(["Okafor", "Tanaka", "Lindqvist"]);
+  });
+
   it("replays hover after a refresh, and leaves a hovered mark that's gone", () => {
     const host = d3Stack();
     const story = recorder();
@@ -478,6 +489,92 @@ describe("expressive: refresh", () => {
     host.redraw([players[0]!]);
     fx.refresh(host.selection());
     expect(events).toEqual(["leave Tanaka"]);
+  });
+});
+
+describe("expressive: value", () => {
+  /** A stack point's value: its own goals or assists. */
+  const value = (d: StackPoint): number => d[1] - d[0];
+
+  function attach() {
+    const host = d3Stack();
+    const story = recorder();
+    const decoration = recorder();
+    const { fx } = setup(host.selection(), { ...stacked, value, on: { update: story.effect, decorate: decoration.effect } });
+    const updates: string[] = [];
+    fx.on("update", (e) => updates.push(`${e.mark.key} from ${e.from.length}`));
+    decoration.log.length = 0;
+    return { host, fx, story, decoration, updates };
+  }
+
+  it("a resize only moves marks: no update, and decorations follow", () => {
+    const { host, fx, story, decoration, updates } = attach();
+    // The window narrows: 8 px a goal instead of 10, the same values, new stack points.
+    host.redraw(players, 8);
+    fx.refresh(host.selection());
+    expect(updates).toEqual([]);
+    expect(story.log).toEqual([]);
+    expect(decoration.log).toEqual(["change Okafor", "change Tanaka", "change Lindqvist"]);
+    expect(fx.marks()[0]!.segments!.map((s) => s.length)).toEqual([128, 32]);
+  });
+
+  it("a new axis maximum updates only the marks whose values changed", () => {
+    const { host, fx, story, updates } = attach();
+    // Okafor scores four, so the axis grows and every bar shrinks to 8 px a goal.
+    host.redraw(players.map((p) => (p.name === "Okafor" ? { ...p, goals: 20 } : p)), 8);
+    fx.refresh(host.selection());
+    expect(updates).toEqual(["Okafor from 200"]);
+    expect(story.log).toEqual(["run Okafor from 200", "change Okafor"]);
+    expect(fx.marks().map((m) => m.length)).toEqual([192, 128, 136]);
+  });
+
+  it("a value that changed is an update even when no length did", () => {
+    const { host, fx, updates } = attach();
+    // Okafor gets to 20 and 5 as the axis grows to 8 px a goal: his segments keep their lengths, the others' shrink.
+    host.redraw(players.map((p) => (p.name === "Okafor" ? { ...p, goals: 20, assists: 5 } : p)), 8);
+    fx.refresh(host.selection());
+    expect(updates).toEqual(["Okafor from 200"]);
+    expect(fx.marks()[0]!.segments!.map((s) => s.length)).toEqual([160, 40]);
+  });
+
+  it("a segment that appears or goes is an update, as on the reference charts", () => {
+    const { host, fx, updates } = attach();
+    const goals = (): SVGRectElement[] => host.rects().filter((r) => (r.parentElement as Element | null) === host.groups[0]);
+    fx.refresh(goals());
+    expect(updates).toEqual(["Okafor from 200", "Tanaka from 160", "Lindqvist from 170"]);
+    updates.length = 0;
+    fx.refresh(host.selection());
+    expect(updates).toEqual(["Okafor from 160", "Tanaka from 60", "Lindqvist from 100"]);
+  });
+
+  it("compares values, not rows: Plot's indices and rows that are new on every render", () => {
+    // Plot binds each rect to its row's index and draws anew each time; the page keeps the rows.
+    let rows = players;
+    const svg = el("svg", {}, document.body);
+    const plot = (unit: number): SVGRectElement[] => {
+      svg.replaceChildren();
+      return rows.map((row, i) => Object.assign(el("rect", { x: 0, y: i * 34, width: row.goals * unit, height: 20 }, svg), { __data__: i }));
+    };
+    const { fx } = setup<Player>(plot(10), { key: (d) => d.name, datum: (element) => rows[(element as unknown as { __data__: number }).__data__]!, value: (d) => d.goals });
+    const updates: string[] = [];
+    fx.on("update", (e) => updates.push(e.mark.key));
+
+    rows = rows.map((p) => ({ ...p }));
+    fx.refresh(plot(8));
+    expect(updates).toEqual([]);
+    rows = rows.map((p) => (p.name === "Tanaka" ? { ...p, goals: 7 } : p));
+    fx.refresh(plot(8));
+    expect(updates).toEqual(["Tanaka"]);
+  });
+
+  it("treats NaN as unchanged, so a missing value doesn't update on every refresh", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, value: () => Number.NaN });
+    const updates: string[] = [];
+    fx.on("update", (e) => updates.push(e.mark.key));
+    host.redraw(players.map((p) => ({ ...p, goals: p.goals + 1 })));
+    fx.refresh(host.selection());
+    expect(updates).toEqual([]);
   });
 });
 

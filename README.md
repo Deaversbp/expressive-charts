@@ -172,6 +172,7 @@ import { expressive, sequence, travel } from "expressive-charts";
 const fx = expressive(svg.selectAll("rect"), {
   key: (d) => d.data.name,                          // required: the mark's identity
   segment: (_d, el) => el.parentNode.__data__.key,  // a player's rects become one bar's segments
+  value: (d) => d[1] - d[0],                        // what each rect shows: updates follow values, not lengths
   baseline: "auto",                                 // the edge every bar grows from (the default)
   keyboard: true,                                   // focusable bars; focus plays the hover story
   on: { hover: ballThenCleat }
@@ -179,7 +180,7 @@ const fx = expressive(svg.selectAll("rect"), {
 fx.refresh(svg.selectAll("rect"));                   // after the page redraws: enter, update and exit by key
 ```
 
-For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Other shapes take a `geometry` callback built with `describe`.
+For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Other shapes take a `geometry` callback built with `describe`. Without `value`, the adapter compares lengths, so a resize or a new axis maximum counts as an update for every bar (and `update: "flash"` flashes them all); with it, only bars whose values changed get one, as on `barChart`.
 
 See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`.
 

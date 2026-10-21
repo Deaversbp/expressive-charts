@@ -32,6 +32,8 @@ import type { Attachment, ExpressiveOptions, MarkSource } from "./types";
 interface Part<D> extends HostPart {
   readonly datum: D;
   readonly series: string | undefined;
+  /** What `value` returned for it; undefined without `value`. */
+  readonly value: unknown;
 }
 
 /** A mark as read from the host's elements. */
@@ -64,7 +66,7 @@ interface Owner<D> {
 interface Diff<D> {
   readonly entering: MarkRecord<D>[];
   readonly exiting: MarkRecord<D>[];
-  /** The length or segments changed, which is what the adapter can see of a change in values. */
+  /** Values changed: a part's `value`, or without `value` the length, or the segments. */
   readonly changed: { readonly record: MarkRecord<D>; readonly from: MarkGeometry }[];
   /** Only moved, or got a new row: the runner follows without an update. */
   readonly moved: MarkRecord<D>[];
@@ -97,7 +99,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     const svg = rootOf(elements);
     const common = commonAncestor(elements, svg);
 
-    const groups = new Map<string, { element: Element; datum: D; series: string | undefined }[]>();
+    const groups = new Map<string, { element: Element; datum: D; series: string | undefined; value: unknown }[]>();
     elements.forEach((element, index) => {
       const datum = datumOf(element, index, data);
       const raw: unknown = options.key(datum, element);
@@ -110,12 +112,12 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       if (!group) groups.set(key, (group = []));
       else if (series === undefined) throw new RangeError(`expressive: two elements have the key "${key}". Keys must be unique, or name each part with segment.`);
       else if (group.some((part) => part.series === series)) throw new RangeError(`expressive: the mark "${key}" has two "${series}" segments.`);
-      group.push({ element, datum, series });
+      group.push({ element, datum, series, value: options.value?.(datum, element) });
     });
 
-    const part = (p: { element: Element; datum: D; series: string | undefined }, outline: string | undefined): Part<D> => {
+    const part = (p: { element: Element; datum: D; series: string | undefined; value: unknown }, outline: string | undefined): Part<D> => {
       const parent = between(common, p.element.parentElement ?? svg, svg);
-      return { element: p.element, datum: p.datum, series: p.series, parent, parentInverse: tryInvert(parent), colors: colorsOf(p.element, svg), outline };
+      return { element: p.element, datum: p.datum, series: p.series, value: p.value, parent, parentInverse: tryInvert(parent), colors: colorsOf(p.element, svg), outline };
     };
     const keys = [...groups.keys()];
 
@@ -269,7 +271,9 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       let record = records.get(mark.key);
       if (record) {
         const from = record.mark;
-        if (lengthsChanged(from.geometry, mark.geometry)) diff.changed.push({ record, from: from.geometry });
+        // With `value`, a resize or a new axis maximum only moves marks, as on our charts.
+        const changed = options.value ? valuesChanged(from.parts, mark.parts) : lengthsChanged(from.geometry, mark.geometry);
+        if (changed) diff.changed.push({ record, from: from.geometry });
         else if (geometryChanged(from.geometry, mark.geometry) || from.data.datum !== mark.data.datum) diff.moved.push(record);
         if (from.parts[0]?.colors?.color !== mark.parts[0]?.colors?.color) recolor.push(mark.key);
         record.mark = mark;
@@ -540,7 +544,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 function checkOptions<D>(options: ExpressiveOptions<D>): void {
   if (typeof options !== "object" || options === null) throw new TypeError("expressive needs options, with at least a key: { key: (d) => d.name }.");
   if (typeof options.key !== "function") throw new TypeError("expressive needs a key function, for example key: (d) => d.name. Marks are matched by key.");
-  for (const name of ["datum", "segment", "geometry"] as const) {
+  for (const name of ["datum", "segment", "value", "geometry"] as const) {
     if (options[name] !== undefined && typeof options[name] !== "function") throw new TypeError(`expressive: ${name} must be a function.`);
   }
   if (options.baseline !== undefined && options.baseline !== "auto" && !isBaseline(options.baseline)) {
@@ -585,7 +589,17 @@ function isIdentity(m: Matrix): boolean {
   return Math.abs(m[0] - 1) < 1e-9 && Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9 && Math.abs(m[3] - 1) < 1e-9 && Math.abs(m[4]) < 1e-6 && Math.abs(m[5]) < 1e-6;
 }
 
-/** What the adapter can see of a change in values: a mark's length, or its segments' lengths. */
+/** A part's value changed, or the mark gained or lost a segment. Values compare like ===, but NaN equals NaN. */
+function valuesChanged<D>(from: readonly Part<D>[], to: readonly Part<D>[]): boolean {
+  if (from.length !== to.length) return true;
+  const before = new Map(from.map((part) => [part.series, part.value]));
+  return to.some((part) => {
+    const was = before.get(part.series);
+    return !before.has(part.series) || !(was === part.value || Object.is(was, part.value));
+  });
+}
+
+/** What the adapter can see of a change in values without `value`: a mark's length, or its segments' lengths. */
 function lengthsChanged(from: MarkGeometry, to: MarkGeometry): boolean {
   const a = from.segments ?? [];
   const b = to.segments ?? [];

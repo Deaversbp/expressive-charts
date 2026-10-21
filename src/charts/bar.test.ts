@@ -45,6 +45,19 @@ function tap(target: Element): void {
   target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 }
 
+/** A key press on `target`. The document hears it first, as it would in a browser. */
+function press(target: Element, key: string, init: KeyboardEventInit = {}): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
+  target.dispatchEvent(event);
+  return event;
+}
+
+/** Tab into the chart: a key press, then focus lands on the mark Tab reaches. */
+function tabTo(target: SVGElement): void {
+  press(document.body, "Tab");
+  target.focus();
+}
+
 /** An effect that logs what the runner does with it. `hold` keeps run() pending until released or aborted. */
 function recorder(options: { hold?: boolean; draw?: (mark: MarkGeometry, ctx: EffectContext) => void } = {}) {
   const log: string[] = [];
@@ -99,7 +112,7 @@ describe("barChart: drawing", () => {
 
   it("draws gridlines, the baseline and ticks with theme classes, below the marks", () => {
     const { svg } = setup();
-    expect(Array.from(svg.children, (child) => child.getAttribute("class"))).toEqual(["ec-grid", "ec-axis", "ec-marks", "ec-overlay"]);
+    expect(Array.from(svg.children, (child) => child.getAttribute("class"))).toEqual(["ec-grid", "ec-axis", "ec-focus", "ec-marks", "ec-overlay"]);
     const lines = Array.from(svg.querySelectorAll(".ec-grid line"), (line) => line.getAttribute("class"));
     expect(lines).toEqual(["ec-baseline", "ec-gridline", "ec-gridline", "ec-gridline", "ec-gridline"]);
     expect(Array.from(svg.querySelectorAll(".ec-axis .ec-tick"), (t) => t.textContent)).toEqual(["0", "5", "10", "15", "20"]);
@@ -274,6 +287,306 @@ describe("barChart: hover", () => {
     pointer("pointerdown", document.body, "touch");
     expect(svg.classList.contains("ec-hovering")).toBe(false);
     expect(events).toEqual(["hover Okafor touch", "leave Okafor", "hover Tanaka touch", "leave Tanaka"]);
+  });
+});
+
+describe("barChart: keyboard", () => {
+  const tabIndexes = (svg: SVGSVGElement) => Array.from(svg.querySelectorAll(".ec-marks > .ec-mark:not(.ec-leaving)"), (g) => `${g.getAttribute("data-key")} ${g.getAttribute("tabindex")}`);
+  const focused = () => document.activeElement?.getAttribute("data-key");
+  /** Records hover and leave events as "hover Okafor keyboard" and "leave Okafor". */
+  const listen = (chart: BarChart<Player>) => {
+    const events: string[] = [];
+    chart.on("hover", (e) => events.push(`hover ${e.mark.key} ${e.source}`));
+    chart.on("leave", (e) => events.push(`leave ${e.mark.key}`));
+    return events;
+  };
+
+  it("is one tab stop, with a roving tabindex", () => {
+    const { svg, mark } = setup();
+    expect(tabIndexes(svg)).toEqual(["Okafor 0", "Tanaka -1", "Lindqvist -1"]);
+    tabTo(mark("Okafor"));
+    press(mark("Okafor"), "ArrowDown");
+    expect(focused()).toBe("Tanaka");
+    expect(tabIndexes(svg)).toEqual(["Okafor -1", "Tanaka 0", "Lindqvist -1"]);
+    // Leaving the chart and coming back lands on the mark focused last.
+    mark("Tanaka").blur();
+    expect(tabIndexes(svg)).toEqual(["Okafor -1", "Tanaka 0", "Lindqvist -1"]);
+  });
+
+  it("moves in visual order with the arrow keys, Home and End, following a re-sort", async () => {
+    const { chart, svg, mark, settle } = setup();
+    tabTo(mark("Okafor"));
+    const steps: [string, string][] = [
+      ["ArrowDown", "Tanaka"],
+      ["ArrowRight", "Lindqvist"],
+      ["ArrowDown", "Lindqvist"],
+      ["Home", "Okafor"],
+      ["ArrowUp", "Okafor"],
+      ["End", "Lindqvist"],
+      ["ArrowLeft", "Tanaka"],
+      ["ArrowUp", "Okafor"]
+    ];
+    for (const [key, expected] of steps) {
+      const event = press(document.activeElement!, key);
+      expect([key, focused(), event.defaultPrevented]).toEqual([key, expected, true]);
+    }
+    // Keys it doesn't use, and browser shortcuts, go through.
+    expect(press(mark("Okafor"), "a").defaultPrevented).toBe(false);
+    expect(press(mark("Okafor"), "ArrowDown", { altKey: true }).defaultPrevented).toBe(false);
+    expect(focused()).toBe("Okafor");
+
+    await settle(chart.update({ sort: "key" }));
+    expect(chart.marks().map((m) => m.key)).toEqual(["Lindqvist", "Okafor", "Tanaka"]);
+    expect(focused()).toBe("Okafor");
+    press(mark("Okafor"), "ArrowDown");
+    expect(focused()).toBe("Tanaka");
+    press(mark("Tanaka"), "Home");
+    expect(focused()).toBe("Lindqvist");
+    expect(tabIndexes(svg)).toEqual(["Lindqvist 0", "Okafor -1", "Tanaka -1"]);
+  });
+
+  it("takes both pairs of arrows on columns", () => {
+    const { mark } = setup({ x: "name", y: "goals" });
+    tabTo(mark("Okafor"));
+    press(mark("Okafor"), "ArrowRight");
+    expect(focused()).toBe("Tanaka");
+    press(mark("Tanaka"), "ArrowDown");
+    expect(focused()).toBe("Lindqvist");
+    press(mark("Lindqvist"), "ArrowLeft");
+    press(mark("Tanaka"), "ArrowUp");
+    expect(focused()).toBe("Okafor");
+  });
+
+  it("plays the hover story on focus, with source keyboard, and dims the others", () => {
+    const hover = recorder();
+    const { chart, svg, mark } = setup({ on: { hover: hover.effect } });
+    const events = listen(chart);
+    tabTo(mark("Okafor"));
+    expect(events).toEqual(["hover Okafor keyboard"]);
+    expect(hover.log).toEqual(["run Okafor"]);
+    expect(svg.classList.contains("ec-hovering")).toBe(true);
+    expect(mark("Okafor").classList.contains("ec-hot")).toBe(true);
+    press(mark("Okafor"), "ArrowDown");
+    expect(events).toEqual(["hover Okafor keyboard", "leave Okafor", "hover Tanaka keyboard"]);
+    expect(hover.log).toEqual(["run Okafor", "clear", "run Tanaka"]);
+    expect(mark("Okafor").classList.contains("ec-hot")).toBe(false);
+    expect(mark("Tanaka").classList.contains("ec-hot")).toBe(true);
+  });
+
+  it("leaves on Escape, keeping focus, and on blur", () => {
+    const hover = recorder();
+    const { chart, svg, mark } = setup({ on: { hover: hover.effect } });
+    const events = listen(chart);
+    const button = document.body.appendChild(document.createElement("button"));
+    tabTo(mark("Okafor"));
+    expect(press(mark("Okafor"), "Escape").defaultPrevented).toBe(true);
+    expect(events).toEqual(["hover Okafor keyboard", "leave Okafor"]);
+    expect(hover.log).toEqual(["run Okafor", "clear"]);
+    expect(svg.classList.contains("ec-hovering")).toBe(false);
+    expect(focused()).toBe("Okafor");
+    // Nothing left to leave.
+    expect(press(mark("Okafor"), "Escape").defaultPrevented).toBe(false);
+    press(mark("Okafor"), "ArrowDown");
+    press(mark("Tanaka"), "Tab");
+    button.focus();
+    expect(events).toEqual(["hover Okafor keyboard", "leave Okafor", "hover Tanaka keyboard", "leave Tanaka"]);
+    expect(svg.classList.contains("ec-hovering")).toBe(false);
+  });
+
+  it("leaves focus from a click to the pointer's hover, without the ring", () => {
+    const { chart, svg, mark } = setup();
+    const events = listen(chart);
+    const ring = svg.querySelector(".ec-focus")!;
+    const target = mark("Okafor").querySelector(".ec-hit")!;
+    pointer("pointerover", target);
+    pointer("pointerdown", target);
+    mark("Okafor").focus();
+    expect(ring.getAttribute("visibility")).toBe("hidden");
+    svg.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" }));
+    expect(events).toEqual(["hover Okafor pointer", "leave Okafor"]);
+    // A key press makes the next focus a keyboard one.
+    press(mark("Okafor"), "ArrowDown");
+    expect(ring.getAttribute("visibility")).toBeNull();
+    expect(events).toEqual(["hover Okafor pointer", "leave Okafor", "hover Tanaka keyboard"]);
+  });
+
+  it("shares one hover between the pointer and focus", () => {
+    const { chart, svg, mark } = setup();
+    const events = listen(chart);
+    const hit = (key: string) => mark(key).querySelector(".ec-hit")!;
+    const pointerLeaves = () => svg.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" }));
+    tabTo(mark("Okafor"));
+    // The pointer takes over, and when it leaves, focus stays without a hover.
+    pointer("pointerover", hit("Tanaka"));
+    pointerLeaves();
+    expect(events).toEqual(["hover Okafor keyboard", "leave Okafor", "hover Tanaka pointer", "leave Tanaka"]);
+    expect(focused()).toBe("Okafor");
+    events.length = 0;
+    // Focus arriving on the mark the pointer is over holds its hover; the pointer leaving doesn't end it.
+    pointer("pointerover", hit("Tanaka"));
+    press(mark("Okafor"), "ArrowDown");
+    pointerLeaves();
+    expect(mark("Tanaka").classList.contains("ec-hot")).toBe(true);
+    pointer("pointerover", hit("Tanaka"));
+    // Blur with the pointer still over it: the hover goes on, held by the pointer.
+    mark("Tanaka").blur();
+    expect(mark("Tanaka").classList.contains("ec-hot")).toBe(true);
+    pointerLeaves();
+    expect(events).toEqual(["hover Tanaka pointer", "leave Tanaka"]);
+  });
+
+  it("keeps focus on its key across an update, and replays the story after", async () => {
+    const hover = recorder();
+    const { chart, svg, mark, settle } = setup({ on: { hover: hover.effect } });
+    const outs: string[] = [];
+    svg.addEventListener("focusout", (e) => outs.push((e.target as Element).getAttribute("data-key")!));
+    tabTo(mark("Tanaka"));
+    await settle(chart.update({ sort: "key" }));
+    expect(chart.marks().map((m) => m.key)).toEqual(["Lindqvist", "Okafor", "Tanaka"]);
+    expect(focused()).toBe("Tanaka");
+    expect(outs).toEqual([]);
+    expect(hover.log).toEqual(["run Tanaka", "clear", "run Tanaka"]);
+    expect(tabIndexes(svg)).toEqual(["Lindqvist -1", "Okafor -1", "Tanaka 0"]);
+  });
+
+  it("moves focus to the nearest mark when the focused one exits", async () => {
+    const hover = recorder();
+    const { chart, svg, mark, settle } = setup({ on: { hover: hover.effect } });
+    const events = listen(chart);
+    tabTo(mark("Tanaka"));
+    // The one after it first.
+    const leaving = mark("Tanaka");
+    const updated = chart.update({ data: players.filter((p) => p.name !== "Tanaka") });
+    expect(focused()).toBe("Lindqvist");
+    expect(leaving.hasAttribute("tabindex")).toBe(false);
+    expect(tabIndexes(svg)).toEqual(["Okafor -1", "Lindqvist 0"]);
+    expect(events).toEqual(["hover Tanaka keyboard", "leave Tanaka", "hover Lindqvist keyboard"]);
+    // The runner holds the new hover until the change settles.
+    expect(hover.log).toEqual(["run Tanaka", "clear"]);
+    await settle(updated);
+    expect(hover.log).toEqual(["run Tanaka", "clear", "run Lindqvist"]);
+    // At the end, the one before it.
+    await settle(chart.update({ data: players.filter((p) => p.name === "Okafor") }));
+    expect(focused()).toBe("Okafor");
+    // With no marks left, focus leaves the chart.
+    await settle(chart.update({ data: [] }));
+    expect(document.activeElement).toBe(document.body);
+    expect(events.slice(-2)).toEqual(["hover Okafor keyboard", "leave Okafor"]);
+    expect(svg.querySelector(".ec-focus")?.getAttribute("visibility")).toBe("hidden");
+    // Marks coming back bring the tab stop back.
+    await settle(chart.update({ data: players }));
+    expect(tabIndexes(svg)).toEqual(["Okafor 0", "Tanaka -1", "Lindqvist -1"]);
+  });
+
+  it("keeps focus on its mark while the window is in the background", async () => {
+    const { chart, mark, settle } = setup();
+    tabTo(mark("Tanaka"));
+    // The window loses focus: the mark hears focusout, but it's still the document's active element.
+    mark("Tanaka").dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    await settle(chart.update({ sort: "key" }));
+    expect(focused()).toBe("Tanaka");
+    await settle(chart.update({ data: players.filter((p) => p.name !== "Tanaka") }));
+    expect(focused()).toBe("Okafor");
+  });
+
+  it("draws the focus ring from the mark's outline, behind the marks, and follows it", async () => {
+    const { chart, svg, mark, clock } = setup({ stack: ["goals", "assists"], sort: "value" });
+    const ring = svg.querySelector(".ec-focus")!;
+    const paths = Array.from(ring.querySelectorAll("path"));
+    const outline = (key: string) => chart.marks().find((m) => m.key === key)!.outline.d;
+    expect(ring.nextElementSibling?.getAttribute("class")).toBe("ec-marks");
+    expect(ring.getAttribute("aria-hidden")).toBe("true");
+    expect(ring.getAttribute("visibility")).toBe("hidden");
+    tabTo(mark("Okafor"));
+    expect(ring.getAttribute("visibility")).toBeNull();
+    // A 2 px ring outside a 2 px gap: the marks are drawn over the rest.
+    expect(paths.map((p) => [p.getAttribute("class"), p.getAttribute("d"), p.getAttribute("stroke-width")])).toEqual([
+      ["ec-focus-ring", outline("Okafor"), "8"],
+      ["ec-focus-gap", outline("Okafor"), "4"]
+    ]);
+    // Sorted by total: Okafor, Lindqvist, Tanaka.
+    press(mark("Okafor"), "End");
+    expect(paths[0]!.getAttribute("d")).toBe(outline("Tanaka"));
+    // Part way through a change, it's where the mark is.
+    const updated = chart.update({ data: players.map((p) => ({ ...p, goals: p.goals * 2 })) });
+    clock.advance(250);
+    expect(paths[0]!.getAttribute("d")).toBe(outline("Tanaka"));
+    expect(paths[1]!.getAttribute("d")).toBe(outline("Tanaka"));
+    clock.advance(1000);
+    await updated;
+    expect(paths[0]!.getAttribute("d")).toBe(outline("Tanaka"));
+    // Escape leaves the story but not focus, so the ring stays.
+    press(mark("Tanaka"), "Escape");
+    expect(ring.getAttribute("visibility")).toBeNull();
+    mark("Tanaka").blur();
+    expect(ring.getAttribute("visibility")).toBe("hidden");
+  });
+
+  it("moves the focus ring with an effect that moves the mark", () => {
+    const hover = recorder({ draw: (_mark, ctx) => ctx.mark.set({ transform: [1, 0, 0, 1, 5, -2] }) });
+    const { svg, mark } = setup({ on: { hover: hover.effect } });
+    const ring = svg.querySelector(".ec-focus")!;
+    tabTo(mark("Okafor"));
+    const body = mark("Okafor").querySelector(".ec-body")!;
+    expect(body.getAttribute("transform")).toBe("matrix(1 0 0 1 5 -2)");
+    expect(ring.getAttribute("transform")).toBe(body.getAttribute("transform"));
+    // The next mark's ring starts where that mark is, and moves with its own effect.
+    press(mark("Okafor"), "ArrowDown");
+    expect(mark("Okafor").querySelector(".ec-body")!.getAttribute("transform")).toBeNull();
+    expect(ring.getAttribute("transform")).toBe(mark("Tanaka").querySelector(".ec-body")!.getAttribute("transform"));
+    // Escape clears the effect, and the ring, still showing, goes back with the mark.
+    press(mark("Tanaka"), "Escape");
+    expect(ring.getAttribute("transform")).toBeNull();
+    expect(ring.getAttribute("visibility")).toBeNull();
+  });
+
+  it("labels each mark with its values, in the chart's format", async () => {
+    const { chart, mark } = setup({ stack: ["goals", "assists"], format: (v) => v.toFixed(1) });
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16.0 goals, 4.0 assists");
+    // The label says where the mark is heading as soon as a change starts.
+    void chart.update({ data: players.map((p) => ({ ...p, assists: p.assists + 1 })) });
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16.0 goals, 5.0 assists");
+    expect(setup({ x: "goals" }).mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: 6 goals");
+    expect(setup({ x: (d) => d.goals + d.assists }).mark("Tanaka").getAttribute("aria-label")).toBe("Tanaka: 16");
+  });
+
+  it("jumps the story to its end state when motion is off", () => {
+    const hover = recorder();
+    const { mark } = setup({ on: { hover: hover.effect } }, { motion: quietMotion("off") });
+    tabTo(mark("Okafor"));
+    expect(hover.log).toEqual(["end Okafor"]);
+    expect(mark("Okafor").classList.contains("ec-hot")).toBe(true);
+  });
+
+  it("hears focus without focus listeners on its SVG elements, which Chrome would make tab stops", () => {
+    const add = vi.spyOn(EventTarget.prototype, "addEventListener");
+    setup();
+    const onSvg = add.mock.contexts.filter((context, i) => context instanceof SVGElement && /^(focus|blur)/.test(String(add.mock.calls[i]![0])));
+    expect(onSvg).toEqual([]);
+    add.mockRestore();
+  });
+
+  it("works inside a shadow root", () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const container = host.attachShadow({ mode: "open" }).appendChild(document.createElement("div"));
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion: quietMotion(), clock: manualClock() };
+    const chart = barChart<Player>(container, { label: "Goals by player", data: players, y: "name", x: "goals", width: 600 }, env);
+    const events = listen(chart);
+    const okafor = chart.element.querySelector<SVGGElement>('.ec-mark[data-key="Okafor"]')!;
+    tabTo(okafor);
+    press(okafor, "ArrowDown");
+    expect(events).toEqual(["hover Okafor keyboard", "leave Okafor", "hover Tanaka keyboard"]);
+  });
+
+  it("stops listening on destroy", () => {
+    const hover = recorder();
+    const { chart, mark } = setup({ on: { hover: hover.effect } });
+    const okafor = mark("Okafor");
+    chart.destroy();
+    document.body.appendChild(okafor);
+    okafor.focus();
+    press(okafor, "ArrowDown");
+    expect(hover.log).toEqual([]);
   });
 });
 

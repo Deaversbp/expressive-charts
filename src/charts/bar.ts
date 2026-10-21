@@ -1,8 +1,7 @@
 // barChart: the thin reference bar chart. Horizontal bars or vertical columns, plain or stacked; keyed
 // marks described with describe.bar; a measured layout; axis, grid and labels in theme colours;
-// built-in hover dimming; pointer and touch hover. update() animates the change: staged in
+// built-in hover dimming; pointer, touch and keyboard hover. update() animates the change: staged in
 // presentation (values, then positions), in one short stage in analysis, at once when motion is off.
-// Keyboard support comes in M1 step 9.
 //
 // The chart never names an effect: it resolves `on` through the presets it's handed and plays them
 // through the runner, which draws on the SVG surface.
@@ -15,10 +14,11 @@ import { createRunner, type RunInput, type SlotEffects } from "../core/runner";
 import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLayout, type BarRow, type TextPlacement } from "./bar-layout";
 import { toColorAssignment } from "./colors";
 import { pointerHover, type HoverTarget } from "./interaction";
+import { keyboardFocus } from "./keyboard";
 import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
 import { svgSurface } from "./render/surface";
-import { setAttributes, setStyles, svgElement } from "./render/svg";
+import { setAttributes, setStyles, svgElement, transformAttribute } from "./render/svg";
 import { textMeasure } from "./render/text";
 import { injectStyles, markColorStyles, seriesColors } from "./render/theme";
 import type { BarChartOptions, Chart, MarkEvents } from "./types";
@@ -95,12 +95,16 @@ interface Diff<D> {
 }
 
 type Listeners<D> = { [K in keyof MarkEvents<D>]: Set<(event: MarkEvents<D>[K]) => void> };
+type HoverSource = MarkEvents<unknown>["hover"]["source"];
 
 /** Used when the container has no width yet (hidden, or no layout as in jsdom); the prototype's width. */
 const FALLBACK_WIDTH = 640;
 const ONE = { index: 0, count: 1 } as const;
 /** Base ms for each stage of a data change: values, then positions. Unstaged, a change takes as long as its stages together, which analysis scales down. */
 const STAGE = 500;
+/** The focus ring's px: a gap in the surface colour around the mark, then the ring. */
+const RING_GAP = 2;
+const RING = 2;
 
 export function barChart<D>(target: string | Element, options: BarChartOptions<D>, env: ChartEnv): BarChart<D> {
   const container = resolveTarget(target);
@@ -116,6 +120,12 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   const svg = svgElement("svg", { class: "ec-chart ec-bar-chart" }, container);
   const grid = svgElement("g", { class: "ec-grid", "aria-hidden": "true" }, svg);
   const axis = svgElement("g", { class: "ec-axis", "aria-hidden": "true" }, svg);
+  // Behind the marks, so it can't cover them; the gap keeps it apart from a bar in the same colour.
+  const ring = svgElement("g", { class: "ec-focus", "aria-hidden": "true", visibility: "hidden" }, svg);
+  const ringPaths = [
+    svgElement("path", { class: "ec-focus-ring", "stroke-width": 2 * (RING_GAP + RING), "stroke-linejoin": "round" }, ring),
+    svgElement("path", { class: "ec-focus-gap", "stroke-width": 2 * RING_GAP, "stroke-linejoin": "round" }, ring)
+  ];
   const marksLayer = svgElement("g", { class: "ec-marks" }, svg);
   const overlay = svgElement("g", { class: "ec-overlay", "aria-hidden": "true" }, svg);
   const measure = textMeasure(svg);
@@ -127,7 +137,9 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   const leaving = new Map<string, MarkRecord<D>>();
   const byGroup = new WeakMap<Element, MarkRecord<D>>();
   const listeners: Listeners<D> = { enter: new Set(), update: new Set(), exit: new Set(), hover: new Set(), leave: new Set() };
-  let hovered: string | undefined;
+  let hovered: { readonly key: string; readonly source: HoverSource } | undefined;
+  /** The mark showing the focus ring: focused from the keyboard. */
+  let ringKey: string | undefined;
   let measuredWidth = containerWidth(container);
   let destroyed = false;
 
@@ -145,8 +157,14 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     overlay,
     // Looked up on each call, so the handle follows the mark's record.
     mark: (key) => ({
-      set: (style) => find(key)?.handle.set(style),
-      reset: () => find(key)?.handle.reset()
+      set: (style) => {
+        find(key)?.handle.set(style);
+        if (key === ringKey) drawRing();
+      },
+      reset: () => {
+        find(key)?.handle.reset();
+        if (key === ringKey) drawRing();
+      }
     }),
     colors: (key) => find(key)?.parts[0]?.colors
   });
@@ -253,6 +271,19 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     record.handle.repaint();
     // A new palette or a different first series: overlays already drawn in "mark" follow.
     if (record.parts[0]?.colors.color !== before) surface.recolor(record.key);
+    if (record.key === ringKey) drawRing();
+  }
+
+  /** The focus ring follows the outline of the mark as it is on screen, moved with its body when an effect moves it. */
+  function drawRing(): void {
+    const record = ringKey === undefined ? undefined : records.get(ringKey);
+    if (!record) {
+      ring.setAttribute("visibility", "hidden");
+      return;
+    }
+    for (const path of ringPaths) path.setAttribute("d", record.shown.geometry.outline.d);
+    const { transform } = record.handle.style;
+    setAttributes(ring, { transform: transform && transformAttribute(transform), visibility: undefined });
   }
 
   /** Draws the mark as `row`. Its runs hear about it when its geometry changed, so decorations follow. */
@@ -373,11 +404,26 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       }
       record.row = row;
       record.series = mergeSeries(record.series, row.values.map((v) => v.series));
+      labelMark(record);
       return record;
     });
-    // DOM order follows visual order (the keyboard and screen readers will rely on it).
-    if (order.some((record, i) => previous[i] !== record)) for (const record of order) marksLayer.appendChild(record.group);
+    // DOM order follows visual order, for screen readers. The focused mark stays put and the others
+    // move around it, because moving a focused element blurs it.
+    if (order.some((record, i) => previous[i] !== record)) {
+      const active = keyboard.active();
+      const pivot = order.findIndex((record) => record.group === active);
+      const anchor = order[pivot]?.group ?? null;
+      order.forEach((record, i) => {
+        if (i < pivot) marksLayer.insertBefore(record.group, anchor);
+        else if (i > pivot) marksLayer.appendChild(record.group);
+      });
+    }
     return diff;
+  }
+
+  /** The mark's accessible name, from where it's heading. */
+  function labelMark(record: MarkRecord<D>): void {
+    record.group.setAttribute("aria-label", markLabel(record.row, format(current)));
   }
 
   /**
@@ -497,33 +543,88 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   /** The mark as it is on screen: what hover, leave and exit report, so mid-change they match what's under the pointer or on its way out. */
   const onScreen = (record: MarkRecord<D>): RunInput<D> => ({ mark: record.shown.geometry, data: record.shown.data });
 
+  /** The mark an event target belongs to; leaving marks don't count. */
+  function liveRecordOf(eventTarget: EventTarget | null): MarkRecord<D> | undefined {
+    const element = eventTarget as Element | null;
+    const group = typeof element?.closest === "function" ? element.closest(".ec-mark") : null;
+    const record = group ? byGroup.get(group) : undefined;
+    return record && records.get(record.key) === record ? record : undefined;
+  }
+
+  /** Pointer and keyboard hover share this: the mark's emphasis, the others' dimming, the hover runs and the event. */
+  function startHover(record: MarkRecord<D>, source: HoverSource, segment?: string): void {
+    hovered = { key: record.key, source };
+    record.group.classList.add("ec-hot");
+    if (current.dim !== false) svg.classList.add("ec-hovering");
+    runner.hover([onScreen(record)]);
+    emit("hover", { ...onScreen(record), batch: ONE, source, ...(segment === undefined ? {} : { segment }) });
+  }
+
+  function endHover(): void {
+    const key = hovered?.key;
+    hovered = undefined;
+    svg.classList.remove("ec-hovering");
+    const record = key === undefined ? undefined : find(key);
+    if (key === undefined || !record) return;
+    record.group.classList.remove("ec-hot");
+    runner.leave([key]);
+    emit("leave", { ...onScreen(record), batch: ONE });
+  }
+
   const interaction = pointerHover(svg, {
     find(eventTarget) {
-      const element = eventTarget as Element | null;
-      const group = typeof element?.closest === "function" ? element.closest(".ec-mark") : null;
-      const record = group ? byGroup.get(group) : undefined;
-      if (!record || records.get(record.key) !== record) return undefined;
-      const segment = element?.closest(".ec-segment")?.getAttribute("data-series") ?? undefined;
+      const record = liveRecordOf(eventTarget);
+      if (!record) return undefined;
+      const segment = (eventTarget as Element).closest(".ec-segment")?.getAttribute("data-series") ?? undefined;
       return segment === undefined ? { key: record.key } : { key: record.key, segment };
     },
     hover(target: HoverTarget, source) {
       const record = records.get(target.key);
-      if (!record) return;
-      hovered = target.key;
-      record.group.classList.add("ec-hot");
-      if (current.dim !== false) svg.classList.add("ec-hovering");
-      runner.hover([onScreen(record)]);
-      emit("hover", { ...onScreen(record), batch: ONE, source, ...(target.segment === undefined ? {} : { segment: target.segment }) });
+      // Already playing for keyboard focus: it goes on.
+      if (!record || hovered?.key === target.key) return;
+      endHover();
+      startHover(record, source, target.segment);
     },
     leave() {
-      const key = hovered;
-      hovered = undefined;
-      svg.classList.remove("ec-hovering");
-      const record = key === undefined ? undefined : find(key);
-      if (key === undefined || !record) return;
-      record.group.classList.remove("ec-hot");
-      runner.leave([key]);
-      emit("leave", { ...onScreen(record), batch: ONE });
+      // Focus holds a keyboard hover until blur or Escape.
+      if (hovered?.source !== "keyboard") endHover();
+    }
+  });
+
+  const keyboard = keyboardFocus(svg, {
+    find: (eventTarget) => liveRecordOf(eventTarget)?.key,
+    order: () => order.map((record) => record.key),
+    element: (key) => find(key)?.group,
+    focus(key, visible) {
+      ringKey = visible ? key : undefined;
+      drawRing();
+      const record = records.get(key);
+      if (!record) return;
+      if (!visible) {
+        // Focus from a click or tap: the pointer's own hover plays.
+        if (hovered?.source === "keyboard" && hovered.key !== key) endHover();
+        return;
+      }
+      if (hovered?.key === key) {
+        // Already playing for the pointer: it goes on, held by focus now.
+        hovered = { key, source: "keyboard" };
+        return;
+      }
+      endHover();
+      startHover(record, "keyboard");
+    },
+    blur() {
+      ringKey = undefined;
+      drawRing();
+      if (hovered?.source !== "keyboard") return;
+      // The pointer is still over it: the hover goes on, held by the pointer now.
+      if (interaction.current === hovered.key) hovered = { key: hovered.key, source: "pointer" };
+      else endHover();
+    },
+    escape() {
+      if (!hovered) return false;
+      endHover();
+      return true;
     }
   });
 
@@ -598,8 +699,10 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   order = laidOut.rows.map((row) => {
     const record = createRecord(row, false);
     records.set(row.key, record);
+    labelMark(record);
     return record;
   });
+  keyboard.sync();
   runner.enter(order.map(input));
 
   return {
@@ -624,7 +727,10 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       // frame, then settle() once the transition has settled.
       runner.interrupt();
       const diff = arrange(nextLayout);
-      if (hovered !== undefined && !records.has(hovered)) interaction.clear();
+      if (hovered !== undefined && !records.has(hovered.key)) {
+        interaction.clear();
+        endHover();
+      }
       const leaves = diff.exiting.map((record) => record.leave!);
       const exited = runner.exit(diff.exiting.map(onScreen));
       void exited.then(() => {
@@ -636,6 +742,9 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       diff.changed.forEach(({ record, from }, index) => emit("update", { ...input(record), from, batch: { index, count: diff.changed.length } }));
       runner.enter(diff.entering.map(input));
       emitEach("enter", diff.entering);
+      // Focus stayed with its key. If that mark is leaving, focus moves to its nearest neighbour, whose
+      // hover the runner holds until the change settles.
+      keyboard.sync();
 
       const settled = transitionTo(nextLayout, motion.mode === "off" || nextLayout.orientation !== orientation);
       await new Promise<void>((resolve) => {
@@ -661,6 +770,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       transition = undefined;
       unfollow?.();
       interaction.destroy();
+      keyboard.destroy();
       runner.destroy();
       unsubscribeMotion();
       observer?.disconnect();
@@ -744,6 +854,13 @@ function sizeAttributes({ width, height }: { readonly width: number; readonly he
 function placeText(element: SVGTextElement, placement: TextPlacement): void {
   setAttributes(element, { x: placement.x, y: placement.y, "text-anchor": placement.anchor });
   if (element.textContent !== placement.text) element.textContent = placement.text;
+}
+
+/** "Okafor: 16 goals, 4 assists". A lone value read by a function (its series is "value") goes unnamed: "Okafor: 16". */
+function markLabel<D>(row: BarRow<D>, format: (value: number) => string): string {
+  const lone = row.values.length === 1 && row.values[0]!.series === "value";
+  const values = row.values.map((v) => (lone ? format(v.value) : `${format(v.value)} ${v.series}`));
+  return `${row.label.text}: ${values.join(", ")}`;
 }
 
 function valuesChanged<D>(from: BarRow<D>, to: BarRow<D>): boolean {

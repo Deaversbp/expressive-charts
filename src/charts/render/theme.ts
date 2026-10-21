@@ -75,6 +75,10 @@ const STYLES = `
 :where(.ec-chart .ec-label) { fill: var(--ec-text, ${TOKENS.text}); font-size: 12.5px; }
 :where(.ec-chart .ec-value, .ec-chart .ec-text) { fill: var(--ec-text, ${TOKENS.text}); font-size: 12.5px; font-weight: 600; }
 :where(.ec-chart .ec-hit) { fill: transparent; }
+:where(.ec-chart .ec-mark:focus) { outline: none; }
+:where(.ec-chart .ec-focus) { pointer-events: none; }
+:where(.ec-chart .ec-focus-ring) { fill: none; stroke: var(--ec-focus, ${TOKENS.focus}); }
+:where(.ec-chart .ec-focus-gap) { fill: var(--ec-surface, ${TOKENS.surface}); stroke: var(--ec-surface, ${TOKENS.surface}); }
 :where(.ec-chart .ec-mark) { transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-segment) { fill: var(--ec-mark); transition: fill var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-segment) { fill: var(--ec-mark-strong); }

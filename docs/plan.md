@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1 is complete (October 2026, §9); M2 is next. the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 and M2 are complete (October 2026, §9); M3 is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -731,7 +731,7 @@ Two things haven't been checked in a browser:
 - **Reduced motion.** The browser pane can't emulate `prefers-reduced-motion`. It's covered by the motion core's tests and by Off, which takes the same path. *Now checked in Chromium by M2 step 6:* the switch shows Off with its note and follows the setting live, hovering shows the icons at their end positions on both charts, a metric switch jumps, and picking a mode on the page overrides it.
 - **The smoothness of staged transitions.** That needs a visible pane, because a hidden one throttles frames. *M2 step 6 checks staged frames at fixed times* (values first, then positions), *but not smoothness at real frame rates.*
 
-### M2: Bars at prototype parity
+### M2: Bars at prototype parity ✅
 
 **Decided while planning M2 (October 2026):** Playwright screenshot tests, Chromium only. CSS is both injected and shipped as a file. You run the screen-reader check that settles the ARIA roles.
 
@@ -802,7 +802,10 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 **Wave 3:**
 
-7. **Finish the demo: card 1 parity.** Put it all together in `demo/bars.html` and compare it with the lab's first card, then check the "Done when" list in the browser with you.
+7. ✅ **Finish the demo: card 1 parity.** Put it all together in `demo/bars.html` and compare it with the lab's first card, then check the "Done when" list in the browser with you.
+   - The tooltip now names the player's position and both numbers, as the lab's does. Its text is also each bar's accessible description, so the position reaches screen readers.
+   - The page's checklist is M1 and M2's "Done when" list.
+   - One deliberate difference from the lab: the data table follows the chart's series (Goals; Assists; or Goals, Assists and Total), where the lab's table always lists all three.
 
 **Done when:**
 - `demo/bars.html` reproduces the lab's first card on the library: the ball and cleat, staged sorting, the metric switch, "Play next matchweek" with a flash on changed bars, a tooltip, a legend for Goals + assists, a data table, and the motion switch.
@@ -810,6 +813,19 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 - CSS works injected and as a file, including under a strict CSP.
 - Your screen-reader check passes.
 - The Playwright suite is green in CI.
+
+**Status: complete (October 2026).** Everything on the list is met:
+- **Card 1 parity, in the browser.** The tooltip ("Okafor · Forward", both numbers) doubles as each bar's description. The legend appears only for Goals + assists. The table has Player, Position, Goals, Assists and Total. "Play next matchweek" announces "Matchweek 25: Okafor and Lindqvist changed", and exactly those bars changed.
+- **Themes.** Both come from the library's stylesheet, and the page sets no `--ec-*` tokens. The palette's contrast is enforced by `theme.test.ts`.
+- **Strict CSP, in Chromium,** with the built package served as plain files:
+  - `style-src 'self'` with the CSS file and `injectStyles: false`;
+  - `style-src 'nonce-…'` with `configure({ nonce })`.
+
+  Charts, hover stories, dimming, the tooltip and the keyboard focus ring all work in both, with no violations. A control showed that violations do reach the console.
+- **Screen reader.** Passed with NVDA + Chrome. The "1 goal" wording was also confirmed with VoiceOver + Safari.
+- **CI.** The Playwright suite and the unit and conformance tests are green on main.
+
+The flash is checked by tests, not by eye: `src/matchweek.test.ts` (only changed bars flash, on both charts), the flash unit tests, and the visual suite's mid-change screenshots. A hidden browser pane throttles frames past the 900 ms blink, so it can't be watched there.
 
 ### M3: Donut, plus the proof that effects are chart-agnostic
 

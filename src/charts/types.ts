@@ -63,8 +63,9 @@ export interface ChartOptions<D> {
   /**
    * A box beside the hovered or focused mark. Default true: the category, each series' value in
    * `format`, and the total of a stack. A function gives a row's text instead ("\n" breaks a line; an
-   * empty string shows none); it's set as text, never as HTML. Visual only: it's aria-hidden, since
-   * each mark's aria-label says the same.
+   * empty string shows none); it's set as text, never as HTML. The box itself is aria-hidden, so it
+   * isn't read twice, but a function's text also becomes the mark's accessible description
+   * (aria-describedby), so what it adds beyond the values (a player's position) reaches screen readers.
    */
   readonly tooltip?: boolean | ((d: NoInfer<D>) => string);
   /**

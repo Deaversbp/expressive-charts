@@ -58,6 +58,9 @@ const chart = barChart<Player>("#chart", {
   // Each bar's name in the same words as the second chart's, "Castillo: 1 goal, 5 assists", where the
   // default would say "1 goals". Only the series the metric shows.
   markLabel: (d, mark) => `${d.name}: ${mark.values.map((v) => amount(v.value, v.series as Series)).join(", ")}`,
+  // As in the prototype, the tooltip names the player's position and both numbers, whatever the metric.
+  // A tooltip function's text is also the bar's accessible description, so the position reaches screen readers.
+  tooltip: (d) => `${d.name} · ${d.pos}\n${amount(d.goals, "goals")} · ${amount(d.assists, "assists")}`,
   // As in the prototype, the table also lists each player's position.
   table: { category: "Player", columns: [{ label: "Position", field: "pos" }] },
   // The chart says what changed ("Sorted A to Z", "Okafor and Tanaka changed"); the page adds the matchweek.

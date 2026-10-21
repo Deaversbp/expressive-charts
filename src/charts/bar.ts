@@ -1,7 +1,8 @@
 // barChart: the thin reference bar chart. Horizontal bars or vertical columns, plain or stacked; keyed
 // marks described with describe.bar; a measured layout; axis, grid and labels in theme colours;
-// built-in hover dimming; pointer, touch and keyboard hover with a tooltip; a legend for stacks. update() animates the change: staged in
-// presentation (values, then positions), in one short stage in analysis, at once when motion is off.
+// built-in hover dimming; pointer, touch and keyboard hover with a tooltip; a legend for stacks; a data table and, with `announce`, a
+// live region for screen readers. update() animates the change: staged in presentation (values, then positions), in one short stage
+// in analysis, at once when motion is off.
 //
 // The chart never names an effect: it resolves `on` through the presets it's handed and plays them
 // through the runner, which draws on the SVG surface.
@@ -11,6 +12,7 @@ import { animated, defaultClock, interpolateNumber, interpolateRecord } from "..
 import { EFFECT_SLOTS, resolveEffects, type PresetFactory, type Registry } from "../core/registry";
 import { report } from "../core/report";
 import { createRunner, type RunInput, type SlotEffects } from "../core/runner";
+import { chartAnnouncer, changeText, type Announcer, type SortName } from "./announce";
 import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLayout, type BarRow, type TextPlacement } from "./bar-layout";
 import { toColorAssignment } from "./colors";
 import { pointerHover, type HoverTarget } from "./interaction";
@@ -22,6 +24,7 @@ import { svgSurface } from "./render/surface";
 import { setAttributes, setStyles, svgElement, transformAttribute } from "./render/svg";
 import { textMeasure } from "./render/text";
 import { injectStyles, markColorStyles, seriesColors } from "./render/theme";
+import { chartTable, checkTableOption, tableModel, type TableModel } from "./table";
 import { chartTooltip, summaryContent } from "./tooltip";
 import type { BarChartOptions, Chart, MarkEvents } from "./types";
 
@@ -119,7 +122,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   const doc = container.ownerDocument;
   injectStyles(doc);
 
-  const svg = svgElement("svg", { class: "ec-chart ec-bar-chart" }, container);
+  // A named group of marks, each an image with its own name: see "ARIA structure" in docs/architecture.md.
+  const svg = svgElement("svg", { class: "ec-chart ec-bar-chart", role: "group" }, container);
   const grid = svgElement("g", { class: "ec-grid", "aria-hidden": "true" }, svg);
   const axis = svgElement("g", { class: "ec-axis", "aria-hidden": "true" }, svg);
   // Behind the marks, so it can't cover them; the gap keeps it apart from a bar in the same colour.
@@ -173,6 +177,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   const runner = createRunner<D>({ effects, motion, icons: env.icons, clock, surface });
   const tooltip = chartTooltip<D>(svg, { motion, option: () => current.tooltip });
   const legend = chartLegend(svg);
+  const table = chartTable(svg);
+  let announcer: Announcer | undefined = current.announce ? chartAnnouncer(svg) : undefined;
 
   // ── Animated state ─────────────────────────────────────────────────────────
   // One animated value per mark property (values, slot, presence) plus the scale and the bands, so a
@@ -212,7 +218,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
   /** A new mark: drawn as laid out, or, when it enters, at its slot with nothing showing yet. */
   function createRecord(row: BarRow<D>, entering: boolean): MarkRecord<D> {
-    const group = svgElement("g", { class: "ec-mark", "data-key": row.key }, marksLayer);
+    // An image: its aria-label says it all, and its text and shapes aren't read on their own.
+    const group = svgElement("g", { class: "ec-mark", "data-key": row.key, role: "img" }, marksLayer);
     const env = { clock, motion, onChange: () => dirty.add(record) };
     const values = valuesOf(row);
     const record: MarkRecord<D> = {
@@ -221,9 +228,9 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       shown: row,
       group,
       hit: svgElement("rect", { class: "ec-hit" }, group),
-      label: svgElement("text", { class: "ec-label" }, group),
+      label: svgElement("text", { class: "ec-label", "aria-hidden": "true" }, group),
       body: svgElement("g", { class: "ec-body" }, group),
-      value: svgElement("text", { class: "ec-value" }, group),
+      value: svgElement("text", { class: "ec-value", "aria-hidden": "true" }, group),
       paths: new Map(),
       parts: [],
       handle: svgMarkHandle(() => record),
@@ -313,6 +320,51 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
   const syncLegend = (): void => legend.update(barEncoding(current).series.map((s) => s.series), colors, current.legend !== false);
 
+  /** The data table for `opts`, laid out as `next`: its rows in visual order. Throws on a column it can't read. */
+  function tableFor(opts: BarChartOptions<D>, next: BarLayout<D>): TableModel | undefined {
+    const encoding = barEncoding(opts);
+    const field = encoding.orientation === "horizontal" ? opts.y : opts.x;
+    return tableModel({
+      option: opts.table,
+      caption: opts.label,
+      category: typeof field === "string" ? field : undefined,
+      series: encoding.series.map((s) => s.series),
+      rows: next.rows.map((row) => ({ key: row.key, category: row.label.text, datum: row.datum, index: row.index, values: row.values, total: row.total })),
+      format: format(opts)
+    });
+  }
+
+  /** Says what an update changed, in the live region: the chart's summary, or the page's text from it. */
+  function announceChange(previous: BarChartOptions<D>, diff: Diff<D>): void {
+    const option = current.announce;
+    if (!announcer || !option) return;
+    const series = barEncoding(current).series.map((s) => s.series);
+    const before = barEncoding(previous).series.map((s) => s.series);
+    const sort = sortName(current.sort);
+    const name = (record: MarkRecord<D>): string => record.row.label.text;
+    const changed = diff.changed.map(({ record }) => record);
+    const text = changeText({
+      ...(current.label !== previous.label ? { label: current.label } : {}),
+      ...(series.join("\n") !== before.join("\n") ? { series } : {}),
+      ...(sort !== sortName(previous.sort) || (sort === "custom" && current.sort !== previous.sort) ? { sort } : {}),
+      changed: changed.map(name),
+      added: diff.entering.map(name),
+      removed: diff.exiting.map(name),
+      count: order.length
+    });
+    if (typeof option !== "function") {
+      announcer.say(text);
+      return;
+    }
+    const key = (record: MarkRecord<D>): string => record.key;
+    try {
+      const said = option({ text, changed: changed.map(key), added: diff.entering.map(key), removed: diff.exiting.map(key) });
+      if (said !== undefined && said !== null) announcer.say(String(said));
+    } catch (error) {
+      report(error);
+    }
+  }
+
   const currentFrame = (): BarFrame => ({ orientation, scale: scale.value, bands: bands.value });
 
   /** The mark as it is now, part way through a transition. */
@@ -397,6 +449,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       records.delete(record.key);
       leaving.set(record.key, record);
       record.group.classList.add("ec-leaving");
+      // On its way out: no longer read.
+      record.group.setAttribute("aria-hidden", "true");
       record.leave = leave();
       record.count = undefined;
       diff.exiting.push(record);
@@ -413,6 +467,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
         if (record) {
           leaving.delete(row.key);
           record.group.classList.remove("ec-leaving");
+          record.group.removeAttribute("aria-hidden");
           record.leave?.resolve();
           record.leave = undefined;
         } else {
@@ -717,6 +772,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
   describeChart(svg, current);
   syncLegend();
+  table.render(tableFor(current, laidOut));
   setAttributes(svg, sizeAttributes(laidOut.frame.bands));
   for (const tick of laidOut.ticks) addTick(tick.value, 1);
   for (const tick of ticks.values()) drawTick(tick, laidOut.frame);
@@ -738,12 +794,22 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       if (next.motion !== undefined && next.motion !== current.motion) throw new TypeError("barChart: `motion` can't be changed by update() yet.");
       const merged: BarChartOptions<D> = { ...current, ...next };
       checkOptions(merged);
-      // Throws on data it can't draw, before anything changes.
+      // Throws on data it can't draw, or a table column it can't read, before anything changes.
       const nextLayout = layout(merged);
+      const nextTable = tableFor(merged, nextLayout);
       if ("colors" in next) colors = toColorAssignment(merged.colors);
+      const previous = current;
       current = merged;
       describeChart(svg, current);
       syncLegend();
+      table.render(nextTable);
+      // A region that appears with its first text is often missed: it announces from the next update.
+      const announcing = announcer !== undefined;
+      if (current.announce && !announcer) announcer = chartAnnouncer(svg);
+      else if (!current.announce && announcer) {
+        announcer.destroy();
+        announcer = undefined;
+      }
       if (current.dim === false) svg.classList.remove("ec-hovering");
       else if (hovered !== undefined) svg.classList.add("ec-hovering");
       supersede?.();
@@ -767,6 +833,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       diff.changed.forEach(({ record, from }, index) => emit("update", { ...input(record), from, batch: { index, count: diff.changed.length } }));
       runner.enter(diff.entering.map(input));
       emitEach("enter", diff.entering);
+      if (announcing) announceChange(previous, diff);
       // Focus stayed with its key. If that mark is leaving, focus moves to its nearest neighbour, whose
       // hover the runner holds until the change settles.
       keyboard.sync();
@@ -799,6 +866,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       runner.destroy();
       tooltip.destroy();
       legend.destroy();
+      table.destroy();
+      announcer?.destroy();
       unsubscribeMotion();
       observer?.disconnect();
       stopFrame?.();
@@ -838,9 +907,11 @@ function checkOptions<D>(options: BarChartOptions<D>): void {
     const value = options[field];
     if (value !== undefined && !(Number.isFinite(value) && value > 0)) throw new RangeError(`barChart: ${field} must be a positive number of px, got ${String(value)}.`);
   }
-  const { tooltip, legend } = options;
+  const { tooltip, legend, announce } = options;
   if (tooltip !== undefined && typeof tooltip !== "boolean" && typeof tooltip !== "function") throw new TypeError("barChart: tooltip must be true, false or a function that returns a row's text.");
   if (legend !== undefined && typeof legend !== "boolean") throw new TypeError("barChart: legend must be true or false.");
+  checkTableOption(options.table, "barChart");
+  if (announce !== undefined && typeof announce !== "boolean" && typeof announce !== "function") throw new TypeError("barChart: announce must be true, false or a function that returns the text to announce.");
 }
 
 /**
@@ -960,6 +1031,10 @@ function decimals(value: number): number {
   if (/e/i.test(text)) return 6;
   const point = text.indexOf(".");
   return point < 0 ? 0 : Math.min(6, text.length - point - 1);
+}
+
+function sortName<D>(sort: BarChartOptions<D>["sort"]): SortName {
+  return typeof sort === "function" ? "custom" : (sort ?? "none");
 }
 
 function format<D>(options: BarChartOptions<D>): (value: number) => string {

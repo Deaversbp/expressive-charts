@@ -11,5 +11,8 @@ Chart components (bar, line, donut, and later more). Each chart gives every mark
 | `motion.ts` | A chart's motion from its `motion` option |
 | `keyboard.ts` | Keyboard focus, shared by `barChart` and `expressive()`: the roving tabindex, arrow keys, Home, End and Escape, whether focus followed a key press, and where focus goes when its mark leaves or its element is replaced |
 | `interaction.ts` | Pointer and touch hover, delegated from the `<svg>` |
+| `tooltip.ts`, `legend.ts` | The tooltip beside the hovered or focused mark, and the series legend |
+| `table.ts` | The data table: its contents from the chart's rows (`tableModel`, pure), and the `<details>` or visually hidden table that shows them, kept by key |
+| `announce.ts` | With `announce`, the polite live region and the chart's summary of an update |
 | `adapter/` | `expressive()`: effects on SVG marks drawn by other code. Reading the source (`source.ts`), coordinates through CTMs (`space.ts`), bars from rects (`bars.ts`), the host-mark style handle (`host-style.ts`) and the record of every change to the host's DOM, so `destroy()` can undo it (`edits.ts`) |
 | `render/` | The drawing API in SVG: `svgSurface` (the runner's surface), `svgLayer`, `svgMarkHandle`; theme tokens and the shared stylesheet; text measurement |

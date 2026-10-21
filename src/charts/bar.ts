@@ -8,9 +8,9 @@
 
 import type { Clock, IconSource, MarkGeometry, Motion } from "../core";
 import { defaultClock } from "../core";
-import { resolveEffects, type PresetFactory, type Registry } from "../core/registry";
+import { EFFECT_SLOTS, resolveEffects, type PresetFactory, type Registry } from "../core/registry";
 import { report } from "../core/report";
-import { createRunner, type RunInput } from "../core/runner";
+import { createRunner, type RunInput, type SlotEffects } from "../core/runner";
 import { barEncoding, layoutBars, type BarLayout, type BarRow, type TextPlacement } from "./bar-layout";
 import { toColorAssignment } from "./colors";
 import { pointerHover, type HoverTarget } from "./interaction";
@@ -94,29 +94,35 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   let measuredWidth = containerWidth(container);
   let destroyed = false;
 
+  let first: BarLayout<D>;
+  try {
+    // Throws on data it can't draw. Nothing but the <svg> is in place yet, so that's all to undo.
+    first = layout(current);
+  } catch (error) {
+    svg.remove();
+    throw error;
+  }
+
   const find = (key: string): MarkRecord<D> | undefined => records.get(key) ?? leaving.get(key);
-  const runner = createRunner<D>({
-    effects,
-    motion,
-    icons: env.icons,
-    clock,
-    surface: svgSurface({
-      overlay,
-      // Looked up on each call, so the handle follows the mark's record.
-      mark: (key) => ({
-        set: (style) => find(key)?.handle.set(style),
-        reset: () => find(key)?.handle.reset()
-      }),
-      colors: (key) => find(key)?.parts[0]?.colors
-    })
+  const surface = svgSurface({
+    overlay,
+    // Looked up on each call, so the handle follows the mark's record.
+    mark: (key) => ({
+      set: (style) => find(key)?.handle.set(style),
+      reset: () => find(key)?.handle.reset()
+    }),
+    colors: (key) => find(key)?.parts[0]?.colors
   });
+  const runner = createRunner<D>({ effects, motion, icons: env.icons, clock, surface });
 
   // ── Drawing ────────────────────────────────────────────────────────────────
 
   function layout(opts: BarChartOptions<D>): BarLayout<D> {
+    const encoding = barEncoding(opts);
+    checkNeeds(effects, encoding.series.map((s) => s.series));
     return layoutBars({
       data: opts.data,
-      encoding: barEncoding(opts),
+      encoding,
       sort: opts.sort,
       width: opts.width ?? measuredWidth,
       height: opts.height,
@@ -144,6 +150,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   }
 
   function drawMark(record: MarkRecord<D>, row: BarRow<D>): void {
+    const before = record.parts[0]?.colors.color;
     record.row = row;
     setAttributes(record.hit, { ...row.hit });
     placeText(record.label, row.label);
@@ -172,6 +179,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const drawn = Array.from(record.body.children).filter((child) => child.classList.contains("ec-segment"));
     if (record.parts.some((part, i) => drawn[i] !== part.element)) for (const part of record.parts) record.body.appendChild(part.element);
     record.handle.repaint();
+    // A new palette or a different first series: overlays already drawn in "mark" follow.
+    if (record.parts[0]?.colors.color !== before) surface.recolor(record.key);
   }
 
   function drawAxis(next: BarLayout<D>): void {
@@ -318,7 +327,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   // ── First render ───────────────────────────────────────────────────────────
 
   describeChart(svg, current);
-  runner.enter(render(layout(current)).entering.map(input));
+  runner.enter(render(first).entering.map(input));
 
   return {
     element: svg,
@@ -408,6 +417,21 @@ function checkOptions<D>(options: BarChartOptions<D>): void {
   for (const field of ["width", "height"] as const) {
     const value = options[field];
     if (value !== undefined && !(Number.isFinite(value) && value > 0)) throw new RangeError(`barChart: ${field} must be a positive number of px, got ${String(value)}.`);
+  }
+}
+
+/**
+ * Data effects name the series they read through `needs.related`. A chart without one of them
+ * throws when it's created or updated, rather than the effect finding nothing when it runs.
+ */
+function checkNeeds<D>(effects: SlotEffects<D>, series: readonly string[]): void {
+  for (const slot of EFFECT_SLOTS) {
+    const effect = effects[slot];
+    if (effect?.kind !== "data") continue;
+    for (const name of effect.needs?.related ?? []) {
+      if (series.includes(name)) continue;
+      throw new RangeError(`barChart: on.${slot} needs the series "${name}", but the chart's series are ${series.map((s) => `"${s}"`).join(", ")}.`);
+    }
   }
 }
 

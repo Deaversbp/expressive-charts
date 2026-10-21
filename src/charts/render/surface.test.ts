@@ -23,12 +23,13 @@ function setup() {
   const svg = svgElement("svg", {}, document.body);
   const overlay = svgElement("g", { class: "ec-overlay" }, svg);
   const marks = new Map<string, MarkHandle>();
+  const slots = new Map([["a", 4]]);
   const surface = svgSurface({
     overlay,
     mark: (key) => marks.get(key) ?? { set() {}, reset() {} },
-    colors: (key) => (key === "a" ? seriesColors(4) : undefined)
+    colors: (key) => (slots.has(key) ? seriesColors(slots.get(key)!) : undefined)
   });
-  return { svg, overlay, surface };
+  return { svg, overlay, surface, slots };
 }
 
 afterEach(() => {
@@ -62,6 +63,22 @@ describe("svgSurface groups", () => {
     expect(overlay.childElementCount).toBe(0);
     // Handles from a cleared group keep working on the detached elements.
     expect(() => group.path("M0,0", { fill: "text" }).update("M1,1")).not.toThrow();
+  });
+
+  it("recolours a key's live groups when its colours change", () => {
+    const { overlay, surface, slots } = setup();
+    slots.set("b", 3);
+    const cleared = surface.group("a", "decorate", 1);
+    const clearedGroup = overlay.lastElementChild as SVGGElement;
+    surface.group("a", "hover", 2);
+    surface.group("b", "hover", 3);
+    cleared.clear();
+    slots.set("a", 2);
+    surface.recolor("a");
+    const mark = (g: Element) => (g as SVGGElement).style.getPropertyValue("--ec-mark");
+    expect(Array.from(overlay.children, mark)).toEqual(["var(--ec-series-2, #eb6834)", "var(--ec-series-3, #1baf7a)"]);
+    expect(mark(clearedGroup)).toBe("var(--ec-series-4, #eda100)");
+    expect(() => surface.recolor("missing")).not.toThrow();
   });
 });
 

@@ -1,4 +1,4 @@
-import { createMotion, manualClock, type EffectContext, type GeometryEffect, type MarkGeometry, type MotionMode } from "../core";
+import { createMotion, manualClock, type DataEffect, type EffectContext, type GeometryEffect, type MarkGeometry, type MotionMode } from "../core";
 import { createRegistry, type PresetFactory } from "../core/registry";
 import { barChart, type ChartEnv } from "./bar";
 import type { BarChartOptions } from "./types";
@@ -140,6 +140,26 @@ describe("barChart: drawing", () => {
     expect(() => barChart("#nothing", { label: "Goals", data: players, y: "name", x: "goals" }, env)).toThrow(/no element matches/);
     expect(() => barChart(host, { label: " ", data: players, y: "name", x: "goals" }, env)).toThrow(/needs a label/);
     expect(() => barChart(host, { label: "Goals", data: players, y: "name", x: "goals", width: -5 }, env)).toThrow(/width must be/);
+  });
+
+  it("leaves nothing behind when its first layout throws", () => {
+    const observe = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe = observe;
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    const motion = quietMotion();
+    const subscribe = vi.spyOn(motion, "subscribe");
+    const container = document.body.appendChild(document.createElement("div"));
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion };
+    expect(() => barChart(container, { label: "Goals", data: [...players, players[0]!], y: "name", x: "goals" }, env)).toThrow(/two rows have the key/);
+    expect(container.childElementCount).toBe(0);
+    expect(observe).not.toHaveBeenCalled();
+    expect(subscribe).not.toHaveBeenCalled();
   });
 
   it("falls back to 640 px when the container has no width", () => {
@@ -396,6 +416,36 @@ describe("barChart: effects", () => {
     pointer("pointerover", mark("Okafor").querySelector(".ec-hit")!);
     expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: "listener" }));
     expect(after).toHaveBeenCalledOnce();
+  });
+
+  it("checks the series data effects need, when created and on update", async () => {
+    const seen: (number | undefined)[] = [];
+    const needsAssists: DataEffect<Player> = {
+      kind: "data",
+      needs: { related: ["assists"] },
+      run: async (_mark, data) => {
+        seen.push(data.related("assists")?.samples[1]?.value);
+      },
+      end: () => {},
+      clear: () => {}
+    };
+    expect(() => setup({ on: { decorate: needsAssists } })).toThrow(/on\.decorate needs the series "assists", but the chart's series are "goals"/);
+    const { chart, mark } = setup({ stack: ["goals", "assists"], on: { decorate: needsAssists } });
+    expect(seen[0]).toBeCloseTo(20);
+    await expect(chart.update({ stack: ["goals"] })).rejects.toThrow(/needs the series "assists"/);
+    expect(mark("Okafor").querySelectorAll(".ec-segment")).toHaveLength(2);
+  });
+
+  it("recolours overlays drawn in the mark's colour when that colour changes", async () => {
+    const decorate = recorder({ draw: (mark, ctx) => ctx.layer.path(mark.outline.d, { stroke: "mark" }) });
+    const { chart, svg } = setup({ on: { decorate: decorate.effect } });
+    const run = () => (svg.querySelector('.ec-run[data-key="Okafor"]') as SVGGElement).style.getPropertyValue("--ec-mark");
+    expect(run()).toBe("var(--ec-series-1, #2a78d6)");
+    await chart.update({ colors: { goals: 3 } });
+    expect(run()).toBe("var(--ec-series-3, #1baf7a)");
+    // A different first series: assists takes the first free slot.
+    await chart.update({ stack: ["assists"] });
+    expect(run()).toBe("var(--ec-series-1, #2a78d6)");
   });
 });
 

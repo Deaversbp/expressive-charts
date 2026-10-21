@@ -424,6 +424,7 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 > - `motion: "analysis"` is this chart's author default, like `setMode()`: the viewer's choice on the page-wide motion and reduced motion still win.
 > - `dim: false` stops the other marks dimming; the hovered mark still takes its strong colour.
 > - Missing values count as 0; negative bars grow the other way from zero; a stack that mixes signs throws.
+> - A data effect's `needs.related` is checked against the chart's series when it's created and on every update.
 > - Charts get the registries and the page-wide motion from the composition root as a `ChartEnv`, so they import nothing outside core.
 
 ### 5.1 Shared shape

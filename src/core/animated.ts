@@ -36,7 +36,7 @@ export interface AnimateOptions {
   readonly duration: number;
   /** Default "transition". */
   readonly timing?: Timing;
-  /** Default easeInOutCubic, or easeOutCubic when this interrupts a running animation. */
+  /** Default easeInOutCubic, or easeOutCubic when this interrupts a moving value and starts at once (no delay). */
   readonly ease?: Easing;
   readonly delay?: number;
   readonly signal?: AbortSignal;
@@ -67,6 +67,8 @@ export function animated<T>(initial: T, interpolate: Interpolator<T>, options: A
   let value = initial;
   let target = initial;
   let running: Tween | undefined;
+  /** The running animation is past its delay: its value is on the move. */
+  let moving = false;
 
   const assign = (next: T): void => {
     value = next;
@@ -76,6 +78,7 @@ export function animated<T>(initial: T, interpolate: Interpolator<T>, options: A
   const halt = (): void => {
     const current = running;
     running = undefined;
+    moving = false;
     current?.cancel();
   };
 
@@ -91,19 +94,26 @@ export function animated<T>(initial: T, interpolate: Interpolator<T>, options: A
       return running?.state === "running";
     },
     to(next, animate) {
-      const interrupted = running?.state === "running";
+      // Restarting an ease-in-out from a moving value would stall; ease out instead. A value still
+      // waiting out a delay isn't moving, and one told to wait first starts from rest anyway.
+      const interrupted = running?.state === "running" && moving && !(animate.delay && animate.delay > 0);
       halt();
       target = next;
       const blend = interpolate(value, next);
+      // The tween's first update is its start value; any later one means it's past its delay.
+      let started = false;
       const current = tween(
         {
           duration: animate.duration,
           timing: animate.timing,
-          // Restarting an ease-in-out from a moving value would stall; ease out instead.
           ease: animate.ease ?? (interrupted ? easeOutCubic : easeInOutCubic),
           delay: animate.delay,
           signal: animate.signal,
-          update: (progress) => assign(blend(progress))
+          update: (progress) => {
+            if (started) moving = true;
+            started = true;
+            assign(blend(progress));
+          }
         },
         env
       );

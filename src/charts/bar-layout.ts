@@ -1,5 +1,9 @@
 // The bar chart's layout: pure, so it's tested without a DOM. Options in, marks (described with
 // describe.bar), labels, ticks and size out. Pixel sizes follow the prototype (demo/lab.html).
+//
+// A layout is drawn from a few numbers: the frame (the value scale and the category bands) and each
+// row's values and slot. Transitions interpolate those numbers, and placeRow and placeTick draw any
+// state in between the same way the layout draws its own.
 
 import { describe, type MarkData, type MarkGeometry, type Rect } from "../core";
 import type { Accessor, BarChartOptions } from "./types";
@@ -27,12 +31,19 @@ export interface TextPlacement {
   readonly text: string;
 }
 
+export interface BarValue {
+  readonly series: string;
+  readonly value: number;
+}
+
 export interface BarRow<D> {
   readonly key: string;
   readonly datum: D;
   /** The row's index in `data`. */
   readonly index: number;
-  readonly values: readonly { readonly series: string; readonly value: number }[];
+  /** Its position along the category axis, in bands: 0 is the first. */
+  readonly slot: number;
+  readonly values: readonly BarValue[];
   readonly total: number;
   readonly geometry: MarkGeometry;
   readonly data: MarkData<D>;
@@ -50,13 +61,60 @@ export interface Tick {
   readonly label: TextPlacement;
 }
 
+/**
+ * The value axis. Data `lo` sits at px `from`, and each unit of data is `extent / (hi - lo)` px along
+ * the axis (`extent` is negative for columns, which grow up). `label` is where the category labels
+ * sit across it: their x for bars, their y for columns.
+ */
+export interface BarScale {
+  readonly lo: number;
+  readonly hi: number;
+  readonly from: number;
+  readonly extent: number;
+  readonly label: number;
+}
+
+/**
+ * The category axis. Slot 0's band starts at px `start`; each band is `band` px, with a bar
+ * `thickness` px across in it; the plot is `span` px along the axis. Plus the chart's size.
+ */
+export interface BarBands {
+  readonly start: number;
+  readonly band: number;
+  readonly thickness: number;
+  readonly span: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface BarFrame {
+  readonly orientation: Orientation;
+  readonly scale: BarScale;
+  readonly bands: BarBands;
+}
+
 export interface BarLayout<D> {
   readonly width: number;
   readonly height: number;
   readonly orientation: Orientation;
-  /** In visual order: top to bottom, or left to right. */
+  readonly frame: BarFrame;
+  /** In visual order: top to bottom, or left to right. A row's slot is its index here. */
   readonly rows: readonly BarRow<D>[];
   readonly ticks: readonly Tick[];
+}
+
+/** What placeRow draws a row from: a laid-out row, or a state in between two. */
+export interface BarRowState<D> {
+  readonly key: string;
+  readonly datum: D;
+  readonly index: number;
+  readonly category: string;
+  /** Signed, from the baseline. */
+  readonly values: readonly BarValue[];
+  /** Fractional in between. */
+  readonly slot: number;
+  /** The value label's text. */
+  readonly text: string;
 }
 
 export interface BarLayoutInput<D> {
@@ -138,7 +196,99 @@ export function barEncoding<D>(options: BarChartOptions<D>): BarEncoding<D> {
 export function layoutBars<D>(input: BarLayoutInput<D>): BarLayout<D> {
   const rows = sortRows(prepareRows(input), input.sort);
   const domain = niceDomain(rows.map((row) => row.total));
-  return input.encoding.orientation === "horizontal" ? horizontal(input, rows, domain) : vertical(input, rows, domain);
+  const texts = rows.map((row) => input.format(row.total));
+  const ticks = domain.ticks.map(input.format);
+  const frame = (input.encoding.orientation === "horizontal" ? horizontalFrame : verticalFrame)(input, rows, domain, texts, ticks);
+  return {
+    width: frame.bands.width,
+    height: frame.bands.height,
+    orientation: frame.orientation,
+    frame,
+    rows: rows.map((row, slot) => placeRow(frame, { ...row, slot, text: texts[slot]! })),
+    ticks: domain.ticks.map((value, i) => placeTick(frame, value, ticks[i]!))
+  };
+}
+
+/**
+ * Draws a row in a frame: its bar (described with describe.bar), labels and pointer target. In between
+ * two states of opposite sign a stack can mix signs; values against the total's sign then draw as 0.
+ */
+export function placeRow<D>(frame: BarFrame, row: BarRowState<D>): BarRow<D> {
+  const { scale, bands } = frame;
+  const at = position(scale);
+  const unit = Math.abs(scale.extent / (scale.hi - scale.lo));
+  const total = row.values.reduce((sum, v) => sum + v.value, 0);
+  const negative = total < 0;
+  const zero = at(0);
+  const tip = at(total);
+  const band = bands.start + row.slot * bands.band;
+  const bar = {
+    key: row.key,
+    ...(row.values.length === 1 ? { series: row.values[0]!.series } : {}),
+    radius: RADIUS,
+    gap: GAP,
+    segments: row.values.map((v) => ({ series: v.series, size: Math.max(0, negative ? -v.value : v.value) * unit }))
+  };
+  const fields = { key: row.key, datum: row.datum, index: row.index, slot: row.slot, values: row.values, total };
+
+  if (frame.orientation === "horizontal") {
+    const geometry = describe.bar({
+      ...bar,
+      x: Math.min(zero, tip),
+      y: band + (bands.band - bands.thickness) / 2,
+      width: Math.abs(tip - zero),
+      height: bands.thickness,
+      baseline: negative ? "right" : "left"
+    });
+    const line = band + bands.band / 2 + LABEL_SIZE * CENTRE;
+    return {
+      ...fields,
+      geometry,
+      data: barData(row.datum, total, geometry),
+      label: { x: scale.label, y: line, anchor: "end", text: row.category },
+      value: { x: negative ? tip - PAD : tip + PAD, y: line, anchor: negative ? "end" : "start", text: row.text },
+      hit: { x: 0, y: band, width: bands.width, height: bands.band }
+    };
+  }
+
+  const centre = band + bands.band / 2;
+  const geometry = describe.bar({
+    ...bar,
+    x: centre - bands.thickness / 2,
+    y: Math.min(zero, tip),
+    width: bands.thickness,
+    height: Math.abs(tip - zero),
+    baseline: negative ? "top" : "bottom"
+  });
+  return {
+    ...fields,
+    geometry,
+    data: barData(row.datum, total, geometry),
+    label: { x: centre, y: scale.label, anchor: "middle", text: row.category },
+    value: { x: centre, y: negative ? tip + PAD + VALUE_SIZE * 0.8 : tip - PAD, anchor: "middle", text: row.text },
+    hit: { x: band, y: 0, width: bands.band, height: bands.height }
+  };
+}
+
+/** Draws a tick's gridline and label in a frame. */
+export function placeTick(frame: BarFrame, value: number, text: string): Tick {
+  const { bands } = frame;
+  const at = position(frame.scale)(value);
+  if (frame.orientation === "horizontal") {
+    const bottom = bands.start + bands.span;
+    return { value, line: { x1: at, y1: bands.start, x2: at, y2: bottom }, label: { x: at, y: bottom + 16, anchor: "middle", text } };
+  }
+  return {
+    value,
+    line: { x1: bands.start, y1: at, x2: bands.start + bands.span, y2: at },
+    label: { x: bands.start - 8, y: at + TICK_SIZE * CENTRE, anchor: "end", text }
+  };
+}
+
+/** Data value to px along the value axis. */
+function position(scale: BarScale): (value: number) => number {
+  const perUnit = scale.extent / (scale.hi - scale.lo);
+  return (value) => scale.from + (value - scale.lo) * perUnit;
 }
 
 interface Prepared<D> {
@@ -199,68 +349,28 @@ function niceStep(span: number): number {
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * power;
 }
 
-function horizontal<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[], domain: Domain): BarLayout<D> {
-  const { width, format, measure } = input;
+function horizontalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[], domain: Domain, values: readonly string[], ticks: readonly string[]): BarFrame {
+  const { width, measure } = input;
   const n = rows.length;
-  const values = rows.map((row) => format(row.total));
   const labelWidth = widest(rows.map((row) => row.category), "ec-label", LABEL_SIZE, measure);
   const valueWidth = widest(values, "ec-value", VALUE_SIZE, measure);
-  const ticks = domain.ticks.map(format);
   const tickWidth = widest(ticks, "ec-tick", TICK_SIZE, measure);
   // Value labels sit past the tip, so negative bars need room on the left as well.
   const negativeRoom = domain.lo < 0 ? valueWidth + PAD : 0;
   const left = Math.max(labelWidth + 10 + negativeRoom, tickWidth / 2 + 2);
   const right = Math.max(valueWidth + PAD + 4, tickWidth / 2 + 2);
   const rowSize = input.height === undefined || n === 0 ? ROW : Math.max(0, input.height - TOP - AXIS) / n;
-  const thickness = (rowSize * BAR) / ROW;
-  const height = input.height ?? TOP + n * rowSize + AXIS;
-  const plot = { x: left, y: TOP, width: Math.max(0, width - left - right), height: n * rowSize };
-  const perUnit = plot.width / (domain.hi - domain.lo);
-  const at = (v: number): number => plot.x + (v - domain.lo) * perUnit;
-  const zero = at(0);
-
   return {
-    width,
-    height,
     orientation: "horizontal",
-    rows: rows.map((row, i) => {
-      const band = TOP + i * rowSize;
-      const tip = at(row.total);
-      const negative = row.total < 0;
-      const geometry = describe.bar({
-        key: row.key,
-        ...(row.values.length === 1 ? { series: row.values[0]!.series } : {}),
-        x: Math.min(zero, tip),
-        y: band + (rowSize - thickness) / 2,
-        width: Math.abs(tip - zero),
-        height: thickness,
-        baseline: negative ? "right" : "left",
-        radius: RADIUS,
-        gap: GAP,
-        segments: row.values.map((v) => ({ series: v.series, size: Math.abs(v.value) * perUnit }))
-      });
-      const line = band + rowSize / 2 + LABEL_SIZE * CENTRE;
-      return {
-        ...rowFields(row, geometry),
-        label: { x: left - 10 - negativeRoom, y: line, anchor: "end", text: row.category },
-        value: { x: negative ? tip - PAD : tip + PAD, y: line, anchor: negative ? "end" : "start", text: values[i]! },
-        hit: { x: 0, y: band, width, height: rowSize }
-      };
-    }),
-    ticks: domain.ticks.map((value, i) => {
-      const x = at(value);
-      const bottom = plot.y + plot.height;
-      return { value, line: { x1: x, y1: plot.y, x2: x, y2: bottom }, label: { x, y: bottom + 16, anchor: "middle", text: ticks[i]! } };
-    })
+    scale: { lo: domain.lo, hi: domain.hi, from: left, extent: Math.max(0, width - left - right), label: left - 10 - negativeRoom },
+    bands: { start: TOP, band: rowSize, thickness: (rowSize * BAR) / ROW, span: n * rowSize, width, height: input.height ?? TOP + n * rowSize + AXIS }
   };
 }
 
-function vertical<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[], domain: Domain): BarLayout<D> {
-  const { width, format, measure } = input;
+function verticalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[], domain: Domain, _values: readonly string[], ticks: readonly string[]): BarFrame {
+  const { width, measure } = input;
   const n = rows.length;
   const height = input.height ?? VERTICAL_HEIGHT;
-  const values = rows.map((row) => format(row.total));
-  const ticks = domain.ticks.map(format);
   const tickWidth = widest(ticks, "ec-tick", TICK_SIZE, measure);
   // Room above positive columns (and below negative ones) for their value labels.
   const top = domain.hi > 0 ? VALUE_SIZE + PAD + 2 : TOP;
@@ -268,60 +378,19 @@ function vertical<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[], dom
   const left = tickWidth + 8 + 2;
   const plot = { x: left, y: top, width: Math.max(0, width - left - 8), height: Math.max(0, height - top - bottom) };
   const band = n > 0 ? plot.width / n : 0;
-  const thickness = Math.min((band * BAR) / ROW, MAX_COLUMN);
-  const perUnit = plot.height / (domain.hi - domain.lo);
-  const at = (v: number): number => plot.y + plot.height - (v - domain.lo) * perUnit;
-  const zero = at(0);
-
+  const base = plot.y + plot.height;
   return {
-    width,
-    height,
     orientation: "vertical",
-    rows: rows.map((row, i) => {
-      const x0 = plot.x + i * band;
-      const centre = x0 + band / 2;
-      const tip = at(row.total);
-      const negative = row.total < 0;
-      const geometry = describe.bar({
-        key: row.key,
-        ...(row.values.length === 1 ? { series: row.values[0]!.series } : {}),
-        x: centre - thickness / 2,
-        y: Math.min(zero, tip),
-        width: thickness,
-        height: Math.abs(tip - zero),
-        baseline: negative ? "top" : "bottom",
-        radius: RADIUS,
-        gap: GAP,
-        segments: row.values.map((v) => ({ series: v.series, size: Math.abs(v.value) * perUnit }))
-      });
-      return {
-        ...rowFields(row, geometry),
-        label: { x: centre, y: plot.y + plot.height + 18, anchor: "middle", text: row.category },
-        value: { x: centre, y: negative ? tip + PAD + VALUE_SIZE * 0.8 : tip - PAD, anchor: "middle", text: values[i]! },
-        hit: { x: x0, y: 0, width: band, height }
-      };
-    }),
-    ticks: domain.ticks.map((value, i) => {
-      const y = at(value);
-      return {
-        value,
-        line: { x1: plot.x, y1: y, x2: plot.x + plot.width, y2: y },
-        label: { x: left - 8, y: y + TICK_SIZE * CENTRE, anchor: "end", text: ticks[i]! }
-      };
-    })
+    scale: { lo: domain.lo, hi: domain.hi, from: base, extent: -plot.height, label: base + 18 },
+    bands: { start: plot.x, band, thickness: Math.min((band * BAR) / ROW, MAX_COLUMN), span: plot.width, width, height }
   };
-}
-
-function rowFields<D>(row: Prepared<D>, geometry: MarkGeometry): Pick<BarRow<D>, "key" | "datum" | "index" | "values" | "total" | "geometry" | "data"> {
-  return { key: row.key, datum: row.datum, index: row.index, values: row.values, total: row.total, geometry, data: barData(row, geometry) };
 }
 
 /**
  * Values along the walk: from 0 at the baseline to the total at the tip. `related(series)` is that
  * series' segment in the same row, its samples running over the segment's own span.
  */
-function barData<D>(row: Prepared<D>, geometry: MarkGeometry): MarkData<D> {
-  const { datum, total } = row;
+function barData<D>(datum: D, total: number, geometry: MarkGeometry): MarkData<D> {
   const valueAt = (distance: number): number => (geometry.length > 0 ? (total * distance) / geometry.length : 0);
   const data: MarkData<D> = {
     datum,

@@ -17,7 +17,11 @@ export interface MarkEvent<D> {
   readonly batch: { readonly index: number; readonly count: number };
 }
 
-/** Effect slots and `chart.on()` consume the same events. Data events fire when a change starts, with the new geometry. */
+/**
+ * Effect slots and `chart.on()` consume the same events. Data events fire when a change starts: enter
+ * and update with the new geometry, exit with the geometry on screen. Hover and leave carry the
+ * geometry on screen too, part way to the new one while a change plays.
+ */
 export interface MarkEvents<D> {
   enter: MarkEvent<D>;
   update: MarkEvent<D> & { readonly from: MarkGeometry };
@@ -65,14 +69,15 @@ export interface BarChartOptions<D> extends ChartOptions<D> {
 
 export interface Chart<D, O> {
   /**
-   * Changes options and draws the new state. Resolves when the change has settled: once leaving marks'
-   * exit effects are done and the marks are removed. Rejects, changing nothing, on options it can't
-   * draw. `on` and `motion` can't change yet.
+   * Changes options and animates to the new state, by the motion mode. Resolves when the change has
+   * settled and the marks it removed are gone (their exit effects done), or as soon as another
+   * update() supersedes it. Rejects, changing nothing, on options it can't draw. `on` and `motion`
+   * can't change yet.
    */
   update(next: Partial<O>): Promise<void>;
   /** Listens for mark events; returns the unsubscribe. */
   on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void;
-  /** The marks now on screen, in visual order (leaving marks excluded). */
+  /** The marks now on screen, in visual order (leaving marks excluded): part way there while a change plays. */
   marks(): readonly MarkGeometry[];
   readonly element: SVGSVGElement;
   /** Clears every effect and removes the chart. */

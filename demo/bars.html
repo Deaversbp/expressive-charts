@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ball and cleat · expressive-charts</title>
+<style>
+  /* Page chrome only. The chart reads the --ec-* tokens; until dark-mode defaults land (M2), the page sets them for dark. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #7d7b75;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5;
+      --ec-text: #f0efec; --ec-text-muted: #8f8d86; --ec-grid: #2c2c2a; --ec-axis: #45453f;
+      --ec-series-1: #3987e5; --ec-series-1-strong: #6da7ec;
+      --ec-series-4: #c98500; --ec-series-4-strong: #eda100;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 20px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
+  .note { font-size: 14px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .bar .label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .hint { font-size: 13px; color: var(--muted); flex: 1 1 220px; min-width: 0; }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
+  .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+  .seg button:hover { background: var(--wash); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; min-width: 0; }
+  #chart { min-width: 0; }
+  .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">M1 step 7 · first look</p>
+    <h1>Ball and cleat on the real library</h1>
+    <p class="lede">The prototype's first card, rebuilt on <code>barChart</code> and <code>travel</code>. Hover a bar, then switch the motion mode and the metric to feel the difference.</p>
+  </header>
+
+  <div class="bar" role="group" aria-label="Motion mode">
+    <span class="label">Motion</span>
+    <div class="seg" id="motion">
+      <button type="button" data-value="presentation">Presentation</button>
+      <button type="button" data-value="analysis">Analysis</button>
+      <button type="button" data-value="off">Off</button>
+    </div>
+    <span class="hint" id="motion-hint"></span>
+  </div>
+
+  <section class="card" aria-labelledby="chart-title">
+    <h2 id="chart-title">Harbor City FC: goals by player</h2>
+    <p class="note">In Goals, a ball rolls the length of the bar. In Assists, a boot steps along it. In Goals + assists, the ball stops at the end of the goals and the boot carries on. Switching the metric or sort animates: in Presentation the values change first and then the rows move; in Analysis it's one quick step; Off jumps.</p>
+    <div class="bar">
+      <div class="seg" id="metric" role="group" aria-label="Metric">
+        <button type="button" data-value="goals" aria-pressed="true">Goals</button>
+        <button type="button" data-value="assists" aria-pressed="false">Assists</button>
+        <button type="button" data-value="ga" aria-pressed="false">Goals + assists</button>
+      </div>
+      <div class="seg" id="sort" role="group" aria-label="Sort">
+        <button type="button" data-value="value" aria-pressed="true">Highest first</button>
+        <button type="button" data-value="key" aria-pressed="false">A–Z</button>
+      </div>
+    </div>
+    <div id="chart"></div>
+  </section>
+
+  <section class="card" aria-labelledby="check-title">
+    <h2 id="check-title">Feel checkpoint</h2>
+    <ul class="checklist">
+      <li>Travel speed and easing in each mode, side by side with <a href="./lab.html">the prototype</a>.</li>
+      <li>Icon size and placement: the ball isn't clipped, the boot's sole stays down.</li>
+      <li>Hover timing: the 100 ms colour change and the dimming of the other bars.</li>
+      <li>Off, and reduced motion (DevTools rendering emulation): the icons rest at their end positions.</li>
+      <li>Metric and sort changes: values first, then positions, in Presentation; one quick step in Analysis; a jump in Off. Click again mid-change: nothing jumps. A hovered bar replays its story once the change settles.</li>
+    </ul>
+  </section>
+</main>
+<script type="module" src="./bars.ts"></script>
+</body>
+</html>

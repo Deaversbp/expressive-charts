@@ -96,7 +96,7 @@ registerPreset("nudge", () => myEffect); // then on: { hover: "nudge" } in any c
 registerIcons(myIcons);                  // then travel("my-icon")
 ```
 
-A first, thin bar chart draws horizontal bars or columns, plain or stacked, sized to its container, with theme colours (`--ec-*` custom properties), hover dimming and hover events. Its effect slots take effects or registered presets; `update()` jumps to the new state for now.
+A first, thin bar chart draws horizontal bars or columns, plain or stacked, sized to its container, with theme colours (`--ec-*` custom properties), hover dimming and hover events. Its effect slots take effects or registered presets. `update()` animates the change by the motion mode: in Presentation the values change first (bars resize, the scale follows) and then the rows move to their new places, about half a second each; Analysis does it all at once in about 200 ms; Off jumps. A second `update()` mid-change carries on from where everything is, and hover effects replay once the change settles.
 
 ```js
 import { barChart } from "expressive-charts";
@@ -111,7 +111,7 @@ const chart = barChart("#goals", {
   on: { hover: "nudge" }
 });
 chart.on("hover", (e) => console.log(e.mark.key, e.data.datum));
-chart.update({ stack: ["goals", "assists"] });
+await chart.update({ stack: ["goals", "assists"] }); // resolves once the change has settled
 ```
 
 The first effect carries an icon along a mark: a ball rolling out a bar, around a donut slice or along a line. Combinators put effects together, and a step with nothing to do (a segment the chart isn't showing) finishes at once:

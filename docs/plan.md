@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: proposal, October 2026. M1 steps 1–4 are built (§9); the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: proposal, October 2026. M1 steps 1–5 are built (§9); the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -351,7 +351,7 @@ export type Color = string;  // a theme token ("negative", "series-3", "mark" = 
 export type Matrix = readonly [number, number, number, number, number, number];
 ```
 
-This is the entire surface effects draw through. It's deliberately small and covers all six planned effects. SVG implements it in `src/charts/render/`. An in-memory recording version in `src/core/testing/` lets effects be unit-tested with no DOM at all.
+This is the entire surface effects draw through. It's deliberately small and covers all six planned effects. SVG implements it in `src/charts/render/` (built in M1 step 5, which also settled how an icon's `size` combines with `place()`: see [architecture.md](architecture.md#drawing-api)). An in-memory recording version in `src/core/testing/` lets effects be unit-tested with no DOM at all.
 
 ### 4.3 Lifecycle rules (owned by the runner, not by each effect)
 
@@ -414,6 +414,18 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 ## 5. Chart API
 
 > Updated by the design session: effect slots now live under `on: { … }` and use `NoInfer`, and adapters (`expressive()`) share these events and slots. See [`sketches/api.ts`](sketches/api.ts) and §11.
+>
+> **A thin `barChart` is built in M1 step 5** (`src/charts`); [architecture.md](architecture.md#reference-charts) is now the reference for it. Differences from the sketch below and decisions made there:
+>
+> - `focus()` (step 9), `tooltip` and `table` (M2) aren't built, so `barChart` is still declared in the sketch, extending the built option and chart types.
+> - `update()` jumps to the new state (staged transitions are step 8) and can't change `on` or `motion` yet. It rejects, changing nothing, on data it can't draw.
+> - `sort` defaults to `"none"` (data order). `"key"` sorts keys with numbers in numeric order.
+> - Bars are coloured by series through a `ColorAssignment` (`colorAssignment()` is built). Colouring each category, as the morph example needs, is open until M5.
+> - `motion: "analysis"` is this chart's author default, like `setMode()`: the viewer's choice on the page-wide motion and reduced motion still win.
+> - `dim: false` stops the other marks dimming; the hovered mark still takes its strong colour.
+> - Missing values count as 0; negative bars grow the other way from zero; a stack that mixes signs throws.
+> - A data effect's `needs.related` is checked against the chart's series when it's created and on every update.
+> - Charts get the registries and the page-wide motion from the composition root as a `ChartEnv`, so they import nothing outside core.
 
 ### 5.1 Shared shape
 
@@ -588,6 +600,8 @@ The two built-ins, converted from the prototype:
 
 ### 7.1 Theme tokens
 
+> **Partly built in M1 step 5:** the tokens below are read with the prototype's light palette as fallbacks (eight series slots, the last four provisional), through one injected stylesheet using `:where()`. Dark-mode defaults, `data-theme`, the validated eight colours and the `nonce` option are still to come (M2).
+
 The prefix is `--ec-`. Defaults come from the prototype palette:
 
 | Token | Use |
@@ -661,8 +675,8 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 2. ✅ **Core motion.** Clock, manual clock, easing, tween, `animated`, `createMotion` with the scaling table, reduced motion, viewer choice.
 3. ✅ **Contracts and geometry.** All of §2 and §4.2 as types, with the §11 changes. Line and arc path math with arc-length sampling, `slice`, `sample`, matrices. The public `describe.bar` builder, plus `describe.arc`, `.line` and `.point`. The recording layer. The sketch re-exports all of it from `src`.
 4. ✅ **Runner and registries.** The rules in §4.3, plus the preset and icon registries, `resolveEffects` and the `EffectSlots` types. Manual-clock tests script the races (hover during an update, re-hover mid-run, the mode turning off mid-run).
-5. **A thin `barChart`.** Horizontal and vertical, single and stacked. Keyed marks, measured layout, axis and grid in theme colours, built-in hover dimming, and pointer hover events. For now, `update()` jumps straight to the new state with no transition.
-6. **Icons, `travel` and combinators.** The neutral core icons; the `expressive-charts/icons/sport` pack with `soccer-ball` and `cleat` (this needs a second build entry and a subpath export); `travel` with gaits; `sequence`, `parallel`, `only`. Decide how an icon's `size` combines with `place()`, the open question in the step 3 hand-over.
+5. ✅ **A thin `barChart`.** Horizontal and vertical, single and stacked. Keyed marks, measured layout, axis and grid in theme colours, built-in hover dimming, and pointer hover events. For now, `update()` jumps straight to the new state with no transition.
+6. **Icons, `travel` and combinators.** The neutral core icons; the `expressive-charts/icons/sport` pack with `soccer-ball` and `cleat` (this needs a second build entry and a subpath export); `travel` with gaits; `sequence`, `parallel`, `only`. How an icon's `size` combines with `place()` was settled in step 5: scaled about the anchor, in icon space, before `place()` (see `Layer.icon` in `src/core/contracts/drawing.ts`).
 7. **First look: `demo/bars.html`.** The ball-and-cleat hover on the thin chart, with the motion switch. The metric switch jumps between views for now.
    - **Checkpoint:** judge the feel in a browser in all three modes: travel speed, easing, icon size and placement, hover timing. Tune the scaling table and the `travel` defaults before going on.
 8. **Updates.** `update()` with staged, interruptible transitions (values first, then positions): sorting and the metric switch animate, and hover replays after an update.

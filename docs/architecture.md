@@ -140,7 +140,7 @@ The rest of `src/core/geometry` is internal: path segments (lines and circular a
 
 ## Events and effect slots
 
-Charts and adapters emit `enter`, `update`, `exit`, `hover` and `leave` (planned, M1 step 5), each with the mark's geometry, its data and its position in the batch. An `update` event also carries the previous geometry. Effects attach to events through the `on` option, typed `EffectSlots<D>` (`src/core/contracts/slots.ts`); each slot takes an effect or a preset name:
+Charts and adapters emit `enter`, `update`, `exit`, `hover` and `leave` (the [bar chart](#reference-charts) does; adapters come in M1 step 10), each a `MarkEvent`: the mark's geometry, its data and its position in the batch. An `update` event also carries the previous geometry (`from`), and a `hover` event its `source` (`"pointer"`, `"touch"`, later `"keyboard"`) and the `segment` under the pointer. Data events fire when a change starts, with the new geometry. `chart.on(type, listener)` and the effect slots consume the same events. Effects attach to events through the `on` option, typed `EffectSlots<D>` (`src/core/contracts/slots.ts`); each slot takes an effect or a preset name:
 
 ```ts
 barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("soccer-ball"), update: "flash" } });
@@ -185,13 +185,13 @@ Planned: `travel(icon, { along })`, `wiggle()`, `pulse()`, `flash()`, `threshold
 
 Effects touch the screen only through the context. It's deliberately small and renderer-neutral, so Canvas can implement it later without changing any effect.
 
-- `layer.icon(icon, { size })` draws an icon, hidden until the first `place(transform)`.
-- `layer.path(d, paint)` draws an overlay path; `update(d, paint?)` replaces the path data and merges the paint fields given.
-- `layer.text(content, style)` draws text in the theme text colour by default; `update(style, content?)` merges the style fields given. Series colours are for swatches, never for words.
-- `mark.set(style)` changes only the fields given, so effects running in parallel don't undo each other's transform or halo. A field given as `undefined` goes back to its default. `mark.reset()` restores the mark's own style.
-- Colours are theme tokens (`"text"`, `"negative"`, `"series-3"`, `"mark"` for this mark's colour) or any CSS colour.
+- `layer.icon(icon, { size })` draws an icon, hidden until the first `place(transform)`. **Size rule:** the icon is scaled by `size / icon.size` about its anchor, in icon space, *before* the `place()` transform. So an effect builds the transform as if the icon were its natural size, and the anchor still lands where the transform puts it; icon-space lengths (footprint, radius) scale by the same factor. Each shape is one path; an unset `fill` or `stroke` draws none, `width` is in icon units, and `clip` is path data in icon space.
+- `layer.path(d, paint)` draws an overlay path, unfilled unless `paint.fill` is given; `update(d, paint?)` replaces the path data and merges the paint fields given.
+- `layer.text(content, style)` draws text in the theme text colour by default, with `at` on its baseline; `update(style, content?)` merges the style fields given. Series colours are for swatches, never for words.
+- `mark.set(style)` changes only the fields given, so effects running in parallel don't undo each other's transform or halo. A field given as `undefined` goes back to its default. `mark.reset()` restores the mark's own style. `transform` (chart space) and `opacity` apply to the mark's body, so its labels and pointer target stay put; `emphasis` mixes toward the strong colour; `halo` strokes the outline behind the mark, `width` being the stroke width (half of it shows outside).
+- Colours are theme tokens (`"text"`, `"text-muted"`, `"negative"`, `"series-3"`, `"series-3-strong"`, and `"mark"` / `"mark-strong"` for this mark's colours) or any CSS colour.
 
-The runner empties the layer and resets the mark when a run is cleared, so cleanup happens even if an effect forgets.
+The runner empties the layer and resets the mark when a run is cleared, so cleanup happens even if an effect forgets. The SVG implementation is in `src/charts/render/` (see [Rendering](#rendering)).
 
 ### Testing effects without a DOM
 
@@ -228,7 +228,7 @@ runner.hover([mark]); runner.leave(); runner.destroy();
 
 Each run's `EffectContext` has its own `signal`; the motion view; `tween()` bound to the clock, the motion and the signal (a tween given its own signal is still cancelled with the run); its own `layer` group and `mark` handle; the icon source; `batch`, the mark's position among the marks in that call; and `previous` on update runs. Data effects also get the mark's `MarkData`. On update, `previous` (geometry) and `data.previous` (values) come from the chart, or else from the last geometry and data the runner saw for that key.
 
-The renderer implements `RunnerSurface`: `group(key, slot, order)` returns a new overlay group for one run, asked for on the run's first draw and cleared once when the run is. Groups stack by `order`, the run's start order, rather than by when they were asked for, since a decoration may first draw long after it started. `mark(key)` returns the mark's style handle. `recordingSurface()` in `src/core/testing` is an in-memory one.
+The renderer implements `RunnerSurface`: `group(key, slot, order)` returns a new overlay group for one run, asked for on the run's first draw and cleared once when the run is. Groups stack by `order`, the run's start order, rather than by when they were asked for, since a decoration may first draw long after it started. `mark(key)` returns the mark's style handle. `svgSurface()` in `src/charts/render/` is the SVG one; `recordingSurface()` in `src/core/testing` is an in-memory one.
 
 ## Presets and icons by name
 
@@ -240,6 +240,26 @@ A slot can name a preset instead of holding an effect, `on: { hover: "wiggle" }`
 - Charts call `resolveEffects(on, presets)` when they're created. An unknown preset name throws a `RangeError` that lists the registered names. A transition effect in a mark slot, or a slot that doesn't exist, throws a `TypeError` naming the slot. Misspelled names aren't type errors (custom names are allowed), so this is where they're caught.
 
 Internally both are a `createRegistry({ kind, entries, hint })` (`src/core/registry.ts`) with `get`, `resolve`, `register` and `names`; a `Registry<Icon>` is an `IconSource`.
+
+## Reference charts
+
+Our charts are in `src/charts`. They import only from core, and the composition root (`src/index.ts`) hands each one a `ChartEnv`: the preset and icon registries and the page-wide motion. So a chart never imports an effect or a registry. Every chart has `update(next)`, `on(type, listener)`, `marks()` (in visual order), `element` (the `<svg>`) and `destroy()`.
+
+### Bar chart
+
+```ts
+barChart("#goals", { label: "Goals by player", data: players, y: "name", stack: ["goals"], sort: "value", colors: { goals: 1, assists: 4 }, on: { hover: ballThenCleat } });
+```
+
+- **Encoding.** The axis whose values aren't numbers is the category: `y: "name", x: "goals"` draws horizontal bars, `x: "name", y: "goals"` columns. With `stack`, the one axis given is the category. `orientation` forces it, and is needed when both axes hold numbers. Each value field is a segment named after it (a function's is `"value"`), so a plain bar has one segment, as `describe.bar` gives it (`gap: 2`, `radius: 4`).
+- **Keys** default to the category, are converted with `String()`, and must be unique. `sort` is `"none"` (data order, the default), `"value"` (largest total first), `"key"` (A–Z, numbers in numeric order) or a comparator; sorting never changes a key or a colour.
+- **Values.** Missing values (`null`, `undefined`) count as 0; anything else that isn't a finite number throws. Negative bars grow from zero the other way (baseline `right` or `top`). A stack that mixes signs throws for now.
+- **Data effects** read other series through `data.related(series)`, which on a bar is that series' segment in the same row. The series an effect lists in `needs.related` must be among the chart's (the stacked fields, or the value field), or creating the chart throws and `update()` rejects.
+- **Layout.** The chart measures its container (or takes `width`) and lays out in px; a `ResizeObserver` re-lays it out on the next frame, without animating, calling `change()` for the marks that moved. Horizontal rows are 34 px with 20 px bars, so the height follows the rows unless `height` is given; columns default to 300 px high. Label margins are measured in the chart's own SVG (estimated from the character count where there's no layout, as in jsdom) and measured again once web fonts load.
+- **Hover.** Pointer hover is delegated from the `<svg>`: each mark's whole row (or column) band is its target. A touch tap acts as hover until a tap elsewhere. The hovered mark turns its strong colour and the others dim to `--ec-dim-opacity` (0.3); `dim: false` keeps the others as they are. Both are CSS transitions timed by `--ec-hover-duration`, which the chart sets from `motion.duration(100, "feedback")`, so they're instant when motion is off.
+- **Updates.** `update(next)` merges the options and checks them (if it can't draw the result, it rejects and changes nothing), then jumps to the new state, calling the runner in its order: `interrupt()`, `exit` / `update` / `enter`, `change()` for every mark that moved, `settle()`. An `update` event means the mark's values changed; a re-sort or a new scale only moves it. Leaving marks stay, unhoverable, until their exit effects finish; one that comes back meanwhile keeps its element. The promise resolves when the leaving marks are gone. `on` and `motion` can't be changed by `update()` yet. Staged transitions come in M1 step 8.
+- **Colours** follow the series through a `ColorAssignment`: `colorAssignment(fixed?)` gives each key a palette slot (1–8), pinned or the next free one in the order keys are first seen, and never reassigns it. `colors` takes pinned slots or a shared assignment.
+- **Motion.** `motion` takes a `Motion`, or a mode as this chart's author default: the viewer's choice on the page-wide motion and the device's reduced-motion setting still win, as they do over `setMode()`.
 
 ## Adapters (planned)
 
@@ -268,7 +288,11 @@ Adapters follow the chart rules:
 
 ## Rendering
 
-SVG first. Canvas or WebGL rendering is a later option for charts with thousands of marks; effects describe what to draw, so they should not need to change when a renderer is added.
+SVG first, in `src/charts/render/`. Canvas or WebGL rendering is a later option for charts with thousands of marks; effects describe what to draw, so they should not need to change when a renderer is added.
+
+- **Structure.** A chart's `<svg class="ec-chart">` holds the grid, the axis, the marks and, last, the overlay where runs draw (one `<g class="ec-run">` per run, stacked by start order, with `--ec-mark` set to the mark's colour, and set again when that colour changes). Each mark is a `<g class="ec-mark" data-key>` with its pointer target, label, body (the segments, which effects restyle) and value label. DOM order follows visual order.
+- **Theme.** Colours are `--ec-*` custom properties with the prototype's light palette as fallbacks: `--ec-text`, `--ec-text-muted`, `--ec-surface`, `--ec-grid`, `--ec-axis`, `--ec-focus`, `--ec-negative`, `--ec-series-1` … `--ec-series-8` with `-strong` variants, `--ec-dim-opacity` and `--ec-hover-duration`. Text uses the text tokens, never a series colour. Dark-mode defaults and the eight validated colours come in M2.
+- **Styles.** One small stylesheet is injected once per document (`<style data-expressive-charts>`). Its rules use `:where()`, so host CSS overrides them without specificity fights. Everything else is set through the CSSOM, which a strict CSP allows; a `nonce` option or a shipped CSS file for strict-CSP pages is still open (plan §10).
 
 ## Build outputs
 

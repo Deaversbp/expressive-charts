@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry and the effect runner are built ([below](#available-now-the-motion-core-and-mark-geometry)). Charts and effects are next, so the chart API under "Design target" isn't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner and a first bar chart are built ([below](#available-now-the-motion-core-mark-geometry-and-a-bar-chart)). The built-in effects are next, so the effects under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -54,7 +54,7 @@ barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue"
 
 More examples, all type-checked against the proposed API, are in [docs/sketches](docs/sketches/).
 
-## Available now: the motion core and mark geometry
+## Available now: the motion core, mark geometry and a bar chart
 
 The first layer is built: the shared animation clock, tweens, retargetable values and motion modes that charts and effects will run on, plus the shared mark description they meet through.
 
@@ -96,7 +96,25 @@ registerPreset("nudge", () => myEffect); // then on: { hover: "nudge" } in any c
 registerIcons(myIcons);                  // then travel("my-icon")
 ```
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, and [Runner](docs/architecture.md#runner) for how effects are played on marks.
+A first, thin bar chart draws horizontal bars or columns, plain or stacked, sized to its container, with theme colours (`--ec-*` custom properties), hover dimming and hover events. Its effect slots take your own effects or registered presets; `update()` jumps to the new state for now.
+
+```js
+import { barChart } from "expressive-charts";
+
+const chart = barChart("#goals", {
+  label: "Goals by player",            // the accessible name, required
+  data: players,
+  y: "name",                           // not numbers, so it's the category
+  stack: ["goals"],
+  sort: "value",
+  colors: { goals: 1, assists: 4 },    // palette slots that follow the series, never the rank
+  on: { hover: "nudge" }
+});
+chart.on("hover", (e) => console.log(e.mark.key, e.data.datum));
+chart.update({ stack: ["goals", "assists"] });
+```
+
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Runner](docs/architecture.md#runner) for how effects are played on marks, and [Reference charts](docs/architecture.md#reference-charts) for the bar chart.
 
 ## Demo
 

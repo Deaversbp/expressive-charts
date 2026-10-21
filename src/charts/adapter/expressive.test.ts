@@ -253,6 +253,30 @@ describe("expressive: keys and segments", () => {
     const apart = setup<Slice>(draw(slices.map((d) => (d.outcome === "Saved" ? { ...d, cx: 0.6 } : d))), options);
     expect(apart.fx.marks().map((m) => m.key)).toEqual(["Blocked", "Goal", "Saved", "Off target"]);
   });
+
+  it("keeps lines that start at one point in document order: they share a pivot but don't go round it", () => {
+    // Cumulative goals and xG both start at 0 in week 1, so both lines' pivot, their first point, is (0, 100).
+    const series: Record<string, { x: number; y: number }[]> = {
+      goals: [
+        { x: 0, y: 100 },
+        { x: 50, y: 90 },
+        { x: 100, y: 10 }
+      ],
+      xG: [
+        { x: 0, y: 100 },
+        { x: 50, y: 20 },
+        { x: 100, y: 80 }
+      ]
+    };
+    const host = d3Stack();
+    const traces = Object.keys(series).map((name) => Object.assign(el("path", { d: "M0,0L1,1" }, host.plot), { __data__: { name } }));
+    const { fx } = setup<{ name: string }>(traces, { key: (d) => d.name, keyboard: true, geometry: (_el, d, k) => build.line({ key: k, points: series[d.name]! }) });
+    expect(fx.marks().map((m) => [m.key, m.pivot])).toEqual([
+      ["goals", { x: 0, y: 100 }],
+      ["xG", { x: 0, y: 100 }]
+    ]);
+    expect(traces.map((trace) => trace.getAttribute("tabindex"))).toEqual(["0", "-1"]);
+  });
 });
 
 describe("expressive: baseline", () => {

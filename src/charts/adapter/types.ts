@@ -89,9 +89,10 @@ export interface Attachment<D> {
   on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void;
   /**
    * The marks now attached, in visual order (leaving marks excluded): bars top to bottom and columns
-   * left to right. Marks described with `geometry` that share one pivot (a pie's slices, each pivot
-   * within 0.5 px of the first) go clockwise from 12 o'clock, by the angle of each mark's `center`
-   * about it; other `geometry` marks keep document order.
+   * left to right. Marks described with `geometry` that go round one pivot (a pie's slices: each
+   * pivot within 0.5 px of the first, and each mark's `start`, `center` and `end` the same distance
+   * from it, more than 0.5 px away) go clockwise from 12 o'clock, by the angle of each mark's
+   * `center` about it. Other `geometry` marks keep document order, lines that start at one point too.
    */
   marks(): readonly MarkGeometry[];
   /** With `keyboard: true`, moves focus to the mark, which plays its hover effects. Does nothing for an unknown key. */

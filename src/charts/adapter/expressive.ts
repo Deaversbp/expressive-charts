@@ -8,7 +8,7 @@
 // ancestor's transform but sits on the root, because some hosts (Vega) remove foreign children from
 // their own groups when they redraw. See docs/ideas/adapter-spike.md.
 
-import type { MarkData, MarkGeometry, Matrix } from "../../core";
+import type { MarkData, MarkGeometry, Matrix, Point } from "../../core";
 import { defaultClock } from "../../core";
 import { invert } from "../../core/geometry";
 import { resolveEffects } from "../../core/registry";
@@ -623,14 +623,14 @@ function markData<D>(parts: readonly Part<D>[]): MarkData<D> {
 }
 
 /**
- * The visual order of marks described with `geometry`. Around one pivot (a pie's slices) it's
- * clockwise from 12 o'clock, by the angle of each mark's centre about the pivot, as a ring is read:
- * d3.pie() sorts slices by value but returns them in data order, so document order jumps around the
- * ring. Otherwise, or if any pivot is more than 0.5 px from the first, it's document order.
+ * The visual order of marks described with `geometry`. Marks that go round one pivot (a pie's
+ * slices) are ordered clockwise from 12 o'clock, by the angle of each mark's centre about the pivot,
+ * as a ring is read: d3.pie() sorts slices by value but returns them in data order, so document
+ * order jumps around the ring. Otherwise it's document order.
  */
 function ringOrder<D>(marks: readonly ReadMark<D>[]): readonly ReadMark<D>[] {
   const pivot = marks[0]?.geometry.pivot;
-  if (!pivot || marks.some(({ geometry }) => Math.hypot(geometry.pivot.x - pivot.x, geometry.pivot.y - pivot.y) > 0.5)) return marks;
+  if (!pivot || !marks.every(({ geometry }) => distance(geometry.pivot, pivot) <= 0.5 && goesRound(geometry))) return marks;
   const TURN = 2 * Math.PI;
   const clockwise = ({ geometry: { center } }: ReadMark<D>): number => {
     // In [0, 2π): 0 straight up (y points down), turning towards +x.
@@ -643,6 +643,20 @@ function ringOrder<D>(marks: readonly ReadMark<D>[]): readonly ReadMark<D>[] {
     .map((mark) => ({ mark, angle: clockwise(mark) }))
     .sort((a, b) => a.angle - b.angle)
     .map(({ mark }) => mark);
+}
+
+/**
+ * Whether the mark's walk goes round its pivot: its start, centre and end all the same distance from
+ * the pivot, give or take 0.5 px, and more than 0.5 px away. An arc's pivot is the donut's centre; a
+ * line's, a bar's and a point's is on its own walk, so lines that start at one point aren't a ring.
+ */
+function goesRound(mark: MarkGeometry): boolean {
+  const radius = distance(mark.start, mark.pivot);
+  return radius > 0.5 && Math.abs(distance(mark.center, mark.pivot) - radius) <= 0.5 && Math.abs(distance(mark.end, mark.pivot) - radius) <= 0.5;
+}
+
+function distance(a: Point, b: Point): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 /** For a mark described with `geometry`: the part's own segment, or the whole mark for a lone part. */

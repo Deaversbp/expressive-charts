@@ -1,7 +1,8 @@
 // expressive(): effects on SVG marks drawn by other code (M1 step 10, for rects). It reads keys, rows
 // and geometry from the host's elements, plays the effect slots through the runner on an overlay at
-// the end of the root <svg>, and listens for pointer and keyboard events once, on that <svg>. Like the
-// charts it never names an effect, and destroy() leaves the host's DOM as it found it.
+// the end of the root <svg>, and listens for pointer and keyboard events once, on that <svg> (focus on
+// its document or shadow root). Like the charts it never names an effect, and destroy() leaves the
+// host's DOM as it found it.
 //
 // Geometry is in the marks' nearest common ancestor's coordinates. The overlay carries that
 // ancestor's transform but sits on the root, because some hosts (Vega) remove foreign children from
@@ -213,6 +214,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   /** Whether the last input was a key (or there's been none), as :focus-visible decides. */
   let keyboardInput = true;
   let interaction: PointerHover | undefined;
+  /** Where focus events are heard: the document or shadow root the root <svg> is in. */
+  let scope: Document | ShadowRoot | undefined;
   let destroyed = false;
 
   const make = <K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<string, string>, parent?: Element): SVGElementTagNameMap[K] => {
@@ -338,8 +341,11 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     if (keyboard) {
       root.ownerDocument.addEventListener("keydown", onAnyKey, true);
       root.ownerDocument.addEventListener("pointerdown", onAnyPointer, true);
-      root.addEventListener("focusin", onFocusIn);
-      root.addEventListener("focusout", onFocusOut);
+      // Not on the <svg>: Chrome makes an SVG element with focus listeners of its own a tab stop.
+      const node = root.getRootNode();
+      scope = "host" in node ? (node as ShadowRoot) : root.ownerDocument;
+      scope.addEventListener("focusin", onFocusIn as EventListener, true);
+      scope.addEventListener("focusout", onFocusOut as EventListener, true);
       root.addEventListener("keydown", onKeyDown);
     }
   }
@@ -352,8 +358,9 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     interaction = undefined;
     root.ownerDocument.removeEventListener("keydown", onAnyKey, true);
     root.ownerDocument.removeEventListener("pointerdown", onAnyPointer, true);
-    root.removeEventListener("focusin", onFocusIn);
-    root.removeEventListener("focusout", onFocusOut);
+    scope?.removeEventListener("focusin", onFocusIn as EventListener, true);
+    scope?.removeEventListener("focusout", onFocusOut as EventListener, true);
+    scope = undefined;
     root.removeEventListener("keydown", onKeyDown);
   }
 

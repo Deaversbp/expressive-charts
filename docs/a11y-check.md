@@ -1,6 +1,10 @@
 # Screen-reader check: `barChart` (M2 step 5)
 
-This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match. Step 5 isn't done until this passes.
+This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
+
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results).
+
+A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to send back.
 
 ## What's being tested
 
@@ -33,7 +37,12 @@ Role words and their order vary between versions and verbosity settings: "graphi
 
 ## A. NVDA + Chrome (Windows)
 
-Start in browse mode, NVDA's default.
+Before you start:
+- Install NVDA (free, from nvaccess.org) and start it from the Start menu or with Ctrl+Alt+N. It says "NVDA started", and its icon appears in the taskbar's hidden icons (the ^ arrow). If Space scrolls the page in step 3, NVDA isn't running.
+- **The NVDA key** is Insert. On a keyboard without an easy Insert key, tick "Use Caps Lock as an NVDA modifier key" in the Welcome dialog (or later in NVDA's Settings > Keyboard), so NVDA+Space becomes Caps Lock+Space.
+- Right-click NVDA's icon and choose Tools > Speech Viewer to see what it says as text.
+
+Start in browse mode, NVDA's default. NVDA+Space switches between browse mode and focus mode, and NVDA says which one you're in. Letter keys such as T only jump around in browse mode.
 
 | # | Do | Expect to hear (roughly) | What you heard |
 | --- | --- | --- | --- |
@@ -47,7 +56,7 @@ Start in browse mode, NVDA's default.
 | 8 | Tab once, to "Play next matchweek". Press Space. | "Play next matchweek, button", then "Matchweek 25: Lindqvist and Okafor changed". | |
 | 9 | Tab once, into the chart. Then Up arrow 3 times (browse mode). | "Okafor: 17 goals, 4 assists, graphic". Then the bars above it in A–Z order, ending "graphic, Lindqvist: 11 goals, 8 assists". | |
 | 10 | Tab once, to "Data table". Press Space. | "Data table, button, collapsed", then "expanded". | |
-| 11 | Press T (next table). | "Harbor City FC: goals and assists by player, table with 9 rows and 5 columns", then "row 1, column 1, Player". | |
+| 11 | Press T (next table). If nothing happens, you're in focus mode: press NVDA+Space until NVDA says "Browse mode", then T. | "Harbor City FC: goals and assists by player, table with 9 rows and 5 columns", then "row 1, column 1, Player". | |
 | 12 | Ctrl+Alt+Down, then Ctrl+Alt+Right 4 times. | "row 2, Adeyemi". Then "Position, column 2, Midfielder", "goals, column 3, 4", "assists, column 4, 6", "Total, column 5, 10". | |
 | 13 | Ctrl+Alt+Down. | "Castillo, row 3, 6": the row header with the new row. | |
 
@@ -75,7 +84,14 @@ VO means Control+Option.
 | 11 | VO+Down, then VO+Right 4 times. | "Adeyemi, row 2". Then each cell with its column header: "Midfielder, Position", "4, goals", "6, assists", "10, Total". | |
 | 12 | VO+Down. | "6, Castillo", or the row header and value in some order. | |
 
-## Your results
+## Results
+
+**NVDA + Chrome on Windows 11, 21 October 2026: passed.** Steps 1–13 read as expected, with the default settings, so every "Listen for" item passed. The roles (`group` on the `<svg>`, `img` on each bar), the table and the announcements stay as built. Versions weren't noted.
+- The one hitch was the tester's, not the page's. In step 11, T did nothing because NVDA was still in focus mode; after NVDA+Space back to browse mode, it found the table. Step 11 now says so.
+
+**VoiceOver + Safari:** not run yet. It needs a Mac.
+
+Template for the next run:
 
 - Screen readers and versions (e.g. NVDA 2025.3, Chrome 141; macOS 26, Safari 26):
 - Any settings changed from the defaults (verbosity, punctuation, table reading):

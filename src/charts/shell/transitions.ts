@@ -1,7 +1,8 @@
 // A chart's transitions: one in flight at a time, drawn every frame until its tweens settle, then landed
-// exactly on the layout. And an update's change, played through the runner in the order it expects.
+// exactly on the layout. An update's change, played through the runner in the order it expects. And
+// the small tests a chart's retarget makes: whether a value still has to move, whether a mark moved.
 
-import type { Clock, MarkGeometry } from "../../core";
+import type { Animated, Clock, MarkGeometry } from "../../core";
 import type { RunInput, Runner } from "../../core/runner";
 import type { ChartEvents } from "./events";
 import type { ChartHover } from "./hover";
@@ -138,4 +139,25 @@ export function playUpdate<D, R extends LeavingMark>(
   // hover the runner holds until the change settles.
   options.hover.sync();
   return leaves;
+}
+
+/** Still animating, or resting somewhere else than `to`. */
+export function busy<T>(value: Animated<T>, to: T, equal: (a: T, b: T) => boolean): boolean {
+  return value.animating || !equal(value.value, to);
+}
+
+export const same = (a: number, b: number): boolean => a === b;
+
+/** The same fields with the same values. */
+export function sameFields<T extends object>(a: T, b: T): boolean {
+  const keys = Object.keys(a) as (keyof T)[];
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
+}
+
+/** Whether a mark looks different: its outline, or its segments. Its runs hear about it through change(). */
+export function geometryChanged(from: MarkGeometry, to: MarkGeometry): boolean {
+  if (from.outline.d !== to.outline.d) return true;
+  const a = from.segments ?? [];
+  const b = to.segments ?? [];
+  return a.length !== b.length || a.some((segment, i) => segment.key !== b[i]!.key || segment.outline.d !== b[i]!.outline.d);
 }

@@ -32,6 +32,11 @@ export function setStyles(element: SVGElement, styles: Readonly<Record<string, s
   }
 }
 
+/** A chart's <svg> size and viewBox, in px. */
+export function sizeAttributes({ width, height }: { readonly width: number; readonly height: number }): Record<string, string | number> {
+  return { width, height, viewBox: `0 0 ${formatNumber(width)} ${formatNumber(height)}` };
+}
+
 /**
  * A Matrix as an SVG transform attribute. The linear part keeps 6 decimals, so a small rotation of a
  * long bar stays exact at its far end; the translation is rounded to 0.001 px like path data.

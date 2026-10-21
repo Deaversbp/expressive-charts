@@ -705,11 +705,18 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 10. ✅ **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`.
     - **Read first:** [ideas/adapter-spike.md](ideas/adapter-spike.md), which tested what D3, Plot and Vega expose on their SVG elements. Build to its recommendation 1: the overlay on the root `<svg>`, events delegated from the root, and `tabindex` re-applied on every `refresh()`.
     - **Built** in `src/charts/adapter/` to that recommendation (see [architecture.md](architecture.md#adapters)). Beyond the plan: `baseline: "auto"` also finds negative bars; keyboard focus draws a ring from the mark's outline and survives a host replacing the focused element; and `destroy()` restores every attribute, style and class it touched. Tested in jsdom on hand-built D3-style SVG, including the ball-and-cleat story. Still to come: `samples` and `watch` (M4), circles and `describe.shape`, and the Vega helper (M3).
-11. **Finish `demo/bars.html`.** Animated metric switch and sort, keyboard support, and the same hover story on a hand-written SVG bar chart beside the reference one.
+11. ✅ **Finish `demo/bars.html`.** Animated metric switch and sort, keyboard support, and the same hover story on a hand-written SVG bar chart beside the reference one.
+    - The hand-written chart (`demo/host-chart.ts`) is drawn the way D3 code would draw it: a translated plot group, one `<g>` per series, each rect's row on `__data__`. It redraws from scratch on every change, and `refresh()` follows. The shared controls drive both charts.
+    - `src/conformance.test.ts` runs the §8 conformance checks for `travel` on real bar marks from both sources, `barChart` and `expressive()`.
 
 Steps 5–7 come first so the motion can be judged in a browser before staged updates, keyboard support and the adapter are built around it.
 
 **Done when:** all three hover stories match the prototype, on our chart and on the hand-written one; sorting is staged in presentation, fast in analysis, and instant in off and under reduced motion; keyboard focus plays the same stories; and the conformance suite passes for `travel` on bar marks from both sources.
+
+**Status after step 11 (October 2026):**
+- **Met:** the hover stories on both charts, checked in a browser; staging order in Presentation; Off showing end states; keyboard focus playing the stories on the hand-written chart; and the conformance suite on both sources.
+- **Still open:** keyboard focus on the reference chart, which is step 9, in progress.
+- **Not checked in a browser:** reduced motion, because the browser pane can't emulate `prefers-reduced-motion`. It's covered by the motion core's tests and by Off, which takes the same path. The smoothness of staged transitions also needs a visible pane, since a hidden one throttles frames.
 
 ### M2: Bars at prototype parity
 

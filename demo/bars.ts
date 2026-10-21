@@ -1,6 +1,8 @@
-// M1 steps 7 and 8: the prototype's ball-and-cleat card on the real library, with staged updates.
-import { barChart, motion, sequence, travel, type MotionMode } from "../src/index";
+// M1: the prototype's ball-and-cleat card on the real library (steps 7 and 8), and the same story on a
+// hand-written SVG chart through expressive() (step 11).
+import { barChart, expressive, motion, sequence, travel, type MotionMode } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
+import { drawHostChart, type DrawOptions, type Segment } from "./host-chart";
 
 interface Player {
   name: string;
@@ -35,7 +37,9 @@ const titles: Record<Metric, string> = {
   ga: "Harbor City FC: goals and assists by player"
 };
 
-// One story for all three views: a segment that isn't in the stack makes its step a no-op.
+// One story for all three views and both charts: a segment that isn't in the stack makes its step a no-op.
+const ballThenCleat = sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" }));
+
 const chart = barChart<Player>("#chart", {
   label: titles.goals,
   data: players,
@@ -43,10 +47,25 @@ const chart = barChart<Player>("#chart", {
   stack: stacks.goals,
   sort: "value",
   colors: { goals: 1, assists: 4 },
-  on: {
-    hover: sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" }))
-  }
+  on: { hover: ballThenCleat }
 });
+
+// The hand-written chart redraws itself from scratch; refresh() tells the effects about the new marks.
+const hostSvg = document.querySelector<SVGSVGElement>("#host-chart");
+let hostState: DrawOptions = { series: stacks.goals, sort: "value" };
+const drawHost = (): SVGRectElement[] => (hostSvg ? drawHostChart(hostSvg, players, hostState) : []);
+const host = expressive<Segment>(drawHost(), {
+  key: (d) => d.row.name, // a player's goals rect and assists rect share a key...
+  segment: (d) => d.series, // ...and become that player's two segments, ordered from the baseline
+  keyboard: true,
+  dim: true,
+  on: { hover: ballThenCleat }
+});
+function updateHost(next: Partial<DrawOptions>): void {
+  hostState = { ...hostState, ...next };
+  host.refresh(drawHost());
+}
+window.addEventListener("resize", () => updateHost({}));
 
 /** Wires a row of toggle buttons; returns a function that shows a value as selected. */
 function segmented(id: string, onPick: (value: string) => void): (value: string) => void {
@@ -65,13 +84,20 @@ function segmented(id: string, onPick: (value: string) => void): (value: string)
   return show;
 }
 
+// The metric and sort controls drive both charts.
 const heading = document.getElementById("chart-title");
 segmented("metric", (value) => {
   const metric = value as Metric;
   if (heading) heading.textContent = titles[metric];
   void chart.update({ stack: stacks[metric], label: titles[metric] });
+  hostSvg?.setAttribute("aria-label", titles[metric]);
+  updateHost({ series: stacks[metric] });
 });
-segmented("sort", (value) => void chart.update({ sort: value as "value" | "key" }));
+segmented("sort", (value) => {
+  const sort = value as "value" | "key";
+  void chart.update({ sort });
+  updateHost({ sort });
+});
 
 // The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.
 const hints: Record<MotionMode, string> = {

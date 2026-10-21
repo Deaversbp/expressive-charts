@@ -8,6 +8,8 @@ import { iconRegistry, presetRegistry } from "./registries";
 export const VERSION = "0.0.0";
 
 export * from "./core";
+export * from "./effects";
+export * from "./icons";
 export { registerIcon, registerIcons, registerPreset } from "./registries";
 export { colorAssignment } from "./charts";
 export type { Accessor, BarChart, BarChartOptions, Chart, ChartOptions, ColorAssignment, KeyOfType, MarkEvent, MarkEvents, NumericKey } from "./charts";

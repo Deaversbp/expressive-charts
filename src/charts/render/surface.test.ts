@@ -1,4 +1,4 @@
-import { matrix, type Icon, type MarkHandle } from "../../core";
+import { matrix, type Icon, type IconShape, type MarkHandle } from "../../core";
 import { svgSurface } from "./surface";
 import { svgElement } from "./svg";
 import { seriesColors } from "./theme";
@@ -154,7 +154,7 @@ describe("svgLayer icons", () => {
 
   it("passes a shape's linecap and linejoin through", () => {
     const { overlay, surface } = setup();
-    const laces = { d: "M7,-3L12,-9.5", stroke: "#ffffff", width: 1.4, linecap: "round", linejoin: "round" };
+    const laces: IconShape = { d: "M7,-3L12,-9.5", stroke: "#ffffff", width: 1.4, linecap: "round", linejoin: "round" };
     surface.group("a", "hover", 1).icon({ ...boot, shapes: [laces] });
     const path = overlay.querySelector(".ec-icon path") as SVGPathElement;
     expect(path.getAttribute("stroke-linecap")).toBe("round");

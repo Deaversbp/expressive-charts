@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: proposal, October 2026. M1 steps 1–5 are built (§9); the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: proposal, October 2026. M1 steps 1–6 are built (§9); the sections they cover say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -279,7 +279,7 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 
 > Updated by the design session: `ctx.previous`, `data.previous`, `Layer.text()` and the author helpers are in [`sketches/api.ts`](sketches/api.ts) (§11).
 >
-> **The contracts in §4.1 and §4.2 are built in M1 step 3** (`src/core/contracts/`), along with `matrix`, `offset` and the recording layer in `src/core/testing/`. [architecture.md](architecture.md#effects) is now the reference. Additions: `AnyMarkEffect` is exported for combinator signatures; the icon resolver is named `IconSource`; `mark.set()` merges the fields given (undefined resets one), so parallel effects don't undo each other; an icon is hidden until first placed; `matrix.apply(m, point)`; and `testContext()`, a ready-made `EffectContext` on a manual clock. The runner (§4.3) is built in M1 step 4; combinators and effects are still to come.
+> **The contracts in §4.1 and §4.2 are built in M1 step 3** (`src/core/contracts/`), along with `matrix`, `offset` and the recording layer in `src/core/testing/`. [architecture.md](architecture.md#effects) is now the reference. Additions: `AnyMarkEffect` is exported for combinator signatures; the icon resolver is named `IconSource`; `mark.set()` merges the fields given (undefined resets one), so parallel effects don't undo each other; an icon is hidden until first placed; `matrix.apply(m, point)`; and `testContext()`, a ready-made `EffectContext` on a manual clock. The runner (§4.3) is built in M1 step 4. `travel` with its gaits and the combinators `sequence`, `parallel` and `only` are built in M1 step 6 (§4.4–§4.6); the other effects and `stagger` are still to come.
 
 ### 4.1 Interfaces
 
@@ -377,6 +377,8 @@ This is the entire surface effects draw through. It's deliberately small and cov
 
 ### 4.4 Combinators
 
+> **Built in M1 step 6** (`sequence`, `parallel`, `only`, in `src/effects/combinators.ts`); `stagger` comes in M3. [architecture.md](architecture.md#combinators) is now the reference. Additions: the parts share the run's context; `clear()` clears every part and passes on the first error after all have run; `parallel` rejects with the first part that rejects; a data combination's `needs.related` lists every part's; `only` matches a mark's key or series and keeps the effect's kind and `needs`; a part that isn't a mark effect throws a `TypeError`.
+
 ```ts
 sequence(...effects)            // run in order; abort stops the chain; end() = every child's end() in order
 parallel(...effects)            // run together; resolves when all finish
@@ -401,6 +403,18 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 | `morph({ points = 160 })` | transition | Interpolates `outline.sample(n)` side by side between two geometries. | The target outline. |
 
 ### 4.6 Travel options
+
+> **Built in M1 step 6** (`src/effects/travel.ts`, `src/effects/gaits.ts`). [architecture.md](architecture.md#travel) is now the reference. Decisions and additions:
+>
+> - **Icon size and `place()`.** The drawing layer scales an icon by `size / icon.size` about its anchor, then applies `place()`, so travel builds `place()` for the icon's natural size and rotates about the pivot as the scale moves it. Icon units are px at the natural size.
+> - **Duration** is measured on the distance the icon actually travels (the walk minus the footprint), as the prototype does, times the gait's `pace`.
+> - **Gaits** can carry their own `ease` and `pace`: `step` eases in and out and takes 15% longer, as the prototype's cleat does. `GaitState` gives distances in the icon's own units and its rolling `radius` (instead of the sketch's `size`), so a gait looks the same at any size. The pose's `spin` and `tilt` are radians; `step`'s `tilt` option is degrees.
+> - **`along`** also matches a mark with no segments whose series is the name (a line series).
+> - **Too short.** On a walk shorter than the footprint, the icon rests at the inset start; on one shorter than the inset itself, it carries on past the end along the end's heading, as the prototype's ball sits clear of the baseline.
+> - **`"fit"`** scales the icon so its box is 85% of the thickness *across* the walk, so a long icon (the cleat) isn't shrunk to fit its length into the bar's height.
+> - **`ride: "on"`** offsets by half the thickness plus the anchor's height above the icon's bottom, towards the icon's own up side (after mirroring).
+> - **`orient: "auto"`** decides mirroring on every frame from the smoothed heading. **Smoothing** uses the chord across half the icon's length either side, which is exact on straight legs and arcs.
+> - **Geometry changes.** The icon follows `onChange` at its current progress, so a resize keeps a resting ball at the bar's end.
 
 - **`gait`** controls how the icon moves: `roll` (spin = distance ÷ radius, about the icon's pivot), `step({ stride: 42, lift: 3.2, tilt: 9 })` (the prototype's cleat), or `slide`. Gaits are small functions in `src/effects/gaits.ts`, chosen by `options.gait`, then the icon's default, then `slide`. Gaits never name icons, and icons never name effects.
 - **`size`** is a number in px, `"fit"` (85% of `thickness`), or by default the icon's own size.
@@ -563,6 +577,8 @@ view.show("bars");
 ## 6. Icons
 
 > Updated by the design session: the core ships neutral icons (`dot`, `arrow`, `chevron`); the ball and cleat move to `expressive-charts/icons/sport`.
+>
+> **Built in M1 step 6** (`src/icons/`, `src/icons/sport/`). [architecture.md](architecture.md#icons) is now the reference. Additions: shapes are in px at the icon's natural size (`size` defaults to the box's width); `IconShape` gains `linecap` and `linejoin` (the cleat needs them), and an unset fill or stroke draws none; `defineIcon` also defaults `radius` and freezes the icon; `iconFromSvg` applies transforms, inherits paint from groups and `style`, rewrites path data from its numbers, keeps only plain colours, and scales the icon to `size` (its spec is in the SVG's units). The core icons are drawn in theme colours. The cleat's box is (0, −14.5, 26, 17.5) with `size` 26. The sport pack is a second build entry and a package `exports` entry; the script-tag bundle doesn't include it.
 
 ```ts
 // src/core/contracts/icon.ts
@@ -676,7 +692,7 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
 3. ✅ **Contracts and geometry.** All of §2 and §4.2 as types, with the §11 changes. Line and arc path math with arc-length sampling, `slice`, `sample`, matrices. The public `describe.bar` builder, plus `describe.arc`, `.line` and `.point`. The recording layer. The sketch re-exports all of it from `src`.
 4. ✅ **Runner and registries.** The rules in §4.3, plus the preset and icon registries, `resolveEffects` and the `EffectSlots` types. Manual-clock tests script the races (hover during an update, re-hover mid-run, the mode turning off mid-run).
 5. ✅ **A thin `barChart`.** Horizontal and vertical, single and stacked. Keyed marks, measured layout, axis and grid in theme colours, built-in hover dimming, and pointer hover events. For now, `update()` jumps straight to the new state with no transition.
-6. **Icons, `travel` and combinators.** The neutral core icons; the `expressive-charts/icons/sport` pack with `soccer-ball` and `cleat` (this needs a second build entry and a subpath export); `travel` with gaits; `sequence`, `parallel`, `only`. How an icon's `size` combines with `place()` was settled in step 5: scaled about the anchor, in icon space, before `place()` (see `Layer.icon` in `src/core/contracts/drawing.ts`).
+6. ✅ **Icons, `travel` and combinators.** The neutral core icons; the `expressive-charts/icons/sport` pack with `soccer-ball` and `cleat` (a second build entry and a subpath export); `travel` with gaits; `sequence`, `parallel`, `only`. An icon's `size` scales it about its anchor, in icon space, before `place()` (settled with step 5: see `Layer.icon` in `src/core/contracts/drawing.ts`, and §4.6). Tested with the manual clock and the recording layer: the ball-and-cleat story in all three views, and the §8 conformance checks on bars, a slice, a line and a point.
 7. **First look: `demo/bars.html`.** The ball-and-cleat hover on the thin chart, with the motion switch. The metric switch jumps between views for now.
    - **Checkpoint:** judge the feel in a browser in all three modes: travel speed, easing, icon size and placement, hover timing. Tune the scaling table and the `travel` defaults before going on.
 8. **Updates.** `update()` with staged, interruptible transitions (values first, then positions): sorting and the metric switch animate, and hover replays after an update.

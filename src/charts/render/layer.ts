@@ -63,11 +63,8 @@ export function svgLayer(group: SVGGElement): Layer {
   };
 }
 
-/** IconShape gains linecap and linejoin in M1 step 6; until both steps land, they're read through this type. */
-type Shape = IconShape & { readonly linecap?: "butt" | "round"; readonly linejoin?: "miter" | "round" };
-
 /** One path per shape. Unset fill or stroke draws none; the width is in icon units, so it scales with the icon. */
-function drawShape(shape: Shape, parent: SVGGElement): void {
+function drawShape(shape: IconShape, parent: SVGGElement): void {
   let clip: string | undefined;
   if (shape.clip !== undefined) {
     // userSpaceOnUse (the default) puts the clip path in the shape's own space: icon space.

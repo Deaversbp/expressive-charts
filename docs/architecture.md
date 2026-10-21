@@ -16,7 +16,7 @@ This document describes the design. Code that doesn't exist yet is marked as pla
  └─────────────┘   └─────────────┘
 ```
 
-Charts and effects both depend on core. They never depend on each other. They meet only through two shared contracts: the **mark geometry** and the **event stream**. Because charts and effects can't import each other, the types for both contracts live in core (`src/core/contracts/`), and so does the geometry math that charts use to build marks and effects use to draw (`src/core/geometry/`).
+Charts and effects both depend on core. They never depend on each other. Icons (`src/icons`) depend only on core too, and effects never import them: they look icons up by name through the run's context. They meet only through two shared contracts: the **mark geometry** and the **event stream**. Because charts and effects can't import each other, the types for both contracts live in core (`src/core/contracts/`), and so does the geometry math that charts use to build marks and effects use to draw (`src/core/geometry/`).
 
 ## Core
 
@@ -156,7 +156,7 @@ barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("so
 
 ## Effects
 
-The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The first effects follow in M1 step 6.
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The first effect, [`travel`](#travel), and the combinators `sequence`, `parallel` and `only` are in `src/effects/`.
 
 There are three kinds, distinguished by a `kind` field:
 
@@ -177,9 +177,41 @@ Each one has `run`, `end` (the final state, used for reduced motion) and `clear`
 | `onChange()` | Called when the geometry moves |
 | `previous` | The geometry before this update, on update events |
 
-`Combined<E>` is the type `sequence` and `parallel` return: a data effect if any part is one, needing every part's row type at once (an intersection), so a generic part like `threshold()` can't widen a typed part back to `unknown`.
+Planned: `wiggle()`, `pulse()`, `flash()`, `threshold({ compareTo, color })`, `morph()`; the combinator `stagger`; and the experimental author helpers `defineEffect` and `defineDataEffect`.
 
-Planned: `travel(icon, { along })`, `wiggle()`, `pulse()`, `flash()`, `threshold({ compareTo, color })`, `morph()`; the combinators `sequence`, `parallel`, `stagger` and `only`; and the experimental author helpers `defineEffect` and `defineDataEffect`.
+### travel
+
+```ts
+travel(icon, { along?, gait?, size?, orient?, ride? }) // icon: an Icon, or a registered icon's name
+sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" }))
+```
+
+`travel` carries an icon along the mark's walk, or along one segment, and leaves it resting at the end. It reads only the walk, `thickness` and `segments`, so the same effect rolls a ball out a bar, around a donut slice and along a line.
+
+- **Where.** `along` names a segment's series; a mark with no segments counts as its own one segment. A missing segment, or a walk shorter than 0.5 px, makes it a no-op: nothing is drawn and it finishes at once. The icon is inset by its footprint so it stays inside the mark. If the walk is shorter than the footprint, the icon rests at the start without moving; on a very short walk it carries on past the end rather than covering the baseline.
+- **How long.** The base duration is `max(260 ms, distance ÷ 360 px/s)`, with `effect` timing, times the gait's `pace`. The easing is the gait's, or `easeOutCubic`.
+- **`size`** is the icon's length along the walk in px, or `"fit"`: scaled so the icon's box is 85% of the mark's thickness across the walk. Default: the icon's own size.
+- **`orient`.** `"follow"` turns the icon with the walk, `"level"` never turns it, and the default `"auto"` follows but mirrors an icon marked `upright` when the walk heads left, so a boot on a negative bar keeps its sole down.
+- **`ride`.** `"center"` (default) puts the icon's anchor on the walk; `"on"` sits the icon on top of it: half the mark's thickness plus the anchor's height above the icon's bottom, towards the icon's up side.
+- **Corners.** The heading is smoothed over half the icon's length either side: it's the chord between the window's ends, which is exactly the tangent on straight legs and arcs and turns gradually across a polyline corner.
+- **Geometry changes.** The icon follows `onChange` and keeps its progress, so on a resize a ball resting at the end of a bar stays at the new end. It's removed while its segment is missing and drawn again when the segment is back.
+- An icon given by name is looked up in `ctx.icons` each time the effect runs or ends. An unknown name throws there, so the runner reports it.
+
+**Gaits** (`gaits.roll()`, `gaits.step({ stride, lift, tilt })`, `gaits.slide()`) decide how the icon moves: `options.gait`, then the icon's own `gait`, then `slide`. A gait is a function from the trip so far (`distance`, `length`, `progress` and the icon's `radius`) to a pose: `lift` towards the icon's up side, and `spin` and `tilt` about its pivot. Distances are in the icon's own units, so a gait looks the same at any size. A gait can carry its own `ease` and `pace`.
+
+| Gait | Pose | Trip |
+| --- | --- | --- |
+| `roll()` | spin = distance ÷ radius | default |
+| `step({ stride: 42, lift: 3.2, tilt: 9 })` | a whole number of steps, at least one; each lifts by `lift` and raises the front by `tilt` degrees, easing off to 70% over the trip; flat at every landing | eased in and out, 15% longer (the prototype's cleat) |
+| `slide()` | still | default |
+
+### Combinators
+
+- `sequence(...effects)` runs the parts in order. An abort stops the chain. `end()` draws every part's end state in order, and `clear()` clears every part, passing on the first error after all have run. A part with nothing to do finishes at once, so `sequence(travel(ball, { along: "goals" }), travel(cleat, { along: "assists" }))` tells the right story whether the bar shows goals, assists or both.
+- `parallel(...effects)` runs the parts together and finishes when they all have, or rejects with the first part that does. `end()` and `clear()` work as for `sequence`.
+- `only(filter, effect)` runs the effect only on marks whose key or series equals `filter`, or for which `filter(mark)` is true. Elsewhere it does nothing. It keeps the effect's kind and `needs`.
+
+The parts share the run's context: one overlay group, one mark handle (whose `set()` merges fields, so parallel parts don't undo each other) and one signal. `Combined<E>` is the type `sequence` and `parallel` return: a data effect if any part is one, needing every part's row type at once (an intersection), so a generic part like `threshold()` can't widen a typed part back to `unknown`. A data combination's `needs.related` lists every part's. A part that isn't a mark effect (a transition effect, say) is a type error, and throws a `TypeError`.
 
 ### Drawing API
 
@@ -201,6 +233,9 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 - `testContext({ mode, icons, batch, previous })` is a complete `EffectContext` on a manual clock, with `abort()`, `clear()` and `change(mark)` (fires `onChange`). It's built on the same run scope the runner gives every run, so `clear()` is exactly the runner's cleanup after `effect.clear(ctx)`.
 - `recordingSurface()` is a `RunnerSurface` whose groups are recording layers and whose marks are recording marks, for runner and chart tests.
 - `measurePath(d)` measures the path data the geometry writes: length, start, end and commands.
+- `play(clock, running)` advances a manual clock a frame at a time until a run settles, letting promise callbacks run between frames, and resolves with the ms it took.
+
+The `travel` tests run the conformance checks from plan §8 on bars (positive, negative, columns, stacked, too short), a donut slice, a line and a point: a full run ends with the same picture as `end()`, clearing leaves nothing, an abort mid-run settles, and with motion off no frames run.
 
 ## Runner
 
@@ -235,11 +270,37 @@ The renderer implements `RunnerSurface`: `group(key, slot, order)` returns a new
 A slot can name a preset instead of holding an effect, `on: { hover: "wiggle" }`, and an effect can name an icon, `travel("cleat")`. Charts resolve names through registries the composition root (`src/index.ts`) hands them, so a chart never knows what a name means.
 
 - `registerPreset(name, factory)` makes a name usable in any chart's `on`. The factory returns a fresh effect that works on any rows. The built-in presets (`wiggle`, `pulse`, `flash`) are registered when their effects land in M3.
-- `registerIcon(icon)` and `registerIcons(icons)` make icons usable by their `name`, through each run's `ctx.icons`.
+- `registerIcon(icon)` and `registerIcons(icons)` make icons usable by their `name`, through each run's `ctx.icons`. The core icons (`dot`, `arrow`, `chevron`) are registered from the start; the sport pack is opt-in, with `registerIcons(sport)`.
 - A later registration replaces an earlier one with the same name.
 - Charts call `resolveEffects(on, presets)` when they're created. An unknown preset name throws a `RangeError` that lists the registered names. A transition effect in a mark slot, or a slot that doesn't exist, throws a `TypeError` naming the slot. Misspelled names aren't type errors (custom names are allowed), so this is where they're caught.
 
 Internally both are a `createRegistry({ kind, entries, hint })` (`src/core/registry.ts`) with `get`, `resolve`, `register` and `names`; a `Registry<Icon>` is an `IconSource`.
+
+## Icons
+
+An icon is path data plus paint (`src/core/contracts/icon.ts`), never raw SVG markup, so any renderer can draw it and Canvas can draw each shape as a `Path2D`. Shapes are drawn facing +x with their up side towards −y, in px at the icon's natural size, `icon.size`.
+
+| Field | What it is | Default |
+| --- | --- | --- |
+| `shapes` | paths drawn in order, each with `fill`, `stroke`, `width`, `linecap`, `linejoin` and an optional `clip` path; an unset fill or stroke draws none | |
+| `box` | icon-space bounds | |
+| `size` | the natural length along the walk, px | the box's width |
+| `anchor` | the point that sits on the walk | |
+| `pivot` | what it spins or tilts around | the anchor |
+| `footprint` | `[behind, ahead]`: its extent along +x from the anchor | from the anchor to the box's edges |
+| `gait` | `"roll"`, `"step"` or `"slide"` | none, so travel slides |
+| `radius` | rolling radius | half the box's height |
+| `upright` | mirror instead of turning upside down | false |
+
+- `defineIcon(spec)` fills the defaults, checks every field (a `RangeError` names the bad one; path data must start with a move and contain only path characters) and freezes the icon, since one icon is shared by every run.
+- `iconFromSvg(markup, spec)` reads SVG markup as text, with no DOM. It keeps only `path`, `circle`, `rect`, `ellipse`, `line` and `polygon`, with their fill, stroke, stroke width, caps and joins (as attributes or in `style`, inherited from groups), and applies their transforms. Everything else is dropped: scripts, event handlers, `<use>`, text, images, and the contents of `<defs>`, `<clipPath>` and the like. Path data is rewritten from the numbers it contains, and colours must be plain colours or theme tokens, so nothing from the markup passes through. Gradients, patterns and CSS classes aren't kept. `size` scales the whole icon so its box is that many px wide; the spec's anchor, pivot, footprint and radius are in the SVG's own units.
+- **Core icons** (`icons.dot`, `.arrow`, `.chevron`) are neutral and drawn in theme colours (`surface`, `text`), so they read in light and dark themes and on any series colour.
+- **The sport pack** is a separate entry point, `expressive-charts/icons/sport`, with `soccerBall`, `cleat` and `sport` (both, for `registerIcons`). They're converted from the prototype and drawn in fixed colours:
+
+| Icon | `anchor` | `pivot` | `footprint` | `gait` | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `soccer-ball` | centre | centre | 8.5 / 8.5 | `roll` | The panels are clipped to the ball. |
+| `cleat` | (0, −6): the heel, raised so the boot sits centred in a bar | (13, −4), the ball of the foot | 0 / 26 | `step` | `upright` |
 
 ## Reference charts
 
@@ -298,4 +359,4 @@ SVG first, in `src/charts/render/`. Canvas or WebGL rendering is a later option 
 
 - `dist/index.js` + `dist/index.d.ts`: ES module for npm and bundlers.
 - `dist/expressive-charts.global.js`: script-tag bundle exposing `window.ExpressiveCharts`.
-- Planned: `expressive-charts/icons/sport`, an optional icon pack (ball, cleat) as a separate entry point, so the core stays neutral.
+- `dist/icons/sport.js`, `.cjs` and `.d.ts`: the optional sport icon pack, imported as `expressive-charts/icons/sport`. It's a separate entry, so the core build doesn't carry the ball and cleat. The script-tag bundle doesn't include it.

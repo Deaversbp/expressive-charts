@@ -2,8 +2,9 @@ import { defineConfig } from "tsup";
 
 export default defineConfig([
   {
-    // npm package: ES module + CommonJS + type declarations
-    entry: ["src/index.ts"],
+    // npm package: ES module + CommonJS + type declarations. The sport icon pack is its own entry
+    // ("expressive-charts/icons/sport"), so the core build doesn't carry it.
+    entry: { index: "src/index.ts", "icons/sport": "src/icons/sport/index.ts" },
     format: ["esm", "cjs"],
     dts: true,
     sourcemap: true,

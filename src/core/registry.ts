@@ -80,7 +80,8 @@ export function resolveEffects<D>(on: EffectSlots<D> | undefined, presets: Pick<
   return effects;
 }
 
-function isMarkEffect(value: unknown): value is AnyMarkEffect {
+/** True for a geometry or data effect with run, end and clear. Combinators check their parts with it too. */
+export function isMarkEffect(value: unknown): value is AnyMarkEffect {
   if (typeof value !== "object" || value === null) return false;
   const effect = value as Partial<Record<"kind" | "run" | "end" | "clear", unknown>>;
   return (
@@ -91,7 +92,8 @@ function isMarkEffect(value: unknown): value is AnyMarkEffect {
   );
 }
 
-function describeValue(value: unknown): string {
+/** What a value that isn't a mark effect is, for error messages. */
+export function describeValue(value: unknown): string {
   if (typeof value !== "object" || value === null) return value === null ? "null" : typeof value;
   const kind = (value as { kind?: unknown }).kind;
   if (kind === "transition") return "a transition effect, which runs between two charts rather than on one mark";

@@ -4,6 +4,7 @@
 
 export { testContext, type TestContext, type TestContextOptions } from "./context";
 export { measurePath, type MeasuredPath, type PathCommand } from "./path";
+export { flush, play, type PlayOptions } from "./play";
 export {
   recordingLayer,
   recordingMark,

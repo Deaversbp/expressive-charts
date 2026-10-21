@@ -4,8 +4,8 @@ The proposed public API, written down as TypeScript before it's built, plus the 
 
 | File | What it is |
 | --- | --- |
-| `api.ts` | The proposed API as declarations. The motion core, the shared contracts and effect slots, the geometry (`describe.bar`, `.arc`, `.line`, `.point`, `matrix`, `offset`) and the registries (`registerPreset`, `registerIcon`, `registerIcons`) are real and re-exported from `src`; everything else is `declare`. Lines marked NEW came out of writing the examples. |
-| `icons-sport.ts` | The proposed optional icon pack, `expressive-charts/icons/sport`. |
+| `api.ts` | The proposed API as declarations. The motion core, the shared contracts and effect slots, the geometry (`describe.bar`, `.arc`, `.line`, `.point`, `matrix`, `offset`), the registries (`registerPreset`, `registerIcon`, `registerIcons`), the icons (`defineIcon`, `iconFromSvg`, `icons`) and the first effects (`travel` and its gaits, `sequence`, `parallel`, `only`) are real and re-exported from `src`; everything else is `declare`. Lines marked NEW came out of writing the examples. |
+| `icons-sport.ts` | The optional icon pack, `expressive-charts/icons/sport`: re-exported from `src/icons/sport`. |
 | `examples/01-ball-and-cleat.ts` | Lab card 1 on the reference bar chart. |
 | `examples/02-goals-vs-xg.ts` | Lab card 2 on the reference line chart, with playback and a pause button. |
 | `examples/03-donut-morph.ts` | Lab card 3: donut to bars and back. |

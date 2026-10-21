@@ -5,9 +5,11 @@
  * the sketch builds on the real thing: the motion core, the shared contracts (MarkGeometry,
  * MarkData, the drawing API, EffectContext, the effect kinds, Icon, the effect slots), the geometry
  * (describe.bar, .arc, .line, .point, matrix, offset), the preset and icon registries
- * (registerPreset, registerIcon, registerIcons), and the thin bar chart's types (mark events, chart
- * options, accessors, colorAssignment). Everything still declared here is planned. Lines marked NEW
- * were added because writing the examples in ./examples exposed a gap in docs/plan.md.
+ * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
+ * options, accessors, colorAssignment), the icons (defineIcon, iconFromSvg, icons) and the first
+ * effects (travel with its gaits, sequence, parallel, only). Everything still declared here is
+ * planned. Lines marked NEW were added because writing the examples in ./examples exposed a gap in
+ * docs/plan.md.
  */
 
 export * from "../../src/index";
@@ -20,14 +22,12 @@ import type {
   ChartOptions as BuiltChartOptions,
   Color,
   ColorAssignment,
-  Combined,
   DataEffect,
   describe as builders,
   Easing,
   EffectContext,
   EffectSlots,
   GeometryEffect,
-  Icon,
   MarkData,
   MarkEvents,
   MarkGeometry,
@@ -48,41 +48,15 @@ import type {
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
-export declare function sequence<E extends readonly AnyMarkEffect[]>(...effects: E): Combined<E>;
-export declare function parallel<E extends readonly AnyMarkEffect[]>(...effects: E): Combined<E>;
+// travel (with TravelOptions), the gaits (gaits.roll, .step, .slide; Gait, GaitState, GaitPose) and
+// the combinators sequence, parallel and only are built, in src/effects. Changed from the sketch: a
+// gait can carry its own easing and pace (a step takes 15% longer and eases in and out, as in the
+// prototype), and GaitState gives distances in the icon's own units plus its rolling radius
+// (instead of its size), so a gait looks the same at any size.
+
 /** Offsets each mark in a batch; 0 in analysis and off. Never a default. */
 export declare function stagger<E extends AnyMarkEffect>(effect: E, options: { readonly delay: number }): E;
-/** Runs only on matching marks: a series name, a key, or a predicate. */
-export declare function only<E extends AnyMarkEffect>(filter: string | ((mark: MarkGeometry) => boolean), effect: E): E;
 
-export interface GaitState {
-  readonly distance: number;
-  readonly progress: number;
-  readonly length: number;
-  readonly size: number;
-}
-export interface GaitPose {
-  readonly lift: number;
-  readonly spin: number;
-  readonly tilt: number;
-}
-export type Gait = (state: GaitState) => GaitPose;
-export declare const gaits: {
-  roll(): Gait;
-  step(options?: { readonly stride?: number; readonly lift?: number; readonly tilt?: number }): Gait;
-  slide(): Gait;
-};
-
-export interface TravelOptions {
-  /** A segment's series name; the whole walk if omitted. A missing or empty segment makes this a no-op. */
-  readonly along?: string;
-  readonly gait?: Gait | "roll" | "step" | "slide";
-  readonly size?: number | "fit";
-  readonly orient?: "auto" | "follow" | "level";
-  readonly ride?: "center" | "on";
-}
-
-export declare function travel(icon: Icon | string, options?: TravelOptions): GeometryEffect;
 export declare function wiggle(options?: { readonly swing?: number }): GeometryEffect;
 export declare function pulse(options?: { readonly times?: number; readonly color?: Color }): GeometryEffect;
 export declare function flash(options?: { readonly color?: Color }): GeometryEffect;
@@ -115,14 +89,9 @@ export declare function defineDataEffect<D = unknown>(spec: DataEffectSpec<D>): 
 
 // ── Icons: neutral core set; sports icons live in "expressive-charts/icons/sport" ─
 
-// Icon and IconShape are built, in src/core/contracts.
-
-export type IconSpec = Omit<Icon, "footprint" | "pivot" | "size"> & Partial<Pick<Icon, "footprint" | "pivot" | "size">>;
-
-export declare function defineIcon(spec: IconSpec): Icon;
-export declare function iconFromSvg(markup: string, spec: Omit<IconSpec, "shapes" | "box">): Icon;
-// registerIcon and registerIcons are built, in src/registries.
-export declare const icons: { readonly dot: Icon; readonly arrow: Icon; readonly chevron: Icon };
+// Icon and IconShape are built, in src/core/contracts (with linecap and linejoin on shapes, for the cleat).
+// defineIcon (with IconSpec), iconFromSvg (with SvgIconSpec) and the core icons (dot, arrow,
+// chevron) are built, in src/icons; registerIcon and registerIcons in src/registries.
 
 // ── Presets ──────────────────────────────────────────────────────────────────
 

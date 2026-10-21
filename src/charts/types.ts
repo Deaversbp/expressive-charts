@@ -76,6 +76,13 @@ export interface ChartOptions<D> {
    */
   readonly markLabel?: (d: NoInfer<D>, mark: MarkSummary) => string;
   /**
+   * Each mark's accessible description (aria-describedby): what its name doesn't already say. Default:
+   * a tooltip function's text, so a custom tooltip's extra facts reach screen readers. When that text
+   * repeats the values the name already says, give only the extra facts here ("Forward"), so nothing
+   * is read twice. `false` describes nothing; so do an empty string and a throw (reported).
+   */
+  readonly markDescription?: false | ((d: NoInfer<D>) => string);
+  /**
    * The data table: the fallback every screen reader can read. Default true: a closed <details>
    * "Data table" after the chart, listing the rows in the chart's order with the category, each series
    * and, for a stack, the total, in `format`. "hidden": visually hidden but still read. An object adds

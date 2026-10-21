@@ -1,7 +1,7 @@
 // The chart's tooltip: an HTML box beside the hovered or focused mark, placed from the mark's bounds
 // and centre. The box is aria-hidden, so it isn't read twice: each mark's aria-label has the values,
-// and a tooltip function's text is also the mark's accessible description. Its text is only ever set
-// as text, never parsed as HTML, so a tooltip function can't inject markup.
+// and its accessible description is `markDescription`'s text or, by default, a tooltip function's.
+// Its text is only ever set as text, never parsed as HTML, so a tooltip function can't inject markup.
 
 import { matrix, type Matrix, type MarkGeometry, type MotionView } from "../core";
 import { report } from "../core/report";
@@ -41,9 +41,10 @@ export interface Tooltip {
    */
   show(mark: MarkGeometry, row: { readonly datum: unknown }, summary: () => TooltipContent, transform?: Matrix): void;
   /**
-   * Makes a tooltip function's text for `row` the accessible description of the mark's `element`
-   * (aria-describedby, to a <desc> inside it), so what it adds beyond the values reaches screen
-   * readers too. The default text says nothing the mark's aria-label doesn't, so it describes nothing.
+   * Gives the mark's `element` its accessible description for `row` (aria-describedby, to a <desc>
+   * inside it): `markDescription`'s text when it's a function, nothing when it's false, and otherwise
+   * a tooltip function's text, so what a custom tooltip adds beyond the values reaches screen readers.
+   * The default tooltip text says nothing the mark's aria-label doesn't, so it describes nothing.
    */
   describe(element: SVGElement, row: { readonly datum: unknown }): void;
   hide(): void;
@@ -91,7 +92,15 @@ export function summaryContent(category: string, values: readonly { readonly ser
  * just after the <svg>, and placed in px from both elements' boxes, so it lands right whatever the
  * page's layout. Showing and hiding fade over `feedback` timing, so they're instant with motion off.
  */
-export function chartTooltip<D>(svg: SVGSVGElement, options: { readonly motion: Pick<MotionView, "duration">; readonly option: () => TooltipOption<D> | undefined }): Tooltip {
+export function chartTooltip<D>(
+  svg: SVGSVGElement,
+  options: {
+    readonly motion: Pick<MotionView, "duration">;
+    readonly option: () => TooltipOption<D> | undefined;
+    /** The `markDescription` option: a function, false, or unset (a tooltip function's text). */
+    readonly description?: () => false | ((d: D) => string) | undefined;
+  }
+): Tooltip {
   let layer: HTMLDivElement | undefined;
   let box: HTMLDivElement | undefined;
   /** Each row's text, and the option it was worked out with: a function is called once per row. */
@@ -165,7 +174,18 @@ export function chartTooltip<D>(svg: SVGSVGElement, options: { readonly motion: 
       tip.classList.add("ec-tooltip-shown");
     },
     describe(element, row) {
-      const content = typeof options.option() === "function" ? contentFor(row, () => "") : undefined;
+      const own = options.description?.();
+      let content: TooltipContent | undefined;
+      if (own === false) content = undefined;
+      else if (typeof own === "function") {
+        try {
+          const text: unknown = own(row.datum as D);
+          content = typeof text === "string" && text !== "" ? text : undefined;
+        } catch (error) {
+          report(error);
+          content = undefined;
+        }
+      } else content = typeof options.option() === "function" ? contentFor(row, () => "") : undefined;
       let desc = element.querySelector<SVGDescElement>(":scope > desc.ec-description");
       if (typeof content !== "string") {
         if (!desc) return;

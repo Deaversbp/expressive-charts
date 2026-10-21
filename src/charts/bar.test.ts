@@ -621,6 +621,63 @@ describe("barChart: ARIA structure", () => {
     expect(document.getElementById(okafor.getAttribute("aria-describedby")!)!.textContent).toBe("Okafor plays up front");
   });
 
+  describe("markDescription", () => {
+    type WithPos = Player & { pos?: string };
+    const description = (element: Element): string | null => {
+      const id = element.getAttribute("aria-describedby");
+      return id === null ? null : (document.getElementById(id)?.textContent ?? null);
+    };
+
+    it("describes with only the extra facts, so a tooltip that repeats the values isn't read twice", () => {
+      const pos: Record<string, string> = { Okafor: "Forward", Tanaka: "Midfielder", Lindqvist: "Forward" };
+      const { mark } = setup({
+        tooltip: (d) => `${d.name} · ${pos[d.name]}\n${d.goals} goals`,
+        markDescription: (d: WithPos) => pos[d.name] ?? ""
+      });
+      expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16 goals");
+      expect(description(mark("Okafor"))).toBe("Forward");
+      expect(mark("Okafor").querySelectorAll("desc.ec-description")).toHaveLength(1);
+    });
+
+    it("describes nothing when false, even with a tooltip function", () => {
+      const { mark } = setup({ tooltip: (d) => `${d.name} plays up front`, markDescription: false });
+      expect(mark("Okafor").hasAttribute("aria-describedby")).toBe(false);
+      expect(mark("Okafor").querySelector("desc.ec-description")).toBeNull();
+    });
+
+    it("describes nothing for an empty string, and reports a throw without leaving the mark described", () => {
+      const reportError = vi.fn();
+      vi.stubGlobal("reportError", reportError);
+      const boom = new Error("no position");
+      const { mark } = setup({ markDescription: (d) => (d.name === "Okafor" ? "" : d.name === "Tanaka" ? (() => { throw boom; })() : "Forward") });
+      expect(mark("Okafor").hasAttribute("aria-describedby")).toBe(false);
+      expect(mark("Tanaka").hasAttribute("aria-describedby")).toBe(false);
+      expect(description(mark("Lindqvist"))).toBe("Forward");
+      expect(reportError).toHaveBeenCalledWith(boom);
+      vi.unstubAllGlobals();
+    });
+
+    it("follows update(): set, changed and turned off", async () => {
+      const { chart, mark, settle } = setup({ tooltip: (d) => `${d.name} plays up front` });
+      expect(description(mark("Okafor"))).toBe("Okafor plays up front");
+      await settle(chart.update({ markDescription: () => "Forward" }));
+      expect(description(mark("Okafor"))).toBe("Forward");
+      await settle(chart.update({ markDescription: false }));
+      expect(mark("Okafor").hasAttribute("aria-describedby")).toBe(false);
+    });
+
+    it("rejects anything but false or a function", () => {
+      const { container } = setup();
+      expect(() =>
+        barChart<Player>(container, { label: "Goals", data: players, y: "name", x: "goals", markDescription: true as unknown as false }, {
+          presets: createRegistry<PresetFactory>({ kind: "preset" }),
+          icons: { get: () => undefined },
+          motion: quietMotion()
+        })
+      ).toThrow(/markDescription must be false or a function/);
+    });
+  });
+
   it("words each image's name with markLabel, given the row and the mark as it's heading", () => {
     const calls: unknown[][] = [];
     const format = (v: number) => v.toFixed(1);

@@ -1,8 +1,8 @@
 // expressive(): effects on SVG marks drawn by other code (M1 step 10, for rects). It reads keys, rows
 // and geometry from the host's elements, plays the effect slots through the runner on an overlay at
-// the end of the root <svg>, and listens for pointer and keyboard events once, on that <svg> (focus on
-// its document or shadow root). Like the charts it never names an effect, and destroy() leaves the
-// host's DOM as it found it.
+// the end of the root <svg>, and listens for pointer events once, on that <svg>. Keyboard focus is
+// barChart's (../keyboard.ts), on the host's elements. Like the charts it never names an effect, and
+// destroy() leaves the host's DOM as it found it.
 //
 // Geometry is in the marks' nearest common ancestor's coordinates. The overlay carries that
 // ancestor's transform but sits on the root, because some hosts (Vega) remove foreign children from
@@ -16,6 +16,7 @@ import { report } from "../../core/report";
 import { createRunner, type RunInput } from "../../core/runner";
 import type { ChartEnv } from "../bar";
 import { pointerHover, type PointerHover } from "../interaction";
+import { keyboardFocus } from "../keyboard";
 import { chartMotion } from "../motion";
 import { svgSurface } from "../render/surface";
 import { setAttributes, setStyles, transformAttribute } from "../render/svg";
@@ -80,7 +81,6 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   const motion = chartMotion(options.motion, env.motion);
   const effects = resolveEffects(options.on, env.presets);
   const clock = env.clock ?? defaultClock;
-  const keyboard = options.keyboard === true;
   const dim = options.dim === true;
   const edits = hostEdits();
   /** The host's colours per element, kept while an effect overrides the fill. */
@@ -205,17 +205,9 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   let owners = new Map<Element, Owner<D>>();
   const listeners: Listeners<D> = { enter: new Set(), update: new Set(), exit: new Set(), hover: new Set(), leave: new Set() };
   let hovered: { readonly key: string; readonly source: HoverSource } | undefined;
-  /** The mark Tab reaches (roving tabindex). */
-  let focusable: string | undefined;
   /** The mark showing the focus ring. */
   let ringKey: string | undefined;
-  /** The focused mark, kept when the host removes its element, so refresh() can focus the new one. */
-  let focused: string | undefined;
-  /** Whether the last input was a key (or there's been none), as :focus-visible decides. */
-  let keyboardInput = true;
   let interaction: PointerHover | undefined;
-  /** Where focus events are heard: the document or shadow root the root <svg> is in. */
-  let scope: Document | ShadowRoot | undefined;
   let destroyed = false;
 
   const make = <K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<string, string>, parent?: Element): SVGElementTagNameMap[K] => {
@@ -259,8 +251,6 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   /** Brings the attachment to `reading` and says what changed. Leaving marks stay until their exit is done. */
   function apply(reading: Reading<D>): Diff<D> {
     if (reading.root && reading.root !== root) moveTo(reading.root);
-    // The same <svg> may have moved into or out of a shadow root.
-    else listenForFocus();
     ancestor = reading.ancestor ?? ancestor;
     const keys = new Set(reading.marks.map((mark) => mark.key));
     const diff: Diff<D> = { entering: [], exiting: [], changed: [], moved: [] };
@@ -300,7 +290,6 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     for (const [el, owner] of before) if (owners.get(el)?.record !== owner.record) edits.restore(el);
 
     placeOverlay();
-    applyKeyboard();
     applyDim();
     for (const record of order) record.handle.repaint();
     for (const key of recolor) surface.recolor(key);
@@ -337,15 +326,10 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         startHover(record, from, hoverTarget.segment);
       },
       leave() {
+        // Focus holds a keyboard hover until blur or Escape.
         if (hovered?.source !== "keyboard") endHover();
       }
     });
-    if (keyboard) {
-      root.ownerDocument.addEventListener("keydown", onAnyKey, true);
-      root.ownerDocument.addEventListener("pointerdown", onAnyPointer, true);
-      listenForFocus();
-      root.addEventListener("keydown", onKeyDown);
-    }
   }
 
   /** Stops listening on the current root. */
@@ -354,29 +338,6 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     endHover();
     interaction?.destroy();
     interaction = undefined;
-    root.ownerDocument.removeEventListener("keydown", onAnyKey, true);
-    root.ownerDocument.removeEventListener("pointerdown", onAnyPointer, true);
-    stopListeningForFocus();
-    root.removeEventListener("keydown", onKeyDown);
-  }
-
-  /** Listens for focus on the document or shadow root the root <svg> is in now, if that changed. */
-  function listenForFocus(): void {
-    if (!keyboard || !root) return;
-    // Not on the <svg>: Chrome makes an SVG element with focus listeners of its own a tab stop.
-    const node = root.getRootNode();
-    const next = "host" in node ? (node as ShadowRoot) : root.ownerDocument;
-    if (next === scope) return;
-    stopListeningForFocus();
-    scope = next;
-    scope.addEventListener("focusin", onFocusIn as EventListener, true);
-    scope.addEventListener("focusout", onFocusOut as EventListener, true);
-  }
-
-  function stopListeningForFocus(): void {
-    scope?.removeEventListener("focusin", onFocusIn as EventListener, true);
-    scope?.removeEventListener("focusout", onFocusOut as EventListener, true);
-    scope = undefined;
   }
 
   function ownerOf(eventTarget: EventTarget | null): Owner<D> | undefined {
@@ -429,21 +390,6 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
   // ── Keyboard ───────────────────────────────────────────────────────────────
 
-  /** One mark is in the tab order; the others are focusable from the arrow keys. */
-  function applyKeyboard(): void {
-    if (!keyboard) return;
-    if (focusable === undefined || !records.has(focusable)) focusable = order[0]?.key;
-    for (const record of order) {
-      record.mark.parts.forEach((part, index) => edits.attribute(part.element, "tabindex", record.key === focusable && index === 0 ? "0" : "-1"));
-    }
-  }
-
-  function focusRecord(record: MarkRecord<D>): void {
-    focusable = record.key;
-    applyKeyboard();
-    (record.mark.parts[0]?.element as SVGElement | undefined)?.focus?.();
-  }
-
   /** The focus ring follows the mark's outline, drawn in the overlay. */
   function drawRing(): void {
     const record = ringKey === undefined ? undefined : records.get(ringKey);
@@ -451,75 +397,57 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     else setAttributes(ring, { visibility: "hidden" });
   }
 
-  // Listened for on the whole document: a click on the chart's background or elsewhere on the page
-  // brings no focusin, and a Tab from outside the chart has to count.
-  function onAnyKey(event: KeyboardEvent): void {
-    if (!event.metaKey && !event.altKey && !event.ctrlKey) keyboardInput = true;
-  }
-
-  function onAnyPointer(): void {
-    keyboardInput = false;
-  }
-
-  function onFocusIn(event: FocusEvent): void {
-    const owner = ownerOf(event.target);
-    if (!owner) return;
-    const { record } = owner;
-    focused = record.key;
-    focusable = record.key;
-    applyKeyboard();
-    edits.style(owner.part.element, "outline", "none");
-    // Focus from a click or tap shows no ring, as with :focus-visible.
-    ringKey = keyboardInput ? record.key : undefined;
-    drawRing();
-    if (hovered?.key === record.key) return;
-    endHover();
-    startHover(record, "keyboard");
-  }
-
-  function onFocusOut(event: FocusEvent): void {
-    const owner = ownerOf(event.target);
-    if (!owner) return;
-    edits.style(owner.part.element, "outline", undefined);
-    ringKey = undefined;
-    drawRing();
-    // Moving to another mark: its focusin takes over. The host removing the element isn't leaving.
-    if (ownerOf(event.relatedTarget) || !(event.target as Node).isConnected) return;
-    focused = undefined;
-    if (hovered?.source === "keyboard") endHover();
-  }
-
-  function onKeyDown(event: KeyboardEvent): void {
-    const owner = ownerOf(event.target);
-    if (!owner) return;
-    const index = order.indexOf(owner.record);
-    let next: MarkRecord<D> | undefined;
-    switch (event.key) {
-      case "ArrowRight":
-      case "ArrowDown":
-        next = order[Math.min(order.length - 1, index + 1)];
-        break;
-      case "ArrowLeft":
-      case "ArrowUp":
-        next = order[Math.max(0, index - 1)];
-        break;
-      case "Home":
-        next = order[0];
-        break;
-      case "End":
-        next = order[order.length - 1];
-        break;
-      case "Escape":
-        if (!hovered) return;
-        endHover();
-        event.preventDefault();
-        return;
-      default:
-        return;
-    }
-    event.preventDefault();
-    if (next && next !== owner.record) focusRecord(next);
-  }
+  // barChart's keyboard focus, with the same hover rules: on the host's elements, written through
+  // the edits so destroy() puts back what they had.
+  const keyboard =
+    options.keyboard === true
+      ? keyboardFocus(() => root, {
+          find: (eventTarget) => ownerOf(eventTarget)?.record.key,
+          order: () => order.map((record) => record.key),
+          element: (key) => records.get(key)?.mark.parts[0]?.element as SVGElement | undefined,
+          tabIndex(key, value) {
+            // A mark that left: apply() already gave its elements back what the host had.
+            const record = records.get(key);
+            if (!record || value === undefined) return;
+            // The first element takes the mark's focus; a click can focus the others. The ring stands in for their own outline.
+            record.mark.parts.forEach((part, index) => {
+              edits.attribute(part.element, "tabindex", index === 0 ? value : "-1");
+              edits.style(part.element, "outline", "none");
+            });
+          },
+          focus(key, visible) {
+            ringKey = visible ? key : undefined;
+            drawRing();
+            const record = records.get(key);
+            if (!record) return;
+            if (!visible) {
+              // Focus from a click or tap: the pointer's own hover plays.
+              if (hovered?.source === "keyboard" && hovered.key !== key) endHover();
+              return;
+            }
+            if (hovered?.key === key) {
+              // Already playing for the pointer: it goes on, held by focus now.
+              hovered = { key, source: "keyboard" };
+              return;
+            }
+            endHover();
+            startHover(record, "keyboard");
+          },
+          blur() {
+            ringKey = undefined;
+            drawRing();
+            if (hovered?.source !== "keyboard") return;
+            // The pointer is still over it: the hover goes on, held by the pointer now.
+            if (interaction?.current === hovered.key) hovered = { key: hovered.key, source: "pointer" };
+            else endHover();
+          },
+          escape() {
+            if (!hovered) return false;
+            endHover();
+            return true;
+          }
+        })
+      : undefined;
 
   // ── Events ─────────────────────────────────────────────────────────────────
 
@@ -540,6 +468,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   // ── First read ─────────────────────────────────────────────────────────────
 
   runner.enter(apply(first).entering.map(input));
+  keyboard?.sync();
 
   return {
     refresh(next) {
@@ -563,9 +492,9 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       emitEach("enter", diff.entering);
       for (const record of [...diff.changed.map((c) => c.record), ...diff.moved]) runner.change(record.mark.geometry, record.mark.data);
       runner.settle();
-      // A host that replaced the focused element (Vega does) would drop keyboard users to the page.
-      const refocus = focused === undefined || ownerOf(doc.activeElement) ? undefined : records.get(focused);
-      if (refocus) focusRecord(refocus);
+      // Focus stays with its key, on the mark's new element if the host replaced it (Vega does). If the
+      // mark left, focus moves to its nearest neighbour. Every mark's tabindex is set again.
+      keyboard?.sync();
 
       void exited.then(() => {
         for (const record of diff.exiting) if (leaving.get(record.key) === record) leaving.delete(record.key);
@@ -584,18 +513,17 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     marks: () => order.map((record) => record.mark.geometry),
 
     focus(key) {
-      const record = records.get(key);
-      if (record && !destroyed) focusRecord(record);
+      if (records.has(key) && !destroyed) keyboard?.focus(key);
     },
 
     destroy() {
       if (destroyed) return;
       destroyed = true;
       hovered = undefined;
-      focused = undefined;
       // The runner resets every mark it styled, through the records, so it goes first.
       runner.destroy();
       unsubscribeMotion?.();
+      keyboard?.destroy();
       detach();
       overlay.remove();
       edits.restoreAll();

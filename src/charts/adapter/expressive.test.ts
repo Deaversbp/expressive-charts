@@ -2,7 +2,7 @@ import { createMotion, describe as build, manualClock, type EffectContext, type 
 import { createRegistry, type PresetFactory } from "../../core/registry";
 import type { ChartEnv } from "../bar";
 import { expressive } from "./expressive";
-import type { ExpressiveOptions, MarkSource } from "./types";
+import type { Attachment, ExpressiveOptions, MarkSource } from "./types";
 
 interface Player {
   name: string;
@@ -122,6 +122,19 @@ function key(target: Element, name: string): KeyboardEvent {
   const event = new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true });
   target.dispatchEvent(event);
   return event;
+}
+
+/** Replaces a rect with a copy carrying the same row, as a host that redraws does. */
+function replaceRect(rect: SVGRectElement): void {
+  rect.replaceWith(Object.assign(rect.cloneNode() as SVGRectElement, { __data__: (rect as unknown as { __data__: unknown }).__data__ }));
+}
+
+/** "hover Okafor keyboard", "leave Okafor": the attachment's hover and leave events as they come. */
+function hoverLog<D>(fx: Attachment<D>): string[] {
+  const events: string[] = [];
+  fx.on("hover", (e) => events.push(`hover ${e.mark.key} ${e.source}`));
+  fx.on("leave", (e) => events.push(`leave ${e.mark.key}`));
+  return events;
 }
 
 const overlayOf = (svg: SVGSVGElement) => svg.querySelector(":scope > .ec-overlay") as SVGGElement;
@@ -554,6 +567,124 @@ describe("expressive: keyboard", () => {
     replaced.replaceWith(Object.assign(replaced.cloneNode() as SVGRectElement, { __data__: (replaced as unknown as { __data__: unknown }).__data__ }));
     fx.refresh(host.selection());
     expect(document.activeElement).toBe(host.rect("Lindqvist", "goals"));
+  });
+
+  it("leaves the hover to the pointer when focus comes from a tap or click, so a tap reports touch", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const events = hoverLog(fx);
+    const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
+    // A tap: the browser focuses the rect between pointerdown and click.
+    const tapped = host.rect("Tanaka", "assists");
+    pointer("pointerdown", tapped, "touch");
+    tapped.focus();
+    tapped.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(events).toEqual(["hover Tanaka touch"]);
+    expect(ring.getAttribute("visibility")).toBe("hidden");
+    // The tab stop moved to the tapped mark, and a key from there plays the keyboard hover.
+    expect(host.rect("Tanaka", "goals").getAttribute("tabindex")).toBe("0");
+    key(tapped, "ArrowDown");
+    expect(events).toEqual(["hover Tanaka touch", "leave Tanaka", "hover Lindqvist keyboard"]);
+
+    // A click on the mark the mouse is over: its hover goes on.
+    events.length = 0;
+    pointer("pointerover", host.rect("Okafor", "goals"));
+    pointer("pointerdown", host.rect("Okafor", "goals"));
+    host.rect("Okafor", "goals").focus();
+    expect(events).toEqual(["leave Lindqvist", "hover Okafor pointer"]);
+  });
+
+  it("holds a hover while focus is on its mark, and hands it back to a pointer still over it on blur", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const events = hoverLog(fx);
+    pointer("pointerover", host.rect("Okafor", "goals"));
+    // Focus from Tab arrives on the hovered mark and holds its hover, so the pointer leaving doesn't end it.
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    host.rect("Okafor", "goals").focus();
+    pointer("pointerleave", host.svg);
+    pointer("pointerover", host.rect("Okafor", "goals"));
+    host.rect("Okafor", "goals").blur();
+    expect(events).toEqual(["hover Okafor pointer"]);
+    pointer("pointerleave", host.svg);
+    expect(events).toEqual(["hover Okafor pointer", "leave Okafor"]);
+  });
+
+  it("moves focus from a mark that leaves to the next one, or else the previous", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const events = hoverLog(fx);
+    const datum = (rect: Element) => (rect as unknown as { __data__: StackPoint }).__data__;
+    fx.focus("Tanaka");
+    // Leaving the selection while the host keeps its elements, as for an exit transition.
+    const rest = host.rects().filter((rect) => datum(rect).data.name !== "Tanaka");
+    fx.refresh({ nodes: () => rest, data: () => rest.map(datum) });
+    expect(document.activeElement).toBe(host.rect("Lindqvist", "goals"));
+    expect(host.rect("Lindqvist", "goals").getAttribute("tabindex")).toBe("0");
+    expect(host.rect("Tanaka", "goals").hasAttribute("tabindex")).toBe(false);
+
+    // The host removes the focused element: the last mark's goes, so the previous one takes focus.
+    host.redraw([players[0]!, players[2]!]);
+    fx.refresh(host.selection());
+    expect(document.activeElement).toBe(host.rect("Lindqvist", "goals"));
+    host.redraw([players[0]!]);
+    fx.refresh(host.selection());
+    expect(document.activeElement).toBe(host.rect("Okafor", "goals"));
+    // No marks left: focus leaves the chart.
+    host.redraw([]);
+    fx.refresh(host.selection());
+    expect(document.activeElement).toBe(document.body);
+    expect(events).toEqual(["hover Tanaka keyboard", "leave Tanaka", "hover Lindqvist keyboard", "leave Lindqvist", "hover Okafor keyboard", "leave Okafor"]);
+  });
+
+  it("brings focus back to a redrawn mark when the browser tells the removal as a blur, as Chrome does", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const events = hoverLog(fx);
+    const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
+    fx.focus("Tanaka");
+    // Chrome fires focusout, going nowhere, on a focused element the host removes, while it's still in the page.
+    const removed = host.rect("Tanaka", "goals");
+    removed.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    replaceRect(removed);
+    fx.refresh(host.selection());
+    expect(document.activeElement).toBe(host.rect("Tanaka", "goals"));
+    expect(ring.getAttribute("visibility")).toBeNull();
+    expect(events).toEqual(["hover Tanaka keyboard", "leave Tanaka", "hover Tanaka keyboard"]);
+  });
+
+  it("doesn't pull focus back to a redrawn mark once focus has moved on", async () => {
+    const host = d3Stack();
+    const button = document.body.appendChild(document.createElement("button"));
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const events = hoverLog(fx);
+    // The host removes the focused element, and focus moves elsewhere before refresh().
+    fx.focus("Okafor");
+    replaceRect(host.rect("Okafor", "goals"));
+    button.focus();
+    expect(events).toEqual(["hover Okafor keyboard", "leave Okafor"]);
+    fx.refresh(host.selection());
+    expect(document.activeElement).toBe(button);
+
+    // A blur to nowhere, then a redraw in a later task.
+    fx.focus("Tanaka");
+    host.rect("Tanaka", "goals").blur();
+    await Promise.resolve();
+    replaceRect(host.rect("Tanaka", "goals"));
+    fx.refresh(host.selection());
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("leaves keys with Alt, Ctrl or Meta to the browser", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    fx.focus("Okafor");
+    for (const modifier of ["altKey", "ctrlKey", "metaKey"]) {
+      const event = new KeyboardEvent("keydown", { key: "ArrowDown", [modifier]: true, bubbles: true, cancelable: true });
+      host.rect("Okafor", "goals").dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(document.activeElement).toBe(host.rect("Okafor", "goals"));
   });
 
   it("hears focus without focus listeners on its SVG elements, which Chrome would make tab stops", () => {

@@ -40,14 +40,21 @@
   #chart { min-width: 0; }
   .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
   a { color: var(--accent); }
+  /* The hand-written chart's own styles: it's someone else's chart, so the page styles it, not the library. */
+  #host-chart { display: block; max-width: 100%; height: auto; }
+  #host-chart text { font-size: 12.5px; }
+  #host-chart .host-label { fill: var(--ink-2); }
+  #host-chart .host-value { fill: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  #host-chart .host-goals rect { fill: var(--ec-series-1, #2a78d6); }
+  #host-chart .host-assists rect { fill: var(--ec-series-4, #eda100); }
 </style>
 </head>
 <body>
 <main class="wrap">
   <header>
-    <p class="eyebrow">M1 step 7 · first look</p>
+    <p class="eyebrow">Milestone 1 · ball and cleat</p>
     <h1>Ball and cleat on the real library</h1>
-    <p class="lede">The prototype's first card, rebuilt on <code>barChart</code> and <code>travel</code>. Hover a bar, then switch the motion mode and the metric to feel the difference.</p>
+    <p class="lede">The prototype's first card, rebuilt on <code>barChart</code> and <code>travel</code>, and the same story on a chart the library didn't draw. Hover a bar, then switch the motion mode, the metric and the sort.</p>
   </header>
 
   <div class="bar" role="group" aria-label="Motion mode">
@@ -60,32 +67,38 @@
     <span class="hint" id="motion-hint"></span>
   </div>
 
+  <div class="bar">
+    <div class="seg" id="metric" role="group" aria-label="Metric">
+      <button type="button" data-value="goals" aria-pressed="true">Goals</button>
+      <button type="button" data-value="assists" aria-pressed="false">Assists</button>
+      <button type="button" data-value="ga" aria-pressed="false">Goals + assists</button>
+    </div>
+    <div class="seg" id="sort" role="group" aria-label="Sort">
+      <button type="button" data-value="value" aria-pressed="true">Highest first</button>
+      <button type="button" data-value="key" aria-pressed="false">A–Z</button>
+    </div>
+  </div>
+
   <section class="card" aria-labelledby="chart-title">
     <h2 id="chart-title">Harbor City FC: goals by player</h2>
-    <p class="note">In Goals, a ball rolls the length of the bar. In Assists, a boot steps along it. In Goals + assists, the ball stops at the end of the goals and the boot carries on. Switching the metric or sort animates: in Presentation the values change first and then the rows move; in Analysis it's one quick step; Off jumps.</p>
-    <div class="bar">
-      <div class="seg" id="metric" role="group" aria-label="Metric">
-        <button type="button" data-value="goals" aria-pressed="true">Goals</button>
-        <button type="button" data-value="assists" aria-pressed="false">Assists</button>
-        <button type="button" data-value="ga" aria-pressed="false">Goals + assists</button>
-      </div>
-      <div class="seg" id="sort" role="group" aria-label="Sort">
-        <button type="button" data-value="value" aria-pressed="true">Highest first</button>
-        <button type="button" data-value="key" aria-pressed="false">A–Z</button>
-      </div>
-    </div>
+    <p class="note">The library's own <code>barChart</code>. In Goals, a ball rolls the length of the bar. In Assists, a boot steps along it. In Goals + assists, the ball stops at the end of the goals and the boot carries on. Switching the metric or sort animates: in Presentation the values change first and then the rows move; in Analysis it's one quick step; Off jumps.</p>
     <div id="chart"></div>
   </section>
 
+  <section class="card" aria-labelledby="host-title">
+    <h2 id="host-title">The same story on someone else's chart</h2>
+    <p class="note">A plain SVG chart drawn by hand, the way D3 code would draw it. It knows nothing about the library and redraws from scratch on every change, with no animation of its own. <code>expressive()</code> adds the same hover story, keyboard focus (Tab, then the arrow keys) and dimming, and <code>refresh()</code> keeps the effects in step after each redraw.</p>
+    <svg id="host-chart" role="img" aria-label="Harbor City FC: goals by player"></svg>
+  </section>
+
   <section class="card" aria-labelledby="check-title">
-    <h2 id="check-title">Feel checkpoint</h2>
+    <h2 id="check-title">Milestone 1: done when</h2>
     <ul class="checklist">
-      <li>Travel speed and easing in each mode, side by side with <a href="./lab.html">the prototype</a>.</li>
-      <li>Icon size and placement: the ball isn't clipped, the boot's sole stays down.</li>
-      <li>Hover timing: the 100 ms colour change and the dimming of the other bars.</li>
-      <li>Off, and reduced motion (DevTools rendering emulation): the icons rest at their end positions.</li>
-      <li>Keyboard: Tab into the chart and arrow through the bars. Each plays its story with the others dimmed, inside a focus ring that covers nothing; Escape stops it, Home and End jump to the ends.</li>
-      <li>Metric and sort changes: values first, then positions, in Presentation; one quick step in Analysis; a jump in Off. Click again mid-change: nothing jumps. A hovered bar replays its story once the change settles.</li>
+      <li>All three hover stories match <a href="./lab.html">the prototype</a>, on both charts: travel speed and easing, the ball not clipped, the boot's sole down.</li>
+      <li>Sorting is staged in Presentation (values first, then positions), one quick step in Analysis, and instant in Off and under reduced motion (DevTools rendering emulation). Clicking again mid-change makes nothing jump.</li>
+      <li>Keyboard focus plays the same stories: Tab into a chart, then the arrow keys, Home and End; Escape stops.</li>
+      <li>Off and reduced motion: hovering shows the icons resting at their end positions.</li>
+      <li>The conformance tests pass for <code>travel</code> on bar marks from both sources (<code>npm test</code>).</li>
     </ul>
   </section>
 </main>

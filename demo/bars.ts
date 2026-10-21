@@ -1,8 +1,7 @@
 // M1: the prototype's ball-and-cleat card on the real library (steps 7 and 8), and the same story on a
 // hand-written SVG chart through expressive() (step 11). M2: "Play next matchweek" flashes the bars
 // that changed (step 2), the motion switch is the library's own (step 4), and the chart has a data
-// table with the players' positions and announces its updates to screen readers (step 5), and
-// expressive() names the hand-written chart's players for screen readers (markLabel).
+// table with the players' positions and announces its updates to screen readers (step 5).
 import { barChart, expressive, motionSwitch, sequence, travel } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
 import { amount, drawHostChart, type DrawOptions, type Segment } from "./host-chart";

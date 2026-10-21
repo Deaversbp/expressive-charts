@@ -640,6 +640,7 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
 
 - **Structure.** Each mark gets an `aria-label`, defaulting to "Okafor: 16 goals, 4 assists", that a page can word with `markLabel(d, mark)` (planned as `describe(d)`; built after M2 step 5, with the name changed because `describe` is the geometry builders' namespace). The SVG gets the chart's `label` and `description`. The exact ARIA roles (`group`/`list`/`listitem` vs `graphics-*`) are picked in M2 after testing with NVDA + Chrome and VoiceOver + Safari. M2 step 5 picked `group` on the SVG and `img` on each mark, and the NVDA + Chrome check confirmed them ([a11y-check.md](a11y-check.md)).
 - **Keyboard.** Each chart is one tab stop (roving `tabindex`). Arrow keys move between marks in visual order, following the current sort, and Home/End jump to the ends. Focus fires `hover` (`source: "keyboard"`), so effects play. Escape or blur fires `leave`. The focus ring is drawn from `mark.outline` in `--ec-focus`, because browser focus outlines on SVG are inconsistent.
+- **Host charts.** `expressive()` writes no ARIA unless asked. `markLabel(datum, mark)` names each host mark as one item, as `barChart` does: the element that takes the mark's focus becomes `role="img"` with the name, and the mark's other parts are hidden. The `<svg>`'s role (`group`, not `img`) and the host's own text stay the host's; the adapter warns about a `role="img"` root.
 - **Data table.** On by default: a `<details>` "Data table" after the chart, as in the prototype. It follows the current sort and updates with the data. `"hidden"` makes it visually hidden but readable by screen readers.
 - **Pause controls (WCAG 2.2.2).** Nothing auto-plays by default. The `playback()` controller (play, pause, seek, stop) comes with a `playButton()` helper whose label switches between Play and Pause. Effects can't loop forever in v0.1: `pulse` repeats are capped below 5 s. If looping is ever added, the chart must render a pause control.
 - **Tooltips** are `aria-hidden`, since the same text is in the mark's label and the table. On touch they follow the tap. A tooltip function's text is also the mark's description (M2 step 3, built).
@@ -678,7 +679,7 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
 - Phone widths and touch.
 - No dropped frames in the Performance panel.
 
-Automated visual regression (Playwright screenshots on a manual clock) is worth adding in M2 but needs a new dev dependency (§10).
+Automated visual regression (Playwright screenshots on a manual clock) is worth adding in M2 but needs a new dev dependency (§10). *Built in M2 step 6* (`tests/visual/`, on Playwright's fake clock).
 
 ---
 
@@ -727,8 +728,8 @@ Steps 5–7 come first so the motion can be judged in a browser before staged up
 - the conformance suite on bar marks from both sources.
 
 Two things haven't been checked in a browser:
-- **Reduced motion.** The browser pane can't emulate `prefers-reduced-motion`. It's covered by the motion core's tests and by Off, which takes the same path.
-- **The smoothness of staged transitions.** That needs a visible pane, because a hidden one throttles frames.
+- **Reduced motion.** The browser pane can't emulate `prefers-reduced-motion`. It's covered by the motion core's tests and by Off, which takes the same path. *Now checked in Chromium by M2 step 6:* the switch shows Off with its note and follows the setting live, hovering shows the icons at their end positions on both charts, a metric switch jumps, and picking a mode on the page overrides it.
+- **The smoothness of staged transitions.** That needs a visible pane, because a hidden one throttles frames. *M2 step 6 checks staged frames at fixed times* (values first, then positions), *but not smoothness at real frame rates.*
 
 ### M2: Bars at prototype parity
 
@@ -782,13 +783,22 @@ Each step names the files it owns, so steps in the same wave can run in parallel
      - The total column shows only for a stack, as the tooltip's total does. The caption (the chart's label) is visually hidden, since the chart's title is beside it. `"hidden"` is a visually hidden `<div>`, not a `<details>`, because a closed `<details>` hides its contents from screen readers.
      - The table changes as soon as an update starts, like the labels and the legend, rather than once it settles (§5.5 step 6). Rows are kept by key, so an open table and a screen reader's place in it stay.
      - **`announce`** is `boolean | (change) => string | undefined`. The chart's summary names a new label or new series, the sort, and the marks that changed (by name up to three, then "5 of 8 changed"), were added or were removed. A function gets that text and the keys and returns the page's own text; it's called before `update()` returns, so the demo adds the matchweek. Turned on by `update()`, it announces from the next update.
+     - **Follow-up: the demo's second chart.** Its `<svg>` was `role="img"` around focusable rects with no names. Now the page makes it `role="group"`, and the hand-drawn chart names each rect by what it shows ("Okafor: 4 assists") and hides its name and value texts, as a careful D3 page would. `expressive()` takes `markLabel(datum, mark)`, which names the element that takes each mark's focus and hides the mark's other parts, so a player is read once ("Okafor: 16 goals, 4 assists"). It's in the adapter because the adapter picks which element takes focus, and Plot and Vega-Lite can't name one segment and hide another ([architecture.md](architecture.md#adapters)). It warns once about a `role="img"` root. [a11y-check.md](a11y-check.md) section C is its listening script, not run yet.
      - The demo's table has a "Player" header and a Position column. Its "After matchweek N" status is no longer a live region, since the chart announces each matchweek.
-     - **Built after the check:** `markLabel(d, mark)` words the marks' names, so the demo says "1 goal" where the default says "1 goals". It's `describe(d)` in §7.2's first draft, renamed because `describe` is the geometry builders' namespace and, in ARIA, a description is the tooltip function's job. `mark` is a `MarkSummary` (`key`, `category`, the `values` shown, `total`, the chart's `format`, and the default `text`). An empty result or a throw (reported) keeps the default name, since a focusable mark must have one. The default wording stays: the chart can't make a singular from a field name.
+     - **Built after the check:** `barChart`'s `markLabel(d, mark)` words the marks' names, so the demo says "1 goal" where the default says "1 goals". It's `describe(d)` in §7.2's first draft, renamed because `describe` is the geometry builders' namespace and, in ARIA, a description is the tooltip function's job; `expressive()` has the same name. `mark` is a `MarkSummary` (`key`, `category`, the `values` shown, `total`, the chart's `format`, and the default `text`). An empty result or a throw (reported) keeps the default name, since a focusable mark must have one. The default wording stays: the chart can't make a singular from a field name.
      - **Still open:** maybe a series display-names option shared by the legend, tooltip, labels and table headers.
-6. **Playwright screenshot tests.** Owns the Playwright dev dependency, `playwright.config.ts`, `tests/visual/`, a CI job, and a small hook that lets tests drive the page-wide clock.
+6. ✅ **Playwright screenshot tests.** Owns the Playwright dev dependency, `playwright.config.ts`, `tests/visual/`, a CI job, and a small hook that lets tests drive the page-wide clock.
    - Screenshots of the demo in light and dark, at rest and mid-travel at fixed clock times, in each motion mode, plus focus rings on both charts.
    - Chromium only, with the browser cached in CI. A documented command updates the baselines.
    - Baselines are captured once steps 1–3 have landed, so they don't churn.
+   - **Built** ([CONTRIBUTING.md](../CONTRIBUTING.md#visual-tests), [architecture.md](architecture.md#clock)): `tests/visual/` has 18 tests and 27 baselines. They cover the list above, plus the tooltip and legend, a staged metric switch, and reduced motion in a real browser, with DOM checks beside the screenshots. Decisions:
+     - **No hook in the library.** Playwright's `page.clock` fakes `performance.now()` and `requestAnimationFrame`, which `defaultClock` looks up only when it asks for a frame, so tests drive the page-wide clock with `runFor(ms)`. Each test first moves the clock to the same reading, so frames (every 16 ms) fall at the same times on every machine.
+     - **CI runs in the official Playwright image**, pinned to the `@playwright/test` version (1.64.1). The image comes with Chromium and its fonts, so nothing is downloaded per run, which does the job of a browser cache. It also means baselines made locally in the same image (`npm run test:visual:update`, through Docker) match CI's exactly. The **Update visual baselines** workflow (`workflow_dispatch`) does the same on GitHub and uploads the screenshots as an artifact.
+     - Baselines have no platform suffix and are compared only on Linux. Elsewhere `npm run test:visual` runs just the DOM checks.
+     - Tolerance: a per-pixel threshold of 0.1 (the default is 0.2) and at most 10 differing pixels; an icon one pixel off changes dozens. Three repeated runs all passed. Renders aren't always bit-identical: a few anti-aliased pixels at a focus ring's corner vary between runs, which the slack covers. There are no retries, so a flaky picture shows up.
+     - The viewport (1000 × 2000) is taller than the page, so an element screenshot never scrolls. A scroll moved the page under the resting pointer, which then hovered the next bar.
+     - Reduced motion is checked in the DOM against the same story animated: the icons end at identical transforms, and nothing runs after the jump. Pictures are shared between the two only where the page above the chart is the same: the reduced-motion note is a line longer, which moves the charts by half a pixel and changes every anti-aliased edge.
+   - **Found and fixed:** on the hand-written chart, the focus ring couldn't be seen on a goals bar. `expressive()` stroked a 2 px ring in `--ec-focus` centred on the outline, with no gap, and `--ec-series-1` is the same blue. Its ring now matches barChart's, 2 px past a 2 px gap, masked to outside the mark, since the adapter's overlay is above the marks. The gap is left clear rather than painted in `--ec-surface` ([architecture.md](architecture.md#adapters)). The focus screenshots now cover light and dark.
 
 **Wave 3:**
 
@@ -857,7 +867,7 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 2. **CSS delivery.** *Decided in M2 planning: both* (M2 step 1). Auto-injected `<style>` vs a CSS file. *Recommendation:* both, with injection on by default (§7.1).
 3. **Persisting the viewer's motion choice** across pages (`localStorage`). *Decided: opt-in `persist`* (M2 step 4). *Recommendation:* opt-in `motionSwitch(el, motion, { persist: "key" })`.
 4. **Live-region announcements** on update, on or off by default. *Decided: off by default, with an `announce` option* (M2 step 5). *Recommendation:* off by default, with a one-line option.
-5. **Playwright for visual regression** needs a new dev dependency plus browsers in CI. *Decided in M2 planning: yes, Chromium only* (M2 step 6). *Recommendation:* decide at M2.
+5. **Playwright for visual regression** needs a new dev dependency plus browsers in CI. *Decided in M2 planning: yes, Chromium only; built in M2 step 6.* *Recommendation:* decide at M2.
 6. **More subpath exports** (`expressive-charts/core`, `/effects`) for smaller bundles. The first one (`/icons/sport`) is needed in M1. *Recommendation:* decide the rest in M6 using real bundle numbers.
 7. **TypeScript 7** (the native compiler) is a separate upgrade. *Recommendation:* after M1, once there's real code to typecheck.
 8. **Framework wrappers** (React, Vue, Svelte) are out of scope for 0.1. The imperative `update()` API is designed to be easy to wrap.

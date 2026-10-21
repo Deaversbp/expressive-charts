@@ -1,10 +1,22 @@
 // Every change the adapter makes to the host's elements, with what was there before, so it can all
-// be undone: attributes (tabindex), inline style properties and classes. Touching el.style or
+// be undone: attributes (tabindex, ARIA), inline style properties and classes. Touching el.style or
 // el.classList rewrites the whole attribute, so once the last of our changes is undone, an attribute
 // that reads the same as before gets its exact text back (or goes away, if it wasn't there).
+//
+// A host that reuses its elements may rewrite an attribute we also write (its own aria-label, as the
+// data changes). Its latest value is the one to put back, so an attribute that no longer reads as we
+// left it takes the host's value as its new original, and undoing our change leaves the host's alone.
+
+/** An attribute we changed. null: absent. */
+interface SavedAttribute {
+  /** What to put back: the host's value from before our first change, or the one it wrote since. */
+  original: string | null;
+  /** What we last left it as. */
+  written: string | null;
+}
 
 interface Saved {
-  readonly attributes: Map<string, string | null>;
+  readonly attributes: Map<string, SavedAttribute>;
   /** Inline style properties we changed: their value and priority before. */
   readonly styles: Map<string, { readonly value: string; readonly priority: string }>;
   /** Classes we added (ones the element already had are left alone). */
@@ -14,8 +26,10 @@ interface Saved {
 }
 
 export interface HostEdits {
-  /** Sets an attribute; null puts back what was there before. */
+  /** Sets an attribute; null puts back the host's value, unless the host has written its own since. */
   attribute(element: Element, name: string, value: string | null): void;
+  /** Removes an attribute; `attribute(element, name, null)` puts it back. */
+  remove(element: Element, name: string): void;
   /** Sets an inline style property; undefined puts back what was there before. */
   style(element: Element, property: string, value: string | undefined): void;
   /** Whether we're overriding the property now. */
@@ -65,17 +79,31 @@ export function hostEdits(): HostEdits {
     if (tokens(element.getAttribute("class")) === tokens(before)) put(element, "class", before);
   };
 
-  function attribute(element: Element, name: string, value: string | null): void {
-    const found = entry(element);
-    if (!found.attributes.has(name)) {
-      if (value === null) return;
-      found.attributes.set(name, element.getAttribute(name));
+  /** Sets (text) or removes (null) an attribute, keeping the host's value to put back. */
+  function write(element: Element, name: string, text: string | null): void {
+    const now = element.getAttribute(name);
+    const kept = entry(element).attributes;
+    const found = kept.get(name);
+    if (!found) kept.set(name, { original: now, written: text });
+    else {
+      // The host changed it since we last wrote it: that's its value now.
+      if (now !== found.written) found.original = now;
+      found.written = text;
     }
-    const original = found.attributes.get(name)!;
-    const next = value ?? original;
-    if (next === null) element.removeAttribute(name);
-    else if (element.getAttribute(name) !== next) element.setAttribute(name, next);
-    if (value === null) found.attributes.delete(name);
+    put(element, name, text);
+  }
+
+  function attribute(element: Element, name: string, value: string | null): void {
+    if (value !== null) {
+      write(element, name, value);
+      return;
+    }
+    const kept = saved.get(element)?.attributes;
+    const found = kept?.get(name);
+    if (!kept || !found) return;
+    // Unless the host has written its own since, which stays.
+    if (element.getAttribute(name) === found.written) put(element, name, found.original);
+    kept.delete(name);
   }
 
   function style(element: Element, property: string, value: string | undefined): void {
@@ -125,6 +153,7 @@ export function hostEdits(): HostEdits {
 
   return {
     attribute,
+    remove: (element, name) => write(element, name, null),
     style,
     styled: (element, property) => saved.get(element)?.styles.has(property) ?? false,
     toggleClass,

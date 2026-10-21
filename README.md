@@ -182,12 +182,15 @@ const fx = expressive(svg.selectAll("rect"), {
   value: (d) => d[1] - d[0],                        // what each rect shows: updates follow values, not lengths
   baseline: "auto",                                 // the edge every bar grows from (the default)
   keyboard: true,                                   // focusable bars; focus plays the hover story
+  markLabel: (d) => `${d.data.name}: ${d.data.goals} goals, ${d.data.assists} assists`, // each bar read as one item
   on: { hover: ballThenCleat }
 });
 fx.refresh(svg.selectAll("rect"));                   // after the page redraws: enter, update and exit by key
 ```
 
 For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Other shapes take a `geometry` callback built with `describe`. Without `value`, the adapter compares lengths, so a resize or a new axis maximum counts as an update for every bar (and `update: "flash"` flashes them all); with it, only bars whose values changed get one, as on `barChart`.
+
+The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 
 See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`.
 
@@ -207,6 +210,7 @@ npm run dev
 | `npm run dev` | Serves the `demo/` folder with live reload |
 | `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` entry), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
 | `npm test` | Runs the test suite |
+| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
 | `npm run typecheck` | Checks types without building |
 
 Requires Node.js 22 or newer (CI tests 22 and 24).

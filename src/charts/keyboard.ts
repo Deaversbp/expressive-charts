@@ -97,6 +97,13 @@ export function keyboardFocus(svg: () => SVGSVGElement | undefined, options: Key
       leave();
       return;
     }
+    // Focus on a mark's element that screen readers can't see (a click on a stack's other segment,
+    // which the adapter's markLabel hides) goes on to the element that carries the mark's name.
+    const own = options.element(key);
+    if (own && own !== event.target && (event.target as Element).getAttribute("aria-hidden") === "true") {
+      own.focus();
+      if (on?.scope.activeElement === own) return;
+    }
     focused = { key, element: event.target as SVGElement };
     if (key === current) return;
     current = key;

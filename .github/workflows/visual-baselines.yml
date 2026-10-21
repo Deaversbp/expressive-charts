@@ -1,0 +1,25 @@
+name: Update visual baselines
+
+# Run from the Actions tab on any branch. It writes the screenshots that changed (and any that are
+# missing) in the same image as the CI job, and uploads them as the "visual-baselines" artifact:
+# unzip it over tests/visual/__screenshots__/, look at what changed, and commit it.
+on:
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    container:
+      # Keep in step with the visual job in ci.yml and @playwright/test in package.json.
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm ci
+      - run: npm run test:visual -- --update-snapshots
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: visual-baselines
+          path: tests/visual/__screenshots__/
+          retention-days: 14

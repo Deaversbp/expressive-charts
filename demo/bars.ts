@@ -5,7 +5,7 @@
 // accessible names say "1 goal" (markLabel).
 import { barChart, expressive, motionSwitch, sequence, travel } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
-import { drawHostChart, type DrawOptions, type Segment } from "./host-chart";
+import { amount, drawHostChart, type DrawOptions, type Segment } from "./host-chart";
 
 interface Player {
   name: string;
@@ -77,6 +77,9 @@ const host = expressive<Segment>(drawHost(), {
   // What each rect shows, so refresh() flashes the players who scored, not every bar on a resize or a new axis maximum.
   value: (d) => d.value,
   keyboard: true,
+  // The host names each rect by what it shows ("Okafor: 4 assists"), but focus moves by player, so
+  // each player is read as one item: the rect that takes focus names all their values, and the other is hidden.
+  markLabel: (d, mark) => `${d.row.name}: ${mark.parts.map((part) => amount(part.datum.value, part.datum.series)).join(", ")}`,
   dim: true,
   on: { hover: ballThenCleat, update: "flash" }
 });

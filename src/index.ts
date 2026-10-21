@@ -33,6 +33,7 @@ export type {
   ChartOptions,
   ColorAssignment,
   ExpressiveOptions,
+  HostMark,
   KeyOfType,
   MarkEvent,
   MarkEvents,

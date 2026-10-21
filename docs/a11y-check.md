@@ -1,6 +1,6 @@
 # Screen-reader check: `barChart` (M2 step 5)
 
-This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
+This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
 
 **Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results).
 
@@ -32,7 +32,7 @@ Role words and their order vary between versions and verbosity settings: "graphi
 ## Known, no need to report
 
 - **The chart's name twice.** The page's section heading has the same text as the chart, so on the way in you may hear it as a region and then as a group.
-- **The second chart** ("The same story on someone else's chart") is the page's own SVG, with effects added by `expressive()`. Its ARIA isn't part of this step, so skip it. (Its `<svg>` is `role="img"` with focusable bars inside, which screen readers handle badly. That's a separate follow-up.)
+- **The second chart** ("The same story on someone else's chart") has its own script, [section C](#c-the-second-chart-expressive-on-the-pages-own-svg). Sections A and B stop at the data table, before it.
 
 ## A. NVDA + Chrome (Windows)
 
@@ -83,6 +83,45 @@ VO means Control+Option.
 | 11 | VO+Down, then VO+Right 4 times. | "Adeyemi, row 2". Then each cell with its column header: "Midfielder, Position", "4, goals", "6, assists", "10, Total". | |
 | 12 | VO+Down. | "6, Castillo", or the row header and value in some order. | |
 
+## C. The second chart: `expressive()` on the page's own SVG
+
+The card "The same story on someone else's chart" is an SVG the page draws itself, the way D3 code would, with effects, keyboard focus and names added by `expressive()`. It should read like the first chart:
+
+- **The chart.** The `<svg>` is `role="group"`, named like the first chart: the page changes its `aria-label` with the metric.
+- **The bars.** The page names each rect by what it shows ("Okafor: 4 assists") and hides its name and value texts. Focus moves by player, so `markLabel` names the rect that takes each player's focus with all their values ("Okafor: 16 goals, 4 assists"), and hides the player's other rect.
+- It has no tooltip, data table or announcements of its own. The page words the names itself, so a value of 1 reads "1 goal".
+
+Start from a fresh page (Goals, Highest first, after matchweek 24), with the setup from A or B. **Listen for:**
+
+1. Each player is read **once, as one item**, with every value the bar shows: "Okafor: 16 goals, 4 assists". Never "Okafor: 4 assists" on its own, and never the name or a number by itself.
+2. Moving into the chart says its name once.
+3. A value of 1 reads "1 goal" or "1 assist".
+4. Nothing is read that you can't see.
+
+**NVDA + Chrome**, starting in browse mode:
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 12 times from the top of the page: past the first chart and "Data table", to the second chart's first bar. | "Harbor City FC: goals by player, grouping", then "Okafor: 16 goals, graphic". The ball rolls along Okafor's bar. | |
+| 2 | Down arrow twice (browse mode). | "graphic, Lindqvist: 10 goals", then "graphic, Moreau: 8 goals". Never "Lindqvist" or "10" on their own. | |
+| 3 | NVDA+Space (focus mode), then End, then Home. | "Castillo: 1 goal, graphic", then "Okafor: 16 goals, graphic". The focus ring moves with each one. | |
+| 4 | NVDA+Space (browse mode). Shift+Tab 6 times, to "Goals + assists". Press Space. | "Goals + assists, toggle button, not pressed", then "pressed", and the first chart's announcement. | |
+| 5 | Tab 6 times, back into the second chart. | "Harbor City FC: goals and assists by player, grouping", then "Okafor: 16 goals, 4 assists, graphic". | |
+| 6 | Shift+Tab 3 times, to "Play next matchweek". Press Space. Then Tab 3 times, back into the second chart. | "Matchweek 25: Lindqvist and Okafor changed" (the first chart's), then "Okafor: 17 goals, 4 assists, graphic". | |
+| 7 | Down arrow 3 times (browse mode). | "Lindqvist: 11 goals, 8 assists", "Tanaka: 6 goals, 10 assists", "Moreau: 8 goals, 3 assists", each as one graphic. Never a player's assists on their own. | |
+
+**VoiceOver + Safari**, with the settings from B:
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 12 times, until focus reaches the second chart's first bar. | "Okafor: 16 goals, image", and "Harbor City FC: goals by player, group". | |
+| 2 | Down arrow twice, then End, then Home. | "Lindqvist: 10 goals, image", "Moreau: 8 goals, image", "Castillo: 1 goal, image", "Okafor: 16 goals, image". | |
+| 3 | VO+Right, then VO+Left. | "Lindqvist: 10 goals, image", then "Okafor: 16 goals, image": one item per bar. | |
+| 4 | Shift+Tab 6 times, to "Goals + assists". Press Space. Then Tab 6 times, back into the chart. | "Okafor: 16 goals, 4 assists, image", with the chart's new name. | |
+| 5 | VO+Right 3 times. | "Lindqvist: 10 goals, 7 assists, image", "Tanaka: 6 goals, 10 assists, image", "Moreau: 8 goals, 3 assists, image". Never a player's assists on their own. | |
+
+If a bar is read twice or in pieces here but not on the first chart, the difference is the structure: here the named element is a `<rect>` inside the page's own `<g>` for each series, where the first chart has a `<g role="img">` per bar.
+
 ## Results
 
 **NVDA + Chrome on Windows 11, 21 October 2026: passed.** Steps 1–13 read as expected, with the default settings, so every "Listen for" item passed. The roles (`group` on the `<svg>`, `img` on each bar), the table and the announcements stay as built. Versions weren't noted.
@@ -90,6 +129,8 @@ VO means Control+Option.
 - The one hitch was the tester's, not the page's. In step 11, T did nothing because NVDA was still in focus mode; after NVDA+Space back to browse mode, it found the table. Step 11 now says so.
 
 **VoiceOver + Safari:** not run yet. It needs a Mac.
+
+**The second chart (section C):** not run yet, with either screen reader.
 
 Template for the next run:
 

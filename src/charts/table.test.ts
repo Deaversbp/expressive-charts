@@ -313,6 +313,29 @@ describe("barChart: data table", () => {
     expect(text()).toEqual(before);
   });
 
+  it("leaves nothing behind when a column throws as the chart is made", () => {
+    const container = document.body.appendChild(document.createElement("div"));
+    let subscribed = 0;
+    const motion = createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+    const subscribe = motion.subscribe.bind(motion);
+    motion.subscribe = (listener) => {
+      subscribed++;
+      return subscribe(listener);
+    };
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion, clock: manualClock() };
+    const add = vi.spyOn(EventTarget.prototype, "addEventListener");
+    const broken = () => {
+      throw new Error("column");
+    };
+    expect(() =>
+      barChart<Player>(container, { label: "Goals by player", data: players, y: "name", x: "goals", width: 600, announce: true, table: { columns: [{ label: "Broken", field: broken }] } }, env)
+    ).toThrow("column");
+    expect(container.childNodes).toHaveLength(0);
+    expect(add).not.toHaveBeenCalled();
+    expect(subscribed).toBe(0);
+    add.mockRestore();
+  });
+
   it("is removed with the chart", () => {
     const { container, chart } = setup();
     chart.destroy();

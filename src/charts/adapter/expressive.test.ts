@@ -142,6 +142,7 @@ const overlayOf = (svg: SVGSVGElement) => svg.querySelector(":scope > .ec-overla
 afterEach(() => {
   document.body.textContent = "";
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("expressive: keys and segments", () => {
@@ -202,6 +203,7 @@ describe("expressive: keys and segments", () => {
     expect(() => setup([path], { key: () => "line" })).toThrow(/can't read the geometry of a <path>/);
     expect(() => setup(host.selection(), { ...stacked, baseline: "middle" as "left" })).toThrow(/baseline must be/);
     expect(() => setup(host.selection(), { ...stacked, value: 3 as never })).toThrow(/value must be a function/);
+    expect(() => setup(host.selection(), { ...stacked, markLabel: "Okafor" as never })).toThrow(/markLabel must be a function/);
     expect(() => setup(host.selection(), {} as ExpressiveOptions<StackPoint>)).toThrow(/needs a key function/);
   });
 
@@ -640,6 +642,56 @@ describe("expressive: keyboard", () => {
     expect(story.log.filter((line) => line.startsWith("run"))).toHaveLength(5);
   });
 
+  it("draws the ring outside the mark and a clear gap, so it shows on a bar in the focus colour", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    const overlay = overlayOf(host.svg);
+    const ring = overlay.querySelector(".ec-focus-ring")!;
+    fx.focus("Okafor");
+    const outline = fx.marks().find((mark) => mark.key === "Okafor")!.outline.d;
+
+    // An 8 px stroke on the outline, masked to more than 2 px outside it: a 2 px ring past a 2 px gap.
+    expect(ring.getAttribute("d")).toBe(outline);
+    expect(ring.getAttribute("stroke-width")).toBe("8");
+    const id = /^url\(#(.+)\)$/.exec(ring.getAttribute("mask") ?? "")?.[1];
+    const mask = overlay.querySelector(`mask#${id}`)!;
+    expect(mask.querySelector("rect")?.getAttribute("fill")).toBe("white");
+    const hole = mask.querySelector("path")!;
+    expect(["d", "fill", "stroke", "stroke-width"].map((name) => hole.getAttribute(name))).toEqual([outline, "black", "black", "4"]);
+
+    fx.focus("Tanaka");
+    expect(hole.getAttribute("d")).toBe(fx.marks().find((mark) => mark.key === "Tanaka")!.outline.d);
+
+    // Another attachment's mask has its own id.
+    const other = d3Stack();
+    setup(other.selection(), { ...stacked, keyboard: true });
+    expect(overlayOf(other.svg).querySelector(".ec-focus-ring")?.getAttribute("mask")).not.toBe(ring.getAttribute("mask"));
+  });
+
+  it("rings an open outline from geometry on both sides, outside its stroke", () => {
+    const host = d3Stack();
+    const points = [
+      { x: 0, y: 100 },
+      { x: 50, y: 20 },
+      { x: 100, y: 80 }
+    ];
+    const trace = el("path", { d: "M0,100L50,20L100,80" }, host.plot);
+    Object.assign(trace, { __data__: { name: "xG" } });
+    const { fx } = setup<{ name: string }>([trace], {
+      key: (d) => d.name,
+      keyboard: true,
+      geometry: (_el, _d, k) => build.line({ key: k, points, width: 3 })
+    });
+    fx.focus("xG");
+    const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
+    const hole = overlayOf(host.svg).querySelector("mask path")!;
+    expect(ring.getAttribute("visibility")).toBeNull();
+    // Unfilled: a fill would close the line into a triangle and mask the ring along its inside. The
+    // gap and ring start at the 3 px stroke's edge.
+    expect(["fill", "stroke-width"].map((name) => hole.getAttribute(name))).toEqual(["none", "7"]);
+    expect(ring.getAttribute("stroke-width")).toBe("11");
+  });
+
   it("shows the ring for a Tab after a click on the chart's background", () => {
     const host = d3Stack();
     setup(host.selection(), { ...stacked, keyboard: true });
@@ -876,6 +928,172 @@ describe("expressive: keyboard", () => {
   });
 });
 
+describe("expressive: markLabel", () => {
+  /** "Okafor: 16 goals, 4 assists", from the parts the adapter passes, from the baseline. */
+  const label: ExpressiveOptions<StackPoint>["markLabel"] = (d, mark) =>
+    `${d.data.name}: ${mark.parts.map((part) => `${part.datum[1] - part.datum[0]} ${part.series}`).join(", ")}`;
+  const aria = (element: Element): string =>
+    ["role", "aria-label", "aria-hidden"].map((name) => `${name}=${element.getAttribute(name) ?? "-"}`).join(" ");
+
+  it("makes the element that takes a mark's focus an image named by it, and hides the mark's other parts", () => {
+    const host = d3Stack();
+    const seen: string[] = [];
+    setup(host.selection(), {
+      ...stacked,
+      keyboard: true,
+      markLabel: (d, mark) => {
+        seen.push(`${mark.key}: ${mark.parts.map((part) => part.series).join(" ")}`);
+        return label!(d, mark);
+      }
+    });
+    expect(seen).toEqual(["Okafor: goals assists", "Tanaka: goals assists", "Lindqvist: goals assists"]);
+    expect(aria(host.rect("Okafor", "goals"))).toBe("role=img aria-label=Okafor: 16 goals, 4 assists aria-hidden=-");
+    expect(aria(host.rect("Okafor", "assists"))).toBe("role=- aria-label=- aria-hidden=true");
+    // The named element is the one keyboard focus uses.
+    expect(host.rect("Okafor", "goals").getAttribute("tabindex")).toBe("0");
+    // Nothing else is touched: the host's groups and the <svg> keep their own.
+    expect(host.groups.some((g) => g.hasAttribute("role") || g.hasAttribute("aria-hidden"))).toBe(false);
+    expect(host.svg.hasAttribute("role")).toBe(false);
+  });
+
+  it("names marks again on every refresh, as their values and parts change", () => {
+    const host = d3Stack();
+    // Left: once Okafor's goals rect goes, the assists rect no longer touches the shared edge.
+    const { fx } = setup(host.selection(), { ...stacked, baseline: "left", markLabel: label });
+    host.redraw([{ name: "Okafor", goals: 17, assists: 4 }, ...players.slice(1)]);
+    fx.refresh(host.selection());
+    expect(host.rect("Okafor", "goals").getAttribute("aria-label")).toBe("Okafor: 17 goals, 4 assists");
+
+    // Okafor loses the goals segment: the assists rect takes the mark's focus and its name.
+    const goals = host.rect("Okafor", "goals");
+    goals.remove();
+    fx.refresh(host.selection());
+    expect(aria(host.rect("Okafor", "assists"))).toBe("role=img aria-label=Okafor: 4 assists aria-hidden=-");
+    // The rect that left gets back what the host had: nothing.
+    expect(aria(goals)).toBe("role=- aria-label=- aria-hidden=-");
+  });
+
+  it("names the first element in document order of a mark described with geometry", () => {
+    const host = d3Stack();
+    const slices = ["Saved", "Scored"].map((outcome, i) =>
+      Object.assign(el("path", { d: "M0,0L1,1" }, host.plot), { __data__: { outcome, start: i, end: i + 1 } })
+    );
+    setup<{ outcome: string; start: number; end: number }>(slices, {
+      key: (d) => d.outcome,
+      geometry: (_el, d, k) => build.arc({ key: k, cx: 0, cy: 0, inner: 70, outer: 116, start: d.start, end: d.end }),
+      markLabel: (d) => `${d.outcome}: 4 shots`
+    });
+    expect(slices.map(aria)).toEqual(["role=img aria-label=Saved: 4 shots aria-hidden=-", "role=img aria-label=Scored: 4 shots aria-hidden=-"]);
+  });
+
+  it("leaves a mark's ARIA as the host drew it for an empty name or a throw, which is reported", () => {
+    const host = d3Stack();
+    host.rect("Tanaka", "goals").setAttribute("aria-label", "Tanaka: 6 goals");
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    setup(host.selection(), {
+      ...stacked,
+      markLabel: (d, mark) => {
+        if (d.data.name === "Tanaka") return " ";
+        if (d.data.name === "Lindqvist") throw new Error("label");
+        return label!(d, mark);
+      }
+    });
+    expect(aria(host.rect("Okafor", "goals"))).toBe("role=img aria-label=Okafor: 16 goals, 4 assists aria-hidden=-");
+    expect(aria(host.rect("Tanaka", "goals"))).toBe("role=- aria-label=Tanaka: 6 goals aria-hidden=-");
+    expect(aria(host.rect("Tanaka", "assists"))).toBe("role=- aria-label=- aria-hidden=-");
+    expect(aria(host.rect("Lindqvist", "assists"))).toBe("role=- aria-label=- aria-hidden=-");
+    expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: "label" }));
+  });
+
+  it("writes no ARIA without it, and puts back the host's own on destroy", () => {
+    const host = d3Stack();
+    const plain = setup(host.selection(), { ...stacked, keyboard: true });
+    expect(host.rects().some((r) => r.hasAttribute("role") || r.hasAttribute("aria-label") || r.hasAttribute("aria-hidden"))).toBe(false);
+    plain.fx.destroy();
+
+    // A careful host names each segment itself; the attachment names the mark, and destroy() undoes it.
+    for (const rect of host.rects()) {
+      const d = (rect as unknown as { __data__: StackPoint }).__data__;
+      const series = (rect.parentElement as Element | null) === host.groups[0] ? "goals" : "assists";
+      rect.setAttribute("role", "img");
+      rect.setAttribute("aria-label", `${d.data.name}: ${d[1] - d[0]} ${series}`);
+    }
+    const before = host.svg.outerHTML;
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true, markLabel: label });
+    expect(aria(host.rect("Okafor", "goals"))).toBe("role=img aria-label=Okafor: 16 goals, 4 assists aria-hidden=-");
+    // The other part keeps the host's name, hidden.
+    expect(aria(host.rect("Okafor", "assists"))).toBe("role=img aria-label=Okafor: 4 assists aria-hidden=true");
+    fx.destroy();
+    expect(host.svg.outerHTML).toBe(before);
+  });
+
+  it("shows the element it names even if the host hid it, and hides it again on destroy", () => {
+    const host = d3Stack();
+    host.rect("Okafor", "goals").setAttribute("aria-hidden", "true");
+    const { fx } = setup(host.selection(), { ...stacked, markLabel: label });
+    expect(aria(host.rect("Okafor", "goals"))).toBe("role=img aria-label=Okafor: 16 goals, 4 assists aria-hidden=-");
+    fx.destroy();
+    expect(aria(host.rect("Okafor", "goals"))).toBe("role=- aria-label=- aria-hidden=true");
+  });
+
+  it("keeps what the host writes between refreshes, and puts that back rather than what it had at first", () => {
+    const host = d3Stack();
+    const rect = host.rect("Okafor", "goals");
+    rect.setAttribute("aria-label", "Okafor: 16 goals");
+    let quiet = false;
+    const { fx } = setup(host.selection(), { ...stacked, markLabel: (d, mark) => (quiet ? "" : label!(d, mark)) });
+    // The host reuses the rect and writes its own name again, as a D3 join's update does.
+    rect.setAttribute("aria-label", "Okafor: 17 goals");
+    fx.refresh();
+    expect(rect.getAttribute("aria-label")).toBe("Okafor: 16 goals, 4 assists");
+    fx.destroy();
+    expect(aria(rect)).toBe("role=- aria-label=Okafor: 17 goals aria-hidden=-");
+
+    // An empty name after the host's write leaves the host's, too.
+    rect.setAttribute("aria-label", "Okafor: 16 goals");
+    const again = setup(host.selection(), { ...stacked, markLabel: (d, mark) => (quiet ? "" : label!(d, mark)) });
+    rect.setAttribute("aria-label", "Okafor: 18 goals");
+    quiet = true;
+    again.fx.refresh();
+    expect(aria(rect)).toBe("role=- aria-label=Okafor: 18 goals aria-hidden=-");
+  });
+
+  it("moves focus from a hidden segment to the element that carries the mark's name", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true, markLabel: label });
+    const events = hoverLog(fx);
+    const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
+    // A click on Tanaka's assists rect, which is hidden: focus lands on the goals rect, named for both.
+    pointer("pointerdown", host.rect("Tanaka", "assists"));
+    host.rect("Tanaka", "assists").focus();
+    expect(document.activeElement).toBe(host.rect("Tanaka", "goals"));
+    expect(host.rect("Tanaka", "goals").getAttribute("tabindex")).toBe("0");
+    expect(ring.getAttribute("visibility")).toBe("hidden");
+    expect(events).toEqual([]);
+    key(host.rect("Tanaka", "goals"), "ArrowDown");
+    expect(document.activeElement).toBe(host.rect("Lindqvist", "goals"));
+    expect(events).toEqual(["hover Lindqvist keyboard"]);
+  });
+
+  it('warns once when the <svg> is role="img", which hides the marks keyboard focus reaches', () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const host = d3Stack();
+    host.svg.setAttribute("role", "img");
+    setup(host.selection(), stacked).fx.destroy();
+    expect(warn).not.toHaveBeenCalled();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true });
+    fx.refresh();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Make it role="group"'));
+    fx.destroy();
+
+    host.svg.setAttribute("role", "group");
+    setup(host.selection(), { ...stacked, keyboard: true, markLabel: label });
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("expressive: destroy", () => {
   it("removes everything it added and leaves the host's DOM as it was", () => {
     const host = d3Stack();
@@ -891,7 +1109,13 @@ describe("expressive: destroy", () => {
       end: () => {},
       clear: () => {}
     };
-    const { fx } = setup(host.selection(), { ...stacked, keyboard: true, dim: true, on: { hover: draw, decorate: draw } });
+    const { fx } = setup(host.selection(), {
+      ...stacked,
+      keyboard: true,
+      dim: true,
+      markLabel: (d) => d.data.name,
+      on: { hover: draw, decorate: draw }
+    });
     pointer("pointerover", host.rect("Okafor", "goals"));
     fx.focus("Tanaka");
     expect(host.svg.outerHTML).not.toBe(before);

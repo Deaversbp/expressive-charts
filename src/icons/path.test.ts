@@ -15,6 +15,10 @@ describe("path data for icons", () => {
 
   it("reads arc flags written without separators, and compact numbers", () => {
     expect(round("M0,0a1 1 0 0110 10")).toBe("M0,0A1,1 0 0 1 10,10");
+    // Minifiers attach a flag to a fractional coordinate.
+    expect(round("M0,0A5 5 0 01.5 .5")).toBe("M0,0A5,5 0 0 1 0.5,0.5");
+    expect(round("M0,0A5 5 0 0 1.5 .5")).toBe("M0,0A5,5 0 0 1 0.5,0.5");
+    expect(round("M0,0A5 5 0 1 0-2 3")).toBe("M0,0A5,5 0 1 0 -2,3");
     expect(round("M.5-.5L1e1,2E-1")).toBe("M0.5,-0.5L10,0.2");
   });
 
@@ -24,6 +28,9 @@ describe("path data for icons", () => {
     expect(round("M0,0Z10,10")).toBe("M0,0Z");
     expect(round("M0,0X10,10")).toBe("M0,0");
     expect(round("M0,0L1e999,0")).toBe("M0,0");
+    // A flag is 0 or 1, nothing else.
+    expect(round("M0,0A5 5 0 2 1 3 3")).toBe("M0,0");
+    expect(round("M0,0A5 5 0 0 1e5 3 3")).toBe("M0,0");
   });
 
   it("moves points and arcs through a transform", () => {

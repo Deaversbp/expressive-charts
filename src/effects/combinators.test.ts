@@ -59,6 +59,10 @@ describe("combinator kinds", () => {
     const team: DataEffect<Team> = { kind: "data", run: async () => {}, end: () => {}, clear: () => {} };
     expectTypeOf(sequence(reader("r", log), team)).toEqualTypeOf<Combined<[DataEffect<Region>, DataEffect<Team>]>>();
     expectTypeOf(only("North", reader("r", log))).toEqualTypeOf<DataEffect<Region>>();
+    // only() builds a new effect, so it promises the effect interface, not the part's other members.
+    const custom = Object.assign(step("a", log), { label: "custom" });
+    expectTypeOf(only("North", custom)).toEqualTypeOf<GeometryEffect>();
+    expect(only("North", custom)).not.toHaveProperty("label");
     const morph = { kind: "transition" } as TransitionEffect;
     // Type-only: never called.
     const misuse = (): unknown =>

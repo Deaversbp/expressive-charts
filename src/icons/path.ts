@@ -24,7 +24,6 @@ const ARITY: Readonly<Record<string, number>> = { M: 2, L: 2, H: 1, V: 1, C: 6, 
 /** Separators, then a command letter or a number. Reading stops at anything else. */
 const TOKEN = /[\s,]*([A-Za-z]|[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/y;
 const LETTER = /^[A-Za-z]$/;
-const FLAGS = /^[01]{2,}/;
 
 /** Reads path data as SVG does: up to the first error, which ends the path. */
 export function parsePath(d: string): PathCommand[] {
@@ -52,18 +51,26 @@ export function parsePath(d: string): PathCommand[] {
     const arity = ARITY[upper];
     if (arity === undefined) break;
     const args: number[] = [];
+    let flagError = false;
     while (args.length < arity && i < tokens.length && !LETTER.test(tokens[i]!)) {
       const token = tokens[i]!;
-      // An arc's two flags can run together, and into the next number: "a1 1 0 0110 10".
-      if (upper === "A" && (args.length === 3 || args.length === 4) && FLAGS.test(token)) {
-        args.push(Number(token[0]));
-        tokens[i] = token.slice(1);
+      // An arc's flags are one character each, and can run into each other and into the next
+      // number: "a1 1 0 0110 10", "A5 5 0 01.5 .5". Anything but 0 or 1 there is an error.
+      if (upper === "A" && (args.length === 3 || args.length === 4)) {
+        const flag = token[0];
+        if (flag !== "0" && flag !== "1") {
+          flagError = true;
+          break;
+        }
+        args.push(Number(flag));
+        if (token.length > 1) tokens[i] = token.slice(1);
+        else i++;
         continue;
       }
       args.push(Number(token));
       i++;
     }
-    if (args.length < arity || !args.every(Number.isFinite)) break;
+    if (flagError || args.length < arity || !args.every(Number.isFinite)) break;
 
     const relative = command !== upper;
     const at = (x: number, y: number): Point => (relative ? { x: pen.x + x, y: pen.y + y } : { x, y });

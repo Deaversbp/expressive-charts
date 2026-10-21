@@ -27,8 +27,14 @@ export function parallel<E extends readonly AnyMarkEffect[]>(...effects: E): Com
   });
 }
 
+/**
+ * What `only` returns: a new effect of the same kind, needing the same rows. Only the effect
+ * interface is kept, not any other members the effect has.
+ */
+type Filtered<E extends AnyMarkEffect> = E extends DataEffect<infer D> ? DataEffect<D> : GeometryEffect;
+
 /** Runs the effect only on matching marks: a key, a series name, or a predicate. Elsewhere it does nothing. */
-export function only<E extends AnyMarkEffect>(filter: string | ((mark: MarkGeometry) => boolean), effect: E): E {
+export function only<E extends AnyMarkEffect>(filter: string | ((mark: MarkGeometry) => boolean), effect: E): Filtered<E> {
   if (typeof filter !== "string" && typeof filter !== "function") throw new TypeError(`only needs a key, a series name or a predicate, got ${describeValue(filter)}.`);
   const [part] = check("only", [effect]);
   const matches = typeof filter === "string" ? (mark: MarkGeometry) => mark.key === filter || mark.series === filter : filter;
@@ -43,7 +49,7 @@ export function only<E extends AnyMarkEffect>(filter: string | ((mark: MarkGeome
       },
       clear: (ctx) => inner.clear(ctx)
     };
-    return filtered as unknown as E;
+    return filtered as Filtered<E>;
   }
   const inner = part as GeometryEffect;
   const filtered: GeometryEffect = {
@@ -54,7 +60,7 @@ export function only<E extends AnyMarkEffect>(filter: string | ((mark: MarkGeome
     },
     clear: (ctx) => inner.clear(ctx)
   };
-  return filtered as E;
+  return filtered as Filtered<E>;
 }
 
 type Start = (part: AnyMarkEffect) => Promise<void>;

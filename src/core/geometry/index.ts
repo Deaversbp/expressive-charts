@@ -3,7 +3,7 @@
 
 export { describe } from "./describe";
 export type { ArcSpec, BarSegmentSpec, BarSpec, Baseline, LineSpec, PointSpec } from "./describe";
-export { matrix, offset } from "./matrix";
+export { invert, matrix, offset, parseTransform } from "./matrix";
 export { closedOutline, openOutline, type Sides } from "./outline";
 export { drawTo, formatNumber, moveTo, pathData } from "./path-data";
 export {

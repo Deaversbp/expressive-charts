@@ -54,6 +54,48 @@ function around(m: Matrix, about: Point | undefined): Matrix {
 /** @experimental */
 export const matrix = { translate, rotate, scale, multiply, apply };
 
+// Internal: iconFromSvg and the adapter read SVG transforms with these.
+
+/** The inverse transform. A singular matrix (it squashes everything onto a line) throws a RangeError. */
+export function invert(m: Matrix): Matrix {
+  const [a, b, c, d, e, f] = m;
+  const det = a * d - b * c;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-12) throw new RangeError("This transform can't be inverted: it has no area.");
+  return [d / det, -b / det, -c / det, a / det, (c * f - d * e) / det, (b * e - a * f) / det];
+}
+
+/** An SVG transform list, as in the transform attribute. An unknown or malformed function is skipped. */
+export function parseTransform(source: string): Matrix {
+  const parts: Matrix[] = [];
+  for (const [, name, rawArgs = ""] of source.matchAll(/(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g)) {
+    const args = rawArgs.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+    if (!args.every(Number.isFinite)) continue;
+    const [a = 0, b, c, d = 0, e = 0, f = 0] = args;
+    const radians = (degrees: number): number => (degrees * Math.PI) / 180;
+    switch (name) {
+      case "matrix":
+        if (args.length === 6) parts.push([a, b!, c!, d, e, f]);
+        break;
+      case "translate":
+        parts.push(translate(a, b ?? 0));
+        break;
+      case "scale":
+        parts.push(scale(a, b ?? a));
+        break;
+      case "rotate":
+        parts.push(rotate(radians(a), b !== undefined && c !== undefined ? { x: b, y: c } : undefined));
+        break;
+      case "skewX":
+        parts.push([1, 0, Math.tan(radians(a)), 1, 0, 0]);
+        break;
+      case "skewY":
+        parts.push([1, Math.tan(radians(a)), 0, 1, 0, 0]);
+        break;
+    }
+  }
+  return multiply(...parts);
+}
+
 /** @experimental A point `distance` px from `point` in direction `angle` (screen radians). */
 export function offset(point: Point, angle: number, distance: number): Point {
   return { x: point.x + distance * Math.cos(angle), y: point.y + distance * Math.sin(angle) };

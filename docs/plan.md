@@ -431,7 +431,7 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 >
 > **A thin `barChart` is built in M1 step 5** (`src/charts`); [architecture.md](architecture.md#reference-charts) is now the reference for it. Differences from the sketch below and decisions made there:
 >
-> - `focus()` (step 9), `tooltip` and `table` (M2) aren't built, so `barChart` is still declared in the sketch, extending the built option and chart types.
+> - `focus()` (step 9) and `table` (M2) aren't built, so `barChart` is still declared in the sketch, extending the built option and chart types. `tooltip` is built (M2), and so is a `legend` option for stacks.
 > - `update()` jumps to the new state (staged transitions are step 8) and can't change `on` or `motion` yet. It rejects, changing nothing, on data it can't draw.
 > - `sort` defaults to `"none"` (data order). `"key"` sorts keys with numbers in numeric order.
 > - Bars are coloured by series through a `ColorAssignment` (`colorAssignment()` is built). Colouring each category, as the morph example needs, is open until M5.
@@ -642,7 +642,7 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
 - **Keyboard.** Each chart is one tab stop (roving `tabindex`). Arrow keys move between marks in visual order, following the current sort, and Home/End jump to the ends. Focus fires `hover` (`source: "keyboard"`), so effects play. Escape or blur fires `leave`. The focus ring is drawn from `mark.outline` in `--ec-focus`, because browser focus outlines on SVG are inconsistent.
 - **Data table.** On by default: a `<details>` "Data table" after the chart, as in the prototype. It follows the current sort and updates with the data. `"hidden"` makes it visually hidden but readable by screen readers.
 - **Pause controls (WCAG 2.2.2).** Nothing auto-plays by default. The `playback()` controller (play, pause, seek, stop) comes with a `playButton()` helper whose label switches between Play and Pause. Effects can't loop forever in v0.1: `pulse` repeats are capped below 5 s. If looping is ever added, the chart must render a pause control.
-- **Tooltips** are `aria-hidden`, since the same text is in the mark's label and the table. On touch they follow the tap.
+- **Tooltips** are `aria-hidden`, since the same text is in the mark's label and the table. On touch they follow the tap. A tooltip function's text is also the mark's description (M2 step 3, built).
 - **Updates.** An optional polite live region announces summaries like "Sorted A–Z". It's off by default (open question).
 
 ---
@@ -756,9 +756,14 @@ Each step names the files it owns, so steps in the same wave can run in parallel
    - **Built** as planned ([architecture.md](architecture.md#flash)). Additions: the 900 ms base peaks a quarter of the way through, each half eased like CSS's `ease-out`, as the prototype's keyframes are; `flash({ width, opacity, color })` takes the halo's peak width, opacity and colour. The §8 conformance checks moved to `src/effects/conformance.test.ts` for every built-in effect and now compare mark styles as well as pictures. Checked in a browser over matchweeks 25–38: on `barChart` exactly the bars whose values changed flash, and a re-sort flashes nothing.
    - **Differs from the prototype:** a metric switch flashes every bar, since every value changes (the prototype flashed only on a matchweek). And `expressive()` saw lengths, not values, so on the hand-written chart every bar flashed when the axis grew (once per view over the season, now that its axis takes the prototype's nice maximum) or when the window was resized.
    - **Follow-up:** `expressive()` takes `value(datum, element)`, what each element shows, and compares values instead of lengths when it's given ([architecture.md](architecture.md#adapters)). The demo passes it, so the hand-written chart flashes the same bars as `barChart`.
-3. **Tooltip and legend.** Owns `src/charts/tooltip.ts`, `src/charts/legend.ts`, and their hooks in `bar.ts`.
+3. ✅ **Tooltip and legend.** Owns `src/charts/tooltip.ts`, `src/charts/legend.ts`, and their hooks in `bar.ts`.
    - Tooltip: an HTML box near the hovered or focused mark that flips at the edges and follows a touch tap. The box is `aria-hidden`, so it isn't read twice. Its text also becomes the mark's accessible description (`aria-describedby`), so anything a custom tooltip adds beyond the series values (the prototype shows the player's position) still reaches screen readers. `tooltip: boolean | ((d) => string)` takes plain text, never HTML. Show and hide use `feedback` timing.
    - Legend: series swatches for stacked charts, coloured through the chart's `ColorAssignment`, with the text in theme text colours. A single series has no legend.
+   - **Built** (details in [architecture.md](architecture.md#bar-chart)). Decisions:
+     - The tooltip sits above the mark and flips below when there's no room. It's clamped to the chart's left and right edges, but never moved over the mark it describes.
+     - Only a tooltip function's text becomes the description. The default text would repeat the mark's `aria-label`.
+     - The legend shows series names as given ("goals"). A shared option for display names, used by the legend, tooltip, labels and table, would suit step 5.
+     - The tooltip's border is `--ec-ring`, step 1's hairline token.
 4. ✅ **`motionSwitch` helper.** Owns `src/charts/controls/`.
    - It builds the Presentation / Analysis / Off segmented control: buttons with `aria-pressed`, calling `motion.chooseMode()`, with the reduced-motion hint.
    - `persist: "key"` is an opt-in that remembers the viewer's choice in `localStorage` (open question 3).

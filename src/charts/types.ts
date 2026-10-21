@@ -53,6 +53,13 @@ export interface ChartOptions<D> {
   readonly height?: number;
   /** Dim the other marks while one is hovered (to --ec-dim-opacity). Default true. The hovered mark's emphasis stays either way. */
   readonly dim?: boolean;
+  /**
+   * A box beside the hovered or focused mark. Default true: the category, each series' value in
+   * `format`, and the total of a stack. A function gives a row's text instead ("\n" breaks a line; an
+   * empty string shows none); it's set as text, never as HTML. Visual only: it's aria-hidden, since
+   * each mark's aria-label says the same.
+   */
+  readonly tooltip?: boolean | ((d: NoInfer<D>) => string);
 }
 
 export interface BarChartOptions<D> extends ChartOptions<D> {
@@ -65,6 +72,8 @@ export interface BarChartOptions<D> extends ChartOptions<D> {
   readonly sort?: "value" | "key" | "none" | ((a: D, b: D) => number);
   /** "horizontal": bars, categories along y. "vertical": columns, categories along x. */
   readonly orientation?: "horizontal" | "vertical";
+  /** A swatch and name per series, above the chart, when it shows more than one series. Default true. */
+  readonly legend?: boolean;
 }
 
 export interface Chart<D, O> {

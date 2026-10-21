@@ -1,4 +1,5 @@
 import type { GeometryEffect, Icon } from "./core";
+import { resolveEffects } from "./core/registry";
 import { icons, registerIcon, registerIcons, registerPreset } from "./index";
 import { iconRegistry, presetRegistry } from "./registries";
 
@@ -20,10 +21,19 @@ describe("page-wide registries", () => {
     expect(iconRegistry.get("cleat")).toBeUndefined();
   });
 
-  it("start with the built-in flash preset, a fresh effect each time", () => {
-    const factory = presetRegistry.resolve("flash");
-    expect(factory().kind).toBe("geometry");
-    expect(factory()).not.toBe(factory());
+  it("start with exactly the built-in presets flash, wiggle and pulse, each a fresh effect each time", () => {
+    expect(presetRegistry.names().filter((name) => !name.startsWith("test-"))).toEqual(["flash", "wiggle", "pulse"]);
+    for (const name of ["flash", "wiggle", "pulse"]) {
+      const factory = presetRegistry.resolve(name);
+      expect(factory().kind).toBe("geometry");
+      expect(factory()).not.toBe(factory());
+    }
+  });
+
+  it("resolve the built-in presets in a chart's slots", () => {
+    const effects = resolveEffects({ hover: "wiggle", enter: "pulse", update: "flash" }, presetRegistry);
+    expect(Object.keys(effects).sort()).toEqual(["enter", "hover", "update"]);
+    for (const effect of Object.values(effects)) expect(effect?.kind).toBe("geometry");
   });
 
   it("registers presets by name", () => {

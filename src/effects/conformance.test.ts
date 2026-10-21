@@ -4,10 +4,12 @@
 
 import type { GeometryEffect, Icon, MarkGeometry } from "../core";
 import { describe as build } from "../core";
-import { play, testContext } from "../core/testing";
-import { parallel, sequence } from "./combinators";
+import { play, testContext, type TestContextOptions } from "../core/testing";
+import { parallel, sequence, stagger } from "./combinators";
 import { flash } from "./flash";
+import { pulse } from "./pulse";
 import { travel } from "./travel";
+import { wiggle } from "./wiggle";
 
 // Test icons, written out so the effect tests don't depend on src/icons.
 const ball: Icon = {
@@ -58,8 +60,16 @@ const effects: Record<string, GeometryEffect> = {
   "ball then boot": sequence(travel(ball, { along: "goals" }), travel(boot, { along: "assists" })),
   flash: flash(),
   "flash in a colour": flash({ width: 12, opacity: 0.5, color: "series-3" }),
-  "flash while the ball rolls": parallel(flash(), travel(ball, { along: "goals" }))
+  "flash while the ball rolls": parallel(flash(), travel(ball, { along: "goals" })),
+  wiggle: wiggle(),
+  "wiggle by 1 px": wiggle({ swing: 1 }),
+  pulse: pulse(),
+  "pulse once in a colour": pulse({ times: 1, color: "series-3" }),
+  "staggered flash, third of five": stagger(flash())
 };
+
+/** The batch an effect runs in, where it matters: a staggered mark waits its turn first. */
+const batches: Record<string, TestContextOptions["batch"]> = { "staggered flash, third of five": { index: 2, count: 5 } };
 
 const runToEnd = (effect: GeometryEffect, mark: MarkGeometry, ctx: ReturnType<typeof testContext>): Promise<number> =>
   play(ctx.clock, effect.run(mark, ctx), { frame: 16 });
@@ -67,17 +77,19 @@ const runToEnd = (effect: GeometryEffect, mark: MarkGeometry, ctx: ReturnType<ty
 for (const [effectName, effect] of Object.entries(effects)) {
   for (const [markName, mark] of Object.entries(marks)) {
     describe(`${effectName} on a ${markName}`, () => {
+      const context = (options: TestContextOptions = {}): ReturnType<typeof testContext> => testContext({ batch: batches[effectName], ...options });
+
       it("ends a full run with the same picture and mark style as end()", async () => {
-        const ran = testContext();
+        const ran = context();
         await runToEnd(effect, mark, ran);
-        const ended = testContext();
+        const ended = context();
         effect.end(mark, ended);
         expect(ran.layer.picture()).toEqual(ended.layer.picture());
         expect(ran.mark.style).toEqual(ended.mark.style);
       });
 
       it("leaves nothing behind once cleared", async () => {
-        const ctx = testContext();
+        const ctx = context();
         await runToEnd(effect, mark, ctx);
         effect.clear(ctx);
         ctx.clear();
@@ -86,7 +98,7 @@ for (const [effectName, effect] of Object.entries(effects)) {
       });
 
       it("settles when aborted mid-run, and clears to nothing", async () => {
-        const ctx = testContext();
+        const ctx = context();
         const running = effect.run(mark, ctx);
         ctx.clock.advance(16);
         ctx.clock.advance(16);
@@ -100,12 +112,12 @@ for (const [effectName, effect] of Object.entries(effects)) {
       });
 
       it("runs no frames when motion is off, and draws the end state", async () => {
-        const ctx = testContext({ mode: "off" });
+        const ctx = context({ mode: "off" });
         const running = effect.run(mark, ctx);
         expect(ctx.clock.idle).toBe(true);
         await running;
         expect(ctx.clock.idle).toBe(true);
-        const ended = testContext({ mode: "off" });
+        const ended = context({ mode: "off" });
         effect.end(mark, ended);
         expect(ctx.layer.picture()).toEqual(ended.layer.picture());
         expect(ctx.mark.style).toEqual(ended.mark.style);

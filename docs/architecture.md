@@ -64,6 +64,7 @@ The modes are `presentation`, `analysis` and `off`. Every duration in the librar
 | `transition` (default) | data changes | base, staged | base × 0.35, max 200 ms | 0 |
 | `effect` | travel, wiggle, flash, pulse | base | base × 0.35, min 140 ms, max 300 ms | 0 |
 | `playback` | auto-play such as "Play season" | base | base × 0.3 | 0 |
+| `stagger` | the wait before each mark of a [`stagger`](#stagger) | base | 0 | 0 |
 
 A rule is `{ factor, min?, max? }` and gives `clamp(base × factor, min(base, min), max)`, so a floor never makes an animation longer than its base. `createMotion({ scaling })` accepts partial overrides. `motion.staged` is true only in presentation, and it tells charts to split data changes into stages: values first, then positions.
 
@@ -158,7 +159,7 @@ barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("so
 
 ## Effects
 
-The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The first effects, [`travel`](#travel) and [`flash`](#flash), and the combinators `sequence`, `parallel` and `only` are in `src/effects/`.
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The effects [`travel`](#travel), [`flash`](#flash), [`wiggle`](#wiggle) and [`pulse`](#pulse), and the combinators `sequence`, `parallel`, `only` and [`stagger`](#stagger), are in `src/effects/`.
 
 There are three kinds, distinguished by a `kind` field:
 
@@ -179,7 +180,7 @@ Each one has `run`, `end` (the final state, used for reduced motion) and `clear`
 | `onChange()` | Called when the geometry moves |
 | `previous` | The geometry before this update, on update events |
 
-Planned: `wiggle()`, `pulse()`, `threshold({ compareTo, color })`, `morph()`; the combinator `stagger`; and the experimental author helpers `defineEffect` and `defineDataEffect`.
+Planned: `threshold({ compareTo, color })`, `morph()`, and the experimental author helpers `defineEffect` and `defineDataEffect`.
 
 ### travel
 
@@ -219,13 +220,53 @@ flash({ width?, opacity?, color? })   // or the preset: on: { update: "flash" }
 - **Any mark.** It reads nothing of the geometry. The renderer strokes the halo along the outline as it is on screen, so in the `update` slot it follows the bar through the transition it runs alongside, and a stacked bar's segments each get their own halo.
 - **Where it runs.** In the `update` slot it runs on the marks whose values changed, not on a re-sort or a new scale: on our charts, and on `expressive()` when the page passes `value`. Without `value` the adapter can't see values, so there an update means a mark's length changed, which a new axis maximum or a resize also does (see [Adapters](#adapters)).
 
+### wiggle
+
+```ts
+wiggle({ swing? })   // or the preset: on: { hover: "wiggle" }
+```
+
+`wiggle` rocks the mark about its `pivot` in three half-swings, each half the last and on the other side, every one a sine arch, over 450 ms base with `effect` timing (about 160 ms in Analysis). The pivot is where the mark is attached to the chart, so a bar rocks on its baseline, a donut slice about the donut's centre and a line about its first point. It's drawn through `mark.set({ transform: matrix.rotate(angle, pivot) })`, which moves the mark's body only: its labels and pointer target stay put.
+
+- **The guardrail.** The angle is capped so the outline point farthest from the pivot moves at most `swing` px (default 3, the most allowed). The reach is the largest distance from the pivot to `outline.sample(64)`, not the walk's length: a slice's far edge is on its outer radius, beyond the walk at mid-radius. A point at distance r turned by θ moves 2r·sin(θ/2), so the cap is `2·asin(swing / (2·reach))`. It's also never more than 15°, so a tiny mark nods rather than spins, and a mark whose outline is all within 0.5 px of its pivot doesn't move at all. The first half-swing reaches the cap.
+- **End state: no transform.** The mark rests where the chart drew it, so with motion off or reduced nothing happens, and a full run ends with `transform` unset.
+- **Geometry changes.** It follows `onChange`, so a wiggle running alongside a transition rocks about the pivot as it is now, with the cap for the mark as it is now.
+- `swing` must be more than 0 and at most 3 px; anything else throws a `RangeError` when the effect is made.
+
+### pulse
+
+```ts
+pulse({ times?, width?, color? })   // or the preset: on: { enter: "pulse" }
+```
+
+`pulse` draws attention with a halo that widens from 0 to `width` (default 12 px, half of it outside the mark) while it fades from 40% opacity to nothing, `times` over (default 2). The width eases out (the ring rushes out and slows) and the fade is linear. Each pulse is 600 ms base, `effect` timing, and its own tween, so Analysis shortens every pulse (to 210 ms) instead of dropping any. It's drawn through `mark.set({ halo })` in the mark's own colour unless `color` names a theme token or a CSS colour.
+
+- **Under 5 s.** Before each pulse it asks the motion how long the pulse will take (`motion.duration(600, "effect")`), and drops it, and the rest, if the pulses so far plus this one would end at 5 s or later. So a page's `createMotion({ scaling })` can't stretch it into something that needs a pause control (WCAG 2.2.2); with effects scaled ×2, 6 pulses become 4.
+- **Never a size change.** It only sets the halo, never a transform, so a value never looks bigger than it is.
+- **End state: nothing**, as for `flash`: a pulse is emphasis, and what it points at stays on the chart.
+- `times` is a whole number from 1 to 6, `width` a finite number more than 0, and `color` a non-empty string; anything else throws a `RangeError`.
+
 ### Combinators
 
 - `sequence(...effects)` runs the parts in order. An abort stops the chain. `end()` draws every part's end state in order, and `clear()` clears every part, passing on the first error after all have run. A part with nothing to do finishes at once, so `sequence(travel(ball, { along: "goals" }), travel(cleat, { along: "assists" }))` tells the right story whether the bar shows goals, assists or both.
 - `parallel(...effects)` runs the parts together and finishes when they all have, or rejects with the first part that does. `end()` and `clear()` work as for `sequence`.
 - `only(filter, effect)` runs the effect only on marks whose key or series equals `filter`, or for which `filter(mark)` is true. Elsewhere it does nothing. It keeps the effect's kind and `needs`.
+- `stagger(effect, { delay })` starts each mark of a batch a little after the one before; see [below](#stagger).
 
 The parts share the run's context: one overlay group, one mark handle (whose `set()` merges fields, so parallel parts don't undo each other) and one signal. `Combined<E>` is the type `sequence` and `parallel` return: a data effect if any part is one, needing every part's row type at once (an intersection), so a generic part like `threshold()` can't widen a typed part back to `unknown`. A data combination's `needs.related` lists every part's. A part that isn't a mark effect (a transition effect, say) is a type error, and throws a `TypeError`.
+
+### stagger
+
+```ts
+stagger(effect, { delay? })   // enter: stagger(pulse({ times: 1 }))
+```
+
+`stagger` makes the mark at `ctx.batch.index` wait `index × delay` ms (default 50) before the effect runs. The whole spread, `(count − 1) × delay`, is capped at 500 ms base, so in a big batch the delay shrinks to `500 / (count − 1)`. The wait is a tween with `stagger` timing, never a timer, so it's the base in Presentation and nothing in Analysis or Off. A batch of one, such as a hover, never waits.
+
+- **Never a default.** Research finds staggering helps little and can hurt, so no chart, adapter or preset staggers; it's there for a page that asks.
+- **While it waits** nothing is drawn. An abort ends the wait and the effect never runs. If the mark moves meanwhile (bars growing in on enter), the effect starts on the geometry and data as they are when its turn comes.
+- **End state:** the effect's own, drawn at once by `end()`. `clear()` passes through.
+- It keeps the effect's kind and `needs`, like `only`: a data effect stays a data effect with the same row type. A part that isn't a mark effect throws a `TypeError`, and a `delay` that's negative or not a finite number a `RangeError`.
 
 ### Drawing API
 
@@ -244,12 +285,12 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 `src/core/testing` has in-memory versions for effect tests. It's internal until the conformance suite is exported after M3.
 
 - `recordingLayer()` and `recordingMark()` record every call and keep what's drawn now. `picture()` gives that as plain data with numbers rounded, so a full run can be compared with `end()`.
-- `testContext({ mode, icons, batch, previous })` is a complete `EffectContext` on a manual clock, with `abort()`, `clear()` and `change(mark)` (fires `onChange`). It's built on the same run scope the runner gives every run, so `clear()` is exactly the runner's cleanup after `effect.clear(ctx)`.
+- `testContext({ mode, scaling, icons, batch, previous })` is a complete `EffectContext` on a manual clock, with `abort()`, `clear()` and `change(mark)` (fires `onChange`). It's built on the same run scope the runner gives every run, so `clear()` is exactly the runner's cleanup after `effect.clear(ctx)`.
 - `recordingSurface()` is a `RunnerSurface` whose groups are recording layers and whose marks are recording marks, for runner and chart tests.
 - `measurePath(d)` measures the path data the geometry writes: length, start, end and commands.
 - `play(clock, running)` advances a manual clock a frame at a time until a run settles, letting promise callbacks run between frames, and resolves with the ms it took.
 
-`src/effects/conformance.test.ts` runs the conformance checks from plan §8 for every built-in effect (`travel` with each gait and option, `flash`, and combinations of them) on bars (positive, negative, columns, stacked, too short), a donut slice, a line and a point: a full run ends with the same picture and mark style as `end()`, clearing leaves nothing, an abort mid-run settles, and with motion off no frames run. `src/conformance.test.ts` runs the same checks on real bar marks from `barChart` and `expressive()`.
+`src/effects/conformance.test.ts` runs the conformance checks from plan §8 for every built-in effect (`travel` with each gait and option, `flash`, `wiggle`, `pulse`, a staggered `flash` on a later mark of a batch, and combinations of them) on bars (positive, negative, columns, stacked, too short), a donut slice, a line and a point: a full run ends with the same picture and mark style as `end()`, clearing leaves nothing, an abort mid-run settles, and with motion off no frames run. `src/conformance.test.ts` runs the same checks on real bar marks from `barChart` and `expressive()`.
 
 ## Runner
 
@@ -283,7 +324,7 @@ The renderer implements `RunnerSurface`: `group(key, slot, order)` returns a new
 
 A slot can name a preset instead of holding an effect, `on: { hover: "wiggle" }`, and an effect can name an icon, `travel("cleat")`. Charts resolve names through registries the composition root (`src/index.ts`) hands them, so a chart never knows what a name means.
 
-- `registerPreset(name, factory)` makes a name usable in any chart's `on`. The factory returns a fresh effect that works on any rows. `flash` is a built-in preset; `wiggle` and `pulse` join it in M3.
+- `registerPreset(name, factory)` makes a name usable in any chart's `on`. The factory returns a fresh effect that works on any rows. The built-in presets are exactly `flash`, `wiggle` and `pulse`, each that effect with its defaults; none combines effects, draws an icon or staggers.
 - `registerIcon(icon)` and `registerIcons(icons)` make icons usable by their `name`, through each run's `ctx.icons`. The core icons (`dot`, `arrow`, `chevron`) are registered from the start; the sport pack is opt-in, with `registerIcons(sport)`.
 - A later registration replaces an earlier one with the same name.
 - Charts call `resolveEffects(on, presets)` when they're created. An unknown preset name throws a `RangeError` that lists the registered names. A transition effect in a mark slot, or a slot that doesn't exist, throws a `TypeError` naming the slot. Misspelled names aren't type errors (custom names are allowed), so this is where they're caught.

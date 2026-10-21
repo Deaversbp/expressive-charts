@@ -5,13 +5,15 @@ import type { MarkData } from "../contracts/data";
 import type { EffectContext } from "../contracts/effect";
 import type { MarkGeometry } from "../contracts/geometry";
 import type { Icon } from "../contracts/icon";
-import { createMotion, type Motion, type MotionMode } from "../motion";
+import { createMotion, type Motion, type MotionMode, type ScalingOverrides } from "../motion";
 import { runScope } from "../runner";
 import { recordingLayer, recordingMark, type RecordingLayer, type RecordingMark } from "./recording";
 
 export interface TestContextOptions {
   /** The author's mode. Default "presentation". The device never asks for reduced motion here. */
   readonly mode?: MotionMode;
+  /** Overrides for the duration scaling, as a page's createMotion({ scaling }) gives. */
+  readonly scaling?: ScalingOverrides;
   readonly icons?: readonly Icon[];
   readonly batch?: { readonly index: number; readonly count: number };
   readonly previous?: MarkGeometry;
@@ -32,7 +34,11 @@ export interface TestContext extends EffectContext {
 
 export function testContext(options: TestContextOptions = {}): TestContext {
   const clock = manualClock();
-  const motion = createMotion({ mode: options.mode ?? "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+  const motion = createMotion({
+    mode: options.mode ?? "presentation",
+    ...(options.scaling ? { scaling: options.scaling } : {}),
+    reducedMotion: { matches: false, subscribe: () => () => {} }
+  });
   const layer = recordingLayer();
   const mark = recordingMark();
   const icons = new Map((options.icons ?? []).map((icon) => [icon.name, icon]));

@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a first bar chart, the `expressive()` adapter for bars drawn by other code, icons, the first effects (`travel` and `flash`, with `sequence`, `parallel` and `only`) and the viewer's `motionSwitch` are built ([below](#available-now-the-motion-core-mark-geometry-a-bar-chart-travel-and-the-adapter)). The other built-in effects are next, so `wiggle`, `pulse`, `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a first bar chart, the `expressive()` adapter for bars drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle` and `pulse`, with `sequence`, `parallel`, `only` and `stagger`) and the viewer's `motionSwitch` are built ([below](#available-now-the-motion-core-mark-geometry-a-bar-chart-travel-and-the-adapter)). The other built-in effects are next, so `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -162,6 +162,15 @@ const chart = barChart("#goals", { label: "Goals by player", data: players, y: "
 chart.update({ data: afterMatchweek }); // the bars that scored blink as they grow
 ```
 
+`wiggle` and `pulse` are the other built-in presets. `wiggle` rocks the mark on its pivot (a bar on its baseline, a donut slice about the centre) in three dying half-swings, and never moves any part of it more than 3 px, so it can't misstate a value; `swing` makes it smaller. `pulse` sends a halo out from the outline and fades it, twice by default (`times`, 1 to 6). It never changes the mark's size, and however a page scales its motion it ends within 5 s. Both end with the mark as the chart drew it. `stagger(effect, { delay })` starts each mark of a batch a little after the one before, 50 ms by default with the whole spread at most 500 ms, and only in Presentation. Nothing staggers unless asked, since research finds it rarely helps:
+
+```js
+import { barChart, pulse, stagger } from "expressive-charts";
+
+barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue", on: { hover: "wiggle" } });
+barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { enter: stagger(pulse({ times: 1 })) } });
+```
+
 `motionSwitch()` is the viewer's own control: Presentation, Analysis and Off as buttons with `aria-pressed`, and a note on what the mode does. A click is the viewer's choice, so it overrides the device's reduced-motion setting; until then, Off is pressed and the note says why. It follows the motion whoever changes it, and `persist` (opt-in) keeps the choice in `localStorage`:
 
 ```js
@@ -210,7 +219,7 @@ The radii live in the arc generator, not in the row, so the page passes them to 
 
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, the combinators and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`.
 
 ## Demo
 

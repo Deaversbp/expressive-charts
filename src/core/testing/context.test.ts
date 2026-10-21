@@ -17,6 +17,12 @@ describe("testContext", () => {
     expect(ctx.clock.idle).toBe(true);
   });
 
+  it("takes scaling overrides, as a page's motion does", () => {
+    const ctx = testContext({ scaling: { presentation: { effect: { factor: 2 } } } });
+    expect(ctx.motion.duration(600, "effect")).toBe(1200);
+    expect(ctx.motion.duration(600, "transition")).toBe(600);
+  });
+
   it("jumps to the end when the mode is off, with no frames", async () => {
     const ctx = testContext({ mode: "off" });
     const updates: number[] = [];

@@ -37,6 +37,7 @@ describe("importing in Node", () => {
     const { sport } = await import("./icons/sport");
     expect(lib.icons.dot.name).toBe("dot");
     expect(lib.sequence(lib.travel("cleat"), lib.only("goals", lib.travel(sport[0]!))).kind).toBe("geometry");
+    expect(lib.stagger(lib.parallel(lib.wiggle(), lib.pulse(), lib.flash())).kind).toBe("geometry");
     expect(lib.iconFromSvg('<svg viewBox="0 0 4 4"><path d="M0,0L4,4"/></svg>', { name: "n", anchor: { x: 0, y: 0 } }).shapes).toHaveLength(1);
   });
 

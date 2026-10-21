@@ -259,6 +259,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   /** Brings the attachment to `reading` and says what changed. Leaving marks stay until their exit is done. */
   function apply(reading: Reading<D>): Diff<D> {
     if (reading.root && reading.root !== root) moveTo(reading.root);
+    // The same <svg> may have moved into or out of a shadow root.
+    else listenForFocus();
     ancestor = reading.ancestor ?? ancestor;
     const keys = new Set(reading.marks.map((mark) => mark.key));
     const diff: Diff<D> = { entering: [], exiting: [], changed: [], moved: [] };
@@ -341,11 +343,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     if (keyboard) {
       root.ownerDocument.addEventListener("keydown", onAnyKey, true);
       root.ownerDocument.addEventListener("pointerdown", onAnyPointer, true);
-      // Not on the <svg>: Chrome makes an SVG element with focus listeners of its own a tab stop.
-      const node = root.getRootNode();
-      scope = "host" in node ? (node as ShadowRoot) : root.ownerDocument;
-      scope.addEventListener("focusin", onFocusIn as EventListener, true);
-      scope.addEventListener("focusout", onFocusOut as EventListener, true);
+      listenForFocus();
       root.addEventListener("keydown", onKeyDown);
     }
   }
@@ -358,10 +356,27 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     interaction = undefined;
     root.ownerDocument.removeEventListener("keydown", onAnyKey, true);
     root.ownerDocument.removeEventListener("pointerdown", onAnyPointer, true);
+    stopListeningForFocus();
+    root.removeEventListener("keydown", onKeyDown);
+  }
+
+  /** Listens for focus on the document or shadow root the root <svg> is in now, if that changed. */
+  function listenForFocus(): void {
+    if (!keyboard || !root) return;
+    // Not on the <svg>: Chrome makes an SVG element with focus listeners of its own a tab stop.
+    const node = root.getRootNode();
+    const next = "host" in node ? (node as ShadowRoot) : root.ownerDocument;
+    if (next === scope) return;
+    stopListeningForFocus();
+    scope = next;
+    scope.addEventListener("focusin", onFocusIn as EventListener, true);
+    scope.addEventListener("focusout", onFocusOut as EventListener, true);
+  }
+
+  function stopListeningForFocus(): void {
     scope?.removeEventListener("focusin", onFocusIn as EventListener, true);
     scope?.removeEventListener("focusout", onFocusOut as EventListener, true);
     scope = undefined;
-    root.removeEventListener("keydown", onKeyDown);
   }
 
   function ownerOf(eventTarget: EventTarget | null): Owner<D> | undefined {

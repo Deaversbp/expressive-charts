@@ -701,7 +701,13 @@ Each milestone ends with a page in `demo/` and is split into small PRs that keep
    - Stage 2 is scheduled with a `delay` on the same clock, so a retarget during stage 1 just reschedules it. `animated` now eases in and out when the value it interrupts is still waiting out a delay, or when the new animation has one: only a value that's moving and keeps moving eases out.
    - Analysis takes as long as the stages it runs together (500 or 1000 ms base), which the 200 ms cap shortens. A change of orientation jumps (morph is M5); a resize mid-change lands it at once.
    - Entering and leaving marks fade their labels and keep their own value text; marks that stay count theirs. Ticks fade in and out by value.
-9. **Keyboard.** Roving focus. Focus plays the hover story, Escape or blur leaves, and the focus ring is drawn from the mark's outline.
+9. ✅ **Keyboard.** Roving focus. Focus plays the hover story, Escape or blur leaves, and the focus ring is drawn from the mark's outline.
+   - **Built** in `src/charts/keyboard.ts` and wired into `barChart` (details in [architecture.md](architecture.md#bar-chart)), matching the `expressive()` adapter's behaviour where they overlap: the same keys, the same `:focus-visible` rule for the ring, and the same sharing of one hover between pointer and focus. Decisions:
+     - Focus follows its key across `update()`: the focused mark's element stays put in the DOM while the others move around it. If the mark leaves, focus moves to its nearest neighbour.
+     - The ring sits behind the marks, a 2 px ring in `--ec-focus` outside a 2 px gap in `--ec-surface`, so it can't cover data or merge with a bar of the same colour.
+     - Focus from a click or tap moves the tab stop without starting a keyboard hover, so a tap still reports `source: "touch"`.
+     - Focus listeners go on the document, not the `<svg>`: Chrome made the `<svg>` an extra tab stop when it had focus listeners of its own (found in the browser check).
+     - Each mark's `aria-label` is "Okafor: 16 goals, 4 assists", from its category and values in the chart's `format`. Roles and a `describe` option wait for M2's screen-reader testing.
 10. **`expressive()` for rect marks.** The adapter for bars drawn by other code: keys, `segment` grouping, `baseline: "auto"`, pointer and keyboard events, `refresh()`.
     - **Read first:** [ideas/adapter-spike.md](ideas/adapter-spike.md), which tested what D3, Plot and Vega expose on their SVG elements. Build to its recommendation 1: the overlay on the root `<svg>`, events delegated from the root, and `tabindex` re-applied on every `refresh()`.
 11. **Finish `demo/bars.html`.** Animated metric switch and sort, keyboard support, and the same hover story on a hand-written SVG bar chart beside the reference one.

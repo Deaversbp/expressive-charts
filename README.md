@@ -96,7 +96,7 @@ registerPreset("nudge", () => myEffect); // then on: { hover: "nudge" } in any c
 registerIcons(myIcons);                  // then travel("my-icon")
 ```
 
-A first, thin bar chart draws horizontal bars or columns, plain or stacked, sized to its container, with theme colours (`--ec-*` custom properties), hover dimming and hover events. Its effect slots take effects or registered presets. `update()` animates the change by the motion mode: in Presentation the values change first (bars resize, the scale follows) and then the rows move to their new places, about half a second each; Analysis does it all at once in about 200 ms; Off jumps. A second `update()` mid-change carries on from where everything is, and hover effects replay once the change settles.
+A first, thin bar chart draws horizontal bars or columns, plain or stacked, sized to its container, with theme colours (`--ec-*` custom properties), hover dimming and hover events. It's one tab stop: the arrow keys move between the bars, and keyboard focus plays the same hover effects inside a focus ring. Its effect slots take effects or registered presets. `update()` animates the change by the motion mode: in Presentation the values change first (bars resize, the scale follows) and then the rows move to their new places, about half a second each; Analysis does it all at once in about 200 ms; Off jumps. A second `update()` mid-change carries on from where everything is, and hover effects replay once the change settles.
 
 ```js
 import { barChart } from "expressive-charts";

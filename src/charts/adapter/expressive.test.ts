@@ -1827,6 +1827,32 @@ describe("expressive: watch", () => {
     expect(document.activeElement).toBe(host.rect("Okafor", "goals"));
   });
 
+  it("finds the shared baseline again, so a bar that ends a transition on the other side of it grows the other way", async () => {
+    // Three bars from a zero line at x = 100; the first is on its way from +60 to -40.
+    const svg = el("svg", { width: 300, height: 120 }, document.body);
+    const plot = el("g", { transform: "translate(20,10)" }, svg);
+    const bars = [60, 30, 40].map((width, i) => Object.assign(el("rect", { x: 100, y: i * 30, width, height: 20 }, plot), { __data__: { name: `p${i}` } }));
+    const decoration = tracer();
+    const { fx, clock } = setup<{ name: string }>(bars, { key: (d) => d.name, watch: true, on: { decorate: decoration.effect } });
+    const first = () => fx.marks().find((mark) => mark.key === "p0")!;
+    const frame = async (x: number, width: number): Promise<void> => {
+      bars[0]!.setAttribute("x", String(x));
+      bars[0]!.setAttribute("width", String(width));
+      await delivered();
+      clock.advance(16);
+    };
+    // Mid-transition no edge is on the line, so the bar keeps growing from the left.
+    await frame(80, 50);
+    expect([first().start.x, first().end.x]).toEqual([80, 130]);
+    // At the end its right edge is on the line: it grows from there, leftwards, as a full read finds.
+    await frame(60, 40);
+    expect([first().start.x, first().end.x]).toEqual([100, 60]);
+    expect(fx.marks().slice(1).map((mark) => mark.start.x)).toEqual([100, 100]);
+    expect(overlayOf(svg).querySelector('.ec-run[data-key="p0"] path')!.getAttribute("d")).toBe(first().slice(0, 1));
+    fx.refresh();
+    expect([first().start.x, first().end.x]).toEqual([100, 60]);
+  });
+
   it("leaves events to refresh(), called when the host joins new data, and keeps values and names until then", async () => {
     const host = d3Stack();
     const story = recorder();

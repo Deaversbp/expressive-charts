@@ -628,8 +628,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     if (changed.size === 0) return;
 
     // Throws (reported by the clock) on marks it can't read, before anything changes.
-    const records = [...changed];
-    const marks = reread(records);
+    const { records, marks } = reread([...changed]);
     records.forEach((record, i) => {
       const mark = marks[i]!;
       record.mark = mark;
@@ -645,22 +644,48 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   /**
-   * The marks again, as the host draws them now: their rows, geometry and samples, in the coordinates
-   * of the last full read. Their values, colours and names stay as that read found them, and so do
-   * their elements. Throws, changing nothing, on marks it can't read.
+   * The marks that changed again, as the host draws them now: their rows, geometry and samples, in the
+   * coordinates of the last full read. Their values, colours and names stay as that read found them,
+   * and so do their elements. Bars whose baseline changed come too, though they didn't move. Throws,
+   * changing nothing, on marks it can't read.
    */
-  function reread(records: readonly MarkRecord<D>[]): ReadMark<D>[] {
-    const kept = new Map(records.flatMap((record) => record.mark.parts.map((part) => [part.element, part.colors] as const)));
-    const at: ReadContext = { svg: root!, common: ancestor!, screen: screenMatrices(), colors: (element) => kept.get(element) };
+  function reread(changed: readonly MarkRecord<D>[]): { readonly records: MarkRecord<D>[]; readonly marks: ReadMark<D>[] } {
+    const at: ReadContext = { svg: root!, common: ancestor!, screen: screenMatrices(), colors: (element) => owners.get(element)?.part.colors };
     const rowOf = rowsNow();
-    const marks = records.map(({ mark }): Drawn<D> => {
-      const pieces = mark.parts.map((part): Piece<D> => ({ element: part.element, datum: rowOf(part.element), series: part.series, value: part.value }));
-      const drawn = mark.rect
-        ? rectMark(mark.key, pieces.map((piece) => rectPiece(mark.key, piece, at)), mark.rect.edge, mark.index, at)
-        : shapeMark(mark.key, pieces, mark.index, at);
-      return { ...drawn, label: mark.label };
+    const piecesOf = ({ parts }: ReadMark<D>): Piece<D>[] => parts.map((part) => ({ element: part.element, datum: rowOf(part.element), series: part.series, value: part.value }));
+    if (options.geometry) {
+      const marks = changed.map(({ mark }): Drawn<D> => ({ ...shapeMark(mark.key, piecesOf(mark), mark.index, at), label: mark.label }));
+      return { records: [...changed], marks: withData(marks) };
+    }
+    const rects = new Map(changed.map((record) => [record, piecesOf(record.mark).map((piece) => rectPiece(record.key, piece, at))]));
+    const edges = edgesNow(rects);
+    for (const record of order) {
+      if (!rects.has(record) && edges.get(record) !== record.mark.rect!.edge) rects.set(record, piecesOf(record.mark).map((piece) => rectPiece(record.key, piece, at)));
+    }
+    const records = [...rects.keys()];
+    const marks = records.map((record): Drawn<D> => ({ ...rectMark(record.key, rects.get(record)!, edges.get(record)!, record.mark.index, at), label: record.mark.label }));
+    return { records, marks: withData(marks) };
+  }
+
+  /**
+   * Each live bar's baseline now. With "auto", the edge every bar shares is found again from their
+   * boxes (the new ones of the bars read this frame), as a full read would, so a bar that ends a
+   * transition on the other side of the line grows from it the other way. In a frame where no edge is
+   * shared (a bar crossing the line), each keeps the one it had.
+   */
+  function edgesNow(rects: ReadonlyMap<MarkRecord<D>, readonly (Piece<D> & { readonly rect: RectPart })[]>): Map<MarkRecord<D>, Baseline> {
+    const kept = new Map(order.map((record) => [record, record.mark.rect!.edge]));
+    if (options.baseline !== undefined && options.baseline !== "auto") return kept;
+    const boxes = order.map((record) => {
+      const pieces = rects.get(record);
+      return pieces ? union(pieces.map((p) => p.rect.box)) : record.mark.rect!.box;
     });
-    return withData(marks);
+    try {
+      const found = baselines(boxes, "auto");
+      return new Map(order.map((record, i) => [record, found[i]!]));
+    } catch {
+      return kept;
+    }
   }
 
   /** Each element's row now: `datum`'s, a selection's data(), or the element's own `__data__`. */

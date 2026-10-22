@@ -219,6 +219,39 @@ export interface DonutChartOptions<D> extends Omit<ChartOptions<D>, "colors" | "
   readonly markLabel?: (d: NoInfer<D>, mark: SliceSummary) => string;
 }
 
+export interface LineChartOptions<D> extends ChartOptions<D> {
+  /**
+   * Each row's x: a numeric field or a function. There's one row per x, drawn in ascending x, and x
+   * values must be unique whatever the keys, since each x is one focus stop, one hit column and one
+   * place to reveal to. `key` defaults to x.
+   */
+  readonly x: Accessor<D, number>;
+  /**
+   * The numeric fields drawn as lines, in order. Each is a line mark keyed by its field, plus a point
+   * mark per row keyed "<series>@<row key>" ("goals@12"). A missing or non-finite value throws.
+   */
+  readonly series: readonly NumericKey<D>[];
+  /**
+   * The label at each line's end, in the right margin: by default its value in `format` with its
+   * series' label ("52 goals"), counting between values while a change or a reveal plays. `false`
+   * turns them off. A function words them, given the value (rounded as it counts), the series and
+   * the chart's `format`; an empty string shows none, and a throw (reported) keeps the default.
+   */
+  readonly labels?: false | ((value: number, series: string, format: (value: number) => string) => string);
+}
+
+export interface LineChart<D> extends Chart<D, LineChartOptions<D>> {
+  /**
+   * Shows the data up to `x`, at once: a view, not a data change, so it fires no events. Each line
+   * ends at x (part way between two rows when x falls between them) and its decorations follow it, as
+   * playback drives it frame by frame. Points past x are hidden, can't be hovered or focused, and
+   * aren't in `marks()`; focus on one moves to the nearest revealed x. The scales, the table, the
+   * names and the announcements cover all the data. Clamped to the rows' range, and kept across
+   * `update()`: the default, `reveal(Infinity)`, shows everything, rows added later included.
+   */
+  reveal(x: number): void;
+}
+
 export interface Chart<D, O> {
   /**
    * Changes options and animates to the new state, by the motion mode. Resolves when the change has

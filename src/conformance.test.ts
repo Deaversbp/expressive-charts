@@ -1,9 +1,9 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// four sources: bars from the reference barChart and from expressive() on bars drawn by other code,
-// the slices of the reference donutChart, and the slices of a D3 pie through expressive(). Each
-// source also draws its marks at another size, as a resize would, for the check that effects follow
-// onChange. This test brings charts and effects together, so it lives beside src/index.ts, the only
-// module allowed to.
+// five sources: bars from the reference barChart and from expressive() on bars drawn by other code,
+// the slices of the reference donutChart, the slices of a D3 pie through expressive(), and the lines
+// and points of the reference lineChart. Each source also draws its marks at another size, as a resize
+// would, for the check that effects follow onChange. This test brings charts and effects together, so
+// it lives beside src/index.ts, the only module allowed to.
 
 import { select } from "d3-selection";
 import { arc, pie, type PieArcDatum } from "d3-shape";
@@ -13,6 +13,7 @@ import {
   donutChart,
   expressive,
   flash,
+  lineChart,
   parallel,
   pulse,
   sequence,
@@ -21,10 +22,11 @@ import {
   travel,
   wiggle,
   type AnyMarkEffect,
+  type MarkData,
   type MarkGeometry
 } from "./index";
 import { cleat, soccerBall } from "./icons/sport";
-import { checkEffect, type CheckEffectOptions } from "./testing";
+import { checkEffect, testContext, type CheckEffectOptions } from "./testing";
 
 interface Player {
   name: string;
@@ -112,6 +114,38 @@ function pieMarks(moved = false): readonly MarkGeometry[] {
   return fx.marks();
 }
 
+interface Week {
+  week: number;
+  goals: number;
+  xg: number;
+}
+
+/** Goals below xG, then above it, then below again. */
+const weeks: Week[] = [
+  { week: 1, goals: 0, xg: 1.2 },
+  { week: 2, goals: 1, xg: 2.1 },
+  { week: 3, goals: 4, xg: 3.6 },
+  { week: 4, goals: 6, xg: 4.4 },
+  { week: 5, goals: 6, xg: 6.3 },
+  { week: 6, goals: 7, xg: 7.5 }
+];
+
+/**
+ * The reference line chart's marks (the lines, then the points by x), each with the data its enter
+ * event gave it: drawn from no data and updated to the season, with motion off so it lands at once.
+ * Narrower and shorter when moved, so every point moves too.
+ */
+function lineSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<MarkGeometry, MarkData<Week>> } {
+  const container = document.body.appendChild(document.createElement("div"));
+  const chart = lineChart<Week>(container, { label: "Goals vs xG", data: [], x: "week", series: ["goals", "xg"], width: moved ? 480 : 640, height: moved ? 240 : 300, motion: "off" });
+  const data = new Map<MarkGeometry, MarkData<Week>>();
+  chart.on("enter", (event) => data.set(event.mark, event.data));
+  void chart.update({ data: weeks });
+  return { marks: chart.marks(), data };
+}
+
+const lineMarks = (moved = false): readonly MarkGeometry[] => lineSource(moved).marks;
+
 const effects: Record<string, AnyMarkEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
@@ -131,7 +165,7 @@ const options: Record<string, CheckEffectOptions> = { "staggered flash, third of
 /** A source's marks, or with `true` the same marks moved. */
 type Source = (moved?: boolean) => readonly MarkGeometry[];
 const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars": adapterMarks };
-const sources: Record<string, Source> = { ...bars, donutChart: donutMarks, "D3 pie through expressive()": pieMarks };
+const sources: Record<string, Source> = { ...bars, donutChart: donutMarks, "D3 pie through expressive()": pieMarks, lineChart: lineMarks };
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -165,6 +199,29 @@ describe("slices from a D3 pie through expressive()", () => {
       expect(mark.segments).toBeUndefined();
       expect(mark.pivot).toEqual({ x: 0, y: 0 });
     }
+  });
+});
+
+describe("lines and points from lineChart", () => {
+  it("finds a line per series, then each series' point at each week, with the data their enter events gave them", () => {
+    const { marks, data } = lineSource();
+    expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg", ...weeks.flatMap((w) => [`goals@${w.week}`, `xg@${w.week}`])]);
+    expect(marks[0]).toMatchObject({ series: "goals", thickness: 2.25 });
+    expect(marks[2]).toMatchObject({ series: "goals", length: 0 });
+    for (const mark of marks) expect(data.has(mark), mark.key).toBe(true);
+    expect(data.get(marks[0]!)!.related("xg")).toBe(data.get(marks[1]!));
+  });
+
+  it("threshold below xG passes the conformance checks on every line and point, with the chart's data", async () => {
+    const { marks, data } = lineSource();
+    const twins = lineSource(true);
+    const all = new Map([...data, ...twins.data]);
+    const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+    await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: (mark) => all.get(mark)! });
+    // Not vacuously: goals are below xG up to week 2's crossing and again from week 4's.
+    const ctx = testContext();
+    threshold({ compareTo: "xg" }).end(marks[0]!, data.get(marks[0]!)!, ctx);
+    expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);
   });
 });
 

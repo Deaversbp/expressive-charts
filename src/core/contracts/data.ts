@@ -9,7 +9,10 @@ export interface Sample {
 }
 
 export interface MarkData<D = unknown> {
-  /** The row behind the mark. A line series gets all its rows. */
+  /**
+   * The row behind the mark: a bar's or a slice's row, a line point's row. A line's is the row at its
+   * revealed end; its other rows' values are in `samples`.
+   */
   readonly datum: D;
   /** Data values along the walk, t ascending. */
   readonly samples: readonly Sample[];

@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart and a donut chart, the `expressive()` adapter for marks drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-and-donut-charts-travel-and-the-adapter)). The line chart and `morph` are still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart, a donut chart and a line chart, the `expressive()` adapter for marks drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-donut-and-line-charts-travel-and-the-adapter)). `morph` is still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -54,7 +54,7 @@ barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue"
 
 More examples, all type-checked against the proposed API, are in [docs/sketches](docs/sketches/).
 
-## Available now: the motion core, mark geometry, bar and donut charts, travel and the adapter
+## Available now: the motion core, mark geometry, bar, donut and line charts, travel and the adapter
 
 The first layer is built: the shared animation clock, tweens, retargetable values and motion modes that charts and effects will run on, plus the shared mark description they meet through.
 
@@ -140,6 +140,27 @@ const shots = donutChart("#shots", {
 await shots.update({ data: afterMatchweek });
 ```
 
+A line chart draws a line per series through one row per x, each ending in a dot and a label in the right margin that counts as the line moves ("52 goals"). The pointer anywhere over the chart hovers every series at the nearest x: a dashed crosshair, each series' point, and a tooltip above them, with nothing dimmed. It's one tab stop whose arrow keys go x by x, each x heard as one image ("12: 15 goals, 14.2 xg", worded by `markLabel`), and it has the same tooltip, data table (a row per x, with no total), legend and announcements as the other charts. Each point is a dot, so effects meant for a line, which `only("goals", …)` also matches on the goals points, act on the line alone. `reveal(x)` shows the data up to x at once, part way between rows and with no events, so `playback()` (below) can play a season while decorations follow every frame. `update()` changes the values first and then moves the rows, a new week growing out of the last:
+
+```js
+import { lineChart, only, parallel, threshold, travel } from "expressive-charts";
+import { soccerBall } from "expressive-charts/icons/sport";
+
+const xg = lineChart("#xg", {
+  label: "Goals vs expected goals, season to date",
+  data: weeks,                         // [{ week: 1, goals: 0, xg: 1.2 }, ...]: one row per x, which must be a number
+  x: "week",
+  series: ["goals", "xg"],
+  seriesLabels: { goals: "Goals scored", xg: "Expected goals (xG)" },
+  labels: (value, series) => (series === "xg" ? `${value.toFixed(1)} xG` : `${value} goals`), // or false
+  legend: { entries: [{ label: "Goals below xG", color: "negative" }] },
+  table: { category: "Matchweek", columns: [{ label: "Difference", field: (d) => d.goals - d.xg, after: "values" }] },
+  on: { decorate: only("goals", parallel(threshold({ compareTo: "xg" }), travel(soccerBall, { ride: "on" }))) } // red below xG, a ball on the tip
+});
+await xg.update({ data: [...weeks, nextWeek] }); // the new week grows out of the last
+xg.reveal(20);                         // through matchweek 20: lines end there, and later weeks can't be hovered
+```
+
 Charts follow the device's light or dark setting, with eight series colours checked for contrast and colour-vision deficiencies in both. Theme them with `--ec-*` custom properties, which your CSS always overrides, and pin a theme with `data-theme` on any ancestor ([Rendering](docs/architecture.md#rendering) has the details):
 
 ```html
@@ -213,7 +234,7 @@ control.destroy();                                                            //
 ```js
 import { playback, playButton } from "expressive-charts";
 
-const season = playback({ from: 1, to: 38, duration: 6500, onFrame: (week) => drawThrough(week) }); // starts at rest at the end
+const season = playback({ from: 1, to: 38, duration: 6500, onFrame: (week) => xg.reveal(week) }); // starts at rest at the end
 playButton("#play", season, { labels: { play: "Play season" } }); // "Play season" / "Pause", back to Play at the end
 range.addEventListener("input", () => season.seek(Number(range.value)));
 ```
@@ -275,7 +296,7 @@ A data effect that `needs` a series the marks don't have throws when the attachm
 
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar and donut charts, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar, donut and line charts, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
 
 ## Writing effects
 

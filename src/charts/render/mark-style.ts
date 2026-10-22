@@ -51,7 +51,8 @@ export interface SvgMarkHandle extends MarkHandle {
  *   (effects animate it themselves): its fill, or an open part's stroke.
  * - `halo` strokes each visible part's outline behind the mark: `width` is the stroke width, so half
  *   of it shows outside the mark. An open part's halo is its own width wider, with round caps, so it
- *   goes round the line's ends too. With `halos`, it's drawn there instead, masked to outside the mark.
+ *   goes round the line's ends too. With `halos`, it's drawn there instead, masked to outside the mark
+ *   (outside an open part's stroke).
  */
 export function svgMarkHandle(target: () => StyleTarget | undefined, options: SvgMarkHandleOptions = {}): SvgMarkHandle {
   let style: MarkStyle = {};
@@ -79,7 +80,7 @@ export function svgMarkHandle(target: () => StyleTarget | undefined, options: Sv
   const paintHalo = (body: SVGGElement, parts: readonly StyledPart[]): void => {
     const spec = style.halo;
     if (above) {
-      const visible = parts.flatMap((part) => (part.visible ? [{ d: part.d, color: part.colors.color }] : []));
+      const visible = parts.flatMap((part) => (part.visible ? [{ d: part.d, color: part.colors.color, ...(part.open ? { stroke: part.open.width } : {}) }] : []));
       above.paint(options.halos?.(), visible, spec, style.transform);
       return;
     }

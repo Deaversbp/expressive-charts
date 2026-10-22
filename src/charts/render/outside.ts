@@ -77,8 +77,9 @@ export interface MaskedHalo {
    * Strokes each part's outline in a group of its own in `container`, at `width` (half of it outside
    * the mark), masked to outside the mark, so it shows only where it would behind the mark. Around an
    * open outline, the mask cuts out the stroke, as the ring's does, and the halo is stroked at the
-   * stroke's width plus its own, so as much of it shows as round a closed mark. Moved with the mark's
-   * `transform`. No halo, no container or no parts removes it.
+   * stroke's width plus its own with round caps, so as much of it shows as round a closed mark, ends
+   * included, as svgMarkHandle's halo behind a line does. Moved with the mark's `transform`. No halo,
+   * no container or no parts removes it.
    */
   paint(container: SVGGElement | undefined, parts: readonly HaloPart[], halo: MarkStyle["halo"], transform: Matrix | undefined): void;
   remove(): void;
@@ -111,8 +112,12 @@ export function maskedHalo(): MaskedHalo {
       }
       setAttributes(group, { transform: transform && transformAttribute(transform) });
       for (const part of parts) {
-        const width = halo.width + (part.stroke ?? 0);
-        const path = svgElement("path", { d: part.d, "stroke-width": width, "stroke-opacity": halo.opacity, "stroke-linejoin": "round", mask: `url(#${id})` }, group);
+        const open = part.stroke !== undefined;
+        const path = svgElement(
+          "path",
+          { d: part.d, "stroke-width": halo.width + (part.stroke ?? 0), "stroke-opacity": halo.opacity, "stroke-linejoin": "round", "stroke-linecap": open ? "round" : undefined, mask: `url(#${id})` },
+          group
+        );
         setStyles(path, { fill: "none", stroke: halo.color === undefined ? (part.color ?? cssColor("mark")) : cssColor(halo.color) });
       }
     },

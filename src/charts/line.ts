@@ -365,7 +365,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   }
 
   function createLine(series: string, placed: PlacedLine<D>, entering: boolean): LineRecord<D> {
-    const group = svgElement("g", { class: "ec-mark ec-line", "data-key": series, "data-series": series }, linesLayer);
+    const group = svgElement("g", { class: "ec-line", "data-key": series, "data-series": series }, linesLayer);
     const body = svgElement("g", { class: "ec-body" }, group);
     const record: LineRecord<D> = {
       kind: "line",
@@ -387,7 +387,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   }
 
   function createPoint(row: RowRecord<D>, placed: PlacedPoint<D>): PointRecord<D> {
-    const group = svgElement("g", { class: "ec-mark ec-point", "data-key": placed.key, "data-series": placed.series }, pointsLayer);
+    const group = svgElement("g", { class: "ec-point", "data-key": placed.key, "data-series": placed.series }, pointsLayer);
     const body = svgElement("g", { class: "ec-body" }, group);
     const record: PointRecord<D> = {
       kind: "point",

@@ -581,6 +581,35 @@ describe("expressive: hover", () => {
 });
 
 describe("expressive: refresh", () => {
+  it("tells a mark's decorations when only its thickness changed, as a line's stroke width does", () => {
+    const host = d3Lines();
+    const story = dataRecorder();
+    const thickness: number[] = [];
+    const { fx } = setup(host.paths, {
+      ...traced,
+      // The page reads each line's width from its element.
+      geometry: (el, d, key) => build.line({ key, series: d.name, points: vertices(d), width: Number(el.getAttribute("stroke-width")) }),
+      on: {
+        decorate: {
+          ...story.effect,
+          run(mark, data, ctx) {
+            ctx.onChange((moved) => thickness.push(moved.thickness));
+            return story.effect.run(mark, data, ctx);
+          }
+        }
+      }
+    });
+    const events: string[] = [];
+    for (const type of ["enter", "update", "exit"] as const) fx.on(type, (e) => events.push(`${type} ${e.mark.key}`));
+
+    host.paths[0]!.setAttribute("stroke-width", "5");
+    fx.refresh(host.paths);
+    expect(fx.marks().find((m) => m.key === "goals")!.thickness).toBe(5);
+    expect(thickness).toContain(5);
+    // The same path: nothing to report as an update.
+    expect(events).toEqual([]);
+  });
+
   it("fires exit, update and enter by key, and follows marks that only moved", () => {
     const host = d3Stack();
     const story = recorder();

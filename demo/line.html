@@ -27,6 +27,8 @@
   @media (min-width: 860px) {
     .pair { grid-template-columns: 1fr 1fr; }
     .pair > .card { grid-row: span 3; grid-template-rows: subgrid; }
+    /* The Vega-Lite line and the differences share a row, but not their rows: one card has a chart, the other a list. */
+    .pair.free > .card { grid-row: auto; grid-template-rows: none; }
   }
   h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
   h2 { font-size: 20px; margin: 0; }
@@ -49,7 +51,7 @@
   /* xG is what goals are read against: a dashed grey on both charts, so it can't be mistaken for the
      red below it, whatever the viewer's colour vision. It's xG's palette slot on these two charts, so
      its end dot, hover point and legend swatch follow. */
-  #line, .d3-box { --ec-series-2: var(--ec-text-muted, #75736d); --ec-series-2-strong: var(--ink-2); }
+  #line, .d3-box, .vega-box { --ec-series-2: var(--ec-text-muted, #75736d); --ec-series-2-strong: var(--ink-2); }
   #line .ec-line[data-key="xg"] .ec-stroke, #d3-line .line-xg { stroke-dasharray: 6 4; }
   /* Legend swatches as short lines, so xG's shows its dash. */
   #line .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
@@ -70,13 +72,22 @@
   #d3-line .line { fill: none; stroke-linejoin: round; stroke-linecap: butt; }
   #d3-line .line-goals { stroke: var(--ec-series-1, #2a78d6); }
   #d3-line .line-xg { stroke: var(--ec-series-2); }
+  /* The Vega-Lite line: Vega writes the colours it's given as attributes (vega-line.ts), so the page
+     maps those two to the theme, and styles its axes as the D3 line's. Its legend is the page's. */
+  .vega-box { min-width: 0; }
+  #vega-line svg { display: block; max-width: 100%; height: auto; overflow: visible; }
+  #vega-line path[stroke="#2a78d6"] { stroke: var(--ec-series-1, #2a78d6); }
+  #vega-line path[stroke="#75736d"] { stroke: var(--ec-series-2); }
+  #vega-line .role-axis-label text { fill: var(--ec-text-muted, #7d7b75); font-family: inherit; font-variant-numeric: tabular-nums; }
+  #vega-line .role-axis-grid line { stroke: var(--ec-grid, #e1e0d9); }
+  #vega-line .role-axis-domain line, #vega-line .role-axis-tick line { stroke: var(--ec-axis, #c3c2b7); }
 </style>
 </head>
 <body>
 <main class="wrap">
   <header>
     <p class="eyebrow">Milestone 4 · line chart and data effects</p>
-    <h1>Goals vs expected goals, two ways</h1>
+    <h1>Goals vs expected goals, three ways</h1>
     <p class="lede">The prototype's second card on the library: a season of goals against expected goals on <code>lineChart</code>, and the same story on a line drawn with D3. One Play button, one scrubber and the motion switch drive both. Each carries one decoration, <code>only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" })))</code>, with no change to effect code.</p>
   </header>
 
@@ -111,6 +122,28 @@
     </div>
   </div>
 
+  <div class="pair free">
+    <section class="card" aria-labelledby="vega-title">
+      <h2 id="vega-title">And on a Vega-Lite line</h2>
+      <p class="note">Drawn by Vega as SVG. <code>fromVegaView()</code> reads its line mark from the View's scenegraph and adds the same decoration. It shows the whole season, since Vega redraws its marks on every data change.</p>
+      <div class="vega-box">
+        <div class="legend"><span><i class="swatch-goals"></i>Goals scored</span><span><i class="swatch-xg"></i>Expected goals (xG)</span><span><i class="swatch-below"></i>Goals below xG</span></div>
+        <div id="vega-line"></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="differences-title">
+      <h2 id="differences-title">Differences from the lab's card</h2>
+      <ul class="checklist">
+        <li>The ball riding the goals line is new; the lab has none. It's drawn at 11 px, smaller than its own 17, so it doesn't hide the last weeks.</li>
+        <li>xG is a dashed grey line, where the lab's is orange: orange sat too close to the red below xG, and the dash tells the lines apart whatever the viewer's colour vision. The legends draw each entry as a short line, so xG's shows its dash.</li>
+        <li>The goals line's end dot and hover dot keep their series colour, since <code>threshold</code> draws nothing on a dot. The tooltip's "vs expected" line and the table's Difference column still say when goals are below xG.</li>
+        <li>"Goals below xG" comes after the series in the legend, since a page's entries follow the chart's own.</li>
+        <li>The table's headers are the series' names, "Goals scored" and "Expected goals (xG)", and its values share the chart's one format, so an xG of 20.0 reads "20".</li>
+      </ul>
+    </section>
+  </div>
+
   <section class="card" aria-labelledby="check-title">
     <h2 id="check-title">Milestone 4: done when</h2>
     <ul class="checklist">
@@ -122,17 +155,6 @@
       <li><code>expressive()</code> has <code>samples</code> and <code>samplesAlong</code>, the <code>needs</code> check, stroke colours and open-outline halos, hover emphasis under <code>dim: true</code>, and opt-in <code>watch</code>, with its cost measured.</li>
       <li>The line screenshots are green in CI, and no other baseline has changed apart from step 4's host hover ones. The line chart's screen-reader check in <code>docs/a11y-check.md</code> passes.</li>
       <li>The package still has no runtime dependencies, and <code>typecheck</code>, <code>test</code> and <code>build</code> are green. <code>fromVegaView()</code> reads a Vega-Lite line on this page, or has moved to milestone 6 with a note saying why.</li>
-    </ul>
-  </section>
-
-  <section class="card" aria-labelledby="differences-title">
-    <h2 id="differences-title">Differences from the lab's card</h2>
-    <ul class="checklist">
-      <li>The ball riding the goals line is new; the lab has none. It's drawn at 11 px, smaller than its own 17, so it doesn't hide the last weeks.</li>
-      <li>xG is a dashed grey line, where the lab's is orange: orange sat too close to the red below xG, and the dash tells the lines apart whatever the viewer's colour vision. The legends draw each entry as a short line, so xG's shows its dash.</li>
-      <li>The goals line's end dot and hover dot keep their series colour, since <code>threshold</code> draws nothing on a dot. The tooltip's "vs expected" line and the table's Difference column still say when goals are below xG.</li>
-      <li>"Goals below xG" comes after the series in the legend, since a page's entries follow the chart's own.</li>
-      <li>The table's headers are the series' names, "Goals scored" and "Expected goals (xG)", and its values share the chart's one format, so an xG of 20.0 reads "20".</li>
     </ul>
   </section>
 </main>

@@ -1,7 +1,8 @@
 // Screenshots of demo/line.html on a stopped clock: the theme at rest, both charts mid-play at week 20,
-// the crosshair with its tooltip, keyboard focus, and the D3 line hovered. Beside them, DOM checks:
-// how long Play takes in each mode, reduced motion, the scrubber, and the names, legend and table.
-// Names start with "line-", since screenshot names are shared across files.
+// the crosshair with its tooltip, keyboard focus, the D3 line hovered, and the Vega-Lite line at rest,
+// hovered and focused. Beside them, DOM checks: how long Play takes in each mode, reduced motion, the
+// scrubber, the names, legend and table, and the Vega-Lite line following a resize. Names start with
+// "line-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, iconTransforms, openDemo, pickMode, REST, tabInto, type Demo } from "./demo";
@@ -11,6 +12,12 @@ const line = (page: Page): Locator => page.locator("#line");
 const d3Line = (page: Page): Locator => page.locator("#d3-line");
 const d3Box = (page: Page): Locator => page.locator(".d3-box");
 const season = (page: Page): Locator => page.locator("#season");
+/** The Vega-Lite line that fromVegaView() reads, and its card's box with the page's legend. */
+const vegaLine = (page: Page): Locator => page.locator("#vega-line");
+const vegaBox = (page: Page): Locator => page.locator(".vega-box");
+/** A series' path on the Vega-Lite line, by the stroke the page gives Vega for it (vega-line.ts). */
+const vegaPath = (page: Page, series: "goals" | "xg"): Locator =>
+  vegaLine(page).locator(`.mark-line path[stroke="${series === "goals" ? "#2a78d6" : "#75736d"}"]`);
 
 const playButton = (page: Page): Locator => page.locator("#play button");
 const slider = (page: Page): Locator => page.getByRole("slider", { name: "Matchweek" });
@@ -33,6 +40,8 @@ const lineDemo: Demo = {
     await expect(line(page).locator(".ec-column")).toHaveCount(38);
     // expressive() has named the D3 line's paths, so it's attached.
     await expect(d3Line(page).locator('path.line[role="img"]')).toHaveCount(2);
+    // And fromVegaView() the Vega-Lite line's, once Vega has drawn it.
+    await expect(vegaLine(page).locator('.mark-line path[role="img"]')).toHaveCount(2);
   }
 };
 
@@ -42,9 +51,9 @@ async function openAtRest(page: Page): Promise<void> {
   await page.clock.runFor(REST);
 }
 
-/** Moves the pointer onto the D3 goals line, `share` of the way along it: hover() would aim at its box's middle, off the stroke. */
-async function hoverD3Goals(page: Page, share = 0.3): Promise<void> {
-  const point = await d3Path(page, "goals").evaluate((element, along) => {
+/** Moves the pointer onto a goals line, `share` of the way along it: hover() would aim at its box's middle, off the stroke. */
+async function hoverD3Goals(page: Page, share = 0.3, path: Locator = d3Path(page, "goals")): Promise<void> {
+  const point = await path.evaluate((element, along) => {
     const path = element as SVGPathElement;
     const at = path.getPointAtLength(path.getTotalLength() * along);
     const screen = new DOMPoint(at.x, at.y).matrixTransform(path.getScreenCTM() ?? undefined);
@@ -200,6 +209,64 @@ test("the D3 line hovered: the goals line in its strong colour, xG dimmed", asyn
   await expect(d3Box(page)).toHaveScreenshot("line-d3-hover.png");
 });
 
+test.describe("the Vega-Lite line", () => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`at rest, ${colorScheme}: three red runs, the ball at the tip, xG dashed in the theme's grey`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openAtRest(page);
+      expect(await redRuns(vegaLine(page))).toBe(3);
+      expect(await iconTransforms(vegaLine(page))).toHaveLength(1);
+      await expect(vegaPath(page, "xg")).toHaveAttribute("stroke-dasharray", "6,4");
+      await expect(vegaBox(page)).toHaveScreenshot(`line-vega-${colorScheme}.png`);
+    });
+
+    test(`the focus ring on its goals line, ${colorScheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openAtRest(page);
+      // One tab stop after the D3 line, goals first.
+      await tabInto(page, vegaLine(page));
+      await expect(vegaPath(page, "goals")).toBeFocused();
+      await page.clock.runFor(REST);
+      await expect(vegaLine(page).locator(".ec-focus-ring")).not.toHaveAttribute("visibility", "hidden");
+      await expect(vegaBox(page)).toHaveScreenshot(`line-vega-focus-${colorScheme}.png`);
+    });
+  }
+
+  test("hovered: the goals line in its strong colour, xG dimmed", async ({ page }) => {
+    await openAtRest(page);
+    await hoverD3Goals(page, 0.3, vegaPath(page, "goals"));
+    await page.clock.runFor(REST);
+    await expect(vegaPath(page, "xg")).toHaveCSS("opacity", "0.3");
+    await expect(vegaBox(page)).toHaveScreenshot("line-vega-hover.png");
+  });
+
+  test("names its lines, and follows a resize Vega draws, with no refresh() from the page", async ({ page }) => {
+    await openAtRest(page);
+    await tabInto(page, vegaLine(page));
+    await expect(vegaPath(page, "goals")).toHaveAttribute("aria-label", "Goals scored: 56 goals by matchweek 38");
+    await page.keyboard.press("ArrowRight");
+    await expect(vegaPath(page, "xg")).toBeFocused();
+    await expect(vegaPath(page, "xg")).toHaveAttribute("aria-label", "Expected goals (xG): 56.5 by matchweek 38");
+
+    // One column: Vega draws the line wider, and the colour and the ball follow on the next frame.
+    const before = await vegaLine(page).locator("svg").getAttribute("width");
+    await page.setViewportSize({ width: 700, height: 2000 });
+    await expect(vegaLine(page).locator("svg")).not.toHaveAttribute("width", before ?? "");
+    await page.clock.runFor(REST);
+    expect(await redRuns(vegaLine(page))).toBe(3);
+    const ends = await page.evaluate(() => {
+      const end = (path: SVGGeometryElement): number => path.getPointAtLength(path.getTotalLength()).matrixTransform(path.getScreenCTM()!).x;
+      const goals = document.querySelector<SVGGeometryElement>('#vega-line .mark-line path[stroke="#2a78d6"]')!;
+      const icon = document.querySelector<SVGGraphicsElement>('#vega-line .ec-overlay .ec-run[data-key="goals"] .ec-icon')!;
+      const box = icon.getBoundingClientRect();
+      return { line: end(goals), ball: box.x + box.width / 2 };
+    });
+    // The ball rests just behind the tip of the redrawn line.
+    expect(ends.line - ends.ball).toBeGreaterThan(0);
+    expect(ends.line - ends.ball).toBeLessThan(20);
+  });
+});
+
 test.describe("names, legend and table", () => {
   test("each week's name and gap, the D3 lines' names, the legend's three entries and the Difference column", async ({ page }) => {
     await openDemo(page, lineDemo);
@@ -254,5 +321,8 @@ test.describe("reduced motion", () => {
     await page.clock.runFor(FRAME);
     expect(await redRuns(d3Line(page))).toBe(3);
     expect(await iconTransforms(d3Line(page))).toEqual(atEnd[1]);
+    // The Vega-Lite line, which doesn't play, shows the decoration's end state too.
+    expect(await redRuns(vegaLine(page))).toBe(3);
+    expect(await iconTransforms(vegaLine(page))).toHaveLength(1);
   });
 });

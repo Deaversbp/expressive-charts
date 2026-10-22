@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart, a donut chart and a line chart, the `expressive()` adapter for marks drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-donut-and-line-charts-travel-and-the-adapter)). `morph` is still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart, a donut chart and a line chart, the `expressive()` adapter for marks drawn by other code (and `fromVegaView()` for Vega and Vega-Lite), icons, the first effects (`travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-donut-and-line-charts-travel-and-the-adapter)). `morph` is still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -298,7 +298,19 @@ A data effect that `needs` a series the marks don't have throws when the attachm
 
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar, donut and line charts, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
+Vega and Vega-Lite charts rendered as SVG (vega-embed's default) go through `fromVegaView()`, which reads the marks from the View's scenegraph rather than the DOM: rects are bars (stacks included), arcs slices, symbols points and lines lines. `sample` gives data effects each item's value, and its `at` for `threshold`. It follows the View's own renders, new data or a resize, so there's no `refresh()` to call. The library imports nothing from Vega:
+
+```js
+const { view } = await vegaEmbed("#season", spec); // a Vega-Lite line, one row per week and series
+fromVegaView(view, {
+  key: (d) => d.series,
+  sample: (d) => ({ value: d.value, at: d.week }),
+  keyboard: true,
+  on: { decorate: only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" }))) }
+});
+```
+
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar, donut and line charts, [Adapters](docs/architecture.md#adapters) for `expressive()` and `fromVegaView()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
 
 ## Writing effects
 
@@ -345,7 +357,7 @@ The dev server's index links the demos built on the library:
 
 - `demo/bars.html`: the lab's first card on `barChart`, with the ball and cleat, staged sorting, "Play next matchweek", and the same story on a hand-written SVG chart through `expressive()`.
 - `demo/donut.html`: the lab's third card without its morph. The shot outcomes on `donutChart`, as columns on `barChart`, and on a D3 pie through `expressive()`, with one picker for the hover effect (the ball, `"wiggle"` or `"pulse"`) and "Next match" flashing the slices that changed (`stagger(flash())`).
-- `demo/line.html`: the lab's second card. Goals against expected goals over a season on `lineChart` and on a D3 line through `expressive()` (with `samplesAlong` and `watch`), each with the goals line red below xG (`threshold`) and a ball riding its leading edge, and one "Play season" button (`playback()`, `playButton()`), scrubber and motion switch driving both.
+- `demo/line.html`: the lab's second card. Goals against expected goals over a season on `lineChart` and on a D3 line through `expressive()` (with `samplesAlong` and `watch`), each with the goals line red below xG (`threshold`) and a ball riding its leading edge, and one "Play season" button (`playButton()`), scrubber and motion switch driving both through `playback()`. A Vega-Lite line through `fromVegaView()` shows the whole season with the same decoration.
 
 ## Development
 

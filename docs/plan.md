@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1, M2 and M3 are complete (October 2026, §9). M4 is planned step by step in §9, and its steps 1–7 are built. `demo/line.html` passed your checklist walk and your screen-reader check; what's left is step 8 (the Vega helper) or its move to M6. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1, M2 and M3 are complete (October 2026, §9). M4's steps 1–8 are all built (§9). `demo/line.html` passed your checklist walk and your screen-reader check. What's left is for you: a look at its new Vega-Lite card, and two short listening steps for it (section E, steps 13 and 14). Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -1338,7 +1338,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 **Wave 4** (if it fits; otherwise it moves to M6):
 
-8. **`fromVegaView(view, mark = "marks")`.** Owns `src/charts/adapter/vega.ts` and its tests, vega and vega-lite in `package.json` and `package-lock.json`, and the Vega-Lite line on `demo/line.html` with its `line-vega-` baselines.
+8. ✅ **`fromVegaView(view, mark = "marks")`.** Owns `src/charts/adapter/vega.ts` and its tests, vega and vega-lite in `package.json` and `package-lock.json`, and the Vega-Lite line on `demo/line.html` with its `line-vega-` baselines.
    - Built to the adapter spike's recommendation 3:
      - it checks that `view.renderer()` is `"svg"`;
      - it reads the named mark's items from `view.scenegraph()`: each item's element is the one whose `__data__` is the item, and its row is `item.datum`;
@@ -1348,6 +1348,36 @@ Each step names the files it owns, so steps in the same wave can run in parallel
      - keys come from the page.
    - Tests on a real Vega-Lite line chart and bar chart with the SVG renderer, including `threshold` on the line: in jsdom, or in Playwright if jsdom can't render them.
    - Docs: Adapters in architecture.md (what each library needs) and README.
+   - **Built** (22 October 2026), in this planning session at your request, in `src/charts/adapter/vega.ts` and exported as `fromVegaView` ([architecture.md](architecture.md#vega-and-vega-lite-fromvegaview)). vega 6.4.0 and vega-lite 6.5.0, the versions the adapter spike tested, are dev dependencies pinned to exact versions; `npm ls --omit=dev` is still empty, and nothing in `src/` outside the tests imports Vega. 24 new tests in `src/vega.test.ts` on real Vega-Lite charts, which Vega renders as SVG in jsdom (1,340 tests in all). Decisions:
+     - **Signature.** `fromVegaView(view, options)`: `expressive()`'s options without `datum`, `geometry` and `watch`, plus `mark` (default `"marks"`) and `sample`. It returns the attachment rather than, as the spike sketched, a mark source for `expressive()`, because it has to own refreshing: Vega replaces its elements. Its `refresh()` takes no source. Duck-typed on the View (`VegaViewLike`: `renderer()`, `scenegraph()`, `container()`). vega-typings declare `scenegraph()` as the root mark, but Vega returns `{ root }`, so both are read.
+     - **The hook the plan left open.** Vega's data and resize listeners, and `runAfter`, run inside the dataflow, before the View renders, so they'd read the old elements. A `MutationObserver` on the View's `<svg>` notes what Vega draws instead: new elements, and changes to `d`, `transform`, `x`, `y`, `width` and `height`, ignoring the adapter's own overlay. The View is read again on the next frame, through `expressive()`'s `refresh()`. That covers new data, resizes and signals with no dataset names, and a View that hasn't run yet attaches with no marks and takes them up once Vega draws.
+     - **Reading.** Every mark of that name in the scenegraph counts (Vega-Lite draws a line per series in a facet group). Each element is found by its `__data__` (a line's one path is bound to its first item), and items' coordinates are mapped from the element's parent's into the marks' common ancestor's.
+     - **Mark types.**
+       - Rects become bars through the adapter's own `baseline: "auto"` and stack reading: `segment` names a stack's parts, ordered from the baseline whatever order Vega-Lite stacks in.
+       - Arcs become slices, with their angles put in order and their radii scaled.
+       - Symbols become points of radius √(size/π).
+       - Lines become lines at the item's `strokeWidth`, with `series` set to the key.
+       - Other types throw a `TypeError`, and so does a line with a gap (`defined: false`).
+     - **Samples need `sample(row)`**, a value or `{ value, at }`. The plan said samples come straight from the items, but the items say where each point is, not which field it shows.
+       - A line gets a sample at each point, through `samplesAlong`, which is exact at the vertices.
+       - Bars go from 0 to their value, and a stack's segments each over their own range. Slices go from 0 to their value, and points get their value.
+       - Unless `value` is given, `sample` is also what each element shows (a line: every point's), so a resize isn't an update.
+     - **The demo** draws a Vega-Lite line of the same season (`demo/vega-line.ts`), beside "Differences from the lab's card", with the same decoration, `keyboard`, `markLabel` and `dim`.
+       - Vega writes the colours it's given as attributes, so the page's CSS maps them to the theme and styles the axes; the legend is the page's.
+       - `config.aria: false` keeps Vega's own descriptions off. Its axes are hidden.
+       - The page is 1,904 px tall at 1000 px wide; the lede is unchanged, so nothing above the charts moves.
+     - **It shows the whole season rather than playing.** Measured in Chromium over a 391-frame reveal, a frame-by-frame reveal would be affordable: Vega's redraw takes 0.7 ms a frame (median; p95 1.9) and the adapter's re-read 1.8 ms (p95 4.5). But every data change gives Vega new elements, so:
+       - a focused line would be replaced every frame;
+       - an `update` would fire for both lines every frame (686 in the run);
+       - the decoration would trail by a frame.
+
+       A page that plays a Vega chart frame by frame would want a lighter path than `refresh()`; none is built.
+     - **Conformance.** Every built-in effect, and `threshold` against xG with the View's own samples, passes `checkEffect` (five checks, with moved twins) on the View's lines. The checks are in `src/vega.test.ts`: the shared conformance file's sources are synchronous, and a View renders asynchronously.
+     - **Screenshots.** Five new: `line-vega-light`, `line-vega-dark`, `line-vega-focus-light`, `line-vega-focus-dark` and `line-vega-hover`. `line-page-light` and `line-page-dark` were remade, since the page has a new card. No other baseline changed. Docker passed 50 of 50 twice.
+     - **Screen reader.** Section E gains steps 13 and 14 for the Vega-Lite line, not run yet. Vega still gives the groups round its lines roles of its own (`graphics-object`, `graphics-symbol`), so step 13 listens for anything unnamed.
+     - **Fixed after Codex's review on PR #48:**
+       - A line Vega draws as a curve (any `interpolate` but `"linear"`) now throws, instead of being described as straight segments the effects would draw off the curve (decision 5).
+       - A change to a line's `stroke-width` alone is now followed. The helper watches that attribute too, and `expressive()`'s `refresh()` now counts a mark whose thickness changed as moved, so its decorations hear `change()`. Before, only an outline or segment change did, so a D3 line whose width changed kept its old decorations as well. Six new tests (1,346 in all).
 
 **Done when:**
 - `lineChart` draws the lab's card 2 on the library: two lines with end labels, a crosshair across both with the tooltip, a legend with the page's "Goals below xG", a table with a Difference column, a name for each matchweek, one tab stop whose arrow keys go week by week, and staged updates. Light and dark come from the library's defaults.
@@ -1366,6 +1396,23 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 - The package still has no runtime dependencies, and `typecheck`, `test` and `build` are green.
 - `fromVegaView()` reads a Vega-Lite line on the demo, or has moved to M6 with a note saying why.
 
+**Status: every step is built (October 2026), and two checks of step 8 are yours.** Against the "Done when" list:
+- **The line chart.** `lineChart` draws the lab's card 2 (step 5), and `demo/line.html` passed your checklist walk (step 7).
+- **`threshold`** colours the goals line below xG on `lineChart`, on a D3 line and on a Vega-Lite line. It follows every frame of a reveal and shows with motion off (steps 2, 5, 6 and 8).
+- **Playback.** `playback()` and `playButton()` play and pause the season in each mode, and the scrubber seeks (steps 3 and 7).
+- **The riding ball** rides the goals line's leading edge on all three charts. `src/effects/travel.ts` and `gaits.ts` haven't changed since M4 was planned.
+- **`checkEffect`**, with its fifth check, passes for every built-in effect on every fixture, and on real marks from `barChart`, `donutChart`, `lineChart`, `expressive()` bars, D3 pies, D3 lines and Vega-Lite lines.
+- **`expressive()`** has `samples`, `samplesAlong`, the `needs` check, stroke colours, open-outline halos, hover emphasis under `dim: true` and opt-in `watch`, measured (open question 13). `fromVegaView()` reads Vega and Vega-Lite charts (step 8).
+- **Screenshots.** The line screenshots pass in Docker.
+  - Beyond step 4's host hover baselines, two other kinds changed. Step 6 remade two dark host focus baselines, for your hover-colour decision. Step 8 remade the two full-page line baselines, since the page has a new card.
+  - CI runs on step 8's pull request.
+- **Screen reader.** Your NVDA + Chrome check of section E passed (steps 1–12). Steps 13 and 14, for the Vega-Lite line, haven't been run.
+- **Packaging.** No runtime dependencies, and `typecheck`, `test` (1,346 tests) and `build` are green.
+
+**Left for you:**
+- look at the Vega-Lite card on `demo/line.html` in the browser;
+- run section E's steps 13 and 14 with NVDA + Chrome.
+
 ### M5: Morph
 
 The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label tweening, and shared colour assignment. That includes colouring bars by category: today `barChart` colours by series, so the lab's columns would all be one colour. With category colours, one `ColorAssignment` keeps each outcome's colour from slice to column (found in the PR #30 review).
@@ -1376,7 +1423,6 @@ The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label
 
 - A stress demo to set documented SVG limits (§10).
 - Dates on `lineChart`'s x axis: time ticks and `Intl` formatting, with no dependency (M4 decision 3).
-- `fromVegaView()`, if it slipped from M4 (step 8).
 - A full accessibility audit.
 - A bundle-size check in CI, done with a Node script and no new dependency.
 - README API docs.

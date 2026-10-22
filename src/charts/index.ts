@@ -5,7 +5,20 @@ export { barChart, type BarChart } from "./bar";
 export { donutChart, type DonutChart } from "./donut";
 export { lineChart } from "./line";
 export type { ChartEnv } from "./shell/setup";
-export { expressive, type Attachment, type ExpressiveOptions, type HostMark, type MarkSource } from "./adapter";
+export {
+  expressive,
+  fromVegaView,
+  type Attachment,
+  type ExpressiveOptions,
+  type HostMark,
+  type MarkSource,
+  type VegaAttachment,
+  type VegaItem,
+  type VegaMark,
+  type VegaOptions,
+  type VegaSample,
+  type VegaViewLike
+} from "./adapter";
 export { colorAssignment, type ColorAssignment } from "./colors";
 export { styleOptions, type StyleOptions } from "./render/theme";
 export type {

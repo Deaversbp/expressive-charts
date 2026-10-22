@@ -965,8 +965,9 @@ function samplesChanged(from: readonly Sample[], to: readonly Sample[]): boolean
   return from.length !== to.length || from.some((a, i) => a.t !== to[i]!.t || a.value !== to[i]!.value || !sameAt(a.at, to[i]!.at));
 }
 
+/** Whether a mark moved: its outline, its segments, or its thickness, which a line's stroke width changes alone. */
 function geometryChanged(from: MarkGeometry, to: MarkGeometry): boolean {
-  if (from.outline.d !== to.outline.d) return true;
+  if (from.outline.d !== to.outline.d || from.thickness !== to.thickness) return true;
   const a = from.segments ?? [];
   const b = to.segments ?? [];
   return a.length !== b.length || a.some((segment, i) => segment.key !== b[i]!.key || segment.outline.d !== b[i]!.outline.d);

@@ -6,6 +6,7 @@ import {
   barChart as drawBarChart,
   donutChart as drawDonutChart,
   expressive as attach,
+  fromVegaView as attachVega,
   lineChart as drawLineChart,
   type Attachment,
   type BarChart,
@@ -16,7 +17,10 @@ import {
   type ExpressiveOptions,
   type LineChart,
   type LineChartOptions,
-  type MarkSource
+  type MarkSource,
+  type VegaAttachment,
+  type VegaOptions,
+  type VegaViewLike
 } from "./charts";
 import { motionSwitch as buildMotionSwitch, type MotionSwitch, type MotionSwitchOptions } from "./charts/controls";
 import { iconRegistry, presetRegistry } from "./registries";
@@ -55,7 +59,13 @@ export type {
   SliceSummary,
   StyleOptions,
   TableColumn,
-  TableOptions
+  TableOptions,
+  VegaAttachment,
+  VegaItem,
+  VegaMark,
+  VegaOptions,
+  VegaSample,
+  VegaViewLike
 } from "./charts";
 export { playButton } from "./charts/controls";
 export type { MotionSwitch, MotionSwitchOptions, PlayButton, PlayButtonOptions } from "./charts/controls";
@@ -96,6 +106,16 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
  */
 export function expressive<D = unknown>(target: MarkSource<D>, options: ExpressiveOptions<D>): Attachment<D> {
   return attach(target, options, env);
+}
+
+/**
+ * Adds effects to a Vega or Vega-Lite chart rendered as SVG (vega-embed's default): the View's mark
+ * named `mark` ("marks", Vega-Lite's data mark, by default), read from its scenegraph. Rects are bars,
+ * arcs slices, symbols points and lines lines; `sample` gives data effects their values. It follows
+ * the View's own renders, so there's no refresh() to call. `key` is required, as for expressive().
+ */
+export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, options: VegaOptions<D>): VegaAttachment<D> {
+  return attachVega(view, options, env);
 }
 
 /**

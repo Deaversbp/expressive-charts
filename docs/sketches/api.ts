@@ -10,7 +10,8 @@
  * (LineChartOptions, LineChart with reveal), the icons (defineIcon, iconFromSvg, icons), the first
  * effects (travel with its gaits, flash, wiggle, pulse, threshold, sequence, parallel, only, stagger), the
  * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch, playback with its
- * playButton, and the adapter, expressive() with its types (MarkSource, Attachment, ExpressiveOptions). The conformance suite is ./testing.ts.
+ * playButton, and the adapters, expressive() with its types (MarkSource, Attachment, ExpressiveOptions) and
+ * fromVegaView() with its own (VegaOptions, VegaViewLike, VegaAttachment). The conformance suite is ./testing.ts.
  * Everything still declared here is planned. Lines marked NEW were
  * added because writing the examples in ./examples exposed a gap in docs/plan.md.
  */
@@ -105,6 +106,10 @@ export declare const describe: typeof builders & {
 // when read, and rects with a numeric `value` get the bar chart's samples without it. So is `watch`
 // (M4 step 6): it re-reads only the marks whose geometry attributes changed, or that sit in an
 // ancestor that moved, once a frame, and fires no events, so refresh() still says what the data did.
+// fromVegaView() is built too (M4 step 8), with VegaOptions, VegaViewLike and VegaAttachment. Changed
+// from the plan's fromVegaView(view, mark = "marks"): it takes expressive()'s options with `mark` among
+// them, plus `sample` for data effects' values, and returns the attachment, which follows the View's
+// renders itself.
 
 // ── Reference charts ─────────────────────────────────────────────────────────
 

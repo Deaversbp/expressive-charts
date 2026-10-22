@@ -5,6 +5,7 @@
 import {
   describe,
   expressive,
+  fromVegaView,
   lineChart,
   motionSwitch,
   only,
@@ -18,6 +19,7 @@ import {
 } from "../src/index";
 import { sport } from "../src/icons/sport/index";
 import { drawLine, type Week } from "./d3-line";
+import { drawVegaLine, type Row, type VegaLine } from "./vega-line";
 
 // The ball goes by its name, "soccer-ball", so the decoration reads the same on both charts.
 registerIcons(sport);
@@ -127,9 +129,36 @@ const d3Effects = expressive(host.paths, {
   on: { decorate: story() }
 });
 
+// The Vega-Lite line shows the whole season. Vega draws new elements on every data change, so
+// playing it frame by frame would replace a focused line 60 times a second and fire an update each
+// frame (the plan's step 8 has the numbers). fromVegaView() reads the View's line mark, "marks",
+// from its scenegraph, and follows the View's own renders, a resize included.
+async function attachVega(box: HTMLElement): Promise<VegaLine> {
+  const vegaLine = await drawVegaLine(box, weeks);
+  const svg = box.querySelector("svg");
+  // A group, not an image: its lines take focus, and screen readers skip what's inside an image.
+  svg?.setAttribute("role", "group");
+  svg?.setAttribute("aria-label", "Goals and expected goals on a Vega-Lite line");
+  fromVegaView<Row>(vegaLine.view, {
+    key: (d) => d.series,
+    // Each point's value at its week, so threshold matches xG by week, as on the other two charts.
+    sample: (d) => ({ value: d.value, at: d.week }),
+    keyboard: true,
+    markLabel: (d) =>
+      d.series === "goals" ? `Goals scored: ${goals(end.goals)} by matchweek ${end.week}` : `Expected goals (xG): ${end.xg.toFixed(1)} by matchweek ${end.week}`,
+    dim: true,
+    on: { decorate: story() }
+  });
+  return vegaLine;
+}
+const vegaBox = document.querySelector<HTMLElement>("#vega-line");
+if (!vegaBox) throw new Error("demo/line.html has no #vega-line.");
+const vegaReady = attachVega(vegaBox);
+
 window.addEventListener("resize", () => {
   host.resize();
   d3Effects.refresh(host.paths);
+  void vegaReady.then((vegaLine) => vegaLine.resize());
 });
 
 // One playback drives both charts: the lab's 6.5 s season in Presentation, about 2 s in Analysis, and

@@ -339,7 +339,8 @@ export function niceDomain(values: readonly number[]): Domain {
   return { lo, hi, ticks };
 }
 
-function niceStep(span: number): number {
+/** A round step near `span`: 1, 2, 5 or 10 times a power of 10. */
+export function niceStep(span: number): number {
   const power = 10 ** Math.floor(Math.log10(span));
   const f = span / power;
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * power;
@@ -439,7 +440,8 @@ function numberOf(value: unknown, series: string, key: string): number {
   throw new RangeError(`barChart: "${series}" for "${key}" must be a finite number, got ${typeof value === "string" ? JSON.stringify(value) : String(value)}.`);
 }
 
-function clean(value: number): number {
+/** Rounds away float noise (0.30000000000000004 is 0.3), and -0 to 0. */
+export function clean(value: number): number {
   const rounded = Number(value.toPrecision(12));
   return rounded === 0 ? 0 : rounded;
 }

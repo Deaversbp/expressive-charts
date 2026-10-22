@@ -7,6 +7,8 @@ Chart components (bar, line, donut, and later more). Each chart gives every mark
 | `bar.ts` | `barChart`: its marks, ticks and focus ring in the DOM, staged and interruptible updates (`retarget`), and what the table, legend and announcements say; the rest is in `shell/` |
 | `shell/` | What charts share beyond their marks, built from callbacks rather than a base class: mark events (`events.ts`), one hover for pointer, touch and keyboard focus (`hover.ts`), transitions and the runner's order for an update (`transitions.ts`), leaving marks (`leaving.ts`), DOM order that keeps focus (`order.ts`), the container's width, web fonts and the hover duration (`watch.ts`), and `ChartEnv`, the container, the accessible name and the `needs` check (`setup.ts`) and the default `format` (`format.ts`) |
 | `bar-layout.ts` | The bar chart's layout, pure: encoding, sorting, the nice scale, the frame (scale and bands), and `placeRow` / `placeTick`, which draw a laid-out row or any state in between |
+| `line.ts` | `lineChart`: its lines, points, x columns (the focus stops), crosshair, end labels and ticks in the DOM, `reveal`, and staged updates in which rows grow out of and fold into their neighbours |
+| `line-layout.ts` | The line chart's layout, pure: encoding, the frame (value scale and plot box), and `placeLines` / `placePoints` / `placeColumns` / `placeEndLabels`, which draw any state of the rows at any reveal |
 | `types.ts` | What charts share: options, `MarkEvent(s)`, `Chart`, accessors |
 | `colors.ts` | `colorAssignment`: palette slots that follow the entity |
 | `series.ts` | `seriesLabels`: a series' name for people, and checking the option |

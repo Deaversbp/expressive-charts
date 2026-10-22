@@ -1,10 +1,10 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// these sources: bars from the reference barChart and from expressive() on bars drawn by other code,
-// the slices of the reference donutChart, the slices of a D3 pie through expressive(), and the
-// lines of a D3 line chart through expressive(), with samples from samplesAlong. Each
-// source also draws its marks at another size, as a resize would, for the check that effects follow
-// onChange. This test brings charts and effects together, so it lives beside src/index.ts, the only
-// module allowed to.
+// six sources: bars from the reference barChart and from expressive() on bars drawn by other code,
+// the slices of the reference donutChart, the slices of a D3 pie through expressive(), the lines and
+// points of the reference lineChart, and the lines of a D3 line chart through expressive(), with
+// samples from samplesAlong. Each source also draws its marks at another size, as a resize would, for
+// the check that effects follow onChange. This test brings charts and effects together, so it lives
+// beside src/index.ts, the only module allowed to.
 
 import { select } from "d3-selection";
 import { arc, line, pie, type PieArcDatum } from "d3-shape";
@@ -14,6 +14,7 @@ import {
   donutChart,
   expressive,
   flash,
+  lineChart,
   parallel,
   pulse,
   samplesAlong,
@@ -23,10 +24,11 @@ import {
   travel,
   wiggle,
   type AnyMarkEffect,
+  type MarkData,
   type MarkGeometry
 } from "./index";
 import { cleat, soccerBall } from "./icons/sport";
-import { checkEffect, type CheckEffectOptions } from "./testing";
+import { checkEffect, testContext, type CheckEffectOptions } from "./testing";
 
 interface Player {
   name: string;
@@ -120,21 +122,38 @@ interface Week {
   xg: number;
 }
 
-/** Cumulative goals and xG over six weeks, crossing twice. */
+/** Goals below xG, then above it, then below again. */
 const weeks: Week[] = [
-  { week: 1, goals: 1, xg: 0.6 },
-  { week: 2, goals: 1, xg: 1.5 },
-  { week: 3, goals: 3, xg: 2.4 },
-  { week: 4, goals: 3, xg: 3.6 },
-  { week: 5, goals: 5, xg: 4.1 },
-  { week: 6, goals: 6, xg: 5.2 }
+  { week: 1, goals: 0, xg: 1.2 },
+  { week: 2, goals: 1, xg: 2.1 },
+  { week: 3, goals: 4, xg: 3.6 },
+  { week: 4, goals: 6, xg: 4.4 },
+  { week: 5, goals: 6, xg: 6.3 },
+  { week: 6, goals: 7, xg: 7.5 }
 ];
 
 /**
- * A real D3 line: two d3.line() paths in a margin <g>, one per series, each described from the
- * points that drew it, with samplesAlong samples. 80 px a week and 30 px a goal (64 and 24 when moved).
+ * The reference line chart's marks (the lines, then the points by x), each with the data its enter
+ * event gave it: drawn from no data and updated to the season, with motion off so it lands at once.
+ * Narrower and shorter when moved, so every point moves too.
  */
-function lineMarks(moved = false): readonly MarkGeometry[] {
+function lineSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<MarkGeometry, MarkData<Week>> } {
+  const container = document.body.appendChild(document.createElement("div"));
+  const chart = lineChart<Week>(container, { label: "Goals vs xG", data: [], x: "week", series: ["goals", "xg"], width: moved ? 480 : 640, height: moved ? 240 : 300, motion: "off" });
+  const data = new Map<MarkGeometry, MarkData<Week>>();
+  chart.on("enter", (event) => data.set(event.mark, event.data));
+  void chart.update({ data: weeks });
+  return { marks: chart.marks(), data };
+}
+
+const lineMarks = (moved = false): readonly MarkGeometry[] => lineSource(moved).marks;
+
+/**
+ * A real D3 line on the same season: two d3.line() paths in a margin <g>, one per series, each
+ * described from the points that drew it, with samplesAlong samples, and the data a decoration gets.
+ * 80 px a week and 30 px a goal (64 and 24 when moved).
+ */
+function d3LineSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<string, MarkData> } {
   const [across, up] = moved ? [64, 24] : [80, 30];
   const x = (week: number): number => across * (week - 1);
   const y = (value: number): number => 200 - up * value;
@@ -150,13 +169,17 @@ function lineMarks(moved = false): readonly MarkGeometry[] {
         .x((w) => x(w.week))
         .y((w) => y(w[d.series]))(d.rows)
     );
+  const data = new Map<string, MarkData>();
   const fx = expressive(paths, {
     key: (d) => d.series,
     geometry: (_el, d, key) => build.line({ key, series: d.series, points: d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]) })), width: 2 }),
-    samples: (d, mark) => samplesAlong(mark, d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]), value: w[d.series], at: w.week })))
+    samples: (d, mark) => samplesAlong(mark, d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]), value: w[d.series], at: w.week }))),
+    on: { decorate: { kind: "data", run: async (mark, markData) => void data.set(mark.key, markData), end: () => {}, clear: () => {} } }
   });
-  return fx.marks();
+  return { marks: fx.marks(), data };
 }
+
+const d3LineMarks = (moved = false): readonly MarkGeometry[] => d3LineSource(moved).marks;
 
 const effects: Record<string, AnyMarkEffect> = {
   "ball rolling": travel(soccerBall),
@@ -177,7 +200,13 @@ const options: Record<string, CheckEffectOptions> = { "staggered flash, third of
 /** A source's marks, or with `true` the same marks moved. */
 type Source = (moved?: boolean) => readonly MarkGeometry[];
 const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars": adapterMarks };
-const sources: Record<string, Source> = { ...bars, donutChart: donutMarks, "D3 pie through expressive()": pieMarks, "D3 line through expressive()": lineMarks };
+const sources: Record<string, Source> = {
+  ...bars,
+  donutChart: donutMarks,
+  "D3 pie through expressive()": pieMarks,
+  lineChart: lineMarks,
+  "D3 line through expressive()": d3LineMarks
+};
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -214,15 +243,52 @@ describe("slices from a D3 pie through expressive()", () => {
   });
 });
 
+describe("lines and points from lineChart", () => {
+  it("finds a line per series, then each series' point at each week, with the data their enter events gave them", () => {
+    const { marks, data } = lineSource();
+    expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg", ...weeks.flatMap((w) => [`goals@${w.week}`, `xg@${w.week}`])]);
+    expect(marks[0]).toMatchObject({ series: "goals", thickness: 2.25 });
+    expect(marks[2]).toMatchObject({ series: "goals", length: 0 });
+    for (const mark of marks) expect(data.has(mark), mark.key).toBe(true);
+    expect(data.get(marks[0]!)!.related("xg")).toBe(data.get(marks[1]!));
+  });
+
+  it("threshold below xG passes the conformance checks on every line and point, with the chart's data", async () => {
+    const { marks, data } = lineSource();
+    const twins = lineSource(true);
+    const all = new Map([...data, ...twins.data]);
+    const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+    await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: (mark) => all.get(mark)! });
+    // Not vacuously: goals are below xG up to week 2's crossing and again from week 4's.
+    const ctx = testContext();
+    threshold({ compareTo: "xg" }).end(marks[0]!, data.get(marks[0]!)!, ctx);
+    expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);
+  });
+});
+
 describe("lines from a D3 line through expressive()", () => {
   it("finds a line for each series, in document order, in the margin group's coordinates", () => {
-    const marks = lineMarks();
+    const { marks, data } = d3LineSource();
     expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg"]);
     for (const mark of marks) {
       expect(mark.outline.closed).toBe(false);
       expect(mark.start).toEqual({ x: 0, y: 200 - 30 * weeks[0]![mark.key as "goals" | "xg"] });
       expect(mark.end.x).toBe(400);
+      expect(data.get(mark.key)!.samples.map((sample) => sample.at)).toEqual(weeks.map((w) => w.week));
     }
+    expect(data.get("goals")!.related("xg")).toBe(data.get("xg"));
+  });
+
+  it("threshold below xG passes the conformance checks on both lines, with the adapter's samples", async () => {
+    const { marks, data } = d3LineSource();
+    const twins = d3LineSource(true);
+    const of = (mark: MarkGeometry) => (marks.includes(mark) ? data : twins.data).get(mark.key)!;
+    const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+    await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: of });
+    // Not vacuously: goals are below xG up to week 2's crossing and again from week 4's.
+    const ctx = testContext();
+    threshold({ compareTo: "xg" }).end(marks[0]!, data.get("goals")!, ctx);
+    expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);
   });
 });
 

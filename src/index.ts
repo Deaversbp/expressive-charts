@@ -6,6 +6,7 @@ import {
   barChart as drawBarChart,
   donutChart as drawDonutChart,
   expressive as attach,
+  lineChart as drawLineChart,
   type Attachment,
   type BarChart,
   type BarChartOptions,
@@ -13,6 +14,8 @@ import {
   type DonutChart,
   type DonutChartOptions,
   type ExpressiveOptions,
+  type LineChart,
+  type LineChartOptions,
   type MarkSource
 } from "./charts";
 import { motionSwitch as buildMotionSwitch, type MotionSwitch, type MotionSwitchOptions } from "./charts/controls";
@@ -42,6 +45,8 @@ export type {
   KeyOfType,
   LegendEntry,
   LegendOptions,
+  LineChart,
+  LineChartOptions,
   MarkEvent,
   MarkEvents,
   MarkSource,
@@ -73,6 +78,15 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
  */
 export function donutChart<D>(target: string | Element, options: DonutChartOptions<D>): DonutChart<D> {
   return drawDonutChart(target, options, env);
+}
+
+/**
+ * A line chart in `target` (an element or a selector): one row per numeric `x`, a line per field in
+ * `series`, with a point per row and series that shows where its x is hovered or focused. `reveal(x)`
+ * shows the data up to x, as `playback()` drives it; `on` attaches effects by slot.
+ */
+export function lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D> {
+  return drawLineChart(target, options, env);
 }
 
 /**

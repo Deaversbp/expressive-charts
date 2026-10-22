@@ -1005,7 +1005,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 - **The same `travel`** rolls round slices on `donutChart` and on a real `d3.pie()` through `expressive({ geometry })`. `src/effects/travel.ts` and `gaits.ts` last changed in M1 step 6, before M3 began.
 - **`wiggle`, `pulse` and `stagger`** are built (step 2), with tests for the 3 px, 5 s and no-stagger-in-Analysis-or-Off guardrails. The `"wiggle"` and `"pulse"` presets play on the donut, the columns and the D3 pie, checked at real frame rates in each mode.
 - **`checkEffect`** passes for every built-in effect on every fixture and on real marks from `barChart`, `donutChart`, `expressive()` bars and D3 pies (step 5). The effect API is public, `expressive-charts/testing` is exported, the guide's examples are type-checked, and `CHANGELOG.md` states the 0.x promise.
-- **The demo's checklist** was checked in the browser. The donut screenshots pass in Docker, in the image CI runs, and the bar baselines haven't changed; CI runs them on the pull request.
+- **The demo's checklist** passed in the browser with you: the hover stories on all three charts, the effect picker, "Next match" and the order in each mode, keyboard focus, and dark mode. The donut screenshots pass in Docker, in the image CI runs, and the bar baselines haven't changed; CI runs them on the pull request.
 - **No runtime dependencies** (`npm ls --omit=dev` is empty), and `typecheck`, `test` and `build` are green.
 
 Two checks wait on you: the donut listening script ([a11y-check section D](a11y-check.md#d-the-donut-page-donutchart-and-a-d3-pie)), which is this milestone's last item, and M2's re-check of the bar descriptions, which is still open.

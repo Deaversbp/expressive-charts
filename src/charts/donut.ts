@@ -285,7 +285,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
     legend.categories(
       laidOut.slices.map((slice) => ({ key: slice.key, label: slice.category })),
       colors,
-      current.legend !== false
+      current.legend
     );
 
   /** The data table for `opts`, laid out as `next`: its rows in the slices' order, each share, and the total. Throws on a column it can't read. */

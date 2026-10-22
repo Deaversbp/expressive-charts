@@ -1,7 +1,7 @@
 import { matrix } from "../../core";
 import { svgMarkHandle, type StyledPart, type StyleTarget } from "./mark-style";
 import { svgElement } from "./svg";
-import { seriesColors } from "./theme";
+import { seriesColors, stylesheet } from "./theme";
 
 function setup() {
   const body = svgElement("g", { class: "ec-body" }, svgElement("svg", {}, document.body));
@@ -62,6 +62,48 @@ describe("svgMarkHandle", () => {
     expect((halo.children[0] as SVGPathElement).style.getPropertyValue("stroke")).toBe("var(--ec-negative, #d03b3b)");
     handle.set({ halo: undefined });
     expect(body.querySelector(".ec-halo")).toBeNull();
+  });
+
+  it("mixes an open part's stroke, not its fill", () => {
+    const { body, target, handle } = setup();
+    const line: StyledPart = { element: svgElement("path", { class: "ec-stroke", d: "M0,20L10,5L20,12" }, body), d: "M0,20L10,5L20,12", colors: seriesColors(2), visible: true, open: { width: 2.25 } };
+    target.current = { body, parts: [line] };
+    handle.set({ emphasis: 1 });
+    expect(line.element.style.getPropertyValue("stroke")).toBe(seriesColors(2).strong);
+    expect(line.element.style.getPropertyValue("fill")).toBe("");
+    expect(line.element.style.getPropertyValue("transition")).toBe("none");
+    handle.set({ emphasis: 0.5 });
+    expect(line.element.style.getPropertyValue("stroke")).toBe(`color-mix(in srgb, ${seriesColors(2).strong} 50%, ${seriesColors(2).color})`);
+    handle.set({ emphasis: undefined });
+    expect(line.element.style.getPropertyValue("stroke")).toBe("");
+    expect(line.element.style.getPropertyValue("transition")).toBe("");
+  });
+
+  it("has stylesheet rules for a stroked part: its mark's colour, and the strong one while hovered", () => {
+    expect(stylesheet).toMatch(/:where\(\.ec-chart \.ec-stroke\) \{ fill: none; stroke: var\(--ec-mark\);[^}]*transition: stroke var\(--ec-hover-duration, 100ms\)/);
+    expect(stylesheet).toContain(":where(.ec-chart .ec-hot .ec-stroke) { stroke: var(--ec-mark-strong); }");
+    // No stroke width: the chart's own attribute sets it, as its geometry's thickness says.
+    expect(stylesheet).not.toMatch(/\.ec-stroke\) \{[^}]*stroke-width/);
+    // Dimming is the other marks' opacity, so it fades a stroked mark as it does a filled one.
+    expect(stylesheet).toContain(":where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot)) { opacity: var(--ec-dim-opacity, 0.3); }");
+  });
+
+  it("strokes an open part's halo behind it at the line's width plus the halo's, round its ends", () => {
+    const { body, part, target, handle } = setup();
+    const line: StyledPart = { element: svgElement("path", { class: "ec-stroke", d: "M0,20L10,5L20,12" }, body), d: "M0,20L10,5L20,12", colors: seriesColors(2), visible: true, open: { width: 2.25 } };
+    target.current = { body, parts: [part("M0,0L10,0L10,20Z", 1), line] };
+    handle.set({ halo: { width: 8, opacity: 0.35 } });
+    const [bar, stroke] = Array.from(body.querySelectorAll<SVGPathElement>(".ec-halo path"));
+    expect(body.firstElementChild!.getAttribute("class")).toBe("ec-halo");
+    expect(stroke!.getAttribute("d")).toBe("M0,20L10,5L20,12");
+    expect(stroke!.getAttribute("stroke-width")).toBe("10.25");
+    expect(stroke!.getAttribute("stroke-linecap")).toBe("round");
+    expect(stroke!.getAttribute("stroke-linejoin")).toBe("round");
+    expect(stroke!.style.getPropertyValue("fill")).toBe("none");
+    expect(stroke!.style.getPropertyValue("stroke")).toBe(seriesColors(2).color);
+    // A closed part's halo is as it was.
+    expect(bar!.getAttribute("stroke-width")).toBe("8");
+    expect(bar!.hasAttribute("stroke-linecap")).toBe(false);
   });
 
   it("repaints onto redrawn parts, and reset() restores the mark's own style", () => {

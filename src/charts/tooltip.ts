@@ -1,5 +1,5 @@
 // The chart's tooltip: an HTML box beside the hovered or focused mark, placed from the mark's bounds
-// and centre. The box is aria-hidden, so it isn't read twice: each mark's aria-label has the values,
+// and centre, or at a point, such as a crosshair over the points it crosses. The box is aria-hidden, so it isn't read twice: each mark's aria-label has the values,
 // and its accessible description is `markDescription`'s text or, by default, a tooltip function's.
 // Its text is only ever set as text, never parsed as HTML, so a tooltip function can't inject markup.
 
@@ -25,6 +25,13 @@ export interface TooltipAnchor {
   readonly bottom: number;
 }
 
+/** A point the box is placed at instead of a mark, in the <svg>'s viewBox units: the x to centre on, and the top and bottom to keep clear. */
+export interface TooltipPoint {
+  readonly x: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
 export interface TooltipPlacement {
   /** The box's top-left corner, in the chart box's px. */
   readonly x: number;
@@ -40,6 +47,12 @@ export interface Tooltip {
    * `tooltip: false`.
    */
   show(mark: MarkGeometry, row: { readonly datum: unknown }, summary: () => TooltipContent, transform?: Matrix): void;
+  /**
+   * Shows the tooltip at `point` instead of beside a mark, or moves it there: centred on its x, above
+   * its top or, without room there, below its bottom. A line chart's crosshair gives its x and the
+   * highest and lowest points it crosses. The text is worked out as show()'s is.
+   */
+  showAt(point: TooltipPoint, row: { readonly datum: unknown }, summary: () => TooltipContent): void;
   /**
    * Gives the mark's `element` its accessible description for `row` (aria-describedby, to a <desc>
    * inside it): `markDescription`'s text when it's a function, nothing when it's false, and otherwise
@@ -79,11 +92,17 @@ export function placeTooltip(anchor: TooltipAnchor, size: Size, box: Size, side?
  * The default text: the category, then each series' value in `format` with its label, or its name
  * when it has none ("16 goals · 4 assists"), then the total when there's more than one. A lone value
  * read by a function (its series is "value") goes unnamed unless it's labelled, as in the marks' names.
+ * `total: false` leaves the total out, for series that don't add up (goals and xG at one x).
  */
-export function summaryContent(category: string, values: readonly { readonly series: string; readonly label?: string; readonly value: number }[], format: (value: number) => string): TooltipContent {
+export function summaryContent(
+  category: string,
+  values: readonly { readonly series: string; readonly label?: string; readonly value: number }[],
+  format: (value: number) => string,
+  options: { readonly total?: boolean } = {}
+): TooltipContent {
   const lone = values.length === 1 && values[0]!.series === "value" && (values[0]!.label ?? "value") === "value";
   const lines = [values.map((v) => (lone ? format(v.value) : `${format(v.value)} ${v.label ?? v.series}`)).join(" · ")];
-  if (values.length > 1) lines.push(`${format(values.reduce((sum, v) => sum + v.value, 0))} total`);
+  if (values.length > 1 && options.total !== false) lines.push(`${format(values.reduce((sum, v) => sum + v.value, 0))} total`);
   return { title: category, lines };
 }
 
@@ -139,39 +158,52 @@ export function chartTooltip<D>(
     box.classList.remove("ec-tooltip-shown");
   }
 
+  /**
+   * Shows the box with `row`'s text, placed against `anchor`: it turns viewBox units into the chart
+   * box's px with `toPx`, at rest or, with `moved`, as an effect has moved the mark.
+   */
+  function place(row: { readonly datum: unknown }, summary: () => TooltipContent, anchor: (toPx: ToPx, moved: boolean) => TooltipAnchor, moved: boolean): void {
+    const content = contentFor(row, summary);
+    if (content === undefined) {
+      hide();
+      return;
+    }
+    const tip = element();
+    const key = typeof content === "string" ? `text:${content}` : JSON.stringify(content);
+    if (key !== rendered) {
+      render(tip, content);
+      rendered = key;
+    }
+    // The <svg> may be scaled to fit its container: its viewBox units become px by its width.
+    const view = viewBox(svg);
+    const chart = svg.getBoundingClientRect();
+    const k = chart.width > 0 && view.width > 0 ? chart.width / view.width : 1;
+    const toPx: ToPx = { x: (x) => (x - view.x) * k, y: (y) => (y - view.y) * k };
+    const area = chart.width > 0 ? { width: chart.width, height: chart.height } : { width: view.width, height: view.height };
+    const size = { width: tip.offsetWidth, height: tip.offsetHeight };
+    // The side is the mark's at rest, so an effect moving it (a wiggle) can't flip the box back and forth.
+    const placed = placeTooltip(anchor(toPx, moved), size, area, moved ? placeTooltip(anchor(toPx, false), size, area).side : undefined);
+    const origin = layer!.getBoundingClientRect();
+    tip.style.left = `${Math.round(chart.left - origin.left + placed.x)}px`;
+    tip.style.top = `${Math.round(chart.top - origin.top + placed.y)}px`;
+    tip.setAttribute("data-side", placed.side);
+    timing(tip);
+    tip.classList.add("ec-tooltip-shown");
+  }
+
   return {
     show(mark, row, summary, transform) {
-      const content = contentFor(row, summary);
-      if (content === undefined) {
-        hide();
-        return;
-      }
-      const tip = element();
-      const key = typeof content === "string" ? `text:${content}` : JSON.stringify(content);
-      if (key !== rendered) {
-        render(tip, content);
-        rendered = key;
-      }
-      // The <svg> may be scaled to fit its container: its viewBox units become px by its width.
-      const view = viewBox(svg);
-      const chart = svg.getBoundingClientRect();
-      const k = chart.width > 0 && view.width > 0 ? chart.width / view.width : 1;
-      const area = chart.width > 0 ? { width: chart.width, height: chart.height } : { width: view.width, height: view.height };
-      const anchor = (m: Matrix | undefined): TooltipAnchor => {
+      const anchor = (toPx: ToPx, moved: boolean): TooltipAnchor => {
+        const m = moved ? transform : undefined;
         const { x, y, width, height } = mark.bounds;
         const ys = [{ x, y }, { x: x + width, y }, { x, y: y + height }, { x: x + width, y: y + height }].map((corner) => (m ? matrix.apply(m, corner).y : corner.y));
         const center = m ? matrix.apply(m, mark.center) : mark.center;
-        return { x: (center.x - view.x) * k, top: (Math.min(...ys) - view.y) * k, bottom: (Math.max(...ys) - view.y) * k };
+        return { x: toPx.x(center.x), top: toPx.y(Math.min(...ys)), bottom: toPx.y(Math.max(...ys)) };
       };
-      const size = { width: tip.offsetWidth, height: tip.offsetHeight };
-      // The side is the mark's at rest, so an effect moving it (a wiggle) can't flip the box back and forth.
-      const placed = placeTooltip(anchor(transform), size, area, transform && placeTooltip(anchor(undefined), size, area).side);
-      const origin = layer!.getBoundingClientRect();
-      tip.style.left = `${Math.round(chart.left - origin.left + placed.x)}px`;
-      tip.style.top = `${Math.round(chart.top - origin.top + placed.y)}px`;
-      tip.setAttribute("data-side", placed.side);
-      timing(tip);
-      tip.classList.add("ec-tooltip-shown");
+      place(row, summary, anchor, transform !== undefined);
+    },
+    showAt(point, row, summary) {
+      place(row, summary, (toPx) => ({ x: toPx.x(point.x), top: toPx.y(point.top), bottom: toPx.y(point.bottom) }), false);
     },
     describe(element, row) {
       const own = options.description?.();
@@ -234,6 +266,12 @@ function render(box: HTMLDivElement, content: TooltipContent): void {
     return div;
   };
   box.replaceChildren(line(content.title, "ec-tooltip-title"), ...content.lines.map((value) => line(value)));
+}
+
+/** Turns viewBox units into px in the chart's box. */
+interface ToPx {
+  x(x: number): number;
+  y(y: number): number;
 }
 
 /** The <svg>'s viewBox, or its size from 0, 0 when it has none. */

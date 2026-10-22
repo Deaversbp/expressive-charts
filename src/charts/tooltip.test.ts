@@ -2,7 +2,8 @@ import { createMotion, manualClock, matrix, type GeometryEffect, type MarkGeomet
 import { createRegistry, type PresetFactory } from "../core/registry";
 import { play } from "../core/testing";
 import { barChart, type ChartEnv } from "./bar";
-import { placeTooltip, summaryContent } from "./tooltip";
+import { svgElement } from "./render/svg";
+import { chartTooltip, placeTooltip, summaryContent, type TooltipOption } from "./tooltip";
 import type { BarChartOptions } from "./types";
 
 interface Player {
@@ -125,12 +126,80 @@ describe("summaryContent", () => {
     expect(summaryContent("Okafor", [{ series: "value", label: "points", value: 16 }], format)).toEqual({ title: "Okafor", lines: ["16.0 points"] });
   });
 
+  it("leaves the total out with total: false, for series that don't add up", () => {
+    const values = [
+      { series: "goals", value: 15 },
+      { series: "xg", value: 14.2 }
+    ];
+    expect(summaryContent("12", values, format, { total: false })).toEqual({ title: "12", lines: ["15.0 goals · 14.2 xg"] });
+    expect(summaryContent("12", values, format, { total: true })).toEqual({ title: "12", lines: ["15.0 goals · 14.2 xg", "29.2 total"] });
+  });
+
   it("says each series by its label when it has one", () => {
     const values = [
       { series: "goals", label: "Goals", value: 16 },
       { series: "assists", value: 4 }
     ];
     expect(summaryContent("Okafor", values, format)).toEqual({ title: "Okafor", lines: ["16.0 Goals · 4.0 assists", "20.0 total"] });
+  });
+});
+
+describe("chartTooltip: at a point", () => {
+  interface Week {
+    week: number;
+    goals: number;
+  }
+
+  /** A tooltip for a 600 × 300 viewBox, which jsdom draws at that size from the page's top left. */
+  function atPoint(option: TooltipOption<Week> = true) {
+    const container = document.body.appendChild(document.createElement("div"));
+    const svg = svgElement("svg", { viewBox: "0 0 600 300" }, container);
+    const tooltip = chartTooltip<Week>(svg, { motion: { duration: (ms) => ms }, option: () => option });
+    const tip = () => container.querySelector<HTMLElement>(".ec-tooltip");
+    const summary = () => ({ title: "12", lines: ["15 goals · 14.2 xg"] });
+    return { svg, tooltip, tip, summary };
+  }
+
+  it("centres on the point's x, above its top, or below its bottom when there's no room above", () => {
+    const { svg, tooltip, tip, summary } = atPoint();
+    const row = { datum: { week: 12, goals: 15 } };
+    tooltip.showAt({ x: 300, top: 150, bottom: 200 }, row, summary);
+    expect(tip()!.parentElement!.previousElementSibling).toBe(svg);
+    expect(tip()!.classList.contains("ec-tooltip-shown")).toBe(true);
+    expect(Array.from(tip()!.children, (line) => line.textContent)).toEqual(["12", "15 goals · 14.2 xg"]);
+    expect(tip()!.style.left).toBe(px(300 - TIP.width / 2));
+    expect(tip()!.style.top).toBe(px(150 - 12 - TIP.height));
+    expect(tip()!.getAttribute("data-side")).toBe("above");
+    // Near the top: below the lowest point, clear of every point the crosshair crosses.
+    tooltip.showAt({ x: 590, top: 40, bottom: 90 }, row, summary);
+    expect(tip()!.style.left).toBe(px(600 - TIP.width));
+    expect(tip()!.style.top).toBe(px(90 + 12));
+    expect(tip()!.getAttribute("data-side")).toBe("below");
+    tooltip.hide();
+    expect(tip()!.classList.contains("ec-tooltip-shown")).toBe(false);
+  });
+
+  it("follows the <svg>'s scale and its viewBox's origin", () => {
+    const { svg, tooltip, tip, summary } = atPoint();
+    svg.setAttribute("viewBox", "-20 -10 600 300");
+    const rect = (left: number, top: number, width: number, height: number) => ({ left, top, width, height, x: left, y: top, right: left + width, bottom: top + height }) as DOMRect;
+    svg.getBoundingClientRect = () => rect(0, 0, 300, 150);
+    tooltip.showAt({ x: 280, top: 140, bottom: 190 }, { datum: { week: 12, goals: 15 } }, summary);
+    // At half size: x 280 is 150 px in, and the top 140 is 75 px down.
+    expect(tip()!.style.left).toBe(px(150 - TIP.width / 2));
+    expect(tip()!.style.top).toBe(px(75 - 12 - TIP.height));
+  });
+
+  it("shows a tooltip function's text from the row, and nothing for an empty string or tooltip: false", () => {
+    const point = { x: 300, top: 150, bottom: 200 };
+    const custom = atPoint((d) => (d.goals > 0 ? `Week ${d.week}: ${d.goals}` : ""));
+    custom.tooltip.showAt(point, { datum: { week: 12, goals: 15 } }, custom.summary);
+    expect(custom.tip()!.textContent).toBe("Week 12: 15");
+    custom.tooltip.showAt(point, { datum: { week: 13, goals: 0 } }, custom.summary);
+    expect(custom.tip()!.classList.contains("ec-tooltip-shown")).toBe(false);
+    const off = atPoint(false);
+    off.tooltip.showAt(point, { datum: { week: 12, goals: 15 } }, off.summary);
+    expect(off.tip()).toBeNull();
   });
 });
 

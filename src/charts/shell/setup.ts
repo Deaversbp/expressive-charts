@@ -4,6 +4,7 @@
 import type { Clock, IconSource, Motion } from "../../core";
 import { EFFECT_SLOTS, type PresetFactory, type Registry } from "../../core/registry";
 import type { SlotEffects } from "../../core/runner";
+import { checkLegendOption } from "../legend";
 import { svgElement } from "../render/svg";
 import { checkSeriesLabels } from "../series";
 import { checkTableOption } from "../table";
@@ -88,7 +89,7 @@ export function checkChartOptions(options: CommonOptions, chart: string): void {
   if (markDescription !== undefined && markDescription !== false && typeof markDescription !== "function") {
     throw new TypeError(`${chart}: markDescription must be false or a function that returns a mark's accessible description.`);
   }
-  if (legend !== undefined && typeof legend !== "boolean") throw new TypeError(`${chart}: legend must be true or false.`);
+  checkLegendOption(legend, chart);
   checkSeriesLabels(options.seriesLabels, chart);
   checkTableOption(options.table, chart);
   if (announce !== undefined && typeof announce !== "boolean" && typeof announce !== "function") throw new TypeError(`${chart}: announce must be true, false or a function that returns the text to announce.`);

@@ -1,4 +1,6 @@
-import type { MarkGeometry } from "../../core";
+import { createMotion, describe as build, manualClock, type GeometryEffect, type MarkGeometry } from "../../core";
+import { createRunner, type Runner } from "../../core/runner";
+import { recordingSurface } from "../../core/testing";
 import { svgElement } from "../render/svg";
 import { chartEvents } from "./events";
 import { chartHover } from "./hover";
@@ -49,7 +51,7 @@ function setup({ dim = true } = {}) {
  * Two targets, x 1 and x 2, as a line chart's hit columns: each stands for two series' points, which
  * take the emphasis. `series` is the series at each x, and can change.
  */
-function columns() {
+function columns(options: { readonly runner?: Pick<Runner<object>, "hover" | "leave"> } = {}) {
   const svg = svgElement("svg", {}, document.body);
   const layer = svgElement("g", {}, svg);
   const series = { now: ["a", "b"] };
@@ -62,7 +64,8 @@ function columns() {
     if (!element) points.set(key, (element = svgElement("circle", { class: "ec-point", "data-key": key }, layer)));
     return element;
   };
-  const runner = { hover: vi.fn(), leave: vi.fn() };
+  const mock = { hover: vi.fn(), leave: vi.fn() };
+  const runner = options.runner ?? mock;
   const events = chartEvents<object>("chart");
   const heard: string[] = [];
   events.on("hover", (event) => heard.push(`hover ${event.mark.key} ${event.batch.index}/${event.batch.count} ${event.source}`));
@@ -83,14 +86,14 @@ function columns() {
     marks: (key) => series.now.map((name) => `${name}@${key}`),
     element: (key) => targets.get(key),
     markElement: point,
-    onScreen: (key) => (key.includes("@") ? { mark: { key } as unknown as MarkGeometry, data: { datum: {}, samples: [], related: () => undefined } } : undefined),
+    onScreen: (key) => (key.includes("@") ? { mark: build.point({ key, x: 10, y: 10, r: 4.5 }), data: { datum: {}, samples: [], related: () => undefined } } : undefined),
     ring: (key) => rings.push(key),
     tooltip: { show: (key) => tips.push(key), hide: () => tips.push("hidden") }
   });
   hover.sync();
   const hot = () => [...points].filter(([, element]) => element.classList.contains("ec-hot")).map(([key]) => key);
-  const hovers = () => runner.hover.mock.calls.map(([marks]) => (marks as { mark: MarkGeometry }[]).map((input) => input.mark.key));
-  return { svg, targets, series, xs, runner, heard, rings, tips, hover, hot, hovers };
+  const hovers = () => mock.hover.mock.calls.map(([marks]) => (marks as { mark: MarkGeometry }[]).map((input) => input.mark.key));
+  return { svg, targets, series, xs, runner: mock, heard, rings, tips, hover, hot, hovers };
 }
 
 function pointer(type: string, target: Element): void {
@@ -276,12 +279,52 @@ describe("chartHover: a target that stands for several marks", () => {
     hover.dropGone();
     expect(hover.key).toBe("1");
     expect(hot()).toEqual(["b@1", "c@1"]);
-    expect(runner.leave).toHaveBeenLastCalledWith(["a@1"]);
-    expect(hovers()).toEqual([["a@1", "b@1"], ["c@1"]]);
-    expect(heard).toEqual(["leave a@1 0/1", "hover c@1 0/1 pointer"]);
+    // The runner hears the whole new batch; the new mark's event has its place in it.
+    expect(runner.leave).toHaveBeenLastCalledWith(["a@1", "b@1"]);
+    expect(hovers()).toEqual([
+      ["a@1", "b@1"],
+      ["b@1", "c@1"]
+    ]);
+    expect(heard).toEqual(["leave a@1 0/1", "hover c@1 1/2 pointer"]);
     // Nothing changed: nothing is heard.
     hover.dropGone();
     expect(heard).toHaveLength(2);
+    expect(hovers()).toHaveLength(2);
+    // The same marks in another order: the runner hears it, and nobody joined or left.
+    series.now = ["c", "b"];
+    hover.dropGone();
+    expect(hovers()[2]).toEqual(["c@1", "b@1"]);
+    expect(heard).toHaveLength(2);
+  });
+
+  it("places a mark that joins mid-change where the runner's settled batch puts it", () => {
+    const clock = manualClock();
+    const motion = createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+    const ran: string[] = [];
+    const record: GeometryEffect = {
+      kind: "geometry",
+      run(mark, ctx) {
+        ran.push(`${mark.key} ${ctx.batch.index}/${ctx.batch.count}`);
+        return new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve()));
+      },
+      end() {},
+      clear() {}
+    };
+    const runner = createRunner<object>({ effects: { hover: record }, surface: recordingSurface(), motion, clock, icons: { get: () => undefined } });
+    const { targets, series, heard, hover } = columns({ runner });
+    pointer("pointerover", targets.get("1")!);
+    expect(ran).toEqual(["a@1 0/2", "b@1 1/2"]);
+    // An update, as playUpdate plays it: interrupt, the marks change, the hover follows, and it settles.
+    ran.length = 0;
+    heard.length = 0;
+    runner.interrupt();
+    series.now = ["b", "c"];
+    hover.dropGone();
+    expect(ran).toEqual([]);
+    runner.settle();
+    expect(ran).toEqual(["b@1 0/2", "c@1 1/2"]);
+    expect(heard).toEqual(["leave a@1 0/1", "hover c@1 1/2 pointer"]);
+    runner.destroy();
   });
 
   it("ends the hover when its target leaves", () => {

@@ -64,7 +64,8 @@ export interface ChartHover {
   syncDim(): void;
   /**
    * After the marks changed: ends the hover if its target has left. Otherwise the hover follows the
-   * marks the target stands for now: those it no longer has are left, and new ones are hovered.
+   * marks the target stands for now: those it no longer has are left, and new ones are hovered, their
+   * events placed in the target's whole batch, as the runner's runs are.
    */
   dropGone(): void;
   /** After the marks changed: the tab stop stays on its key, or moves to its nearest neighbour, and focus follows. */
@@ -206,17 +207,26 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
         endHover();
         return;
       }
+      const { source, marks: before } = hovered;
       const now = onScreen(marksOf(hovered.key));
-      const had = new Set(hovered.marks);
+      if (now.length === before.length && now.every((mark, i) => mark.key === before[i])) return;
+      const had = new Set(before);
       const keys = new Set(now.map((mark) => mark.key));
-      const gone = hovered.marks.filter((key) => !keys.has(key));
-      const joined = now.filter((mark) => !had.has(mark.key));
-      if (gone.length === 0 && joined.length === 0) return;
-      const { source } = hovered;
+      const gone = onScreen(before.filter((key) => !keys.has(key)));
       hovered = { ...hovered, marks: now.map((mark) => mark.key) };
-      leaveMarks(gone);
-      for (const { key } of joined) markElement(key)?.classList.add("ec-hot");
-      hoverMarks(joined, source);
+      for (const { key } of gone) markElement(key)?.classList.remove("ec-hot");
+      for (const { key } of now) if (!had.has(key)) markElement(key)?.classList.add("ec-hot");
+      // The runner hears the target's whole new batch, in order. Mid-change (playUpdate interrupts
+      // first), it holds hovers and replays every hovered mark as one batch when the change settles, so
+      // a joined mark's run gets the place its event gives; at rest, the marks that stayed start again
+      // with their new places.
+      runner.leave(before);
+      runner.hover(now.map(({ input }) => input));
+      gone.forEach(({ input }, index) => events.emit("leave", { ...input, batch: { index, count: gone.length } }));
+      const count = now.length;
+      now.forEach(({ key, input }, index) => {
+        if (!had.has(key)) events.emit("hover", { ...input, batch: { index, count }, source });
+      });
     },
     sync: () => keyboard.sync(),
     destroy() {

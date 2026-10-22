@@ -40,6 +40,8 @@ export type {
   ExpressiveOptions,
   HostMark,
   KeyOfType,
+  LegendEntry,
+  LegendOptions,
   MarkEvent,
   MarkEvents,
   MarkSource,
@@ -50,7 +52,8 @@ export type {
   TableColumn,
   TableOptions
 } from "./charts";
-export type { MotionSwitch, MotionSwitchOptions } from "./charts/controls";
+export { playButton } from "./charts/controls";
+export type { MotionSwitch, MotionSwitchOptions, PlayButton, PlayButtonOptions } from "./charts/controls";
 
 /** Charts resolve preset and icon names through the page-wide registries and follow the page-wide motion. */
 const env: ChartEnv = { presets: presetRegistry, icons: iconRegistry, motion: pageMotion };

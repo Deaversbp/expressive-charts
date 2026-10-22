@@ -290,7 +290,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     legend.update(
       barEncoding(current).series.map((s) => ({ series: s.series, label: seriesLabel(current.seriesLabels, s.series) })),
       colors,
-      current.legend !== false
+      current.legend
     );
 
   /** The data table for `opts`, laid out as `next`: its rows in visual order. Throws on a column it can't read. */

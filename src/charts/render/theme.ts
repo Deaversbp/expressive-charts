@@ -163,6 +163,8 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-mark) { transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-segment) { fill: var(--ec-mark); transition: fill var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-segment) { fill: var(--ec-mark-strong); }
+:where(.ec-chart .ec-stroke) { fill: none; stroke: var(--ec-mark); stroke-linejoin: round; transition: stroke var(--ec-hover-duration, 100ms) ease-out; }
+:where(.ec-chart .ec-hot .ec-stroke) { stroke: var(--ec-mark-strong); }
 :where(.ec-chart .ec-slice) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; stroke-linejoin: round; transition: fill var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-slice) { fill: var(--ec-mark-strong); }
 :where(.ec-chart .ec-center-value) { fill: var(--ec-text, ${TOKENS.text}); font-size: 26px; font-weight: 600; }
@@ -176,6 +178,9 @@ ${TOKEN_RULES}
 :where(.ec-motion-modes button[aria-pressed="true"]) { font-weight: 600; }
 :where(.ec-motion-modes button:focus-visible) { outline: 2px solid var(--ec-focus, ${TOKENS.focus}); outline-offset: 2px; }
 :where(.ec-motion-hint) { flex: 1 1 220px; min-width: 0; color: var(--ec-text-muted, ${TOKENS["text-muted"]}); }
+:where(.ec-play) { font: inherit; font-size: 13px; font-weight: 600; color: var(--ec-text, ${TOKENS.text}); border: 1px solid var(--ec-ring, color-mix(in srgb, currentColor 12%, transparent)); background: var(--ec-surface, ${TOKENS.surface}); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+:where(.ec-play:hover) { background: color-mix(in srgb, var(--ec-focus, ${TOKENS.focus}) 12%, var(--ec-surface, ${TOKENS.surface})); }
+:where(.ec-play:focus-visible) { outline: 2px solid var(--ec-focus, ${TOKENS.focus}); outline-offset: 2px; }
 :where(.ec-chart .ec-leaving, .ec-chart .ec-overlay) { pointer-events: none; }
 :where(.ec-attached.ec-dimmed) { opacity: var(--ec-dim-opacity, 0.3); }
 :where(.ec-attached) { transition: opacity var(--ec-hover-duration, 100ms) ease-out, fill var(--ec-hover-duration, 100ms) ease-out, stroke var(--ec-hover-duration, 100ms) ease-out; }

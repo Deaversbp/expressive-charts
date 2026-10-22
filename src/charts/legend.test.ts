@@ -3,6 +3,7 @@ import { createRegistry, type PresetFactory } from "../core/registry";
 import { play } from "../core/testing";
 import { barChart, type ChartEnv } from "./bar";
 import { colorAssignment } from "./colors";
+import { donutChart } from "./donut";
 import { chartLegend } from "./legend";
 import { seriesColors } from "./render/theme";
 import type { BarChartOptions } from "./types";
@@ -123,6 +124,63 @@ describe("barChart: legend", () => {
     expect(document.querySelector(".ec-legend")).toBeNull();
     legend.categories([], colors, true);
     expect(document.querySelector(".ec-legend")).toBeNull();
+  });
+
+  it("adds the page's entries after the series, each in its own colour, with the name in the theme's text colour", async () => {
+    const entries = [
+      { label: "Below target", color: "negative" },
+      { label: "Forecast", color: "#7a7a7a" }
+    ];
+    const { chart, items, names, swatches, settle } = setup({ legend: { entries } });
+    expect(names()).toEqual(["goals", "assists", "Below target", "Forecast"]);
+    expect(swatches()).toEqual([seriesColors(1).color, seriesColors(2).color, "var(--ec-negative, #d03b3b)", "#7a7a7a"]);
+    // The chart's entries say what they are; the page's have no key.
+    expect(items().map((item) => item.getAttribute("data-series"))).toEqual(["goals", "assists", null, null]);
+    expect(items()[2]!.querySelector<HTMLElement>(".ec-legend-label")!.getAttribute("style")).toBeNull();
+    // One series is listed too beside a page's entry, so its colour is named.
+    await settle(chart.update({ stack: ["goals"] }));
+    expect(names()).toEqual(["goals", "Below target", "Forecast"]);
+    await settle(chart.update({ legend: true }));
+    expect(names()).toEqual([]);
+    await settle(chart.update({ legend: { entries: entries.slice(0, 1) }, stack: ["goals", "assists"] }));
+    expect(names()).toEqual(["goals", "assists", "Below target"]);
+    await settle(chart.update({ legend: false }));
+    expect(names()).toEqual([]);
+  });
+
+  it("adds the page's entries after a donut's categories", () => {
+    const svg = document.body.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "svg"));
+    const legend = chartLegend(svg);
+    const colors = colorAssignment({ Saved: 3 });
+    legend.categories([{ key: "Saved", label: "Saved" }], colors, { entries: [{ label: "Target", color: "series-5" }] });
+    const items = () => Array.from(document.querySelectorAll<HTMLElement>(".ec-legend-item"));
+    expect(items().map((item) => [item.getAttribute("data-key"), item.textContent, item.style.getPropertyValue("--ec-mark")])).toEqual([
+      ["Saved", "Saved", seriesColors(3).color],
+      [null, "Target", seriesColors(5).color]
+    ]);
+    // With no categories there's nothing for the page's entries to sit beside.
+    legend.categories([], colors, { entries: [{ label: "Target", color: "series-5" }] });
+    expect(document.querySelector(".ec-legend")).toBeNull();
+
+    // donutChart passes them on.
+    const container = document.body.appendChild(document.createElement("div"));
+    const motion = createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion, clock: manualClock() };
+    const data = [
+      { outcome: "Saved", shots: 3 },
+      { outcome: "Goal", shots: 1 }
+    ];
+    donutChart(container, { label: "Shots", data, category: "outcome", value: "shots", width: 400, legend: { entries: [{ label: "Target", color: "negative" }] } }, env);
+    expect(Array.from(container.querySelectorAll(".ec-legend-item"), (item) => item.textContent)).toEqual(["Saved", "Goal", "Target"]);
+  });
+
+  it("rejects entries it can't draw", () => {
+    expect(() => setup({ legend: [] as never })).toThrow(/legend must be true or false, or an object/);
+    expect(() => setup({ legend: { entries: { label: "Below" } as never } })).toThrow(/legend\.entries must be an array/);
+    expect(() => setup({ legend: { entries: [null as never] } })).toThrow(/legend\.entries\[0\] must be an object/);
+    expect(() => setup({ legend: { entries: [{ label: " ", color: "negative" }] } })).toThrow(/legend\.entries\[0\]\.label must be a non-empty string/);
+    expect(() => setup({ legend: { entries: [{ label: "Below", color: "" }] } })).toThrow(/legend\.entries\[0\]\.color must be a theme token or a CSS colour/);
+    expect(() => setup({ legend: { entries: [{ label: "Below", color: "mark" }] } })).toThrow(/legend\.entries\[0\]\.color can't be "mark"/);
   });
 
   it("is removed with the chart", () => {

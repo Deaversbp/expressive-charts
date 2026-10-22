@@ -1,13 +1,41 @@
-import type { DataEffect, GeometryEffect, Icon, MarkData, MarkGeometry } from "../core";
+import type { DataEffect, EffectContext, GeometryEffect, Icon, MarkData, MarkGeometry } from "../core";
 import { describe as build, linear } from "../core";
+import { movedFixtures } from "./fixtures";
 import { checkEffect, fixtures } from "./index";
 
-/** A stroke along the walk that stays: a well-behaved effect. */
+/** Draws a stroke along the walk up to progress p, following the mark when it moves. */
+function stroke(mark: MarkGeometry, ctx: EffectContext): (p: number) => void {
+  let current = mark;
+  let progress = 0;
+  const path = ctx.layer.path(mark.slice(0, 0), { stroke: "mark", width: 3 });
+  ctx.onChange((next) => {
+    current = next;
+    path.update(current.slice(0, progress));
+  });
+  return (p) => {
+    progress = p;
+    path.update(current.slice(0, p));
+  };
+}
+
+/** A stroke along the walk that stays and follows the mark: a well-behaved effect. */
 const trace: GeometryEffect = {
   kind: "geometry",
   async run(mark, ctx) {
-    const stroke = ctx.layer.path(mark.slice(0, 0), { stroke: "mark", width: 3 });
-    await ctx.tween({ duration: 300, timing: "effect", ease: linear, update: (p) => stroke.update(mark.slice(0, p)) }).finished;
+    await ctx.tween({ duration: 300, timing: "effect", ease: linear, update: stroke(mark, ctx) }).finished;
+  },
+  end(mark, ctx) {
+    stroke(mark, ctx)(1);
+  },
+  clear() {}
+};
+
+/** The same stroke drawn once, ignoring onChange: it stays where the mark was. */
+const stuck: GeometryEffect = {
+  kind: "geometry",
+  async run(mark, ctx) {
+    const path = ctx.layer.path(mark.slice(0, 0), { stroke: "mark", width: 3 });
+    await ctx.tween({ duration: 300, timing: "effect", ease: linear, update: (p) => path.update(mark.slice(0, p)) }).finished;
   },
   end(mark, ctx) {
     ctx.layer.path(mark.slice(0, 1), { stroke: "mark", width: 3 });
@@ -43,14 +71,16 @@ describe("checkEffect", () => {
     };
     const message = await outcome(checkEffect(fading, { name: "fade" }));
     const lines = message.split("\n");
-    expect(lines[0]).toBe("checkEffect found 16 problems with fade:");
-    expect(lines).toHaveLength(17);
+    // Three checks fail on each of the eight fixtures: the full run, motion off, and the change() after them.
+    expect(lines[0]).toBe("checkEffect found 24 problems with fade:");
+    expect(lines).toHaveLength(25);
     expect(lines[1]).toBe(
       `- on the bar, a full run should end with the same picture and mark style as end(): item 1 drawn after the run is ` +
         `{"kind":"path","d":"${fixtures.bar.slice(0, 1)}","paint":{"stroke":"mark","opacity":0.5}} but end() draws {"kind":"path","d":"${fixtures.bar.slice(0, 1)}","paint":{"stroke":"mark","opacity":1}}`
     );
     expect(lines[2]).toMatch(/^- on the bar, with motion off, no frames should run and the end state should be drawn: item 1 drawn after the run with motion off is .*"opacity":0\.5/);
-    expect(lines.filter((line) => line.includes("on the point,"))).toHaveLength(2);
+    expect(lines[3]).toMatch(/^- on the bar, a change\(\) to the moved mark should leave what end\(\) draws on it: item 1 drawn after a full run and a change\(\) is /);
+    expect(lines.filter((line) => line.includes("on the point,"))).toHaveLength(3);
   });
 
   it("compares the mark's style too, ignoring float noise", async () => {
@@ -116,6 +146,75 @@ describe("checkEffect", () => {
     expect(message).toContain('- on mark "North" (2), a full run');
   });
 
+  it("checks that a full run, and end(), follow a change() to the moved mark", async () => {
+    const message = await outcome(checkEffect(stuck, { name: "stuck" }));
+    const lines = message.split("\n");
+    expect(lines[0]).toBe("checkEffect found 8 problems with stuck:");
+    const was = `{"kind":"path","d":"${fixtures.bar.slice(0, 1)}","paint":{"stroke":"mark","width":3}}`;
+    const now = `{"kind":"path","d":"${movedFixtures.bar.slice(0, 1)}","paint":{"stroke":"mark","width":3}}`;
+    expect(lines[1]).toBe(
+      `- on the bar, a change() to the moved mark should leave what end() draws on it: ` +
+        `item 1 drawn after a full run and a change() is ${was} but end() draws ${now}; item 1 drawn after end() and a change() is ${was} but end() draws ${now}`
+    );
+
+    // Following onChange in run() alone isn't enough: with motion off the runner draws end() instead, and the mark still moves.
+    const runOnly: GeometryEffect = { ...trace, end: stuck.end };
+    const reasons = (await outcome(checkEffect(runOnly, { marks: { line: fixtures.line } }))).split("\n");
+    expect(reasons).toHaveLength(2);
+    expect(reasons[1]).toMatch(/^- on the line, a change\(\) to the moved mark should leave what end\(\) draws on it: item 1 drawn after end\(\) and a change\(\) is /);
+  });
+
+  it("waits for an effect that eases to the moved mark", async () => {
+    // Moves the stroke to the moved mark 200 ms after the change, then rests there.
+    const gliding: GeometryEffect = {
+      ...trace,
+      async run(mark, ctx) {
+        const path = ctx.layer.path(mark.slice(0, 1), { stroke: "mark", width: 3 });
+        ctx.onChange((next) => {
+          void ctx.tween({ duration: 200, update: (p) => path.update((p < 1 ? mark : next).slice(0, 1)) });
+        });
+      },
+      end(mark, ctx) {
+        const path = ctx.layer.path(mark.slice(0, 1), { stroke: "mark", width: 3 });
+        ctx.onChange((next) => path.update(next.slice(0, 1)));
+      }
+    };
+    await expect(checkEffect(gliding)).resolves.toBeUndefined();
+    const endless: GeometryEffect = {
+      ...gliding,
+      async run(mark, ctx) {
+        ctx.layer.path(mark.slice(0, 1), { stroke: "mark", width: 3 });
+        ctx.onChange(() => void ctx.tween({ duration: 20_000, update: () => {} }));
+      }
+    };
+    expect(await outcome(checkEffect(endless, { marks: { bar: fixtures.bar } }))).toBe(
+      "checkEffect found 1 problem with the effect:\n- on the bar, a change() to the moved mark should leave what end() draws on it: it was still animating 10 s after the change()"
+    );
+  });
+
+  it("skips the change() check on a page's own marks unless moved(mark) gives them moved", async () => {
+    expect(await outcome(checkEffect(stuck, { marks: [bar] }))).toBe("passed");
+    const resized = build.bar({ key: "North", series: "revenue", x: 0, y: 0, width: 80, height: 16, baseline: "left" });
+    const moved = vi.fn((mark: MarkGeometry) => (mark.key === "North" ? resized : undefined));
+    const was = `{"kind":"path","d":"${bar.slice(0, 1)}","paint":{"stroke":"mark","width":3}}`;
+    const now = `{"kind":"path","d":"${resized.slice(0, 1)}","paint":{"stroke":"mark","width":3}}`;
+    expect(await outcome(checkEffect(stuck, { marks: [bar, fixtures.point], moved }))).toBe(
+      "checkEffect found 1 problem with the effect:\n" +
+        `- on mark "North", a change() to the moved mark should leave what end() draws on it: ` +
+        `item 1 drawn after a full run and a change() is ${was} but end() draws ${now}; item 1 drawn after end() and a change() is ${was} but end() draws ${now}`
+    );
+    // moved(mark) replaces the fixtures' twins: the point gets none, so it's skipped.
+    expect(moved.mock.calls.map(([mark]) => mark.key)).toEqual(["North", "p"]);
+    // A fixture keeps its twin whatever it's named.
+    expect(await outcome(checkEffect(stuck, { marks: { mine: fixtures.point } }))).toMatch(/^checkEffect found 1 problem with the effect:\n- on the mine, a change\(\) to the moved mark/);
+    const broken = () => {
+      throw new Error("no twin");
+    };
+    expect(await outcome(checkEffect(stuck, { marks: [bar], moved: broken }))).toBe(
+      'checkEffect found 1 problem with the effect:\n- on mark "North": the moved mark, or its data, threw Error: no twin'
+    );
+  });
+
   it("gives the effect the icons and batch it's told to", async () => {
     const dot: Icon = { name: "dot", shapes: [], box: { x: -2, y: -2, width: 4, height: 4 }, size: 4, anchor: { x: 0, y: 0 }, pivot: { x: 0, y: 0 }, footprint: [2, 2] };
     const seen: string[] = [];
@@ -161,16 +260,19 @@ describe("checkEffect on data effects", () => {
     revenue: number;
   }
 
-  /** A label with the mark's last value, beside its end. */
+  const last = (data: MarkData): string => String(data.samples[data.samples.length - 1]?.value ?? 0);
+
+  /** A label with the mark's last value, beside its end, following the mark and its data. */
   const label: DataEffect = {
     kind: "data",
     async run(mark, data, ctx) {
-      const value = data.samples[data.samples.length - 1]?.value ?? 0;
-      const text = ctx.layer.text(String(value), { at: mark.end, opacity: 0 });
+      const text = ctx.layer.text(last(data), { at: mark.end, opacity: 0 });
+      ctx.onChange((next, nextData) => text.update({ at: next.end }, last(nextData ?? data)));
       await ctx.tween({ duration: 200, update: (p) => text.update({ opacity: p }) }).finished;
     },
     end(mark, data, ctx) {
-      ctx.layer.text(String(data.samples[data.samples.length - 1]?.value ?? 0), { at: mark.end, opacity: 1 });
+      const text = ctx.layer.text(last(data), { at: mark.end, opacity: 1 });
+      ctx.onChange((next, nextData) => text.update({ at: next.end }, last(nextData ?? data)));
     },
     clear() {}
   };
@@ -208,6 +310,26 @@ describe("checkEffect on data effects", () => {
     await expect(checkEffect(reader, { data: () => ({ datum: undefined, samples: [], related }) })).resolves.toBeUndefined();
   });
 
+  it("gives change() and end() the moved mark's data", async () => {
+    const values = new Map([
+      [fixtures.line, 4],
+      [movedFixtures.line, 9]
+    ]);
+    const data = (mark: MarkGeometry): MarkData => ({ datum: undefined, samples: [{ t: 1, value: values.get(mark)! }], related: () => undefined });
+    await expect(checkEffect(label, { marks: { line: fixtures.line }, data })).resolves.toBeUndefined();
+    // Reading the data only once keeps the 4 where the moved mark has 9.
+    const once: DataEffect = {
+      ...label,
+      run: async (mark, data, ctx) => {
+        const text = ctx.layer.text(last(data), { at: mark.end, opacity: 1 });
+        ctx.onChange((next) => text.update({ at: next.end }));
+      }
+    };
+    expect(await outcome(checkEffect(once, { marks: { line: fixtures.line }, data }))).toContain(
+      `item 1 drawn after a full run and a change() is {"kind":"text","content":"4","style":{"at":{"x":256,"y":40},"opacity":1}} but end() draws {"kind":"text","content":"9"`
+    );
+  });
+
   it("reports data(mark) throwing as a failure for that mark", async () => {
     const message = await outcome(
       checkEffect(label, {
@@ -227,5 +349,19 @@ describe("fixtures", () => {
     expect(Object.isFrozen(fixtures)).toBe(true);
     expect(fixtures.stacked.segments?.map((segment) => segment.series)).toEqual(["goals", "assists"]);
     expect(fixtures.point.length).toBe(0);
+  });
+
+  it("has a moved twin of each: the same key and series, somewhere else", () => {
+    expect(Object.keys(movedFixtures)).toEqual(Object.keys(fixtures));
+    expect(Object.isFrozen(movedFixtures)).toBe(true);
+    for (const [name, mark] of Object.entries(fixtures)) {
+      const twin = movedFixtures[name as keyof typeof fixtures];
+      expect(twin.key, name).toBe(mark.key);
+      expect(twin.series, name).toBe(mark.series);
+      expect(twin.segments?.map((segment) => segment.series), name).toEqual(mark.segments?.map((segment) => segment.series));
+      expect(twin.slice(0, 1), name).not.toBe(mark.slice(0, 1));
+      expect(twin.thickness > 0, name).toBe(true);
+    }
+    expect(movedFixtures.point.length).toBe(0);
   });
 });

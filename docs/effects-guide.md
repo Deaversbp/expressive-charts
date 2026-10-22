@@ -1,6 +1,6 @@
 # Writing effects
 
-An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: our bar chart, the donut, and SVG charts drawn by D3 or Observable Plot through `expressive()`.
+An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `threshold`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: our bar chart, the donut, and SVG charts drawn by D3 or Observable Plot through `expressive()`.
 
 This guide covers the contract an effect reads, the drawing API it writes through, how it keeps time, the rules that keep charts readable, data effects, composing, and testing with `checkEffect`. It ends with two worked examples and a review checklist.
 
@@ -14,10 +14,13 @@ import { barChart, defineEffect } from "expressive-charts";
 const underline = defineEffect({
   async run(mark, ctx) {
     const line = ctx.layer.path(mark.slice(0, 0), { stroke: "text-muted", width: 2 });
-    await ctx.tween({ duration: 300, timing: "effect", update: (p) => line.update(mark.slice(0, p)) }).finished;
+    let drawn = 0;
+    ctx.onChange((next) => line.update((mark = next).slice(0, drawn)));
+    await ctx.tween({ duration: 300, timing: "effect", update: (p) => line.update(mark.slice(0, (drawn = p))) }).finished;
   },
   end(mark, ctx) {
-    ctx.layer.path(mark.slice(0, 1), { stroke: "text-muted", width: 2 });
+    const line = ctx.layer.path(mark.slice(0, 1), { stroke: "text-muted", width: 2 });
+    ctx.onChange((next) => line.update(next.slice(0, 1)));
   }
 });
 
@@ -26,6 +29,7 @@ barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue"
 
 - `run(mark, ctx)` animates. It resolves when it's done or cancelled.
 - `end(mark, ctx)` draws, at once, what a full run ends with. Reduced motion shows only this.
+- `ctx.onChange` hands both the mark's new geometry whenever it moves (a resize, a transition), so the underline stays on the bar.
 - `defineEffect` fills in `kind: "geometry"` and a `clear()` that does nothing, throws a `TypeError` if `run` or `end` isn't a function, and freezes the effect. Only `run`, `end` and `clear` are kept.
 
 The effect never asks what chart it's on. It reads the mark's walk (`mark.slice`), so the same underline runs along a bar, around a donut slice and along a line.
@@ -171,7 +175,7 @@ The runner owns each run's lifecycle, so an effect stays small:
 - **Clearing** aborts `ctx.signal`, calls the effect's `clear(ctx)`, empties the layer, resets the mark's style and drops `onChange` listeners, even if the effect forgets. `clear()` is only for cleanup beyond that, which is rare.
 - **A finished run stays** until it's cleared: a ball that rolled to the end rests there while the pointer stays.
 - **Abort means stop.** After `ctx.signal` aborts, draw nothing more and resolve; don't reject. Awaiting `ctx.tween(...).finished` already does this, and a loop should check `ctx.signal.aborted` between steps.
-- **Geometry moves.** A run in the `update` slot plays while the chart transitions, and a resize can come at any time. To stay attached, redraw from `onChange(mark => …)`, as `travel` and `wiggle` do.
+- **Geometry moves.** A run in the `update` slot plays while the chart transitions, a resize can come at any time, and a line grows as it's revealed. To stay attached, redraw from `onChange(mark => …)`, as `travel`, `wiggle` and `threshold` do. Do it in `end()` too: with motion off the runner draws `end()` instead of running, and the mark still moves. `checkEffect` checks both.
 
 ## Data effects and `needs`
 
@@ -205,6 +209,34 @@ const belowTarget = defineDataEffect<Region>({
 - **Row types are checked.** An effect for `Region` rows is a type error on a chart of other rows, and combining it with a generic effect doesn't hide that. An effect that reads no row fields is `defineDataEffect({ … })`, with `D` left as `unknown`, and fits any chart.
 - **`needs: { related: ["xg"] }`** lists the series the effect reads through `related()`. A chart without them throws when it's created, instead of the effect silently drawing nothing, and so does an `expressive()` attachment whose marks don't have them, when it's made or refreshed.
 - Keep the distinction: an effect that only needs geometry should be a geometry effect, so it runs everywhere, including on host marks with no data.
+- `onChange(listener)` passes the mark's latest data as its second argument, so an effect that reads values can follow them as they change (a line being revealed). In the `update` slot it keeps `previous`. It can be undefined; keep the data you had.
+
+### `threshold`, the built-in data effect
+
+```ts
+import { barChart, only, threshold } from "expressive-charts";
+
+// The part of each bar past a 10-goal target, across the bar's full thickness.
+const pastTarget = threshold({ compareTo: 10, when: "above", color: "series-1-strong" });
+barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { decorate: pastTarget } });
+
+// A related series instead of a number: the goals line in the negative colour wherever it's below xG.
+const belowXg = only("goals", threshold({ compareTo: "xg" }));
+```
+
+- **What it draws.** One overlay path per run of the walk where the mark's values are below `compareTo` (or above it, with `when: "above"`): `mark.slice(t0, t1)`, stroked in `color` (default `"negative"`) at the mark's `thickness` with butt caps, so a coloured part ends exactly where the values cross. Equal values aren't coloured, and a walk under 0.5 px, such as a point, draws nothing.
+- **What it compares.** A number is compared with every sample as it is. A series' name goes in `needs.related`, so a chart without that series throws when it's created. The series is matched by `at` when every sample of both has a number or a `Date` there, the reference interpolated between its samples and nothing coloured outside its range; otherwise by `t`.
+- **Crossings** are interpolated linearly in `t` between neighbouring samples, and between the places where the reference bends. That's exact where the walk is straight between samples: bars, our lines, and a host polyline sampled at its vertices. Along a curve, values aren't linear in distance, so a crossing between two samples is approximate; denser samples narrow the error.
+- **An encoding, not motion.** It draws at once, with no tween, because a fade would flicker as a line extends. It redraws on every `onChange`, with the latest data, so it follows a mark that moves and a line as it's revealed. `end()` draws the same picture, so the colour shows with motion off. Put it in `on.decorate`, which runs from enter until the mark exits.
+- `compareTo` must be a finite number or a non-empty series name, `when` `"below"` or `"above"`, and `color` a non-empty string, or it throws a `RangeError` when it's made.
+
+What it compares on each chart, from the samples the chart gives:
+
+| Chart | `samples` | `related(series)` |
+| --- | --- | --- |
+| `barChart` | 0 at the baseline to the bar's total at the tip, so `compareTo: 10` colours the part past 10 | that series' segment of the stack, with samples over the segment's own walk |
+| `donutChart` | 0 to the slice's share of the total, so `compareTo: 0.25, when: "above"` colours the part past a quarter | its own series only |
+| `expressive()` | the page's `samples` option: on a D3 line, `samplesAlong` on the points that drew it, so `compareTo: "xg"` colours it below the xG line. Without it, rects with a numeric `value` get `barChart`'s samples, and other marks none, so it draws nothing | the mark's own segment of that series, else the first other mark of that series (another line path) |
 
 ## Composing
 
@@ -219,7 +251,7 @@ only("revenue", underline);           // on marks whose key or series is "revenu
 stagger(pulse({ times: 1 }));         // each mark of a batch a little after the one before
 ```
 
-- Parts share the run's context: one overlay group, one mark handle (whose `set()` merges fields) and one signal. A part with nothing to do should finish at once, so one `sequence` tells the whole story whatever the chart shows.
+- Parts share the run's context: one overlay group, one mark handle (whose `set()` merges fields) and one signal. A sequence starts each part on the mark's geometry and data as they are by then. A part with nothing to do should finish at once, so one `sequence` tells the whole story whatever the chart shows.
 - A combination is a data effect if any part is one, and it needs every part's rows and related series.
 - `stagger` is never a default: research finds it helps little and can hurt. Its waits use `"stagger"` timing, so nothing waits in Analysis or Off.
 - `registerPreset("underline", () => underline)` makes an effect usable by name in any chart's `on`.
@@ -244,14 +276,16 @@ On every mark, it checks that:
 1. a full run ends with the same picture and mark style as `end()`;
 2. clearing leaves nothing drawn, the mark's own style, and nothing still running;
 3. an abort mid-run settles the run (it resolves, without more frames) and clears to nothing;
-4. with motion off, no frames run and the run draws what `end()` draws.
+4. with motion off, no frames run and the run draws what `end()` draws;
+5. after a full run, and after `end()`, a `change()` to the mark moved somewhere else leaves what `end()` draws there, so an effect that should stay attached follows `onChange`.
 
 A failure reads like this:
 
 ```
-checkEffect found 16 problems with delta:
+checkEffect found 24 problems with delta:
 - on the bar, a full run should end with the same picture and mark style as end(): item 1 drawn after the run is {"kind":"text","content":"+1","style":{"at":{"x":210,"y":10},"anchor":"start","opacity":1}} but end() draws {"kind":"text","content":"+1","style":{"at":{"x":210,"y":10},"anchor":"start"}}
 - on the bar, with motion off, no frames should run and the end state should be drawn: item 1 drawn after the run with motion off is …
+- on the bar, a change() to the moved mark should leave what end() draws on it: item 1 drawn after a full run and a change() is {"kind":"text","content":"+1","style":{"at":{"x":210,"y":10},"anchor":"start","opacity":1}} but end() draws {"kind":"text","content":"+1","style":{"at":{"x":170,"y":40},"anchor":"start"}}; item 1 drawn after end() and a change() is …
 - on the negative bar, …
 ```
 
@@ -262,12 +296,14 @@ Options:
 | `marks` | the marks to check on: named (`{ bar, slice }`), or a list such as `chart.marks()`, named by key | `fixtures` |
 | `icons` | icons the effect looks up by name through `ctx.icons` | none |
 | `data` | `(mark) => MarkData`, for data effects | no datum, values from 0 to 1, no related series |
+| `moved` | `(mark) => MarkGeometry \| undefined`: the same mark (same key) moved, for check 5; undefined skips it on that mark | each fixture's moved twin; nothing for other marks |
 | `batch` | `{ index, count }`, for effects that read `ctx.batch` | the only mark |
 | `name` | what the report calls the effect | "the effect" |
 
-- `fixtures` are one of each kind of mark: `bar`, `negative bar`, `column`, `stacked`, `short bar`, `slice`, `line` and `point`.
+- `fixtures` are one of each kind of mark: `bar`, `negative bar`, `column`, `stacked`, `short bar`, `slice`, `line` and `point`. Each has a moved twin for check 5, with the same key and series, somewhere else and another size.
 - A data effect typed for its own rows needs `data` that gives them (a type error otherwise), and so does one that `needs` related series (checkEffect throws otherwise).
-- On real marks: `checkEffect(effect, { marks: chart.marks() })`, in a DOM environment such as jsdom.
+- On real marks: `checkEffect(effect, { marks: chart.marks() })`, in a DOM environment such as jsdom. Check 5 needs the marks moved: draw them again at another size and pass `moved: (mark) => resized.marks().find((m) => m.key === mark.key)`, or it's skipped.
+- With a data effect, check 5 gives `change()` and `end()` the moved mark's data, `data(moved)`.
 
 For your own tests, `testContext({ mode, scaling, icons, batch, previous })` is a complete context on a manual clock, with `abort()`, `clear()` (the runner's cleanup) and `change(mark)` (calls `onChange`). Its `layer` and `mark` record what's drawn: `layer.picture()` gives it as plain data, rounded, and `mark.style` the mark's style. `play(ctx.clock, running)` advances the clock a frame at a time until the run settles:
 
@@ -288,7 +324,7 @@ Both are in [docs/sketches/examples/effects](sketches/examples/effects/), where 
 A highlighter stroke that draws itself along the walk and stays. It reads only the walk, so it works on any mark; on a point, whose walk has no length, it draws nothing.
 
 ```ts
-import { defineEffect, type Color } from "expressive-charts";
+import { defineEffect, type Color, type EffectContext, type MarkGeometry } from "expressive-charts";
 
 /**
  * A highlighter stroke that draws itself along the mark's walk, then stays. Its end state is the
@@ -297,24 +333,41 @@ import { defineEffect, type Color } from "expressive-charts";
 export const trace = (color: Color = "mark") =>
   defineEffect({
     async run(mark, ctx) {
-      const stroke = ctx.layer.path(mark.slice(0, 0), { stroke: color, width: 3, opacity: 0.5, linecap: "round" });
-      await ctx.tween({ duration: 500, timing: "effect", update: (p) => stroke.update(mark.slice(0, p)) }).finished;
+      const show = stroke(mark, ctx, color);
+      await ctx.tween({ duration: 500, timing: "effect", update: show }).finished;
     },
     end(mark, ctx) {
-      ctx.layer.path(mark.slice(0, 1), { stroke: color, width: 3, opacity: 0.5, linecap: "round" });
+      stroke(mark, ctx, color)(1);
     }
   });
+
+/** Draws the stroke along the walk up to progress p, and keeps it on the mark when the mark moves. */
+function stroke(mark: MarkGeometry, ctx: EffectContext, color: Color): (p: number) => void {
+  let current = mark;
+  let progress = 0;
+  const path = ctx.layer.path(mark.slice(0, 0), { stroke: color, width: 3, opacity: 0.5, linecap: "round" });
+  const draw = () => path.update(current.slice(0, progress));
+  ctx.onChange((next) => {
+    current = next;
+    draw();
+  });
+  return (p) => {
+    progress = p;
+    draw();
+  };
+}
 ```
 
-- Its last frame, `mark.slice(0, 1)` with the same paint, is exactly what `end()` draws.
+- `run()` and `end()` both draw through `stroke()`, so the run's last frame, `mark.slice(0, 1)` with the same paint, is exactly what `end()` draws.
 - With motion off the tween ends at once, so `run()` draws the finished stroke too.
+- `stroke()` redraws from `onChange`, so the stroke stays on the mark when it moves, whether a run or `end()` drew it.
 
 ### delta
 
 A data effect: "+2" just beyond the end of a mark whose value changed, in the `update` slot. It compares the last sample with the one before the update.
 
 ```ts
-import { defineDataEffect, offset, type MarkData, type MarkGeometry, type TextStyle } from "expressive-charts";
+import { defineDataEffect, offset, type EffectContext, type MarkData, type MarkGeometry, type TextStyle } from "expressive-charts";
 
 const finalValue = (data: MarkData | undefined): number => {
   const samples = data?.samples ?? [];
@@ -331,32 +384,49 @@ export const delta = (format = (n: number) => (n > 0 ? `+${n}` : `${n}`)) =>
     async run(mark, data, ctx) {
       const change = finalValue(data) - finalValue(data.previous);
       if (change === 0) return;
-      const { at, anchor } = place(mark);
-      const up = mark.angle(1) - Math.PI / 2;
-      const label = ctx.layer.text(format(change), { at: offset(at, up, -8), anchor, opacity: 0 });
-      await ctx.tween({
-        duration: 400,
-        timing: "effect",
-        update: (p) => label.update({ opacity: p, at: offset(at, up, -8 * (1 - p)) })
-      }).finished;
+      const show = label(mark, ctx, format(change));
+      await ctx.tween({ duration: 400, timing: "effect", update: show }).finished;
     },
     end(mark, data, ctx) {
       const change = finalValue(data) - finalValue(data.previous);
-      // The same fields the run's last frame leaves, opacity included, so the two compare equal.
-      if (change !== 0) ctx.layer.text(format(change), { ...place(mark), opacity: 1 });
+      if (change !== 0) label(mark, ctx, format(change))(1);
     }
   });
 
-/** 10 px past the end of the walk, the text reading away from the mark whichever way it grows. */
-function place(mark: MarkGeometry): Pick<TextStyle, "at" | "anchor"> {
+/**
+ * Draws the label at progress p, rising into place and fading in, and keeps it beside the mark's end
+ * when the mark moves. The run and end() both draw through it, so they leave the same fields.
+ */
+function label(mark: MarkGeometry, ctx: EffectContext, content: string): (p: number) => void {
+  let current = mark;
+  let progress = 0;
+  const text = ctx.layer.text(content, { ...place(mark, 0), opacity: 0 });
+  const draw = () => text.update({ ...place(current, progress), opacity: progress });
+  ctx.onChange((next) => {
+    current = next;
+    draw();
+  });
+  return (p) => {
+    progress = p;
+    draw();
+  };
+}
+
+/**
+ * 10 px past the end of the walk, the text reading away from the mark whichever way it grows. It
+ * starts 8 px towards the mark's down side and rises to its place as `rise` goes from 0 to 1.
+ */
+function place(mark: MarkGeometry, rise: number): Pick<TextStyle, "at" | "anchor"> {
   const heading = mark.angle(1);
-  return { at: offset(mark.end, heading, 10), anchor: Math.abs(heading) > Math.PI / 2 ? "end" : "start" };
+  const at = offset(mark.end, heading, 10);
+  return { at: offset(at, heading - Math.PI / 2, -8 * (1 - rise)), anchor: Math.abs(heading) > Math.PI / 2 ? "end" : "start" };
 }
 ```
 
 - It reads its own data and nothing about the chart, so it's `defineDataEffect` with no row type: it fits any chart.
 - It rises 8 px towards its place, along the mark's up side, and fades in; then it stays, since a change label is information.
-- `end()` gives the same fields, `opacity: 1` included, as the run's last frame. Without it, `checkEffect` reports the difference (the sketch's first version had exactly that bug).
+- `run()` and `end()` both draw through `label()`, so `end()` leaves the same fields as the run's last frame, `opacity: 1` included. The sketch's first version drew `end()` on its own without `opacity`, and `checkEffect` reported the difference (the failure above).
+- `label()` follows `onChange`, so the label stays beside the end of a bar that's still growing in the `update` slot, or that's resized.
 - The anchor follows the walk's heading, so on a bar growing left the text reads away from the bar instead of over its tip.
 
 ## Review checklist
@@ -369,7 +439,7 @@ Before you publish an effect, or review one:
 - [ ] `end()` draws exactly what a full run ends with, and anything that informs the viewer is still there.
 - [ ] Data stays readable: decorations in the overlay, changes to the mark small and bounded, nothing hidden or resized while it's read.
 - [ ] It's stateless: nothing shared between runs, options checked when it's made.
-- [ ] It stops on abort and resolves; it follows `onChange` if it should stay attached while the mark moves.
+- [ ] It stops on abort and resolves; it follows `onChange`, after a run and after `end()`, if it should stay attached while the mark moves.
 - [ ] It ends well within 5 s and never loops.
 - [ ] Text is in theme text colours.
 - [ ] A data effect has the row type it reads and lists its related series in `needs`.

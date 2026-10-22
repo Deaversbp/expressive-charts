@@ -78,7 +78,8 @@ export interface MotionOptions {
 }
 
 const MODES: readonly MotionMode[] = ["presentation", "analysis", "off"];
-const TIMINGS: readonly Timing[] = ["feedback", "transition", "effect", "playback", "stagger"];
+/** Every timing, for checking options. Internal: not exported from core's index. */
+export const TIMINGS: readonly Timing[] = ["feedback", "transition", "effect", "playback", "stagger"];
 
 export function createMotion(options: MotionOptions = {}): Motion {
   let requested = checkMode(options.mode ?? "presentation");

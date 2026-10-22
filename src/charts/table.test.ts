@@ -101,6 +101,38 @@ describe("tableModel", () => {
     expect(tableModel(input())!.footer).toBeUndefined();
   });
 
+  it("leaves the Total column out when the chart says its series don't add up", () => {
+    const model = tableModel(input({ total: false }))!;
+    expect(model.headers.map((cell) => cell.text)).toEqual(["name", "goals", "assists"]);
+    expect(model.rows[0]!.cells.map((cell) => cell.text)).toEqual(["Okafor", "16", "4"]);
+    // And a lone series can have one, if a chart wants it.
+    expect(tableModel(input({ series: ["goals"], total: true }))!.headers.map((cell) => cell.text)).toEqual(["name", "goals", "Total"]);
+  });
+
+  it("puts a column with after: \"values\" last, after the values, the total and a share", () => {
+    const difference = { label: "Difference", field: (d: Player) => d.goals - d.assists, after: "values" as const };
+    const position = { label: "Position", field: "pos" as const };
+    const model = tableModel(input({ option: { columns: [difference, position] } }))!;
+    expect(model.headers).toEqual([
+      { text: "name", numeric: false },
+      { text: "Position", numeric: false },
+      { text: "goals", numeric: true },
+      { text: "assists", numeric: true },
+      { text: "Total", numeric: true },
+      { text: "Difference", numeric: true }
+    ]);
+    expect(model.rows[1]!.cells.map((cell) => cell.text)).toEqual(["Tanaka", "Midfielder", "6", "10", "16", "-4"]);
+    const lines = tableModel(input({ option: { columns: [difference] }, total: false }))!;
+    expect(lines.headers.map((cell) => cell.text)).toEqual(["name", "goals", "assists", "Difference"]);
+    // A donut's: after the Share, with an empty cell in the total row.
+    const donut = tableModel(
+      input({ option: { columns: [{ ...difference, field: (d: Player) => d.goals * 2 }] }, series: ["goals"], rows: input().rows.map((row) => ({ ...row, values: [row.values[0]!], total: row.values[0]!.value })), shares: true })
+    )!;
+    expect(donut.headers.map((cell) => cell.text)).toEqual(["name", "goals", "Share", "Difference"]);
+    expect(donut.rows[0]!.cells.map((cell) => cell.text)).toEqual(["Okafor", "16", "50%", "32"]);
+    expect(donut.footer!.map((cell) => cell.text)).toEqual(["Total", "32", "100%", ""]);
+  });
+
   it("right-aligns an extra column only when it holds numbers", () => {
     const model = tableModel(
       input({
@@ -312,6 +344,18 @@ describe("barChart: data table", () => {
     expect(table()!.querySelector("b, i, u")).toBeNull();
     expect(table()!.tBodies[0]!.rows[0]!.cells[1]!.textContent).toBe("<i>Forward</i>");
     expect(document.querySelector("summary em")).toBeNull();
+  });
+
+  it("puts a page's column after the values with after: \"values\", and rejects any other place", async () => {
+    const difference = { label: "Difference", field: (d: Player) => d.goals - d.assists, after: "values" as const };
+    const { chart, text, settle } = setup({ ...withStack, table: { columns: [difference, { label: "Position", field: "pos" }] } });
+    expect(text().slice(0, 2)).toEqual([
+      ["name", "Position", "goals", "assists", "Total", "Difference"],
+      ["Okafor", "Forward", "16", "4", "20", "12"]
+    ]);
+    await settle(chart.update({ stack: ["goals"] }));
+    expect(text()[0]).toEqual(["name", "Position", "goals", "Difference"]);
+    expect(() => setup({ table: { columns: [{ ...difference, after: "end" as never }] } })).toThrow(/table\.columns\[0\]\.after must be "category" or "values"/);
   });
 
   it("rejects an option it can't use, and an update whose column throws changes nothing", async () => {

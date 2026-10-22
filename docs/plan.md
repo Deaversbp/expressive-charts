@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1 is complete. M2 is complete apart from a short screen-reader re-check. M3 is built, and waits only on your donut screen-reader check (October 2026, §9). M4 is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 and M3 are complete, and M2 is complete apart from a short screen-reader re-check (October 2026, §9). M4 is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -829,7 +829,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 The flash is checked by tests, not by eye: `src/matchweek.test.ts` (only changed bars flash, on both charts), the flash unit tests, and the visual suite's mid-change screenshots. A hidden browser pane throttles frames past the 900 ms blink, so it can't be watched there.
 
-### M3: Donut, plus the proof that effects are chart-agnostic ✅ (pending your donut screen-reader check)
+### M3: Donut, plus the proof that effects are chart-agnostic ✅
 
 `donutChart` (slice geometry from `describe.arc`, built in M1, and a centre label). The same `travel`, now rolling around slices, with **no change to effect code**, on our donut and on D3 pie paths through `expressive({ geometry })`. `wiggle`, `pulse`, `stagger` and string presets, shown on bars and on the donut (`on: { hover: "wiggle" }`).
 
@@ -979,7 +979,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
    - The screenshots as decision 11, made in Docker (`npm run test:visual:update`).
    - A donut listening script in `docs/a11y-check.md`. **You run it** with NVDA + Chrome, and the names and roles are adjusted to what you hear.
    - Then check the "Done when" list in the browser with you.
-   - **Built** (October 2026), with nothing in `src/` changed. Decisions:
+   - **Built** (October 2026), with nothing in `src/` changed. **Your screen-reader check passed** with NVDA + Chrome (22 October 2026): all 13 steps of [a11y-check section D](a11y-check.md#d-the-donut-page-donutchart-and-a-d3-pie) read as expected, so the names and roles stay as built. Decisions:
      - **Layout.** On one column the page was 2,415 px tall, past the visual suite's 2,000 px viewport. From 860 px wide, the donut and the D3 pie sit side by side, so the same effect can be compared on both, with the columns below; narrower, it's one column. The page ends at 1,819 px at 1000 px wide.
      - **An order control (Data order, Largest first), beyond decision 11.** "Next match" never changes the order with these numbers (the gaps of 25 to 37 shots widen over the matches), so without it the donut's second stage, the turn, couldn't be seen. It drives all three: the donut's and the columns' `sort`, and `pie.sort(null)` or `d3.pie()`'s default on the D3 pie.
      - **The effect picker** destroys and rebuilds the donut, the columns and the attachment with the data and order as they are (open question 14). The motion is page-wide and the donut's colours are pinned by outcome (`colors`), with the D3 pie given the same slots in the page's CSS, so both survive a rebuild, and focus stays on the picker, which isn't rebuilt. A test checks all four.
@@ -1000,15 +1000,16 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 - Your donut screen-reader check passes.
 - The package still has no runtime dependencies, and `typecheck`, `test` and `build` are green.
 
-**Status: built, waiting on your donut screen-reader check (October 2026).** Everything else on the "Done when" list is met:
+**Status: complete (October 2026).** Everything on the "Done when" list is met:
 - **The donut** draws the lab's card 3 on `demo/donut.html`: separators, outside labels, the centre total, a legend, the tooltip, a table with Share and a total row, ARIA names, keyboard order round the ring, and staged updates (step 6's frame timings). Both themes come from the library's stylesheet; the page sets no `--ec-*` tokens.
 - **The same `travel`** rolls round slices on `donutChart` and on a real `d3.pie()` through `expressive({ geometry })`. `src/effects/travel.ts` and `gaits.ts` last changed in M1 step 6, before M3 began.
 - **`wiggle`, `pulse` and `stagger`** are built (step 2), with tests for the 3 px, 5 s and no-stagger-in-Analysis-or-Off guardrails. The `"wiggle"` and `"pulse"` presets play on the donut, the columns and the D3 pie, checked at real frame rates in each mode.
 - **`checkEffect`** passes for every built-in effect on every fixture and on real marks from `barChart`, `donutChart`, `expressive()` bars and D3 pies (step 5). The effect API is public, `expressive-charts/testing` is exported, the guide's examples are type-checked, and `CHANGELOG.md` states the 0.x promise.
 - **The demo's checklist** passed in the browser with you: the hover stories on all three charts, the effect picker, "Next match" and the order in each mode, keyboard focus, and dark mode. The donut screenshots pass in Docker, in the image CI runs, and the bar baselines haven't changed; CI runs them on the pull request.
+- **Screen reader.** Your donut check passed with NVDA + Chrome (22 October 2026): all 13 steps of [a11y-check section D](a11y-check.md#d-the-donut-page-donutchart-and-a-d3-pie) read as expected. VoiceOver + Safari hasn't been run on the donut.
 - **No runtime dependencies** (`npm ls --omit=dev` is empty), and `typecheck`, `test` and `build` are green.
 
-Two checks wait on you: the donut listening script ([a11y-check section D](a11y-check.md#d-the-donut-page-donutchart-and-a-d3-pie)), which is this milestone's last item, and M2's re-check of the bar descriptions, which is still open.
+M2's re-check of the bar descriptions is still open; it's separate from M3.
 
 ### M4: Line chart and data effects
 

@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart and a donut chart, the `expressive()` adapter for marks drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle` and `pulse`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-and-donut-charts-travel-and-the-adapter)). The other built-in effects are next, so `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart and a donut chart, the `expressive()` adapter for marks drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-and-donut-charts-travel-and-the-adapter)). The line chart and `morph` are still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -96,7 +96,7 @@ registerPreset("nudge", () => myEffect); // then on: { hover: "nudge" } in any c
 registerIcons(myIcons);                  // then travel("my-icon")
 ```
 
-A first, thin bar chart draws horizontal bars or columns, plain or stacked, sized to its container, with theme colours (`--ec-*` custom properties), hover dimming and hover events. Hovering, tapping or focusing a bar shows a tooltip, and a stacked chart has a legend. It's one tab stop: the arrow keys move between the bars, and keyboard focus plays the same hover effects inside a focus ring. Screen readers hear the chart as a group named by its `label`, and each bar as one image named by its values ("Okafor: 16 goals, 4 assists"), which `markLabel` can word ("Castillo: 1 goal"). `markDescription` adds what the name doesn't say, such as a player's position, without repeating it. `seriesLabels` names the series for people (`{ xg: "Expected goals" }`) wherever the chart names them: the legend, tooltip, table and bar names. Under the chart, a "Data table" lists the same numbers in the chart's order, the fallback every screen reader can read; `table: "hidden"` keeps it out of sight. `announce: true` adds a polite live region that says what each update changed. Its effect slots take effects or registered presets. `update()` animates the change by the motion mode: in Presentation the values change first (bars resize, the scale follows) and then the rows move to their new places, about half a second each; Analysis does it all at once in about 200 ms; Off jumps. A second `update()` mid-change carries on from where everything is, and hover effects replay once the change settles.
+A first, thin bar chart draws horizontal bars or columns, plain or stacked, sized to its container, with theme colours (`--ec-*` custom properties), hover dimming and hover events. Hovering, tapping or focusing a bar shows a tooltip, and a stacked chart has a legend. It's one tab stop: the arrow keys move between the bars, and keyboard focus plays the same hover effects inside a focus ring. Screen readers hear the chart as a group named by its `label`, and each bar as one image named by its values ("Okafor: 16 goals, 4 assists"), which `markLabel` can word ("Castillo: 1 goal"). `markDescription` adds what the name doesn't say, such as a player's position, without repeating it. `seriesLabels` names the series for people (`{ xg: "Expected goals" }`) wherever the chart names them: the legend, tooltip, table and bar names. Under the chart, a "Data table" lists the same numbers in the chart's order, the fallback every screen reader can read; `table: "hidden"` keeps it out of sight, and `table.columns` adds the page's own columns, after the category or, with `after: "values"`, last. `legend: { entries }` adds swatches after the series for colours the page's effects draw, each a theme token or a CSS colour: `{ label: "Goals below xG", color: "negative" }`. `announce: true` adds a polite live region that says what each update changed. Its effect slots take effects or registered presets. `update()` animates the change by the motion mode: in Presentation the values change first (bars resize, the scale follows) and then the rows move to their new places, about half a second each; Analysis does it all at once in about 200 ms; Off jumps. A second `update()` mid-change carries on from where everything is, and hover effects replay once the change settles.
 
 ```js
 import { barChart } from "expressive-charts";
@@ -113,8 +113,8 @@ const chart = barChart("#goals", {
   tooltip: (d) => `${d.name}\n${d.goals} goals`, // plain text, never HTML; default: category, values, total
   markLabel: (d, mark) =>              // each bar's accessible name; the default says "1 goals"
     `${d.name}: ${mark.values.map((v) => `${mark.format(v.value)} ${v.value === 1 ? singular[v.series] : v.series}`).join(", ")}`,
-  legend: true,                        // the default: swatches when more than one series shows
-  table: { columns: [{ label: "Position", field: "pos" }] }, // the default data table, plus a column
+  legend: true,                        // the default: swatches when more than one series shows; or { entries: [...] }
+  table: { columns: [{ label: "Position", field: "pos" }] }, // the default data table, plus a column (after: "values" puts it last)
   announce: true,                      // off by default: "Sorted A to Z", "Okafor and Tanaka changed"
   on: { hover: "nudge" }
 });
@@ -189,6 +189,16 @@ barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue"
 barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { enter: stagger(pulse({ times: 1 })) } });
 ```
 
+`threshold` is the first data effect. It colours the parts of a mark where its values are below a reference, or above it with `when: "above"`, in the theme's negative colour unless `color` says otherwise. The reference is a number, or a related series' name (`compareTo: "xg"`, matched by each sample's `at`, such as a line's x). Each coloured part ends exactly where the values cross. It's an encoding rather than motion: it draws at once, follows the mark on every change, and shows the same with motion off, so it goes in `on.decorate`:
+
+```js
+import { barChart, threshold } from "expressive-charts";
+
+// The part of each bar past a 10-goal target, across the bar's full thickness.
+const pastTarget = threshold({ compareTo: 10, when: "above", color: "series-1-strong" });
+barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { decorate: pastTarget } });
+```
+
 `motionSwitch()` is the viewer's own control: Presentation, Analysis and Off as buttons with `aria-pressed`, and a note on what the mode does. A click is the viewer's choice, so it overrides the device's reduced-motion setting; until then, Off is pressed and the note says why. It follows the motion whoever changes it, and `persist` (opt-in) keeps the choice in `localStorage`:
 
 ```js
@@ -247,11 +257,11 @@ The radii live in the arc generator, not in the row, so the page passes them to 
 
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar and donut charts, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar and donut charts, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
 
 ## Writing effects
 
-Effects of your own work everywhere the built-in ones do. `defineEffect` takes a `run` that animates the mark and an `end` that draws where the run ends, which is all reduced motion shows. Both read only the mark's shared description, so this one draws along a bar, around a donut slice or along a line, on our charts and through `expressive()`:
+Effects of your own work everywhere the built-in ones do. `defineEffect` takes a `run` that animates the mark and an `end` that draws where the run ends, which is all reduced motion shows. Both read only the mark's shared description, so this one draws along a bar, around a donut slice or along a line, on our charts and through `expressive()`. Both follow `ctx.onChange`, so the underline stays on the mark when it moves:
 
 ```js
 import { barChart, defineEffect } from "expressive-charts";
@@ -259,10 +269,13 @@ import { barChart, defineEffect } from "expressive-charts";
 const underline = defineEffect({
   async run(mark, ctx) {
     const line = ctx.layer.path(mark.slice(0, 0), { stroke: "text-muted", width: 2 });
-    await ctx.tween({ duration: 300, timing: "effect", update: (p) => line.update(mark.slice(0, p)) }).finished;
+    let drawn = 0;
+    ctx.onChange((next) => line.update((mark = next).slice(0, drawn)));
+    await ctx.tween({ duration: 300, timing: "effect", update: (p) => line.update(mark.slice(0, (drawn = p))) }).finished;
   },
   end(mark, ctx) {
-    ctx.layer.path(mark.slice(0, 1), { stroke: "text-muted", width: 2 });
+    const line = ctx.layer.path(mark.slice(0, 1), { stroke: "text-muted", width: 2 });
+    ctx.onChange((next) => line.update(next.slice(0, 1)));
   }
 });
 barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue", on: { hover: underline } });

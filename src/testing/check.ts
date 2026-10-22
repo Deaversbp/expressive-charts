@@ -5,7 +5,7 @@
 import type { AnyMarkEffect, DataEffect, GeometryEffect, Icon, MarkData, MarkGeometry } from "../core";
 import { describeValue, isMarkEffect } from "../core/registry";
 import { flush, play, testContext, type TestContext, type TestContextOptions } from "../core/testing";
-import { fixtures } from "./fixtures";
+import { fixtures, movedFixtures, type FixtureName } from "./fixtures";
 
 export interface CheckEffectOptions<D = unknown> {
   /**
@@ -20,6 +20,12 @@ export interface CheckEffectOptions<D = unknown> {
    * related series, so an effect that reads its rows or `needs` related series has to pass this.
    */
   readonly data?: (mark: MarkGeometry) => MarkData<D>;
+  /**
+   * The same mark moved (a resize, a transition's next frame): another geometry with the same key, for
+   * the check that the effect follows `onChange`. Undefined skips that check on the mark. Default:
+   * each fixture's moved twin, and nothing for other marks, so a page's own marks pass this or skip it.
+   */
+  readonly moved?: (mark: MarkGeometry) => MarkGeometry | undefined;
   /** The mark's place among the marks of its event, for effects that read `ctx.batch` (stagger). Default: the only one. */
   readonly batch?: { readonly index: number; readonly count: number };
   /** What the report calls the effect. Default: "the effect". */
@@ -34,7 +40,9 @@ type WithData<D> = CheckEffectOptions<D> & { readonly data: (mark: MarkGeometry)
  * 1. a full run ends with the same picture and mark style as `end()`;
  * 2. clearing leaves nothing drawn, the mark's own style, and no frames running;
  * 3. an abort mid-run settles the run (it resolves, without more frames) and clears to nothing;
- * 4. with motion off, no frames run and the run draws what `end()` draws.
+ * 4. with motion off, no frames run and the run draws what `end()` draws;
+ * 5. after a full run, and after `end()`, a `change()` to the moved mark (`options.moved`) leaves the
+ *    picture and mark style `end()` draws on it, so an effect that should stay attached follows `onChange`.
  *
  * Resolves when every check passes. Otherwise it rejects with one Error that lists every failure:
  * the mark, the check and what differed. A data effect typed for its own rows needs `data`, and so
@@ -54,14 +62,21 @@ export async function checkEffect(effect: AnyMarkEffect, options: CheckEffectOpt
   const marks = named(options.marks ?? fixtures);
   if (marks.length === 0) throw new TypeError("checkEffect: there are no marks to check on.");
 
+  const dataOf = (mark: MarkGeometry): MarkData<unknown> | undefined => (effect.kind === "data" ? (options.data ?? defaultData)(mark) : undefined);
   const failures: string[] = [];
   for (const [markName, mark] of marks) {
     let data: MarkData<unknown> | undefined;
     try {
-      data = effect.kind === "data" ? (options.data ?? defaultData)(mark) : undefined;
+      data = dataOf(mark);
     } catch (error) {
       failures.push(`on ${markName}: data(mark) threw ${describeError(error)}`);
       continue;
+    }
+    let moved: Moved | undefined;
+    try {
+      moved = movedSubject(effect, (options.moved ?? movedFixture)(mark), dataOf);
+    } catch (error) {
+      failures.push(`on ${markName}: the moved mark, or its data, threw ${describeError(error)}`);
     }
     const subject: Subject = {
       effect,
@@ -71,7 +86,8 @@ export async function checkEffect(effect: AnyMarkEffect, options: CheckEffectOpt
         if (typeof (running as Promise<void> | undefined)?.then !== "function") throw new TypeError(`run() must return a promise, got ${describeValue(running)}.`);
         return running as Promise<void>;
       },
-      end: (ctx) => (effect.kind === "data" ? effect.end(mark, data!, ctx) : effect.end(mark, ctx))
+      end: (ctx) => (effect.kind === "data" ? effect.end(mark, data!, ctx) : effect.end(mark, ctx)),
+      moved
     };
     for (const check of CHECKS) {
       let problem: string | undefined;
@@ -97,6 +113,31 @@ interface Subject {
   /** Starts a run; throws if run() doesn't return a promise. */
   run(ctx: TestContext): Promise<void>;
   end(ctx: TestContext): void;
+  /** The mark moved, for the onChange check; undefined skips it. */
+  readonly moved: Moved | undefined;
+}
+
+/** The moved mark, with its data. */
+interface Moved {
+  /** Tells the run's onChange listeners the mark moved, with its data there, as the runner does. */
+  change(ctx: TestContext): void;
+  /** end() on the moved mark. */
+  end(ctx: TestContext): void;
+}
+
+/** The moved twin of a fixture (the same object, whatever it is named); nothing for other marks. */
+function movedFixture(mark: MarkGeometry): MarkGeometry | undefined {
+  const name = (Object.keys(fixtures) as FixtureName[]).find((fixture) => fixtures[fixture] === mark);
+  return name === undefined ? undefined : movedFixtures[name];
+}
+
+function movedSubject(effect: AnyMarkEffect, mark: MarkGeometry | undefined, dataOf: (mark: MarkGeometry) => MarkData<unknown> | undefined): Moved | undefined {
+  if (mark === undefined) return undefined;
+  const data = dataOf(mark);
+  return {
+    change: (ctx) => ctx.change(mark, data),
+    end: (ctx) => (effect.kind === "data" ? effect.end(mark, data!, ctx) : effect.end(mark, ctx))
+  };
 }
 
 interface Check {
@@ -162,8 +203,49 @@ const CHECKS: readonly Check[] = [
       subject.end(ended);
       return compare(ctx, ended, "after the run with motion off");
     }
+  },
+  {
+    title: "a change() to the moved mark should leave what end() draws on it",
+    async test(subject) {
+      const { moved } = subject;
+      if (!moved) return undefined;
+      const problems: string[] = [];
+
+      const ran = subject.context();
+      const run = track(subject.run(ran));
+      await play(ran.clock, run.done);
+      if (run.failed) return `run() rejected with ${describeError(run.error)}`;
+      moved.change(ran);
+      if (!(await finish(ran))) return "it was still animating 10 s after the change()";
+      const ended = subject.context();
+      moved.end(ended);
+      const afterRun = compare(ran, ended, "after a full run and a change()");
+      if (afterRun) problems.push(afterRun);
+
+      // With motion off the runner draws end() instead of running, and changes still come.
+      const still = subject.context({ mode: "off" });
+      subject.end(still);
+      moved.change(still);
+      await flush();
+      const endedOff = subject.context({ mode: "off" });
+      moved.end(endedOff);
+      const afterEnd = compare(still, endedOff, "after end() and a change()");
+      if (afterEnd) problems.push(afterEnd);
+      return problems.length > 0 ? problems.join("; ") : undefined;
+    }
   }
 ];
+
+/** Runs frames until nothing animates (an effect may ease to the new geometry); false if it's still going after 10 s. */
+async function finish(ctx: TestContext): Promise<boolean> {
+  await flush();
+  for (let elapsed = 0; !ctx.clock.idle; elapsed += 16) {
+    if (elapsed >= 10_000) return false;
+    ctx.clock.advance(16);
+    await flush();
+  }
+  return true;
+}
 
 /** No datum, values 0 to 1 along the walk, no related series. */
 const defaultData = (): MarkData<unknown> => ({

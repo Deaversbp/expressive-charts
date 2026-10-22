@@ -15,6 +15,8 @@ export type {
   ChartOptions,
   DonutChartOptions,
   KeyOfType,
+  LegendEntry,
+  LegendOptions,
   MarkEvent,
   MarkEvents,
   MarkSummary,

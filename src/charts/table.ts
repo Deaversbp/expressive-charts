@@ -2,8 +2,8 @@
 // in SVG. A closed <details> "Data table" after the chart, or, with `table: "hidden"`, a table that's
 // visually hidden but still read. Its rows are the chart's, in visual order, so it follows the sort;
 // its columns are the category (each row's header), any extra columns the page lists, each series,
-// and the total of a stack, in the chart's format. A donut adds each row's share and a total row.
-// Text is only ever set as text, never parsed as HTML.
+// and the total of a stack, in the chart's format, then any columns the page puts after the values.
+// A donut adds each row's share and a total row. Text is only ever set as text, never parsed as HTML.
 
 import { percent } from "./shell/format";
 import type { ChartOptions, TableColumn, TableOptions } from "./types";
@@ -35,6 +35,11 @@ export interface TableInput<D> {
   /** In visual order. */
   readonly rows: readonly TableRow<D>[];
   readonly format: (value: number) => string;
+  /**
+   * Whether there's a Total column after the series, each row's values added up. Default: when
+   * there's more than one series, as a stack has. A line chart's series don't add up, so it has none.
+   */
+  readonly total?: boolean;
   /**
    * A donut's: a Share column after the values, each row's share of the rows' total as a whole
    * percent, and a total row in <tfoot>: "Total", the values added up, and 100%.
@@ -87,6 +92,7 @@ export function checkTableOption(option: unknown, chart: string): void {
     if (typeof column.label !== "string") fail(`table.columns[${i}].label must be a string: the column's header.`);
     if (typeof column.field !== "string" && typeof column.field !== "function") fail(`table.columns[${i}].field must be a field name or a function of the row.`);
     if (column.format !== undefined && typeof column.format !== "function") fail(`table.columns[${i}].format must be a function.`);
+    if (column.after !== undefined && column.after !== "category" && column.after !== "values") fail(`table.columns[${i}].after must be "category" or "values".`);
   });
 }
 
@@ -96,17 +102,22 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
   if (option === false) return undefined;
   const options: TableOptions<D> = typeof option === "object" ? option : {};
   const columns = options.columns ?? [];
-  const stacked = input.series.length > 1;
+  const first = columns.filter((column) => column.after !== "values");
+  const last = columns.filter((column) => column.after === "values");
+  const totals = input.total ?? input.series.length > 1;
   const number = (value: number): TableCell => ({ text: format(value), numeric: true });
   const grand = input.rows.reduce((sum, row) => sum + row.total, 0);
   const share = (value: number): TableCell[] => (input.shares ? [{ text: percent(grand > 0 ? value / grand : 0), numeric: true }] : []);
+  const header = (column: TableColumn<D>): TableCell => ({ text: column.label, numeric: false });
+  const blank = (): TableCell => ({ text: "", numeric: false });
 
   const headers: TableCell[] = [
     { text: options.category ?? input.category ?? "Category", numeric: false },
-    ...columns.map((column) => ({ text: column.label, numeric: false })),
+    ...first.map(header),
     ...input.series.map((series) => ({ text: input.label?.(series) ?? series, numeric: true })),
-    ...(stacked ? [{ text: options.total ?? "Total", numeric: true }] : []),
-    ...(input.shares ? [{ text: options.share ?? "Share", numeric: true }] : [])
+    ...(totals ? [{ text: options.total ?? "Total", numeric: true }] : []),
+    ...(input.shares ? [{ text: options.share ?? "Share", numeric: true }] : []),
+    ...last.map(header)
   ];
   const rows = input.rows.map((row) => {
     const values = new Map(row.values.map((v) => [v.series, v.value]));
@@ -114,10 +125,11 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
       key: row.key,
       cells: [
         { text: row.category, numeric: false },
-        ...columns.map((column) => columnCell(column, row, format)),
+        ...first.map((column) => columnCell(column, row, format)),
         ...input.series.map((series) => number(values.get(series) ?? 0)),
-        ...(stacked ? [number(row.total)] : []),
-        ...share(row.total)
+        ...(totals ? [number(row.total)] : []),
+        ...share(row.total),
+        ...last.map((column) => columnCell(column, row, format))
       ]
     };
   });
@@ -125,17 +137,20 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
   const footer: TableCell[] | undefined = input.shares
     ? [
         { text: options.total ?? "Total", numeric: false },
-        ...columns.map(() => ({ text: "", numeric: false })),
+        ...first.map(blank),
         ...input.series.map((series) => number(sum(series))),
-        ...(stacked ? [number(grand)] : []),
-        ...share(grand)
+        ...(totals ? [number(grand)] : []),
+        ...share(grand),
+        ...last.map(blank)
       ]
     : undefined;
   // A column of numbers is right-aligned, header and all.
-  columns.forEach((_, i) => {
-    const cells = rows.map((row) => row.cells[1 + i]!).filter((cell) => cell.text !== "");
-    if (cells.length > 0 && cells.every((cell) => cell.numeric)) headers[1 + i] = { ...headers[1 + i]!, numeric: true };
-  });
+  const lastAt = headers.length - last.length;
+  const pageColumns = [...first.map((_, i) => 1 + i), ...last.map((_, i) => lastAt + i)];
+  for (const at of pageColumns) {
+    const cells = rows.map((row) => row.cells[at]!).filter((cell) => cell.text !== "");
+    if (cells.length > 0 && cells.every((cell) => cell.numeric)) headers[at] = { ...headers[at]!, numeric: true };
+  }
   return {
     hidden: option === "hidden" || options.hidden === true,
     summary: options.summary ?? "Data table",

@@ -495,7 +495,8 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
       for (const run of [...entry.runs.values()]) {
         if (run.state === "cleared") continue;
         try {
-          run.scope.change(mark, entry.data);
+          // An update run keeps the previous values it was given, as when it's replaced by end().
+          run.scope.change(mark, latestData(entry, run));
         } catch (error) {
           report(error);
           clearRun(run);

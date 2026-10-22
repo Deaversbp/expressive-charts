@@ -1,6 +1,6 @@
 // What reference charts have in common: options, events and the chart handle.
 
-import type { EffectSlots, MarkData, MarkGeometry, Motion, MotionMode } from "../core";
+import type { Color, EffectSlots, MarkData, MarkGeometry, Motion, MotionMode } from "../core";
 import type { ColorAssignment } from "./colors";
 
 /** Field names of D whose values are T. */
@@ -61,6 +61,13 @@ export interface ChartOptions<D> {
   /** Dim the other marks while one is hovered (to --ec-dim-opacity). Default true. The hovered mark's emphasis stays either way. */
   readonly dim?: boolean;
   /**
+   * A swatch and a name for each series or, on a donut, each category, above the chart. Default true.
+   * Bars list their series when more than one shows. An object's `entries` come after the chart's
+   * own, for colours its effects draw, which the chart can't know: { label: "Goals below xG", color:
+   * "negative" }. With entries, a single series is listed too, so its colour is named beside theirs.
+   */
+  readonly legend?: boolean | LegendOptions;
+  /**
    * A box beside the hovered or focused mark. Default true: the category, each series' value in
    * `format`, and the total of a stack. A function gives a row's text instead ("\n" breaks a line; an
    * empty string shows none); it's set as text, never as HTML. The box itself is aria-hidden, so it
@@ -97,14 +104,26 @@ export interface ChartOptions<D> {
   readonly announce?: boolean | ((change: ChartChange) => string | undefined);
 }
 
+export interface LegendOptions {
+  /** Entries after the chart's own, in order. */
+  readonly entries?: readonly LegendEntry[];
+}
+
+/** A legend entry the page adds: a swatch in `color`, named by `label` in the theme's text colour. */
+export interface LegendEntry {
+  readonly label: string;
+  /** A theme token ("negative", "series-3") or a CSS colour. Not "mark" or "mark-strong": an entry has no mark. */
+  readonly color: Color;
+}
+
 export interface TableOptions<D> {
   /** Visually hidden, but still read by screen readers, as with `table: "hidden"`. Default false. */
   readonly hidden?: boolean;
-  /** Extra columns, after the category's: the prototype's player position, say. */
+  /** Extra columns, after the category's (the prototype's player position, say) or, with `after: "values"`, after the chart's values. */
   readonly columns?: readonly TableColumn<D>[];
   /** The category column's header. Default: the category's field name, or "Category" when a function reads it. */
   readonly category?: string;
-  /** The total column's header, shown when there's more than one series, or a donut's total row's. Default "Total". */
+  /** The header of a stack's total column, or of a donut's total row. Default "Total". */
   readonly total?: string;
   /** A donut's share column's header. Default "Share". */
   readonly share?: string;
@@ -119,6 +138,11 @@ export interface TableColumn<D> {
   readonly field: Accessor<D, unknown>;
   /** Default: numbers in the chart's `format`, anything else as text, and nothing for null or undefined. */
   readonly format?: (value: unknown) => string;
+  /**
+   * Where it goes. Default "category": just after the category, before the values. "values": last,
+   * after every column of the chart's own (the series, a total, a share), as a Difference column is.
+   */
+  readonly after?: "category" | "values";
 }
 
 /** What `markLabel` is given beside the row: the mark as it's heading, in the chart's terms. */
@@ -161,8 +185,6 @@ export interface BarChartOptions<D> extends ChartOptions<D> {
   readonly sort?: "value" | "key" | "none" | ((a: D, b: D) => number);
   /** "horizontal": bars, categories along y. "vertical": columns, categories along x. */
   readonly orientation?: "horizontal" | "vertical";
-  /** A swatch and name per series, above the chart, when it shows more than one series. Default true. */
-  readonly legend?: boolean;
 }
 
 /** What a donut's `markLabel` is given beside the row: the slice as it's heading, as a bar's `MarkSummary` says it, and its share. */
@@ -187,8 +209,6 @@ export interface DonutChartOptions<D> extends Omit<ChartOptions<D>, "colors" | "
    * aria-hidden, and its text is added to the chart's description.
    */
   readonly center?: false | ((total: number, format: (value: number) => string) => string);
-  /** A swatch and name per category, above the chart, in the slices' order. Default true. */
-  readonly legend?: boolean;
   /** Palette slots (1–8) by slice: its key, which is its category unless `key` is given. Pinned or shared. */
   readonly colors?: ColorAssignment | Readonly<Record<string, number>>;
   /**

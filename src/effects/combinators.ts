@@ -5,9 +5,11 @@ import type { AnyMarkEffect, Combined, DataEffect, EffectContext, GeometryEffect
 import { describeValue, isMarkEffect } from "../core/registry";
 
 /**
- * Runs the parts one after another. An abort stops the chain, and `end()` draws every part's end
- * state in order. A part with nothing to do (a travel along a missing segment) finishes at once, so
- * one sequence tells the whole story whatever the chart shows.
+ * Runs the parts one after another, each on the geometry and data as they are when it starts, since
+ * the mark may move while an earlier part runs (a transition, a line being revealed). An abort stops
+ * the chain, and `end()` draws every part's end state in order. A part with nothing to do (a travel
+ * along a missing segment) finishes at once, so one sequence tells the whole story whatever the chart
+ * shows.
  */
 export function sequence<E extends readonly AnyMarkEffect[]>(...effects: E): Combined<E> {
   const parts = check("sequence", effects);
@@ -92,18 +94,15 @@ export function stagger<E extends AnyMarkEffect>(effect: E, options: StaggerOpti
    * Waits this mark's turn. The geometry and data may move meanwhile (marks growing in on enter), so
    * it resolves with the latest of each; undefined if the run was aborted while it waited.
    */
-  const wait = async <M>(mark: MarkGeometry, data: M, ctx: EffectContext): Promise<{ mark: MarkGeometry; data: M } | undefined> => {
+  const wait = async <M>(mark: MarkGeometry, data: M, ctx: EffectContext): Promise<Latest<M> | undefined> => {
     if (ctx.signal.aborted) return undefined;
     const { index, count } = ctx.batch;
     const step = count > 1 ? Math.min(delay, STAGGER_SPREAD / (count - 1)) : 0;
     const base = index > 0 ? index * step : 0;
     if (!(base > 0)) return { mark, data };
-    let latest = { mark, data };
-    ctx.onChange((next, nextData) => {
-      latest = { mark: next, data: (nextData as M | undefined) ?? latest.data };
-    });
+    const now = follow(mark, data, ctx);
     await ctx.tween({ duration: base, timing: "stagger", update: () => {} }).finished;
-    return ctx.signal.aborted ? undefined : latest;
+    return ctx.signal.aborted ? undefined : now();
   };
 
   if (part!.kind === "data") {
@@ -133,12 +132,33 @@ export function stagger<E extends AnyMarkEffect>(effect: E, options: StaggerOpti
   return staggered as Filtered<E>;
 }
 
+/** A mark's geometry and data as they are now. */
+interface Latest<M> {
+  readonly mark: MarkGeometry;
+  readonly data: M;
+}
+
+/** The geometry and data as they are now: those given, until onChange brings newer ones. */
+function follow<M>(mark: MarkGeometry, data: M, ctx: EffectContext): () => Latest<M> {
+  let latest: Latest<M> = { mark, data };
+  ctx.onChange((next, nextData) => {
+    latest = { mark: next, data: (nextData as M | undefined) ?? latest.data };
+  });
+  return () => latest;
+}
+
 type Start = (part: AnyMarkEffect) => Promise<void>;
 
 /** Builds the combination's effect object, of the kind its parts make it. */
 function combine<E extends readonly AnyMarkEffect[]>(parts: readonly AnyMarkEffect[], play: (start: Start, ctx: EffectContext) => Promise<void>): Combined<E> {
-  const starter = (mark: MarkGeometry, data: MarkData<unknown> | undefined, ctx: EffectContext): Start => (part) =>
-    part.kind === "data" ? part.run(mark, data!, ctx) : part.run(mark, ctx);
+  // Each part starts on the latest geometry and data, so a sequence's later parts don't start where the mark was.
+  const starter = (mark: MarkGeometry, data: MarkData<unknown> | undefined, ctx: EffectContext): Start => {
+    const now = follow(mark, data, ctx);
+    return (part) => {
+      const { mark: latest, data: values } = now();
+      return part.kind === "data" ? part.run(latest, values!, ctx) : part.run(latest, ctx);
+    };
+  };
   const end = (mark: MarkGeometry, data: MarkData<unknown> | undefined, ctx: EffectContext): void => {
     for (const part of parts) {
       if (part.kind === "data") part.end(mark, data!, ctx);

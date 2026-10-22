@@ -7,7 +7,7 @@
  * (describe.bar, .arc, .line, .point, matrix, offset), the preset and icon registries
  * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
  * options, accessors, colorAssignment), the donut chart's options, the icons (defineIcon, iconFromSvg, icons), the first
- * effects (travel with its gaits, flash, wiggle, pulse, sequence, parallel, only, stagger), the
+ * effects (travel with its gaits, flash, wiggle, pulse, threshold, sequence, parallel, only, stagger), the
  * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch and the adapter's
  * types (MarkSource, Attachment, ExpressiveOptions). The conformance suite is ./testing.ts.
  * Everything still declared here is planned. Lines marked NEW were
@@ -21,9 +21,7 @@ import type {
   BarChartOptions as BuiltBarChartOptions,
   Chart as BuiltChart,
   ChartOptions as BuiltChartOptions,
-  Color,
   ColorAssignment,
-  DataEffect,
   describe as builders,
   DonutChartOptions,
   Easing,
@@ -53,12 +51,7 @@ import type {
 // units plus its rolling radius (instead of its size), so a gait looks the same at any size. flash
 // takes a width and opacity too, pulse a width; stagger's delay is optional (default 50 ms, the
 // spread capped at 500 ms), and it returns an effect of the same kind rather than the same type.
-/** Colours the parts of the walk where values are below the reference (default) or, with when: "above", above it. */
-export declare function threshold(options: {
-  readonly compareTo: string | number;
-  readonly when?: "below" | "above";
-  readonly color?: Color;
-}): DataEffect;
+// threshold (with ThresholdOptions) is built too, as sketched (M4 decision 11).
 export declare function morph(options?: { readonly points?: number }): TransitionEffect;
 
 // NEW: helpers for effect authors. Built in M3 (src/effects/define.ts) and public, with

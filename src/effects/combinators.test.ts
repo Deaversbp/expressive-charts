@@ -93,6 +93,28 @@ describe("sequence", () => {
     expect(elapsed).toBe(150);
   });
 
+  it("starts each part on the geometry and data as they are when it starts", async () => {
+    const seen: { width: number; revenue: number }[] = [];
+    const probe: DataEffect<Region> = {
+      kind: "data",
+      run: async (m, d) => void seen.push({ width: m.bounds.width, revenue: d.datum.revenue }),
+      end: () => {},
+      clear: () => {}
+    };
+    const ctx = testContext();
+    const running = sequence(probe, step("a", []), probe).run(mark, data, ctx);
+    ctx.clock.advance(50);
+    // The bar grows while "a" runs; a change with no data keeps the latest data given.
+    const grown = build.bar({ key: "North", series: "revenue", x: 0, y: 0, width: 160, height: 20, baseline: "left" });
+    ctx.change(grown, { ...data, datum: { region: "North", revenue: 6 } });
+    ctx.change(grown);
+    await play(ctx.clock, running);
+    expect(seen).toEqual([
+      { width: 100, revenue: 4 },
+      { width: 160, revenue: 6 }
+    ]);
+  });
+
   it("stops the chain on abort", async () => {
     const log: string[] = [];
     const ctx = testContext();

@@ -8,8 +8,9 @@ Effect plugins and combinators. Effects read only `MarkGeometry` (plus `MarkData
 | `flash.ts` | `flash({ width, opacity, color })`: one halo blink along the outline, for `on: { update: "flash" }` |
 | `wiggle.ts` | `wiggle({ swing })`: a short damped rotation about the pivot, the far end moving at most 3 px, for `on: { hover: "wiggle" }` |
 | `pulse.ts` | `pulse({ times, width, color })`: halos that widen and fade, 1 to 6 times and always within 5 s |
+| `threshold.ts` | `threshold({ compareTo, when, color })`: a data effect that colours the parts of the walk below (or above) a constant or a related series, at once, following every change |
 | `gaits.ts` | `gaits.roll()`, `gaits.step()`, `gaits.slide()`: how an icon moves while it travels |
 | `combinators.ts` | `sequence`, `parallel`, `only`, and `stagger` (never a default) |
 | `define.ts` | `defineEffect` and `defineDataEffect`: effects written outside the library, from their `run` and `end` ([guide](../../docs/effects-guide.md)) |
 
-Planned: `threshold` and `morph`.
+Planned: `morph`.

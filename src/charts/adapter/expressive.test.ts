@@ -1,4 +1,5 @@
 import {
+  createClock,
   createMotion,
   describe as build,
   manualClock,
@@ -12,6 +13,7 @@ import {
   type Sample
 } from "../../core";
 import { createRegistry, type PresetFactory } from "../../core/registry";
+import { measurePath } from "../../core/testing";
 import type { ChartEnv } from "../bar";
 import { expressive } from "./expressive";
 import type { Attachment, ExpressiveOptions, MarkSource } from "./types";
@@ -224,10 +226,14 @@ function dataRecorder(needs?: string[]) {
   return { effect, seen, last };
 }
 
-/** The host's colour mixed toward black, as hover darkening and full emphasis write it (jsdom may write a hex as rgb()). */
-const darker = (hex: string, rgb: string): RegExp => new RegExp(`^color-mix\\(in srgb, (${hex}|rgb\\(${rgb}\\)) 75%, black\\)$`);
-const BLUE = darker("#2a78d6", "42, 120, 214");
-const ORANGE = darker("#eb6834", "235, 104, 52");
+/**
+ * The host's strong colour, as the hover colour under dim and full emphasis write it: a quarter of the way to
+ * the theme's text colour, as our charts' -strong colours step, so darker in light and lighter in dark
+ * (jsdom may write a hex as rgb()).
+ */
+const strongOf = (hex: string, rgb: string): RegExp => new RegExp(`^color-mix\\(in oklab, (${hex}|rgb\\(${rgb}\\)), var\\(--ec-text, #0b0b0b\\) 25%\\)$`);
+const BLUE = strongOf("#2a78d6", "42, 120, 214");
+const ORANGE = strongOf("#eb6834", "235, 104, 52");
 
 afterEach(() => {
   document.body.textContent = "";
@@ -454,6 +460,17 @@ describe("expressive: coordinates", () => {
     expect(fx.marks()[0]!.bounds).toEqual({ x: 0, y: 7, width: 200, height: 20 });
     expect(overlayOf(host.svg).getAttribute("transform")).toBe("matrix(2 0 0 2 120 20)");
   });
+
+  it("reads a rect through its parent's CTM and its transform attribute, not back through an effect's CSS transform", () => {
+    const host = d3Stack([players[0]!]);
+    const ctm = (e: number) => () => ({ a: 2, b: 0, c: 0, d: 2, e, f: 20 });
+    Object.assign(host.plot, { getScreenCTM: ctm(120) });
+    for (const group of host.groups) Object.assign(group, { getScreenCTM: ctm(120) });
+    // What a browser reports while an effect's CSS transform has the rects 5 px to the right.
+    for (const rect of host.rects()) Object.assign(rect, { getScreenCTM: ctm(130) });
+    const { fx } = setup(host.selection(), stacked);
+    expect(fx.marks()[0]!.bounds).toEqual({ x: 0, y: 7, width: 200, height: 20 });
+  });
 });
 
 describe("expressive: hover", () => {
@@ -549,8 +566,8 @@ describe("expressive: hover", () => {
     expect(assists.style.getPropertyValue("transform")).toBe("matrix(1, 0, 0, 1, 5, 0)");
     expect(assists.style.getPropertyValue("transform-origin")).toBe("0 0");
     expect(assists.style.getPropertyValue("opacity")).toBe("0.5");
-    // The host's colour, mixed toward black (jsdom writes the hex as rgb()).
-    expect(assists.style.getPropertyValue("fill")).toMatch(/^color-mix\(in srgb, (#eb6834|rgb\(235, 104, 52\)) 75%, black\)$/);
+    // The host's strong colour, toward the text colour (jsdom writes the hex as rgb()).
+    expect(assists.style.getPropertyValue("fill")).toMatch(ORANGE);
     expect(assists.getAttribute("transform")).toBeNull();
     const halo = overlayOf(host.svg).querySelector(".ec-halos > .ec-halo")!;
     expect(halo.querySelectorAll(":scope > path")).toHaveLength(2);
@@ -935,7 +952,7 @@ describe("expressive: stroked marks", () => {
     const { fx } = setup<Trace>(host.paths, { ...traced, on: { hover: glow } });
     const [goals] = host.paths;
     pointer("pointerover", goals!);
-    // Emphasis darkens the stroke and leaves the fill alone.
+    // Emphasis colours the stroke and leaves the fill alone.
     expect(goals!.style.getPropertyValue("stroke")).toMatch(BLUE);
     expect(goals!.style.getPropertyValue("fill")).toBe("");
     // Runs draw in the line's colour.
@@ -982,14 +999,14 @@ describe("expressive: stroked marks", () => {
   });
 });
 
-describe("expressive: hover darkening", () => {
-  it("under dim, darkens the hovered mark as our charts do: each segment's fill on a bar", () => {
+describe("expressive: hover colour", () => {
+  it("under dim, gives the hovered mark its strong colour, as our charts do: each segment's fill on a bar", () => {
     const host = d3Stack();
     setup(host.selection(), { ...stacked, dim: true });
     pointer("pointerover", host.rect("Okafor", "goals"));
     expect(host.rect("Okafor", "goals").style.getPropertyValue("fill")).toMatch(BLUE);
     expect(host.rect("Okafor", "assists").style.getPropertyValue("fill")).toMatch(ORANGE);
-    // The others dim and keep their colours; the darkening fades in with the stylesheet's transition.
+    // The others dim and keep their colours; the strong colour fades in with the stylesheet's transition.
     expect(host.rect("Tanaka", "goals").style.getPropertyValue("fill")).toBe("");
     expect(host.rect("Okafor", "goals").style.getPropertyValue("transition")).toBe("");
     expect(document.querySelector("style[data-expressive-charts]")!.textContent).toContain(
@@ -1003,7 +1020,7 @@ describe("expressive: hover darkening", () => {
     expect(host.rects().map((rect) => rect.style.getPropertyValue("fill"))).toEqual(host.rects().map(() => ""));
   });
 
-  it("darkens a line's stroke, for keyboard focus too, and gives way to an effect's emphasis", () => {
+  it("gives a line's stroke its strong colour, for keyboard focus too, and gives way to an effect's emphasis", () => {
     const host = d3Lines();
     const soften: GeometryEffect = { kind: "geometry", run: async (_mark, ctx) => ctx.mark.set({ emphasis: 0 }), end: () => {}, clear: () => {} };
     const { fx } = setup<Trace>(host.paths, { ...traced, dim: true, keyboard: true });
@@ -1562,6 +1579,376 @@ describe("expressive: markLabel", () => {
     host.svg.setAttribute("role", "group");
     setup(host.selection(), { ...stacked, keyboard: true, markLabel: label });
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("expressive: watch", () => {
+  /** The MutationObserver hands over what it noted in a microtask: this waits for it. */
+  const delivered = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+  /** A decoration that draws the mark's walk in its layer and redraws it on every change. */
+  function tracer() {
+    const log: string[] = [];
+    const effect: GeometryEffect = {
+      kind: "geometry",
+      run: async (mark, ctx) => {
+        const path = ctx.layer.path(mark.slice(0, 1), { stroke: "mark", width: 1 });
+        ctx.onChange((moved) => {
+          log.push(`change ${moved.key}`);
+          path.update(moved.slice(0, 1), { stroke: "mark", width: 1 });
+        });
+      },
+      end: () => {},
+      clear: () => {}
+    };
+    return { effect, log };
+  }
+
+  const line = (d: Trace) => build.line({ key: d.name, series: d.name, points: vertices(d), width: 2 });
+
+  it("hands the host's changes on once a frame, on the chart's clock", async () => {
+    const host = d3Lines();
+    const decoration = tracer();
+    const { fx, clock } = setup<Trace>(host.paths, { ...traced, watch: true, on: { decorate: decoration.effect } });
+    const [goals, xg] = host.paths as [SVGPathElement, SVGPathElement];
+
+    // Between two frames, the host draws the goals line three times and xG once.
+    host.draw(season.slice(0, 2), [goals]);
+    host.draw(season.slice(0, 3), [goals]);
+    host.draw(season.slice(0, 4), [goals]);
+    host.draw(season.slice(0, 3), [xg]);
+    await delivered();
+    expect(decoration.log).toEqual([]);
+    clock.advance(16);
+    expect(decoration.log).toEqual(["change goals", "change xg"]);
+    expect(fx.marks().map((m) => m.outline.d)).toEqual([
+      line({ name: "goals", rows: season.slice(0, 4) }).outline.d,
+      line({ name: "xg", rows: season.slice(0, 3) }).outline.d
+    ]);
+    // The decoration redrew on the new walk.
+    expect(overlayOf(host.svg).querySelector(".ec-runs path")!.getAttribute("d")).toBe(fx.marks()[0]!.slice(0, 1));
+
+    // Nothing more until the host changes something again; then the next frame follows it.
+    clock.advance(16);
+    expect(clock.idle).toBe(true);
+    host.draw(season, [goals]);
+    await delivered();
+    expect(clock.idle).toBe(false);
+    clock.advance(16);
+    expect(decoration.log).toEqual(["change goals", "change xg", "change goals"]);
+  });
+
+  it("on a browser's frame loop, follows each frame a host draws in its own frame callback in that frame", async () => {
+    // As in a browser: callbacks asked for during a frame run in the next one, in the order asked,
+    // each followed by its microtasks (the MutationObserver's among them).
+    let next = 1;
+    let asked = new Map<number, FrameRequestCallback>();
+    let running = new Map<number, FrameRequestCallback>();
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => (asked.set(next, callback), next++));
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => asked.delete(id) || running.delete(id));
+    let time = 0;
+    const frame = async (): Promise<void> => {
+      time += 16;
+      running = asked;
+      asked = new Map();
+      for (const [id, callback] of running) {
+        if (!running.has(id)) continue;
+        callback(time);
+        await delivered();
+      }
+    };
+
+    const host = d3Stack([players[0]!]);
+    const decoration = tracer();
+    setup(host.selection(), { ...stacked, watch: true, on: { decorate: decoration.effect } }, { clock: createClock() });
+    // A D3 timer's frame: it writes the transition's attributes, then asks for its next frame.
+    let width = 160;
+    const draw = (): void => {
+      width += 10;
+      host.rect("Okafor", "goals").setAttribute("width", String(width));
+      host.rect("Okafor", "assists").setAttribute("x", String(width));
+      if (width < 260) requestAnimationFrame(draw);
+    };
+    requestAnimationFrame(draw);
+
+    // What each frame paints: the bar's length, and the length of the walk the decoration drew.
+    const painted: [number, number][] = [];
+    for (let i = 0; i < 12; i++) {
+      await frame();
+      const drawn = measurePath(overlayOf(host.svg).querySelector(".ec-runs path")!.getAttribute("d")!).end!.x;
+      painted.push([width + 40, drawn]);
+    }
+    // The first frame is heard after it's drawn; from then on, each frame is followed in the frame
+    // it's drawn in. Once the host stops, a quiet frame lets the clock go.
+    expect(painted[0]).toEqual([210, 200]);
+    for (const [bar, walk] of painted.slice(1)) expect(walk).toBe(bar);
+    expect(asked.size).toBe(0);
+  });
+
+  it("reads only the marks that changed, fires no events and doesn't interrupt a hover", async () => {
+    const host = d3Lines();
+    const [goals, xg] = host.paths as [SVGPathElement, SVGPathElement];
+    const reads: string[] = [];
+    const story = recorder();
+    const { fx, clock } = setup<Trace>(host.paths, {
+      key: traced.key,
+      geometry: (element, d, key) => {
+        reads.push(`geometry ${key}`);
+        return traced.geometry!(element, d, key);
+      },
+      samples: (d, mark) => {
+        reads.push(`samples ${mark.key}`);
+        return traced.samples!(d, mark);
+      },
+      value: (d) => {
+        reads.push(`value ${d.name}`);
+        return d.rows.length;
+      },
+      markLabel: (d) => {
+        reads.push(`label ${d.name}`);
+        return d.name;
+      },
+      watch: true,
+      on: { hover: story.effect }
+    });
+    const events: string[] = [];
+    for (const type of ["enter", "update", "exit", "hover", "leave"] as const) fx.on(type, (e) => events.push(`${type} ${e.mark.key}`));
+    pointer("pointerover", xg);
+    expect(events).toEqual(["hover xg"]);
+    reads.length = 0;
+
+    host.draw(season.slice(0, 3), [goals]);
+    await delivered();
+    clock.advance(16);
+    // Its row, geometry and samples: values and names are refresh()'s.
+    expect(reads).toEqual(["geometry goals", "samples goals"]);
+    expect(events).toEqual(["hover xg"]);
+    // The hover on xG goes on, and follows xG when it moves.
+    host.draw(season.slice(0, 3), [xg]);
+    await delivered();
+    clock.advance(16);
+    expect(story.log).toEqual(["run xg", "change xg"]);
+    expect(events).toEqual(["hover xg"]);
+  });
+
+  it("gives data effects the rows the host binds each frame, and tells marks that read a needed series", async () => {
+    const host = d3Lines();
+    const [goals, xg] = host.paths as [SVGPathElement, SVGPathElement];
+    const needsXg = dataRecorder(["xg"]);
+    const { clock } = setup<Trace>(host.paths, { ...traced, watch: true, on: { decorate: needsXg.effect } });
+    needsXg.seen.length = 0;
+
+    // xG alone is redrawn: goals reads it through related("xg"), so it follows too.
+    host.draw(season.slice(0, 3), [xg]);
+    await delivered();
+    clock.advance(16);
+    expect(needsXg.seen.map((entry) => entry.key)).toEqual(["xg", "goals"]);
+    expect(needsXg.last("xg")!.samples.map((s) => s.at)).toEqual([1, 2, 3]);
+    expect(needsXg.last("goals")!.related("xg")!.samples.map((s) => s.at)).toEqual([1, 2, 3]);
+
+    // Nothing needs the goals line, so it moves alone, with its new row.
+    needsXg.seen.length = 0;
+    host.draw(season.slice(0, 2), [goals]);
+    await delivered();
+    clock.advance(16);
+    expect(needsXg.seen.map((entry) => entry.key)).toEqual(["goals"]);
+    expect((needsXg.last("goals")!.datum as Trace).rows).toEqual(season.slice(0, 2));
+  });
+
+  it("moves the overlay with a common ancestor the host animates, and reads nothing again", async () => {
+    const host = d3Lines();
+    const decoration = tracer();
+    const { fx, clock } = setup<Trace>(host.paths, { ...traced, watch: true, keyboard: true, on: { decorate: decoration.effect } });
+    fx.focus("goals");
+    const overlay = overlayOf(host.svg);
+    const ring = overlay.querySelector(".ec-focus-ring")!;
+    const before = { marks: fx.marks(), runs: overlay.querySelector(".ec-runs")!.innerHTML, ring: ring.getAttribute("d") };
+    expect(ring.getAttribute("visibility")).not.toBe("hidden");
+    expect(before.ring).toBeTruthy();
+    expect(overlay.getAttribute("transform")).toBe("matrix(1 0 0 1 30 20)");
+
+    // The host slides its plot group right over two frames.
+    for (const x of [40, 50]) {
+      host.plot.setAttribute("transform", `translate(${x},20)`);
+      await delivered();
+      clock.advance(16);
+      expect(overlay.getAttribute("transform")).toBe(`matrix(1 0 0 1 ${x} 20)`);
+    }
+    // The marks' geometry is in the plot's coordinates, so it didn't change: the decorations and the
+    // ring moved with the overlay.
+    expect(fx.marks()).toEqual(before.marks);
+    expect(decoration.log).toEqual([]);
+    expect(overlay.querySelector(".ec-runs")!.innerHTML).toBe(before.runs);
+    expect(ring.getAttribute("d")).toBe(before.ring);
+  });
+
+  it("reads again every mark inside a group the host animates below the common ancestor", async () => {
+    const host = d3Stack();
+    const decoration = tracer();
+    const { fx, clock } = setup(host.selection(), { ...stacked, watch: true, on: { decorate: decoration.effect } });
+    // The host slides the assists group 5 px right, as a transition's last frame would leave it.
+    host.groups[1]!.setAttribute("transform", "translate(5,0)");
+    await delivered();
+    clock.advance(16);
+    expect(decoration.log).toEqual(["change Okafor", "change Tanaka", "change Lindqvist"]);
+    const okafor = fx.marks()[0]!;
+    expect(okafor.segments!.map((s) => s.end.x)).toEqual([160, 205]);
+    // The decoration redrew on the new walk.
+    expect(overlayOf(host.svg).querySelector(".ec-runs path")!.getAttribute("d")).toBe(okafor.slice(0, 1));
+  });
+
+  it("hears style on an ancestor too, and reads only the marks inside it", async () => {
+    const host = d3Lines();
+    const [goals, xg] = host.paths as [SVGPathElement, SVGPathElement];
+    // xG drawn in a group of its own.
+    const group = el("g", { class: "xg" }, host.plot);
+    group.appendChild(xg);
+    const decoration = tracer();
+    const { clock } = setup<Trace>([goals, xg], { ...traced, watch: true, on: { decorate: decoration.effect } });
+    group.style.setProperty("opacity", "0.5");
+    await delivered();
+    clock.advance(16);
+    expect(decoration.log).toEqual(["change xg"]);
+  });
+
+  it("puts the marks in visual order again as the host moves them", async () => {
+    const host = d3Stack();
+    const { fx, clock } = setup(host.selection(), { ...stacked, watch: true, keyboard: true });
+    // A sort's last frame: Tanaka's row and Okafor's swap places.
+    for (const series of SERIES) {
+      host.rect("Okafor", series).setAttribute("y", "41");
+      host.rect("Tanaka", series).setAttribute("y", "7");
+    }
+    await delivered();
+    clock.advance(16);
+    expect(fx.marks().map((m) => m.key)).toEqual(["Tanaka", "Okafor", "Lindqvist"]);
+    fx.focus("Tanaka");
+    key(host.rect("Tanaka", "goals"), "ArrowDown");
+    expect(document.activeElement).toBe(host.rect("Okafor", "goals"));
+  });
+
+  it("finds the shared baseline again, so a bar that ends a transition on the other side of it grows the other way", async () => {
+    // Three bars from a zero line at x = 100; the first is on its way from +60 to -40.
+    const svg = el("svg", { width: 300, height: 120 }, document.body);
+    const plot = el("g", { transform: "translate(20,10)" }, svg);
+    const bars = [60, 30, 40].map((width, i) => Object.assign(el("rect", { x: 100, y: i * 30, width, height: 20 }, plot), { __data__: { name: `p${i}` } }));
+    const decoration = tracer();
+    const { fx, clock } = setup<{ name: string }>(bars, { key: (d) => d.name, watch: true, on: { decorate: decoration.effect } });
+    const first = () => fx.marks().find((mark) => mark.key === "p0")!;
+    const frame = async (x: number, width: number): Promise<void> => {
+      bars[0]!.setAttribute("x", String(x));
+      bars[0]!.setAttribute("width", String(width));
+      await delivered();
+      clock.advance(16);
+    };
+    // Mid-transition no edge is on the line, so the bar keeps growing from the left.
+    await frame(80, 50);
+    expect([first().start.x, first().end.x]).toEqual([80, 130]);
+    // At the end its right edge is on the line: it grows from there, leftwards, as a full read finds.
+    await frame(60, 40);
+    expect([first().start.x, first().end.x]).toEqual([100, 60]);
+    expect(fx.marks().slice(1).map((mark) => mark.start.x)).toEqual([100, 100]);
+    expect(overlayOf(svg).querySelector('.ec-run[data-key="p0"] path')!.getAttribute("d")).toBe(first().slice(0, 1));
+    fx.refresh();
+    expect([first().start.x, first().end.x]).toEqual([100, 60]);
+  });
+
+  it("leaves events to refresh(), called when the host joins new data, and keeps values and names until then", async () => {
+    const host = d3Stack();
+    const story = recorder();
+    const label = vi.fn((d: StackPoint) => `${d.data.name}: ${d.data.goals} goals`);
+    const value = (d: StackPoint): number => d[1] - d[0];
+    const { fx, clock } = setup(host.selection(), { ...stacked, value, markLabel: label, watch: true, on: { update: story.effect } });
+    const updates: string[] = [];
+    fx.on("update", (e) => updates.push(`${e.mark.key} from ${e.from.length}`));
+    label.mockClear();
+
+    // The host joins Okafor's 18 goals and calls refresh() before its transition starts...
+    const next = players.map((p) => (p.name === "Okafor" ? { ...p, goals: 18 } : p));
+    for (const series of SERIES) {
+      for (const row of next) {
+        const rect = host.rect(row.name, series);
+        const x0 = series === "goals" ? 0 : row.goals;
+        Object.assign(rect, { __data__: Object.assign([x0, x0 + row[series]], { data: row }) });
+      }
+    }
+    fx.refresh();
+    expect(updates).toEqual(["Okafor from 200"]);
+    expect(label).toHaveBeenCalledTimes(3);
+    expect(host.rect("Okafor", "goals").getAttribute("aria-label")).toBe("Okafor: 18 goals");
+
+    // ...then draws its frames, which watch follows without an event or a name.
+    for (const width of [168, 176, 180]) {
+      host.rect("Okafor", "goals").setAttribute("width", String(width));
+      host.rect("Okafor", "assists").setAttribute("x", String(width));
+      await delivered();
+      clock.advance(16);
+    }
+    expect(fx.marks()[0]!.length).toBe(220);
+    expect(updates).toEqual(["Okafor from 200"]);
+    expect(label).toHaveBeenCalledTimes(3);
+    // refresh() follows the update with a change, as it always does; then one change a frame.
+    expect(story.log).toEqual(["run Okafor from 200", "change Okafor", "change Okafor", "change Okafor", "change Okafor"]);
+    // With the values unchanged since that refresh(), a refresh() at the end is no update.
+    fx.refresh();
+    expect(updates).toEqual(["Okafor from 200"]);
+  });
+
+  it("reports a mark it can't read in a frame and changes nothing", async () => {
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    const host = d3Stack();
+    const decoration = tracer();
+    const { fx, clock } = setup(host.selection(), { ...stacked, watch: true, on: { decorate: decoration.effect } });
+    const before = fx.marks();
+    host.groups[1]!.setAttribute("transform", "rotate(30)");
+    await delivered();
+    clock.advance(16);
+    expect(reportError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/rotated or skewed/) }));
+    expect(fx.marks()).toEqual(before);
+    expect(decoration.log).toEqual([]);
+  });
+
+  it("watches what refresh() reads, and drops changes it has already read", async () => {
+    const host = d3Stack();
+    const decoration = tracer();
+    const { fx, clock } = setup(host.selection(), { ...stacked, watch: true, on: { decorate: decoration.effect } });
+    host.redraw(players, 8);
+    await delivered();
+    expect(clock.idle).toBe(false);
+    fx.refresh();
+    expect(decoration.log).toEqual(["change Okafor", "change Tanaka", "change Lindqvist"]);
+    expect(clock.idle).toBe(true);
+
+    // The host replaces Tanaka's rects (as Vega does): refresh() watches the new ones, not the old.
+    const old = host.rect("Tanaka", "goals");
+    for (const series of SERIES) replaceRect(host.rect("Tanaka", series));
+    fx.refresh(host.selection());
+    decoration.log.length = 0;
+    old.setAttribute("width", "10");
+    await delivered();
+    expect(clock.idle).toBe(true);
+    host.rect("Tanaka", "goals").setAttribute("width", "40");
+    await delivered();
+    clock.advance(16);
+    expect(decoration.log).toEqual(["change Tanaka"]);
+  });
+
+  it("destroy() disconnects it", async () => {
+    const host = d3Lines();
+    const decoration = tracer();
+    const { fx, clock } = setup<Trace>(host.paths, { ...traced, watch: true, on: { decorate: decoration.effect } });
+    // A frame is waiting when it's destroyed: it's cancelled.
+    host.draw(season.slice(0, 3));
+    await delivered();
+    expect(clock.idle).toBe(false);
+    fx.destroy();
+    expect(clock.idle).toBe(true);
+    host.draw(season.slice(0, 2));
+    host.plot.setAttribute("transform", "translate(0,0)");
+    await delivered();
+    expect(clock.idle).toBe(true);
+    expect(decoration.log).toEqual([]);
   });
 });
 

@@ -6,11 +6,11 @@ import type { MarkHandle, MarkStyle, Matrix } from "../../core";
 import { matrix } from "../../core";
 import { mergeFields } from "../../core/merge";
 import { maskedHalo, type HaloPart } from "../render/outside";
-import type { SeriesColors } from "../render/theme";
+import { cssColor, type SeriesColors } from "../render/theme";
 import type { HostEdits } from "./edits";
 import { ownTransform } from "./space";
 
-/** The host's colours for an element, and the property they're from, which emphasis and darkening write. */
+/** The host's colours for an element, and the property they're from, which emphasis and the hover colour write. */
 export interface HostColors extends SeriesColors {
   /** "stroke" when the fill is none, as on a line. */
   readonly paint: "fill" | "stroke";
@@ -22,7 +22,7 @@ export interface HostPart {
   /** From the element's parent's user space into the marks' common ancestor's, and back. */
   readonly parent: Matrix;
   readonly parentInverse: Matrix | undefined;
-  /** The host's colour for the element, which `emphasis`, hover darkening and the "mark" token start from. */
+  /** The host's colour for the element, which `emphasis`, the hover colour and the "mark" token start from. */
   readonly colors: HostColors | undefined;
   /**
    * The part's outline in the common ancestor's space, for the halo, with an open outline's stroke
@@ -35,7 +35,7 @@ export interface HostMarkHandle extends MarkHandle {
   readonly style: MarkStyle;
   /** Applies the current style again, after a refresh (new elements or outlines). */
   repaint(): void;
-  /** Darkens the mark while it's hovered, under `dim`, as our charts do. */
+  /** Gives the mark its strong colour while it's hovered, under `dim`, as our charts do. */
   hot(on: boolean): void;
 }
 
@@ -43,7 +43,7 @@ export interface HostMarkHandle extends MarkHandle {
  * - `transform` is in the common ancestor's space. Each element gets an inline CSS transform that
  *   moves it by that much, composed with its own transform attribute, with origin 0 0 in its user space.
  * - `opacity` and `emphasis` are inline styles; emphasis mixes the host's colour (its fill, or its
- *   stroke on a line) toward a darker one. A hot mark takes the darker one, unless an effect sets emphasis.
+ *   stroke on a line) toward its strong colour. A hot mark takes the strong one, unless an effect sets emphasis.
  * - `halo` strokes each visible part's outline in the overlay, masked to outside the mark, so it
  *   shows only where it would behind the mark.
  */
@@ -101,14 +101,21 @@ export function hostMarkHandle(parts: () => readonly HostPart[], edits: HostEdit
  * the computed value where there's styling. jsdom computes no presentation attributes (every fill is
  * black and every stroke none), so a computed value that's the property's initial one gives way to
  * the nearest value declared on the element or above it. A gradient or pattern gives no colours.
+ *
+ * The strong colour is our charts' kind of -strong: the colour stepped toward the text colour, in
+ * OKLab so the hue stays, so a hovered mark gets darker in the light theme and lighter in the dark.
+ * Our palette's -strong colours sit 20% of the way in light and 29% in dark; a host's colour goes 25%.
  */
 export function hostColors(element: Element, root: Element): HostColors | undefined {
   const fill = paintOf(element, root, "fill");
   const paint = fill === NONE ? "stroke" : "fill";
   const color = paint === "fill" ? fill : paintOf(element, root, "stroke");
   if (color === undefined || color === NONE) return undefined;
-  return { color, strong: `color-mix(in srgb, ${color} 75%, black)`, paint };
+  return { color, strong: `color-mix(in oklab, ${color}, ${cssColor("text")} ${STRONG})`, paint };
 }
+
+/** How far a host's colour steps toward the text colour for its strong colour. */
+const STRONG = "25%";
 
 const NONE = "none";
 

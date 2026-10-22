@@ -1,12 +1,13 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// five sources: bars from the reference barChart and from expressive() on bars drawn by other code,
-// the slices of the reference donutChart, the slices of a D3 pie through expressive(), and the lines
-// and points of the reference lineChart. Each source also draws its marks at another size, as a resize
-// would, for the check that effects follow onChange. This test brings charts and effects together, so
-// it lives beside src/index.ts, the only module allowed to.
+// six sources: bars from the reference barChart and from expressive() on bars drawn by other code,
+// the slices of the reference donutChart, the slices of a D3 pie through expressive(), the lines and
+// points of the reference lineChart, and the lines of a D3 line chart through expressive(), with
+// samples from samplesAlong. Each source also draws its marks at another size, as a resize would, for
+// the check that effects follow onChange. This test brings charts and effects together, so it lives
+// beside src/index.ts, the only module allowed to.
 
 import { select } from "d3-selection";
-import { arc, pie, type PieArcDatum } from "d3-shape";
+import { arc, line, pie, type PieArcDatum } from "d3-shape";
 import {
   barChart,
   describe as build,
@@ -16,6 +17,7 @@ import {
   lineChart,
   parallel,
   pulse,
+  samplesAlong,
   sequence,
   stagger,
   threshold,
@@ -146,6 +148,39 @@ function lineSource(moved = false): { readonly marks: readonly MarkGeometry[]; r
 
 const lineMarks = (moved = false): readonly MarkGeometry[] => lineSource(moved).marks;
 
+/**
+ * A real D3 line on the same season: two d3.line() paths in a margin <g>, one per series, each
+ * described from the points that drew it, with samplesAlong samples, and the data a decoration gets.
+ * 80 px a week and 30 px a goal (64 and 24 when moved).
+ */
+function d3LineSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<string, MarkData> } {
+  const [across, up] = moved ? [64, 24] : [80, 30];
+  const x = (week: number): number => across * (week - 1);
+  const y = (value: number): number => 200 - up * value;
+  const plot = select(document.body).append("svg").attr("width", 520).attr("height", 240).append("g").attr("transform", "translate(40,20)");
+  const paths = plot
+    .selectAll<SVGPathElement, { series: "goals" | "xg"; rows: Week[] }>("path")
+    .data((["goals", "xg"] as const).map((series) => ({ series, rows: weeks })))
+    .join("path")
+    .attr("fill", "none")
+    .attr("stroke-width", 2)
+    .attr("d", (d) =>
+      line<Week>()
+        .x((w) => x(w.week))
+        .y((w) => y(w[d.series]))(d.rows)
+    );
+  const data = new Map<string, MarkData>();
+  const fx = expressive(paths, {
+    key: (d) => d.series,
+    geometry: (_el, d, key) => build.line({ key, series: d.series, points: d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]) })), width: 2 }),
+    samples: (d, mark) => samplesAlong(mark, d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]), value: w[d.series], at: w.week }))),
+    on: { decorate: { kind: "data", run: async (mark, markData) => void data.set(mark.key, markData), end: () => {}, clear: () => {} } }
+  });
+  return { marks: fx.marks(), data };
+}
+
+const d3LineMarks = (moved = false): readonly MarkGeometry[] => d3LineSource(moved).marks;
+
 const effects: Record<string, AnyMarkEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
@@ -165,7 +200,13 @@ const options: Record<string, CheckEffectOptions> = { "staggered flash, third of
 /** A source's marks, or with `true` the same marks moved. */
 type Source = (moved?: boolean) => readonly MarkGeometry[];
 const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars": adapterMarks };
-const sources: Record<string, Source> = { ...bars, donutChart: donutMarks, "D3 pie through expressive()": pieMarks, lineChart: lineMarks };
+const sources: Record<string, Source> = {
+  ...bars,
+  donutChart: donutMarks,
+  "D3 pie through expressive()": pieMarks,
+  lineChart: lineMarks,
+  "D3 line through expressive()": d3LineMarks
+};
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -221,6 +262,32 @@ describe("lines and points from lineChart", () => {
     // Not vacuously: goals are below xG up to week 2's crossing and again from week 4's.
     const ctx = testContext();
     threshold({ compareTo: "xg" }).end(marks[0]!, data.get(marks[0]!)!, ctx);
+    expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);
+  });
+});
+
+describe("lines from a D3 line through expressive()", () => {
+  it("finds a line for each series, in document order, in the margin group's coordinates", () => {
+    const { marks, data } = d3LineSource();
+    expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg"]);
+    for (const mark of marks) {
+      expect(mark.outline.closed).toBe(false);
+      expect(mark.start).toEqual({ x: 0, y: 200 - 30 * weeks[0]![mark.key as "goals" | "xg"] });
+      expect(mark.end.x).toBe(400);
+      expect(data.get(mark.key)!.samples.map((sample) => sample.at)).toEqual(weeks.map((w) => w.week));
+    }
+    expect(data.get("goals")!.related("xg")).toBe(data.get("xg"));
+  });
+
+  it("threshold below xG passes the conformance checks on both lines, with the adapter's samples", async () => {
+    const { marks, data } = d3LineSource();
+    const twins = d3LineSource(true);
+    const of = (mark: MarkGeometry) => (marks.includes(mark) ? data : twins.data).get(mark.key)!;
+    const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+    await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: of });
+    // Not vacuously: goals are below xG up to week 2's crossing and again from week 4's.
+    const ctx = testContext();
+    threshold({ compareTo: "xg" }).end(marks[0]!, data.get("goals")!, ctx);
     expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);
   });
 });

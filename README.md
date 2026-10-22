@@ -287,12 +287,14 @@ const fx = expressive(svg.selectAll("path.line"), {
   key: (d) => d.series,
   geometry: (_el, d, key) => describe.line({ key, series: d.series, points: points(d), width: 2 }),
   samples: (d, mark) => samplesAlong(mark, points(d)), // checked when read: t from 0 to 1, finite values
-  dim: true,                                           // the other line fades, and the hovered one's stroke darkens
+  dim: true,                                           // the other line fades, and the hovered one's stroke takes its strong colour
   on: { decorate: only("goals", threshold({ compareTo: "xg" })) } // red wherever goals are below xG
 });
 ```
 
-A data effect that `needs` a series the marks don't have throws when the attachment is made, or on the `refresh()` that loses it. With `dim: true`, the hovered mark darkens as on our charts: its fill, or its stroke when the fill is `none`, which is also the colour its halos and emphasis start from.
+To follow the host's own transitions frame by frame, pass `watch: true`. The adapter watches the marks' geometry attributes, and `transform` and `style` on the groups above them, and once a frame reads again only the marks that moved, so the red runs and a ball riding the goals line (`travel("soccer-ball", { ride: "on" })`) keep up with a D3 transition, or with a reveal the page draws itself, without firing events. Call `refresh()` when the host joins new data, before its transition starts: that's when `enter`, `update` and `exit` fire. A `geometry` callback should read the element, or a row the host updates each frame; one that reads the transition's target row sees only the end. It's opt-in, since its cost grows with the marks that move: measured in Chromium on a desktop, it adds about half a millisecond a frame to 20 bars in a D3 transition or to a two-line reveal, and 2.7 ms to 200 moving bars.
+
+A data effect that `needs` a series the marks don't have throws when the attachment is made, or on the `refresh()` that loses it. With `dim: true`, the hovered mark takes its strong colour, as on our charts: its fill, or its stroke when the fill is `none` (the colour its halos and emphasis start from), stepped toward the theme's text colour, so darker in light and lighter in dark.
 
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 

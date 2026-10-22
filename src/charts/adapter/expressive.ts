@@ -7,9 +7,12 @@
 // Geometry is in the marks' nearest common ancestor's coordinates. The overlay carries that
 // ancestor's transform but sits on the root, because some hosts (Vega) remove foreign children from
 // their own groups when they redraw. See docs/ideas/adapter-spike.md.
+//
+// With `watch`, the host's own transitions are followed frame by frame (./watch.ts): the marks that
+// changed are read again and the runner hears change(), as on our charts' frames, with no events.
 
-import type { MarkData, MarkGeometry, Matrix, Point, Sample } from "../../core";
-import { defaultClock } from "../../core";
+import type { Baseline, MarkData, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
+import { defaultClock, matrix } from "../../core";
 import { invert } from "../../core/geometry";
 import { EFFECT_SLOTS, resolveEffects } from "../../core/registry";
 import { report } from "../../core/report";
@@ -26,9 +29,10 @@ import type { MarkEvents } from "../types";
 import { baselines, describeRects, isBaseline, union, visualOrder, type RectPart } from "./bars";
 import { hostEdits } from "./edits";
 import { hostColors, hostMarkHandle, type HostMarkHandle, type HostPart } from "./host-style";
-import { commonAncestor, readSource, rootOf } from "./source";
-import { axisAligned, between, boxIn, rectOf } from "./space";
+import { boundRows, commonAncestor, readSource, rootOf } from "./source";
+import { axisAligned, between, boxIn, ownTransform, rectOf, screenMatrices, type ScreenMatrix } from "./space";
 import type { Attachment, ExpressiveOptions, MarkSource } from "./types";
+import { watchHost, type WatchedChanges } from "./watch";
 
 interface Part<D> extends HostPart {
   readonly datum: D;
@@ -46,10 +50,34 @@ interface ReadMark<D> {
   readonly parts: readonly Part<D>[];
   /** `markLabel`'s name for it; undefined leaves its ARIA as the host drew it. */
   readonly label: string | undefined;
+  /** Its place in the source, by its first element: document order, for marks described with `geometry`. */
+  readonly index: number;
+  /** A rect mark's baseline and the box its rects cover, which watch keeps and orders by. */
+  readonly rect?: { readonly edge: Baseline; readonly box: Rect };
 }
 
-/** A mark before its data: `related` needs every mark of the reading. */
+/** A mark before its data. */
 type Drawn<D> = Omit<ReadMark<D>, "data">;
+/** A mark before its name: watch keeps the one the last full read gave it. */
+type Unnamed<D> = Omit<Drawn<D>, "label">;
+
+/** Where marks are read: the root and the marks' common ancestor, with the elements' screen CTMs and colours. */
+interface ReadContext {
+  readonly svg: SVGSVGElement;
+  readonly common: Element;
+  /** Screen CTMs, each read once. */
+  readonly screen: ScreenMatrix;
+  /** Computed on a full read; watch keeps the last ones, since it doesn't watch colours. */
+  readonly colors: (element: Element) => HostPart["colors"];
+}
+
+/** An element of a mark as read from the source, before its geometry. */
+interface Piece<D> {
+  readonly element: Element;
+  readonly datum: D;
+  readonly series: string | undefined;
+  readonly value: unknown;
+}
 
 interface Reading<D> {
   readonly root: SVGSVGElement | undefined;
@@ -91,7 +119,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   const clock = env.clock ?? defaultClock;
   const dim = options.dim === true;
   const edits = hostEdits();
-  /** The host's colours per element, kept while an effect or hover darkening overrides them. */
+  /** The host's colours per element, kept while an effect or the hover colour overrides them. */
   const colorCache = new WeakMap<Element, ReturnType<typeof hostColors>>();
   let source = target;
   let warnedIndex = false;
@@ -106,7 +134,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     const svg = rootOf(elements);
     const common = commonAncestor(elements, svg);
 
-    const groups = new Map<string, { element: Element; datum: D; series: string | undefined; value: unknown }[]>();
+    const groups = new Map<string, Piece<D>[]>();
     elements.forEach((element, index) => {
       const datum = datumOf(element, index, data);
       const raw: unknown = options.key(datum, element);
@@ -122,96 +150,96 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       group.push({ element, datum, series, value: options.value?.(datum, element) });
     });
 
-    const part = (p: { element: Element; datum: D; series: string | undefined; value: unknown }, outline: Part<D>["outline"]): Part<D> => {
-      const parent = between(common, p.element.parentElement ?? svg, svg);
-      return { element: p.element, datum: p.datum, series: p.series, value: p.value, parent, parentInverse: tryInvert(parent), colors: colorsOf(p.element, svg), outline };
-    };
+    const at: ReadContext = { svg, common, screen: screenMatrices(), colors: (element) => colorsOf(element, svg) };
+    const named = (mark: Unnamed<D>): Drawn<D> => ({ ...mark, label: labelOf(mark.key, mark.parts) });
     const keys = [...groups.keys()];
 
     if (options.geometry) {
-      const describeMark = options.geometry;
-      const marks = keys.map((key): Drawn<D> => {
-        const group = groups.get(key)!;
-        const first = group[0]!;
-        const geometry = describeMark(first.element, first.datum, key);
-        if (typeof geometry !== "object" || geometry === null || geometry.key !== key) {
-          throw new TypeError(`expressive: geometry for "${key}" must be a MarkGeometry with the key "${key}". Build it with describe and the key passed in.`);
-        }
-        const parts = group.map((p) => part(p, outlineOf(geometry, p.series, group.length)));
-        return { key, geometry, parts, label: labelOf(key, parts) };
-      });
-      return { root: svg, ancestor: common, marks: withData(ringOrder(marks), false) };
+      const marks = keys.map((key, index) => named(shapeMark(key, groups.get(key)!, index, at)));
+      return { root: svg, ancestor: common, marks: checkNeeds(withData(ringOrder(marks, (mark) => mark.geometry))) };
     }
 
-    const rects = keys.map((key) =>
-      groups.get(key)!.map((p) => {
-        if (p.element.localName !== "rect") {
-          throw new TypeError(`expressive: can't read the geometry of a <${p.element.localName}> (mark "${key}"). Only <rect> marks are read; describe others with the geometry option.`);
-        }
-        const m = between(common, p.element, svg);
-        if (!axisAligned(m)) {
-          throw new TypeError(`expressive: the <rect> of "${key}" is rotated or skewed, so it isn't an upright bar. Describe it with the geometry option.`);
-        }
-        const rect: RectPart = { box: boxIn(m, rectOf(p.element)), series: p.series, radius: radiusOf(p.element) };
-        return { ...p, rect };
-      })
-    );
-    const boxes = rects.map((parts) => union(parts.map((p) => p.rect.box)));
+    const rects = keys.map((key) => groups.get(key)!.map((piece) => rectPiece(key, piece, at)));
+    const boxes = rects.map((pieces) => union(pieces.map((p) => p.rect.box)));
     const edges = baselines(boxes, options.baseline ?? "auto");
-    const marks = visualOrder(boxes, edges).map((i): Drawn<D> => {
-      const key = keys[i]!;
-      const { geometry, order } = describeRects(key, rects[i]!.map((p) => p.rect), edges[i]!);
-      const segments = geometry.segments ?? [];
-      const parts = order.map((j, n) => {
-        const segment = segments[n];
-        return part(rects[i]![j]!, segment && segment.length >= 0.5 ? { d: segment.outline.d } : undefined);
-      });
-      return { key, geometry, parts, label: labelOf(key, parts) };
-    });
-    return { root: svg, ancestor: common, marks: withData(marks, true) };
+    const marks = visualOrder(boxes, edges).map((i) => named(rectMark(keys[i]!, rects[i]!, edges[i]!, i, at)));
+    return { root: svg, ancestor: common, marks: checkNeeds(withData(marks)) };
+  }
+
+  /** A mark described with `geometry`, from its elements in source order. */
+  function shapeMark(key: string, pieces: readonly Piece<D>[], index: number, at: ReadContext): Unnamed<D> {
+    const first = pieces[0]!;
+    const geometry = options.geometry!(first.element, first.datum, key);
+    if (typeof geometry !== "object" || geometry === null || geometry.key !== key) {
+      throw new TypeError(`expressive: geometry for "${key}" must be a MarkGeometry with the key "${key}". Build it with describe and the key passed in.`);
+    }
+    const parts = pieces.map((p) => part(p, outlineOf(geometry, p.series, pieces.length), at));
+    return { key, geometry, parts, index };
   }
 
   /**
-   * Each mark's data, in the order given (visual order): its first part's row and its samples.
-   * `related(series)` is the mark's own segment of that series, or else the first other mark whose
-   * series has that name, such as another of a D3 chart's line paths. Samples are read and checked
-   * here, and the series data effects need are checked against the marks', so anything wrong throws
-   * before anything changes.
+   * A <rect>'s box in the marks' common coordinates, through its parent's coordinates and its own
+   * transform attribute. Its own CSS transform is the adapter's (an effect's), so it isn't read back.
+   * Other elements, and rects that aren't upright, throw.
    */
-  function withData(marks: readonly Drawn<D>[], rects: boolean): ReadMark<D>[] {
-    const bySeries = new Map<string, ReadMark<D>[]>();
-    const read = marks.map((mark): ReadMark<D> => {
+  function rectPiece(key: string, piece: Piece<D>, at: ReadContext): Piece<D> & { readonly rect: RectPart } {
+    if (piece.element.localName !== "rect") {
+      throw new TypeError(`expressive: can't read the geometry of a <${piece.element.localName}> (mark "${key}"). Only <rect> marks are read; describe others with the geometry option.`);
+    }
+    const m = matrix.multiply(between(at.common, piece.element.parentElement ?? at.svg, at.svg, at.screen), ownTransform(piece.element));
+    if (!axisAligned(m)) {
+      throw new TypeError(`expressive: the <rect> of "${key}" is rotated or skewed, so it isn't an upright bar. Describe it with the geometry option.`);
+    }
+    return { ...piece, rect: { box: boxIn(m, rectOf(piece.element)), series: piece.series, radius: radiusOf(piece.element) } };
+  }
+
+  /** A bar from its rects, growing from `edge`: its parts go from the baseline. */
+  function rectMark(key: string, pieces: readonly (Piece<D> & { readonly rect: RectPart })[], edge: Baseline, index: number, at: ReadContext): Unnamed<D> {
+    const { geometry, order } = describeRects(key, pieces.map((p) => p.rect), edge);
+    const segments = geometry.segments ?? [];
+    const parts = order.map((j, n) => {
+      const segment = segments[n];
+      return part(pieces[j]!, segment && segment.length >= 0.5 ? { d: segment.outline.d } : undefined, at);
+    });
+    return { key, geometry, parts, index, rect: { edge, box: union(pieces.map((p) => p.rect.box)) } };
+  }
+
+  function part(piece: Piece<D>, outline: Part<D>["outline"], at: ReadContext): Part<D> {
+    const parent = between(at.common, piece.element.parentElement ?? at.svg, at.svg, at.screen);
+    return { element: piece.element, datum: piece.datum, series: piece.series, value: piece.value, parent, parentInverse: tryInvert(parent), colors: at.colors(piece.element), outline };
+  }
+
+  /**
+   * Each mark's data, in the order given: its first part's row and its samples. `related(series)` is
+   * the mark's own segment of that series, or else the first other live mark, in visual order, whose
+   * series has that name, such as another of a D3 chart's line paths. It's looked up when called, so
+   * it sees that mark as last read, by refresh() or by watch. Samples are read and checked here, so
+   * bad ones throw before anything changes.
+   */
+  function withData(marks: readonly Drawn<D>[]): ReadMark<D>[] {
+    return marks.map((mark): ReadMark<D> => {
       const { key, geometry, parts } = mark;
-      const total = rects ? totalOf(parts) : undefined;
+      const total = mark.rect ? totalOf(parts) : undefined;
       const samplesOf = (datum: D, of: MarkGeometry, series?: string): readonly Sample[] => {
         if (options.samples) return checkSamples(options.samples(datum, of), series === undefined ? `"${key}"` : `"${key}" (${series})`);
         return total === undefined ? [] : barSamples(geometry, of, total);
       };
       const own = new Map<string, MarkData<D>>();
-      const related = (series: string): MarkData<D> | undefined => own.get(series) ?? bySeries.get(series)?.find((other) => other.key !== key)?.data;
+      const related = (series: string): MarkData<D> | undefined => own.get(series) ?? relatedOf(series, key);
       for (const series of ownSeries(mark)) {
         const datum = (parts.find((p) => p.series === series) ?? parts[0]!).datum;
         own.set(series, { datum, samples: samplesOf(datum, geometry.segments?.find((s) => s.series === series) ?? geometry, series), related });
       }
       return { ...mark, data: { datum: parts[0]!.datum, samples: samplesOf(parts[0]!.datum, geometry), related } };
     });
-    for (const mark of read) {
-      const { series } = mark.geometry;
-      if (series === undefined) continue;
-      let list = bySeries.get(series);
-      if (!list) bySeries.set(series, (list = []));
-      list.push(mark);
-    }
-    checkNeeds(read);
-    return read;
   }
 
   /**
    * Data effects name the series they read through `needs.related`, and the marks must have them, so
    * a missing series throws instead of the effect drawing nothing. With no marks yet, there's nothing to check.
    */
-  function checkNeeds(marks: readonly ReadMark<D>[]): void {
-    if (marks.length === 0) return;
+  function checkNeeds(marks: ReadMark<D>[]): ReadMark<D>[] {
+    if (marks.length === 0) return marks;
     const series = new Set(marks.flatMap((mark) => [...(mark.geometry.series === undefined ? [] : [mark.geometry.series]), ...ownSeries(mark)]));
     for (const slot of EFFECT_SLOTS) {
       const effect = effects[slot];
@@ -224,6 +252,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         );
       }
     }
+    return marks;
   }
 
   function datumOf(element: Element, index: number, data: readonly D[] | undefined): D {
@@ -257,7 +286,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   function colorsOf(element: Element, svg: Element): HostPart["colors"] {
-    // While an effect or hover darkening sets the colour, the computed one is ours: keep the host's from before.
+    // While an effect or the hover colour sets it, the computed one is ours: keep the host's from before.
     if ((edits.styled(element, "fill") || edits.styled(element, "stroke")) && colorCache.has(element)) return colorCache.get(element);
     const colors = hostColors(element, svg);
     colorCache.set(element, colors);
@@ -474,9 +503,9 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   /**
-   * With `dim`, this attachment's other marks fade while one is hovered, and the hovered one darkens
-   * (its fill, or its stroke on a line), as on our charts. The fade is classes, so host CSS can
-   * override it, and only on its own marks, so attachments sharing an <svg> leave each other alone.
+   * With `dim`, this attachment's other marks fade while one is hovered, and the hovered one takes its
+   * strong colour (its fill, or its stroke on a line), as on our charts. The fade is classes, so host
+   * CSS can override it, and only on its own marks, so attachments sharing an <svg> leave each other alone.
    * Both are CSS transitions timed by motion, like the charts'.
    */
   function applyDim(): void {
@@ -564,6 +593,122 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         })
       : undefined;
 
+  // ── Watching the host ──────────────────────────────────────────────────────
+
+  const watching = options.watch === true ? watchHost(doc, clock, follow) : undefined;
+
+  /** Watches the live marks' elements from now on, and drops changes not followed yet: the caller has just read them all. */
+  function watchMarks(): void {
+    watching?.observe(
+      order.flatMap((record) => record.mark.parts.map((part) => part.element)),
+      root
+    );
+  }
+
+  /**
+   * A frame's changes, with `watch`. The marks whose geometry attributes changed, and every mark inside
+   * an ancestor that moved below the marks' common ancestor, are read again, put in visual order again
+   * and followed through change(), with no events and no interrupt, as on our charts' frames. An
+   * ancestor at or above the common ancestor moves the overlay: the marks' geometry is in that
+   * ancestor's coordinates, so it hasn't changed.
+   */
+  function follow(changes: WatchedChanges): void {
+    if (destroyed || !ancestor) return;
+    const changed = new Set<MarkRecord<D>>();
+    for (const element of changes.marks) {
+      const record = owners.get(element)?.record;
+      if (record) changed.add(record);
+    }
+    let overlayMoved = false;
+    for (const element of changes.ancestors) {
+      if (element.contains(ancestor)) overlayMoved = true;
+      else for (const record of order) if (record.mark.parts.some((part) => element.contains(part.element))) changed.add(record);
+    }
+    if (overlayMoved) placeOverlay();
+    if (changed.size === 0) return;
+
+    // Throws (reported by the clock) on marks it can't read, before anything changes.
+    const { records, marks } = reread([...changed]);
+    records.forEach((record, i) => {
+      const mark = marks[i]!;
+      record.mark = mark;
+      for (const part of mark.parts) owners.set(part.element, { record, part });
+      record.handle.repaint();
+    });
+    order = visual(order);
+    if (records.some((record) => record.key === ringKey)) drawRing();
+    // As in refresh(): when a mark of a series a data effect needs moves, every other live mark follows too.
+    const following = new Set(records);
+    if (records.some((record) => needed.has(record.mark.geometry.series ?? ""))) for (const record of order) following.add(record);
+    for (const record of following) runner.change(record.mark.geometry, record.mark.data);
+  }
+
+  /**
+   * The marks that changed again, as the host draws them now: their rows, geometry and samples, in the
+   * coordinates of the last full read. Their values, colours and names stay as that read found them,
+   * and so do their elements. Bars whose baseline changed come too, though they didn't move. Throws,
+   * changing nothing, on marks it can't read.
+   */
+  function reread(changed: readonly MarkRecord<D>[]): { readonly records: MarkRecord<D>[]; readonly marks: ReadMark<D>[] } {
+    const at: ReadContext = { svg: root!, common: ancestor!, screen: screenMatrices(), colors: (element) => owners.get(element)?.part.colors };
+    const rowOf = rowsNow();
+    const piecesOf = ({ parts }: ReadMark<D>): Piece<D>[] => parts.map((part) => ({ element: part.element, datum: rowOf(part.element), series: part.series, value: part.value }));
+    if (options.geometry) {
+      const marks = changed.map(({ mark }): Drawn<D> => ({ ...shapeMark(mark.key, piecesOf(mark), mark.index, at), label: mark.label }));
+      return { records: [...changed], marks: withData(marks) };
+    }
+    const rects = new Map(changed.map((record) => [record, piecesOf(record.mark).map((piece) => rectPiece(record.key, piece, at))]));
+    const edges = edgesNow(rects);
+    for (const record of order) {
+      if (!rects.has(record) && edges.get(record) !== record.mark.rect!.edge) rects.set(record, piecesOf(record.mark).map((piece) => rectPiece(record.key, piece, at)));
+    }
+    const records = [...rects.keys()];
+    const marks = records.map((record): Drawn<D> => ({ ...rectMark(record.key, rects.get(record)!, edges.get(record)!, record.mark.index, at), label: record.mark.label }));
+    return { records, marks: withData(marks) };
+  }
+
+  /**
+   * Each live bar's baseline now. With "auto", the edge every bar shares is found again from their
+   * boxes (the new ones of the bars read this frame), as a full read would, so a bar that ends a
+   * transition on the other side of the line grows from it the other way. In a frame where no edge is
+   * shared (a bar crossing the line), each keeps the one it had.
+   */
+  function edgesNow(rects: ReadonlyMap<MarkRecord<D>, readonly (Piece<D> & { readonly rect: RectPart })[]>): Map<MarkRecord<D>, Baseline> {
+    const kept = new Map(order.map((record) => [record, record.mark.rect!.edge]));
+    if (options.baseline !== undefined && options.baseline !== "auto") return kept;
+    const boxes = order.map((record) => {
+      const pieces = rects.get(record);
+      return pieces ? union(pieces.map((p) => p.rect.box)) : record.mark.rect!.box;
+    });
+    try {
+      const found = baselines(boxes, "auto");
+      return new Map(order.map((record, i) => [record, found[i]!]));
+    } catch {
+      return kept;
+    }
+  }
+
+  /** Each element's row now: `datum`'s, a selection's data(), or the element's own `__data__`. */
+  function rowsNow(): (element: Element) => D {
+    if (options.datum) return options.datum;
+    const bound = boundRows(source);
+    return (element) => (bound?.has(element) ? bound.get(element)! : datumOf(element, 0, undefined));
+  }
+
+  /** The records in visual order, as read() orders marks: by their place in the source and, for bars, their boxes. */
+  function visual(records: readonly MarkRecord<D>[]): MarkRecord<D>[] {
+    const bySource = [...records].sort((a, b) => a.mark.index - b.mark.index);
+    if (options.geometry) return [...ringOrder(bySource, (record) => record.mark.geometry)];
+    const boxes = bySource.map((record) => record.mark.rect!.box);
+    const edges = bySource.map((record) => record.mark.rect!.edge);
+    return visualOrder(boxes, edges).map((i) => bySource[i]!);
+  }
+
+  /** The first other live mark of that series, in visual order: another of a D3 chart's line paths. */
+  function relatedOf(series: string, key: string): MarkData<D> | undefined {
+    return order.find((record) => record.key !== key && record.mark.geometry.series === series)?.mark.data;
+  }
+
   // ── Events ─────────────────────────────────────────────────────────────────
 
   function emit<K extends keyof MarkEvents<D>>(type: K, event: MarkEvents<D>[K]): void {
@@ -584,6 +729,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
   runner.enter(apply(first).entering.map(input));
   keyboard?.sync();
+  watchMarks();
 
   return {
     refresh(next) {
@@ -595,6 +741,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       // The order the runner expects: interrupt, then exit / update / enter, then change, then settle.
       runner.interrupt();
       const diff = apply(reading);
+      watchMarks();
       if (hovered !== undefined && !records.has(hovered.key)) {
         interaction?.clear();
         endHover();
@@ -642,6 +789,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       if (destroyed) return;
       destroyed = true;
       hovered = undefined;
+      watching?.destroy();
       // The runner resets every mark it styled, through the records, so it goes first.
       runner.destroy();
       unsubscribeMotion?.();
@@ -730,11 +878,12 @@ function describeValue(value: unknown): string {
  * as a ring is read: d3.pie() sorts slices by value but returns them in data order, so document
  * order jumps around the ring. Otherwise it's document order.
  */
-function ringOrder<D>(marks: readonly Drawn<D>[]): readonly Drawn<D>[] {
-  const pivot = marks[0]?.geometry.pivot;
-  if (!pivot || !marks.every(({ geometry }) => distance(geometry.pivot, pivot) <= 0.5 && goesRound(geometry))) return marks;
+function ringOrder<T>(marks: readonly T[], geometryOf: (mark: T) => MarkGeometry): readonly T[] {
+  const pivot = marks[0] && geometryOf(marks[0]).pivot;
+  if (!pivot || !marks.every((mark) => distance(geometryOf(mark).pivot, pivot) <= 0.5 && goesRound(geometryOf(mark)))) return marks;
   const TURN = 2 * Math.PI;
-  const clockwise = ({ geometry: { center } }: Drawn<D>): number => {
+  const clockwise = (mark: T): number => {
+    const { center } = geometryOf(mark);
     // In [0, 2π): 0 straight up (y points down), turning towards +x.
     const angle = Math.atan2(center.x - pivot.x, pivot.y - center.y);
     const turned = angle < 0 ? angle + TURN : angle;

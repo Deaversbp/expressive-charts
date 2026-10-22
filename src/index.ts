@@ -40,6 +40,8 @@ export type {
   ExpressiveOptions,
   HostMark,
   KeyOfType,
+  LegendEntry,
+  LegendOptions,
   MarkEvent,
   MarkEvents,
   MarkSource,

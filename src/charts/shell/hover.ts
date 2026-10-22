@@ -1,10 +1,15 @@
-// Hover for a reference chart's marks. Pointer, touch and keyboard focus share one hover: the mark's
+// Hover for a reference chart's marks. Pointer, touch and keyboard focus share one hover: the marks'
 // emphasis (`ec-hot`), the others' dimming (`ec-hovering` on the <svg>), the tooltip, the runner's
 // hover and leave, and the events. Focus from a key press shows the focus ring and plays the hover;
 // focus from a click or tap moves the tab stop but leaves the hover to the pointer.
 //
-// The chart says which marks there are and draws them: it finds a live mark from an event target,
-// gives a mark's element and how it is on screen, draws the ring and shows the tooltip.
+// What's hovered is a target: what the pointer is over and what takes focus. A target stands for one
+// mark or several, hovered together in one batch: a bar or a slice is its own mark, while a line
+// chart's x stands for every series' point there. The keyboard moves between targets.
+//
+// The chart says which targets and marks there are and draws them: it finds a live target from an
+// event target, gives a target's marks, their elements and how they are on screen, draws the ring
+// and shows the tooltip.
 
 import type { RunInput, Runner } from "../../core/runner";
 import { pointerHover, type HoverTarget } from "../interaction";
@@ -20,71 +25,113 @@ export interface ChartHoverOptions<D> {
   readonly events: Pick<ChartEvents<D>, "emit">;
   /** Whether the other marks dim while one is hovered: the `dim` option as it is now. */
   dim(): boolean;
-  /** The live mark an event target belongs to, with the segment under the pointer; leaving marks don't count. */
+  /** The live target an event target belongs to, with the segment under the pointer; leaving ones don't count. */
   find(target: EventTarget | null): HoverTarget | undefined;
-  /** Whether `key`'s mark is live: on screen and not leaving. */
+  /** Whether the target `key` is live: on screen and not leaving. */
   live(key: string): boolean;
-  /** The live marks' keys, in visual order. */
+  /** The live targets' keys, in visual order: the keyboard's order. */
   order(): readonly string[];
-  /** A mark's element, live or leaving: it takes focus, and the hover's emphasis. */
+  /**
+   * The keys of the marks a live target stands for, in the batch's order: a line chart's x gives each
+   * series' point there. Default: the target alone, as a bar or a slice is its own mark.
+   */
+  marks?(key: string): readonly string[];
+  /** A target's element, live or leaving: it takes focus and, for a target that is its own mark, the hover's emphasis. */
   element(key: string): SVGElement | undefined;
+  /** A mark's element, live or leaving: it takes the hover's emphasis (`ec-hot`). Default: `element`, for targets that are their own marks. */
+  markElement?(key: string): SVGElement | undefined;
   /** A mark as it is on screen, live or leaving: what hover and leave report, so mid-change they match what's under the pointer. */
   onScreen(key: string): RunInput<D> | undefined;
-  /** Draws the focus ring around the live mark `key` as it is on screen, or hides it. */
+  /** Draws the focus ring around the live target `key` as it is on screen, or hides it. */
   ring(key: string | undefined): void;
   readonly tooltip: {
-    /** Shows the tooltip beside the live mark `key` as it is on screen, or moves it there. */
+    /** Shows the tooltip for the live target `key` as it is on screen, or moves it there. */
     show(key: string): void;
     hide(): void;
   };
 }
 
 export interface ChartHover {
-  /** The hovered mark's key. */
+  /** The hovered target's key. */
   readonly key: string | undefined;
-  /** The mark showing the focus ring: focused from the keyboard. */
+  /** The target showing the focus ring: focused from the keyboard. */
   readonly ringKey: string | undefined;
   /** The element with focus in the chart's document or shadow root. */
   active(): Element | null;
-  /** An effect restyled a mark: the focus ring and the tooltip follow its transform. */
+  /** An effect restyled a mark: the focus ring and the tooltip of the target it belongs to follow its transform. */
   restyled(key: string): void;
   /** After `dim` changed: the others dim, or stop dimming, now. */
   syncDim(): void;
-  /** After the marks changed: ends the hover if its mark has left. */
+  /**
+   * After the marks changed: ends the hover if its target has left. Otherwise the hover follows the
+   * marks the target stands for now: those it no longer has are left, and new ones are hovered.
+   */
   dropGone(): void;
   /** After the marks changed: the tab stop stays on its key, or moves to its nearest neighbour, and focus follows. */
   sync(): void;
   destroy(): void;
 }
 
-const ONE = { index: 0, count: 1 } as const;
+interface Hovered {
+  /** The target's key. */
+  readonly key: string;
+  readonly source: HoverSource;
+  /** The marks hovered for it, in the batch's order. */
+  readonly marks: readonly string[];
+}
 
 export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
   const { svg, runner, events } = options;
-  let hovered: { readonly key: string; readonly source: HoverSource } | undefined;
+  const marksOf = (key: string): readonly string[] => options.marks?.(key) ?? [key];
+  const markElement = (key: string): SVGElement | undefined => (options.markElement ?? options.element)(key);
+  let hovered: Hovered | undefined;
   let ringKey: string | undefined;
 
-  /** Pointer and keyboard hover share this: the mark's emphasis, the others' dimming, the hover runs and the event. */
+  /** The marks among `keys` that are on screen, with how they are there. */
+  const onScreen = (keys: readonly string[]): { readonly key: string; readonly input: RunInput<D> }[] =>
+    keys.flatMap((key) => {
+      const input = options.onScreen(key);
+      return input ? [{ key, input }] : [];
+    });
+
+  /** The marks' hover runs, in one batch, and an event for each with its place in it. */
+  function hoverMarks(marks: ReturnType<typeof onScreen>, source: HoverSource, segment?: string): void {
+    if (marks.length === 0) return;
+    runner.hover(marks.map(({ input }) => input));
+    const count = marks.length;
+    marks.forEach(({ input }, index) => events.emit("hover", { ...input, batch: { index, count }, source, ...(segment === undefined ? {} : { segment }) }));
+  }
+
+  /** The marks lose their emphasis, their hover runs end in one batch, and each gets a leave event. */
+  function leaveMarks(keys: readonly string[]): void {
+    const marks = onScreen(keys);
+    if (marks.length === 0) return;
+    for (const { key } of marks) markElement(key)?.classList.remove("ec-hot");
+    runner.leave(marks.map(({ key }) => key));
+    const count = marks.length;
+    marks.forEach(({ input }, index) => events.emit("leave", { ...input, batch: { index, count } }));
+  }
+
+  /** Pointer and keyboard hover share this: the marks' emphasis, the others' dimming, the tooltip, the hover runs and the events. */
   function startHover(key: string, source: HoverSource, segment?: string): void {
-    hovered = { key, source };
-    options.element(key)!.classList.add("ec-hot");
+    const marks = onScreen(marksOf(key));
+    hovered = { key, source, marks: marks.map((mark) => mark.key) };
+    for (const { key: mark } of marks) markElement(mark)?.classList.add("ec-hot");
     if (options.dim()) svg.classList.add("ec-hovering");
     options.tooltip.show(key);
-    runner.hover([options.onScreen(key)!]);
-    events.emit("hover", { ...options.onScreen(key)!, batch: ONE, source, ...(segment === undefined ? {} : { segment }) });
+    hoverMarks(marks, source, segment);
   }
 
   function endHover(): void {
-    const key = hovered?.key;
+    const marks = hovered?.marks ?? [];
     hovered = undefined;
     svg.classList.remove("ec-hovering");
     options.tooltip.hide();
-    const mark = key === undefined ? undefined : options.onScreen(key);
-    if (key === undefined || !mark) return;
-    options.element(key)?.classList.remove("ec-hot");
-    runner.leave([key]);
-    events.emit("leave", { ...mark, batch: ONE });
+    leaveMarks(marks);
   }
+
+  /** Whether the mark `key` is, or belongs to, the target `target`. */
+  const within = (target: string, key: string): boolean => key === target || (options.live(target) && marksOf(target).includes(key));
 
   const interaction = pointerHover(svg, {
     find: options.find,
@@ -115,7 +162,7 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       }
       if (hovered?.key === key) {
         // Already playing for the pointer: it goes on, held by focus now.
-        hovered = { key, source: "keyboard" };
+        hovered = { ...hovered, source: "keyboard" };
         return;
       }
       endHover();
@@ -126,7 +173,7 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       options.ring(ringKey);
       if (hovered?.source !== "keyboard") return;
       // The pointer is still over it: the hover goes on, held by the pointer now.
-      if (interaction.current === hovered.key) hovered = { key: hovered.key, source: "pointer" };
+      if (interaction.current === hovered.key) hovered = { ...hovered, source: "pointer" };
       else endHover();
     },
     escape() {
@@ -145,17 +192,31 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     },
     active: () => keyboard.active(),
     restyled(key) {
-      if (key === ringKey) options.ring(ringKey);
-      if (key === hovered?.key && options.live(key)) options.tooltip.show(key);
+      if (ringKey !== undefined && within(ringKey, key)) options.ring(ringKey);
+      if (hovered !== undefined && (hovered.marks.includes(key) || key === hovered.key) && options.live(hovered.key)) options.tooltip.show(hovered.key);
     },
     syncDim() {
       if (!options.dim()) svg.classList.remove("ec-hovering");
       else if (hovered !== undefined) svg.classList.add("ec-hovering");
     },
     dropGone() {
-      if (hovered === undefined || options.live(hovered.key)) return;
-      interaction.clear();
-      endHover();
+      if (hovered === undefined) return;
+      if (!options.live(hovered.key)) {
+        interaction.clear();
+        endHover();
+        return;
+      }
+      const now = onScreen(marksOf(hovered.key));
+      const had = new Set(hovered.marks);
+      const keys = new Set(now.map((mark) => mark.key));
+      const gone = hovered.marks.filter((key) => !keys.has(key));
+      const joined = now.filter((mark) => !had.has(mark.key));
+      if (gone.length === 0 && joined.length === 0) return;
+      const { source } = hovered;
+      hovered = { ...hovered, marks: now.map((mark) => mark.key) };
+      leaveMarks(gone);
+      for (const { key } of joined) markElement(key)?.classList.add("ec-hot");
+      hoverMarks(joined, source);
     },
     sync: () => keyboard.sync(),
     destroy() {

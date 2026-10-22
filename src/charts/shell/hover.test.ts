@@ -42,7 +42,55 @@ function setup({ dim = true } = {}) {
   });
   hover.sync();
   const mark = (key: string) => layer.querySelector<SVGGElement>(`[data-key="${key}"]`)!;
-  return { svg, live, runner, heard, rings, tips, hover, mark, options };
+  return { svg, live, runner, events, heard, rings, tips, hover, mark, options };
+}
+
+/**
+ * Two targets, x 1 and x 2, as a line chart's hit columns: each stands for two series' points, which
+ * take the emphasis. `series` is the series at each x, and can change.
+ */
+function columns() {
+  const svg = svgElement("svg", {}, document.body);
+  const layer = svgElement("g", {}, svg);
+  const series = { now: ["a", "b"] };
+  const xs = new Set(["1", "2"]);
+  const targets = new Map<string, SVGRectElement>();
+  for (const x of xs) targets.set(x, svgElement("rect", { class: "ec-mark ec-hit", "data-key": x }, layer));
+  const points = new Map<string, SVGCircleElement>();
+  const point = (key: string) => {
+    let element = points.get(key);
+    if (!element) points.set(key, (element = svgElement("circle", { class: "ec-point", "data-key": key }, layer)));
+    return element;
+  };
+  const runner = { hover: vi.fn(), leave: vi.fn() };
+  const events = chartEvents<object>("chart");
+  const heard: string[] = [];
+  events.on("hover", (event) => heard.push(`hover ${event.mark.key} ${event.batch.index}/${event.batch.count} ${event.source}`));
+  events.on("leave", (event) => heard.push(`leave ${event.mark.key} ${event.batch.index}/${event.batch.count}`));
+  const rings: (string | undefined)[] = [];
+  const tips: string[] = [];
+  const hover = chartHover<object>({
+    svg,
+    runner,
+    events,
+    dim: () => false,
+    find(target) {
+      const key = (target as Element | null)?.closest?.(".ec-hit")?.getAttribute("data-key") ?? undefined;
+      return key !== undefined && xs.has(key) ? { key } : undefined;
+    },
+    live: (key) => xs.has(key),
+    order: () => [...xs],
+    marks: (key) => series.now.map((name) => `${name}@${key}`),
+    element: (key) => targets.get(key),
+    markElement: point,
+    onScreen: (key) => (key.includes("@") ? { mark: { key } as unknown as MarkGeometry, data: { datum: {}, samples: [], related: () => undefined } } : undefined),
+    ring: (key) => rings.push(key),
+    tooltip: { show: (key) => tips.push(key), hide: () => tips.push("hidden") }
+  });
+  hover.sync();
+  const hot = () => [...points].filter(([, element]) => element.classList.contains("ec-hot")).map(([key]) => key);
+  const hovers = () => runner.hover.mock.calls.map(([marks]) => (marks as { mark: MarkGeometry }[]).map((input) => input.mark.key));
+  return { svg, targets, series, xs, runner, heard, rings, tips, hover, hot, hovers };
 }
 
 function pointer(type: string, target: Element): void {
@@ -146,5 +194,103 @@ describe("chartHover", () => {
     hover.restyled("b");
     expect(rings).toEqual(["a"]);
     expect(tips).toEqual(["a"]);
+  });
+
+  it("gives a target that is its own mark a batch of one", () => {
+    const { svg, mark, runner, events } = setup();
+    const batches: string[] = [];
+    events.on("hover", (event) => batches.push(`hover ${event.mark.key} ${event.batch.index}/${event.batch.count}`));
+    events.on("leave", (event) => batches.push(`leave ${event.mark.key} ${event.batch.index}/${event.batch.count}`));
+    pointer("pointerover", mark("b"));
+    expect(runner.hover.mock.calls[0]![0]).toHaveLength(1);
+    pointer("pointerleave", svg);
+    expect(runner.leave).toHaveBeenCalledWith(["b"]);
+    expect(batches).toEqual(["hover b 0/1", "leave b 0/1"]);
+  });
+});
+
+describe("chartHover: a target that stands for several marks", () => {
+  afterEach(() => {
+    document.body.textContent = "";
+  });
+
+  it("hovers every mark of the target in one batch, and leaving ends them all", () => {
+    const { svg, targets, runner, heard, tips, hover, hot, hovers } = columns();
+    pointer("pointerover", targets.get("2")!);
+    expect(hover.key).toBe("2");
+    expect(hot()).toEqual(["a@2", "b@2"]);
+    // The target's own element isn't a mark here: it takes focus, not the emphasis.
+    expect(targets.get("2")!.classList.contains("ec-hot")).toBe(false);
+    expect(hovers()).toEqual([["a@2", "b@2"]]);
+    expect(heard).toEqual(["hover a@2 0/2 pointer", "hover b@2 1/2 pointer"]);
+    expect(tips).toEqual(["hidden", "2"]);
+
+    pointer("pointerover", targets.get("1")!);
+    expect(hot()).toEqual(["a@1", "b@1"]);
+    expect(runner.leave).toHaveBeenCalledWith(["a@2", "b@2"]);
+    expect(heard.slice(2)).toEqual(["leave a@2 0/2", "leave b@2 1/2", "hover a@1 0/2 pointer", "hover b@1 1/2 pointer"]);
+
+    pointer("pointerleave", svg);
+    expect(hot()).toEqual([]);
+    expect(runner.leave).toHaveBeenLastCalledWith(["a@1", "b@1"]);
+    expect(heard.slice(6)).toEqual(["leave a@1 0/2", "leave b@1 1/2"]);
+    expect(hover.key).toBeUndefined();
+  });
+
+  it("keeps the keyboard a flat list of targets, each hovering its marks", () => {
+    const { targets, heard, rings, hover, hot } = columns();
+    expect(targets.get("1")!.getAttribute("tabindex")).toBe("0");
+    expect(targets.get("2")!.getAttribute("tabindex")).toBe("-1");
+    press(document.body, "Tab");
+    targets.get("1")!.focus();
+    expect(hot()).toEqual(["a@1", "b@1"]);
+    expect(rings).toEqual(["1"]);
+    press(targets.get("1")!, "ArrowRight");
+    expect(document.activeElement).toBe(targets.get("2"));
+    expect(hover.key).toBe("2");
+    expect(hot()).toEqual(["a@2", "b@2"]);
+    expect(heard).toEqual(["hover a@1 0/2 keyboard", "hover b@1 1/2 keyboard", "leave a@1 0/2", "leave b@1 1/2", "hover a@2 0/2 keyboard", "hover b@2 1/2 keyboard"]);
+    press(targets.get("2")!, "Escape");
+    expect(hot()).toEqual([]);
+    expect(hover.key).toBeUndefined();
+  });
+
+  it("moves the ring and the tooltip when one of the target's marks is restyled", () => {
+    const { targets, rings, tips, hover } = columns();
+    press(document.body, "Tab");
+    targets.get("1")!.focus();
+    rings.length = 0;
+    tips.length = 0;
+    hover.restyled("b@1");
+    hover.restyled("a@2");
+    expect(rings).toEqual(["1"]);
+    expect(tips).toEqual(["1"]);
+  });
+
+  it("follows the marks the target stands for after they change", () => {
+    const { targets, series, runner, heard, hover, hot, hovers } = columns();
+    pointer("pointerover", targets.get("1")!);
+    heard.length = 0;
+    // A series joins and another leaves: the hover goes on, on the marks there now.
+    series.now = ["b", "c"];
+    hover.dropGone();
+    expect(hover.key).toBe("1");
+    expect(hot()).toEqual(["b@1", "c@1"]);
+    expect(runner.leave).toHaveBeenLastCalledWith(["a@1"]);
+    expect(hovers()).toEqual([["a@1", "b@1"], ["c@1"]]);
+    expect(heard).toEqual(["leave a@1 0/1", "hover c@1 0/1 pointer"]);
+    // Nothing changed: nothing is heard.
+    hover.dropGone();
+    expect(heard).toHaveLength(2);
+  });
+
+  it("ends the hover when its target leaves", () => {
+    const { targets, xs, heard, hover, hot } = columns();
+    pointer("pointerover", targets.get("2")!);
+    xs.delete("2");
+    hover.dropGone();
+    expect(hover.key).toBeUndefined();
+    expect(hot()).toEqual([]);
+    expect(heard.slice(2)).toEqual(["leave a@2 0/2", "leave b@2 1/2"]);
   });
 });

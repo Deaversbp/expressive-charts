@@ -7,7 +7,7 @@ import { maskedHalo } from "./outside";
 import { setAttributes, setStyles, svgElement, transformAttribute } from "./svg";
 import { cssColor, type SeriesColors } from "./theme";
 
-/** One filled part of a mark: a bar segment, a slice. */
+/** One part of a mark: a filled bar segment or slice, or a stroked line. */
 export interface StyledPart {
   readonly element: SVGPathElement;
   /** The part's outline, which the halo follows. */
@@ -15,6 +15,12 @@ export interface StyledPart {
   readonly colors: SeriesColors;
   /** False for parts too short to see (a zero value): they get no halo. */
   readonly visible: boolean;
+  /**
+   * For an open outline (a line), which is stroked rather than filled: the stroke's width. Emphasis
+   * then mixes the stroke's colour, and the halo is stroked behind it this much wider than its own
+   * width, so as much of it shows on each side as round a closed mark.
+   */
+  readonly open?: { readonly width: number };
 }
 
 /** What a style applies to: the mark's body group (it moves with `transform`) and its parts. */
@@ -42,9 +48,10 @@ export interface SvgMarkHandle extends MarkHandle {
  * - `transform` is in chart space, on the body, so labels and the hit area stay put.
  * - `opacity` is on the body; it multiplies with the built-in hover dimming.
  * - `emphasis` mixes each part's colour toward its strong colour, without the CSS hover transition
- *   (effects animate it themselves).
+ *   (effects animate it themselves): its fill, or an open part's stroke.
  * - `halo` strokes each visible part's outline behind the mark: `width` is the stroke width, so half
- *   of it shows outside the mark. With `halos`, it's drawn there instead, masked to outside the mark.
+ *   of it shows outside the mark. An open part's halo is its own width wider, with round caps, so it
+ *   goes round the line's ends too. With `halos`, it's drawn there instead, masked to outside the mark.
  */
 export function svgMarkHandle(target: () => StyleTarget | undefined, options: SvgMarkHandleOptions = {}): SvgMarkHandle {
   let style: MarkStyle = {};
@@ -62,7 +69,7 @@ export function svgMarkHandle(target: () => StyleTarget | undefined, options: Sv
     const emphasis = style.emphasis;
     for (const part of parts) {
       setStyles(part.element, {
-        fill: emphasis === undefined ? undefined : mix(part.colors, emphasis),
+        [part.open ? "stroke" : "fill"]: emphasis === undefined ? undefined : mix(part.colors, emphasis),
         transition: emphasis === undefined ? undefined : "none"
       });
     }
@@ -90,7 +97,12 @@ export function svgMarkHandle(target: () => StyleTarget | undefined, options: Sv
     while (halo.childElementCount > visible.length) halo.lastElementChild?.remove();
     visible.forEach((part, index) => {
       const path = (halo!.children[index] as SVGPathElement | undefined) ?? svgElement("path", { "stroke-linejoin": "round" }, halo);
-      setAttributes(path, { d: part.d, "stroke-width": spec.width, "stroke-opacity": spec.opacity });
+      setAttributes(path, {
+        d: part.d,
+        "stroke-width": spec.width + (part.open?.width ?? 0),
+        "stroke-opacity": spec.opacity,
+        "stroke-linecap": part.open ? "round" : undefined
+      });
       setStyles(path, { fill: "none", stroke: spec.color === undefined ? part.colors.color : cssColor(spec.color) });
     });
   };

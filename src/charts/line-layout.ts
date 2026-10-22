@@ -184,8 +184,7 @@ export function layoutLines<D>(input: LineLayoutInput<D>): LineLayout<D> {
   const xWidths = xTexts.map((text) => measure(text, "ec-tick", TICK_SIZE));
 
   // The values' labels on the left; the end labels, or the last x label, on the right.
-  const label = input.label;
-  const labelWidth = label ? widest(rows.flatMap((row) => row.values.map((v) => label(v.series, v.value))), "ec-value", VALUE_SIZE, measure) : 0;
+  const labelWidth = input.label ? widest(distinctLabels(rows, input.label), "ec-value", VALUE_SIZE, measure) : 0;
   const left = Math.max(widest(yTexts, "ec-tick", TICK_SIZE, measure) + 10, (xWidths[0] ?? 0) / 2 + 2);
   const right = Math.max(GRID_PAST + 2, (xWidths[xWidths.length - 1] ?? 0) / 2 + 2, labelWidth > 0 ? LABEL_GAP + labelWidth + 4 : 0);
   const frame: LineFrame = {
@@ -415,6 +414,22 @@ function prepareRows<D>({ data, encoding }: LineLayoutInput<D>): LineRow<D>[] {
 function numberOf(value: unknown, series: string, key: string): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   throw new RangeError(`lineChart: "${series}" for "${key}" must be a finite number, got ${show(value)}. Lines can't skip a value yet.`);
+}
+
+/**
+ * The end labels worth measuring: one of each shape, its digits aside. Chart text has tabular digits,
+ * so "23 goals" and "48 goals" are as wide, and a long series isn't measured row by row in the DOM.
+ */
+function distinctLabels<D>(rows: readonly LineRow<D>[], label: (series: string, value: number) => string): string[] {
+  const shapes = new Map<string, string>();
+  for (const row of rows) {
+    for (const { series, value } of row.values) {
+      const text = label(series, value);
+      const shape = text.replace(/\d/g, "0");
+      if (!shapes.has(shape)) shapes.set(shape, text);
+    }
+  }
+  return [...shapes.values()];
 }
 
 function widest(texts: readonly string[], className: string, size: number, measure: LineLayoutInput<unknown>["measure"]): number {

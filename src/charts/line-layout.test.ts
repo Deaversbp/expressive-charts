@@ -116,6 +116,20 @@ describe("layoutLines", () => {
     expect(labelled.frame.box.right).toBe(640 - (10 + 49 + 4));
   });
 
+  it("measures one end label of each shape, its digits aside, so a long series isn't measured row by row", () => {
+    const season = Array.from({ length: 500 }, (_, i) => ({ week: i + 1, goals: i, xg: i / 10 }));
+    const measured: string[] = [];
+    const spy = (text: string) => {
+      measured.push(text);
+      return text.length * 7;
+    };
+    const { frame } = layout({ data: season, x: "week", series: ["goals", "xg"] }, { measure: spy, label: (series, value) => `${value} ${series}` });
+    // Chart text has tabular digits, so "1 xg" is as wide as "0 xg", and "499 goals" as "100 goals".
+    const labels = measured.filter((text) => / (goals|xg)$/.test(text)).sort();
+    expect(labels).toEqual(["0 goals", "0 xg", "0.1 xg", "10 goals", "10 xg", "10.1 xg", "100 goals"]);
+    expect(frame.box.right).toBe(640 - (10 + 9 * 7 + 4));
+  });
+
   it("gives each series the decimals its values have", () => {
     expect(layout<Week>({ data: weeks, x: "week", series: ["goals", "xg"] }).decimals).toEqual({ goals: 0, xg: 1 });
   });

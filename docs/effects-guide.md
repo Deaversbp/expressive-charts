@@ -202,12 +202,12 @@ const belowTarget = defineDataEffect<Region>({
 | Field | What it is |
 | --- | --- |
 | `datum` | the row behind the mark (a line gets all its rows) |
-| `samples` | values along the walk, `{ t, value, at? }`, t ascending: on `barChart`, from 0 at the baseline to the total at the tip; on the donut, from 0 to the slice's share. `expressive()` gives none yet (planned for M4) |
+| `samples` | values along the walk, `{ t, value, at? }`, t ascending: on `barChart`, from 0 at the baseline to the total at the tip; on the donut, from 0 to the slice's share. On `expressive()`, the page's `samples` option (`samplesAlong` gives a host's line its own from the points that drew it), or without it the bar chart's samples on rects with a numeric `value`, and none on other marks |
 | `related(series)` | another series of the same mark or chart, as `MarkData`, if there is one |
 | `previous` | the values before this update, in the `update` slot |
 
 - **Row types are checked.** An effect for `Region` rows is a type error on a chart of other rows, and combining it with a generic effect doesn't hide that. An effect that reads no row fields is `defineDataEffect({ … })`, with `D` left as `unknown`, and fits any chart.
-- **`needs: { related: ["xg"] }`** lists the series the effect reads through `related()`. A chart without them throws when it's created, instead of the effect silently drawing nothing.
+- **`needs: { related: ["xg"] }`** lists the series the effect reads through `related()`. A chart without them throws when it's created, instead of the effect silently drawing nothing, and so does an `expressive()` attachment whose marks don't have them, when it's made or refreshed.
 - Keep the distinction: an effect that only needs geometry should be a geometry effect, so it runs everywhere, including on host marks with no data.
 - `onChange(listener)` passes the mark's latest data as its second argument, so an effect that reads values can follow them as they change (a line being revealed). In the `update` slot it keeps `previous`. It can be undefined; keep the data you had.
 
@@ -236,7 +236,7 @@ What it compares on each chart, from the samples the chart gives:
 | --- | --- | --- |
 | `barChart` | 0 at the baseline to the bar's total at the tip, so `compareTo: 10` colours the part past 10 | that series' segment of the stack, with samples over the segment's own walk |
 | `donutChart` | 0 to the slice's share of the total, so `compareTo: 0.25, when: "above"` colours the part past a quarter | its own series only |
-| `expressive()` | none yet, so it draws nothing; `samples` and `samplesAlong` are planned for M4 | the mark's other segments |
+| `expressive()` | the page's `samples` option: on a D3 line, `samplesAlong` on the points that drew it, so `compareTo: "xg"` colours it below the xG line. Without it, rects with a numeric `value` get `barChart`'s samples, and other marks none, so it draws nothing | the mark's own segment of that series, else the first other mark of that series (another line path) |
 
 ## Composing
 

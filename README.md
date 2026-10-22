@@ -255,6 +255,24 @@ const fx = expressive(svg.selectAll("path.slice"), {
 
 The radii live in the arc generator, not in the row, so the page passes them to `describe.arc`. `d3.pie()` sorts slices by value but leaves the paths in data order; the adapter orders slices that share a centre clockwise from 12 o'clock, so keyboard focus goes round the ring.
 
+A line drawn by `d3.line()` is described from the points that drew it. Data effects also need its values along the way: `samplesAlong` projects the same points onto the line, and since each line's geometry names its series, `related("xg")` on the goals line finds the xG path. Rects with a numeric `value` get the bar chart's samples without asking.
+
+```js
+import { describe, expressive, only, samplesAlong, threshold } from "expressive-charts";
+
+// One <path> per series, its datum { series, rows }, drawn with x(week) and y(value).
+const points = (d) => d.rows.map((r) => ({ x: x(r.week), y: y(r.value), value: r.value, at: r.week }));
+const fx = expressive(svg.selectAll("path.line"), {
+  key: (d) => d.series,
+  geometry: (_el, d, key) => describe.line({ key, series: d.series, points: points(d), width: 2 }),
+  samples: (d, mark) => samplesAlong(mark, points(d)), // checked when read: t from 0 to 1, finite values
+  dim: true,                                           // the other line fades, and the hovered one's stroke darkens
+  on: { decorate: only("goals", threshold({ compareTo: "xg" })) } // red wherever goals are below xG
+});
+```
+
+A data effect that `needs` a series the marks don't have throws when the attachment is made, or on the `refresh()` that loses it. With `dim: true`, the hovered mark darkens as on our charts: its fill, or its stroke when the fill is `none`, which is also the colour its halos and emphasis start from.
+
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 
 See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar and donut charts, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.

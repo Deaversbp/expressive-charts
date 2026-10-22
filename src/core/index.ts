@@ -61,5 +61,5 @@ export type {
   TransitionEffect
 } from "./contracts";
 
-export { describe, matrix, offset } from "./geometry";
-export type { ArcSpec, BarSegmentSpec, BarSpec, Baseline, LineSpec, PointSpec } from "./geometry";
+export { describe, matrix, offset, samplesAlong } from "./geometry";
+export type { ArcSpec, BarSegmentSpec, BarSpec, Baseline, LineSpec, PointSpec, SamplePoint } from "./geometry";

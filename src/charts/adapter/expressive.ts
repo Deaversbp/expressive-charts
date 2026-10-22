@@ -8,10 +8,10 @@
 // ancestor's transform but sits on the root, because some hosts (Vega) remove foreign children from
 // their own groups when they redraw. See docs/ideas/adapter-spike.md.
 
-import type { MarkData, MarkGeometry, Matrix, Point } from "../../core";
+import type { MarkData, MarkGeometry, Matrix, Point, Sample } from "../../core";
 import { defaultClock } from "../../core";
 import { invert } from "../../core/geometry";
-import { resolveEffects } from "../../core/registry";
+import { EFFECT_SLOTS, resolveEffects } from "../../core/registry";
 import { report } from "../../core/report";
 import { createRunner, type RunInput } from "../../core/runner";
 import type { ChartEnv } from "../bar";
@@ -47,6 +47,9 @@ interface ReadMark<D> {
   /** `markLabel`'s name for it; undefined leaves its ARIA as the host drew it. */
   readonly label: string | undefined;
 }
+
+/** A mark before its data: `related` needs every mark of the reading. */
+type Drawn<D> = Omit<ReadMark<D>, "data">;
 
 interface Reading<D> {
   readonly root: SVGSVGElement | undefined;
@@ -88,7 +91,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   const clock = env.clock ?? defaultClock;
   const dim = options.dim === true;
   const edits = hostEdits();
-  /** The host's colours per element, kept while an effect overrides the fill. */
+  /** The host's colours per element, kept while an effect or hover darkening overrides them. */
   const colorCache = new WeakMap<Element, ReturnType<typeof hostColors>>();
   let source = target;
   let warnedIndex = false;
@@ -119,7 +122,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       group.push({ element, datum, series, value: options.value?.(datum, element) });
     });
 
-    const part = (p: { element: Element; datum: D; series: string | undefined; value: unknown }, outline: string | undefined): Part<D> => {
+    const part = (p: { element: Element; datum: D; series: string | undefined; value: unknown }, outline: Part<D>["outline"]): Part<D> => {
       const parent = between(common, p.element.parentElement ?? svg, svg);
       return { element: p.element, datum: p.datum, series: p.series, value: p.value, parent, parentInverse: tryInvert(parent), colors: colorsOf(p.element, svg), outline };
     };
@@ -127,7 +130,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
     if (options.geometry) {
       const describeMark = options.geometry;
-      const marks = keys.map((key): ReadMark<D> => {
+      const marks = keys.map((key): Drawn<D> => {
         const group = groups.get(key)!;
         const first = group[0]!;
         const geometry = describeMark(first.element, first.datum, key);
@@ -135,9 +138,9 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
           throw new TypeError(`expressive: geometry for "${key}" must be a MarkGeometry with the key "${key}". Build it with describe and the key passed in.`);
         }
         const parts = group.map((p) => part(p, outlineOf(geometry, p.series, group.length)));
-        return { key, geometry, data: markData(parts), parts, label: labelOf(key, parts) };
+        return { key, geometry, parts, label: labelOf(key, parts) };
       });
-      return { root: svg, ancestor: common, marks: ringOrder(marks) };
+      return { root: svg, ancestor: common, marks: withData(ringOrder(marks), false) };
     }
 
     const rects = keys.map((key) =>
@@ -155,17 +158,72 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     );
     const boxes = rects.map((parts) => union(parts.map((p) => p.rect.box)));
     const edges = baselines(boxes, options.baseline ?? "auto");
-    const marks = visualOrder(boxes, edges).map((i): ReadMark<D> => {
+    const marks = visualOrder(boxes, edges).map((i): Drawn<D> => {
       const key = keys[i]!;
       const { geometry, order } = describeRects(key, rects[i]!.map((p) => p.rect), edges[i]!);
       const segments = geometry.segments ?? [];
       const parts = order.map((j, n) => {
         const segment = segments[n];
-        return part(rects[i]![j]!, segment && segment.length >= 0.5 ? segment.outline.d : undefined);
+        return part(rects[i]![j]!, segment && segment.length >= 0.5 ? { d: segment.outline.d } : undefined);
       });
-      return { key, geometry, data: markData(parts), parts, label: labelOf(key, parts) };
+      return { key, geometry, parts, label: labelOf(key, parts) };
     });
-    return { root: svg, ancestor: common, marks };
+    return { root: svg, ancestor: common, marks: withData(marks, true) };
+  }
+
+  /**
+   * Each mark's data, in the order given (visual order): its first part's row and its samples.
+   * `related(series)` is the mark's own segment of that series, or else the first other mark whose
+   * series has that name, such as another of a D3 chart's line paths. Samples are read and checked
+   * here, and the series data effects need are checked against the marks', so anything wrong throws
+   * before anything changes.
+   */
+  function withData(marks: readonly Drawn<D>[], rects: boolean): ReadMark<D>[] {
+    const bySeries = new Map<string, ReadMark<D>[]>();
+    const read = marks.map((mark): ReadMark<D> => {
+      const { key, geometry, parts } = mark;
+      const total = rects ? totalOf(parts) : undefined;
+      const samplesOf = (datum: D, of: MarkGeometry, series?: string): readonly Sample[] => {
+        if (options.samples) return checkSamples(options.samples(datum, of), series === undefined ? `"${key}"` : `"${key}" (${series})`);
+        return total === undefined ? [] : barSamples(geometry, of, total);
+      };
+      const own = new Map<string, MarkData<D>>();
+      const related = (series: string): MarkData<D> | undefined => own.get(series) ?? bySeries.get(series)?.find((other) => other.key !== key)?.data;
+      for (const series of ownSeries(mark)) {
+        const datum = (parts.find((p) => p.series === series) ?? parts[0]!).datum;
+        own.set(series, { datum, samples: samplesOf(datum, geometry.segments?.find((s) => s.series === series) ?? geometry, series), related });
+      }
+      return { ...mark, data: { datum: parts[0]!.datum, samples: samplesOf(parts[0]!.datum, geometry), related } };
+    });
+    for (const mark of read) {
+      const { series } = mark.geometry;
+      if (series === undefined) continue;
+      let list = bySeries.get(series);
+      if (!list) bySeries.set(series, (list = []));
+      list.push(mark);
+    }
+    checkNeeds(read);
+    return read;
+  }
+
+  /**
+   * Data effects name the series they read through `needs.related`, and the marks must have them, so
+   * a missing series throws instead of the effect drawing nothing. With no marks yet, there's nothing to check.
+   */
+  function checkNeeds(marks: readonly ReadMark<D>[]): void {
+    if (marks.length === 0) return;
+    const series = new Set(marks.flatMap((mark) => [...(mark.geometry.series === undefined ? [] : [mark.geometry.series]), ...ownSeries(mark)]));
+    for (const slot of EFFECT_SLOTS) {
+      const effect = effects[slot];
+      if (effect?.kind !== "data") continue;
+      for (const name of effect.needs?.related ?? []) {
+        if (series.has(name)) continue;
+        const known = series.size > 0 ? `the marks' series are ${[...series].map((s) => `"${s}"`).join(", ")}` : "the marks have no series";
+        throw new RangeError(
+          `expressive: on.${slot} needs the series "${name}", but ${known}. Name each mark's series in its geometry (describe.line({ key, series, … })), or a stack's parts with segment.`
+        );
+      }
+    }
   }
 
   function datumOf(element: Element, index: number, data: readonly D[] | undefined): D {
@@ -199,8 +257,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   function colorsOf(element: Element, svg: Element): HostPart["colors"] {
-    // While an effect sets the fill, the computed fill is ours: keep the host's from before.
-    if (edits.styled(element, "fill") && colorCache.has(element)) return colorCache.get(element);
+    // While an effect or hover darkening sets the colour, the computed one is ours: keep the host's from before.
+    if ((edits.styled(element, "fill") || edits.styled(element, "stroke")) && colorCache.has(element)) return colorCache.get(element);
     const colors = hostColors(element, svg);
     colorCache.set(element, colors);
     return colors;
@@ -292,7 +350,9 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         // With `value`, a resize or a new axis maximum only moves marks, as on our charts.
         const changed = options.value ? valuesChanged(from.parts, mark.parts) : lengthsChanged(from.geometry, mark.geometry);
         if (changed) diff.changed.push({ record, from: from.geometry });
-        else if (geometryChanged(from.geometry, mark.geometry) || from.data.datum !== mark.data.datum) diff.moved.push(record);
+        else if (geometryChanged(from.geometry, mark.geometry) || from.data.datum !== mark.data.datum || samplesChanged(from.data.samples, mark.data.samples)) {
+          diff.moved.push(record);
+        }
         if (from.parts[0]?.colors?.color !== mark.parts[0]?.colors?.color) recolor.push(mark.key);
         record.mark = mark;
       } else {
@@ -414,24 +474,35 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   /**
-   * With `dim`, this attachment's other marks fade while one is hovered: classes, so host CSS can
-   * override them, and only on its own marks, so attachments sharing an <svg> leave each other alone.
-   * The fade is a CSS transition timed by motion, like the charts'.
+   * With `dim`, this attachment's other marks fade while one is hovered, and the hovered one darkens
+   * (its fill, or its stroke on a line), as on our charts. The fade is classes, so host CSS can
+   * override it, and only on its own marks, so attachments sharing an <svg> leave each other alone.
+   * Both are CSS transitions timed by motion, like the charts'.
    */
   function applyDim(): void {
     if (!dim) return;
     const duration = `${motion.duration(100, "feedback")}ms`;
     for (const record of order) {
-      const dimmed = hovered !== undefined && hovered.key !== record.key;
+      const hot = hovered?.key === record.key;
       for (const part of record.mark.parts) {
         edits.toggleClass(part.element, "ec-attached", true);
-        edits.toggleClass(part.element, "ec-dimmed", dimmed);
+        edits.toggleClass(part.element, "ec-dimmed", hovered !== undefined && !hot);
         edits.style(part.element, "--ec-hover-duration", duration);
       }
+      record.handle.hot(hot);
     }
+    for (const record of leaving.values()) record.handle.hot(false);
   }
 
   const unsubscribeMotion = dim ? motion.subscribe(applyDim) : undefined;
+
+  /** The series data effects read through `related`, maybe from other marks. */
+  const needed = new Set(
+    EFFECT_SLOTS.flatMap((slot) => {
+      const effect = effects[slot];
+      return effect?.kind === "data" ? (effect.needs?.related ?? []) : [];
+    })
+  );
 
   // ── Keyboard ───────────────────────────────────────────────────────────────
 
@@ -534,7 +605,14 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       diff.changed.forEach(({ record, from }, index) => emit("update", { ...input(record), from, batch: { index, count: diff.changed.length } }));
       runner.enter(diff.entering.map(input));
       emitEach("enter", diff.entering);
-      for (const record of [...diff.changed.map((c) => c.record), ...diff.moved]) runner.change(record.mark.geometry, record.mark.data);
+      // A data effect can read another mark through related(series): when a mark of a series one needs
+      // changes, moves, comes or goes, every other live mark follows too, with data that sees it.
+      const following = new Set([...diff.changed.map((c) => c.record), ...diff.moved]);
+      if ([...following, ...diff.entering, ...diff.exiting].some((record) => needed.has(record.mark.geometry.series ?? ""))) {
+        const entering = new Set(diff.entering);
+        for (const record of order) if (!entering.has(record)) following.add(record);
+      }
+      for (const record of following) runner.change(record.mark.geometry, record.mark.data);
       runner.settle();
       // Focus stays with its key, on the mark's new element if the host replaced it (Vega does). If the
       // mark left, focus moves to its nearest neighbour. Every mark's tabindex is set again.
@@ -591,14 +669,59 @@ function checkOptions<D>(options: ExpressiveOptions<D>): void {
   }
 }
 
-/** A mark's data: its first part's row, with the other parts as related series. Values come with `samples` (M4). */
-function markData<D>(parts: readonly Part<D>[]): MarkData<D> {
-  const of = (part: Part<D>): MarkData<D> => ({ datum: part.datum, samples: [], related });
-  const related = (series: string): MarkData<D> | undefined => {
-    const found = parts.find((part) => part.series === series);
-    return found && of(found);
-  };
-  return of(parts[0]!);
+/** The series a mark has of its own: its segments' and its parts'. */
+function ownSeries<D>(mark: Drawn<D>): string[] {
+  const names = [...(mark.geometry.segments ?? []).map((s) => s.series), ...mark.parts.map((p) => p.series)];
+  return [...new Set(names.filter((name): name is string => name !== undefined))];
+}
+
+/** A rect mark's total: the sum of its parts' values when every one is a finite number (from `value`), else undefined. */
+function totalOf<D>(parts: readonly Part<D>[]): number | undefined {
+  let total = 0;
+  for (const { value } of parts) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+    total += value;
+  }
+  return total;
+}
+
+/**
+ * The bar chart's samples: from 0 at the baseline to the total at the tip, values in proportion to
+ * distance along the bar. A segment's run over its own span of it.
+ */
+function barSamples(bar: MarkGeometry, of: MarkGeometry, total: number): Sample[] {
+  const valueAt = (along: number): number => (bar.length > 0 ? (total * along) / bar.length : 0);
+  if (of === bar) {
+    return [
+      { t: 0, value: 0 },
+      { t: 1, value: total }
+    ];
+  }
+  const from = distance(bar.start, of.start);
+  return [
+    { t: 0, value: valueAt(from) },
+    { t: 1, value: valueAt(from + of.length) }
+  ];
+}
+
+/** A copy of the page's samples, checked: t in [0, 1] and never decreasing, and finite values. */
+function checkSamples(samples: unknown, mark: string): Sample[] {
+  if (!Array.isArray(samples)) throw new TypeError(`expressive: samples for ${mark} must return an array of { t, value }, got ${describeValue(samples)}.`);
+  let last = 0;
+  return samples.map((sample: unknown, i): Sample => {
+    const { t, value, at } = (typeof sample === "object" && sample !== null ? sample : {}) as Partial<Sample>;
+    if (typeof t !== "number" || !(t >= 0 && t <= 1)) throw new RangeError(`expressive: samples for ${mark}: samples[${i}].t must be in [0, 1], got ${describeValue(t)}.`);
+    if (t < last) throw new RangeError(`expressive: samples for ${mark} must be in t order: samples[${i}].t is ${t}, after ${last}.`);
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new RangeError(`expressive: samples for ${mark}: samples[${i}].value must be a finite number, got ${describeValue(value)}.`);
+    }
+    last = t;
+    return at === undefined ? { t, value } : { t, value, at };
+  });
+}
+
+function describeValue(value: unknown): string {
+  return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
 
 /**
@@ -607,11 +730,11 @@ function markData<D>(parts: readonly Part<D>[]): MarkData<D> {
  * as a ring is read: d3.pie() sorts slices by value but returns them in data order, so document
  * order jumps around the ring. Otherwise it's document order.
  */
-function ringOrder<D>(marks: readonly ReadMark<D>[]): readonly ReadMark<D>[] {
+function ringOrder<D>(marks: readonly Drawn<D>[]): readonly Drawn<D>[] {
   const pivot = marks[0]?.geometry.pivot;
   if (!pivot || !marks.every(({ geometry }) => distance(geometry.pivot, pivot) <= 0.5 && goesRound(geometry))) return marks;
   const TURN = 2 * Math.PI;
-  const clockwise = ({ geometry: { center } }: ReadMark<D>): number => {
+  const clockwise = ({ geometry: { center } }: Drawn<D>): number => {
     // In [0, 2π): 0 straight up (y points down), turning towards +x.
     const angle = Math.atan2(center.x - pivot.x, pivot.y - center.y);
     const turned = angle < 0 ? angle + TURN : angle;
@@ -638,11 +761,15 @@ function distance(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-/** For a mark described with `geometry`: the part's own segment, or the whole mark for a lone part. */
-function outlineOf(geometry: MarkGeometry, series: string | undefined, parts: number): string | undefined {
+/**
+ * For a mark described with `geometry`: the part's own segment, or the whole mark for a lone part,
+ * with the stroke's width when the outline is open (a line).
+ */
+function outlineOf(geometry: MarkGeometry, series: string | undefined, parts: number): HostPart["outline"] {
   const segment = series === undefined ? undefined : geometry.segments?.find((s) => s.series === series);
-  if (segment) return segment.length >= 0.5 ? segment.outline.d : undefined;
-  return parts === 1 ? geometry.outline.d : undefined;
+  const shape = segment ?? (parts === 1 ? geometry : undefined);
+  if (!shape || (segment && segment.length < 0.5)) return undefined;
+  return shape.outline.closed ? { d: shape.outline.d } : { d: shape.outline.d, stroke: shape.thickness };
 }
 
 /** The rect's corner radius: rx, or ry when only that is given. */
@@ -681,6 +808,12 @@ function lengthsChanged(from: MarkGeometry, to: MarkGeometry): boolean {
   const b = to.segments ?? [];
   if (Math.abs(from.length - to.length) > 0.01 || a.length !== b.length) return true;
   return a.some((segment, i) => segment.key !== b[i]!.key || Math.abs(segment.length - b[i]!.length) > 0.01);
+}
+
+/** The page's samples changed, though the geometry and the row may not have. */
+function samplesChanged(from: readonly Sample[], to: readonly Sample[]): boolean {
+  const sameAt = (a: Sample["at"], b: Sample["at"]): boolean => a === b || (a instanceof Date && b instanceof Date && a.getTime() === b.getTime());
+  return from.length !== to.length || from.some((a, i) => a.t !== to[i]!.t || a.value !== to[i]!.value || !sameAt(a.at, to[i]!.at));
 }
 
 function geometryChanged(from: MarkGeometry, to: MarkGeometry): boolean {

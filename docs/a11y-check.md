@@ -1,6 +1,6 @@
 # Screen-reader check: `barChart` (M2 step 5)
 
-This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
+This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
 
 **Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results).
 
@@ -122,6 +122,47 @@ Start from a fresh page (Goals, Highest first, after matchweek 24), with the set
 
 If a bar is read twice or in pieces here but not on the first chart, the difference is the structure: here the named element is a `<rect>` inside the page's own `<g>` for each series, where the first chart has a `<g role="img">` per bar.
 
+## D. The donut page: `donutChart` and a D3 pie
+
+`demo/donut.html` (M3) shows the lab's shot outcomes three ways: the library's `donutChart`, the same data as columns on `barChart`, and a pie the page draws with D3, which `expressive()` names. The columns are read like section A's bars, so this script covers the two donuts:
+
+- **The donut.** The `<svg>` is `role="group"`, named by its label ("Shot outcomes"). The total in the hole is hidden, and its text is the group's description ("406 shots"), so it's heard on the way in. Each slice is `role="img"`, named by its category, its count and its share: "Saved: 112 shots, 28%". The labels round the ring are inside the slice and hidden, so the name is the only thing read.
+- **Keyboard order.** The donut is one tab stop. The arrow keys go round the ring clockwise from 12 o'clock: Right and Down to the next slice, Left and Up to the previous, Home and End to the ends, with no wrap-around. In data order that's Goal, Saved, Off target, Blocked.
+- **The data table.** Outcome, shots and a Share column, with a total row ("Total, 406, 100%") whose first cell is its row header.
+- **Announcements.** "Next match" adds a match's shots. The donut announces it ("Match 1: Saved and Off target changed"); the other two charts don't, so it's heard once.
+- **The D3 pie.** The page's `<svg>` is `role="group"`, named "Shot outcomes on a D3 pie", and its labels are hidden. `markLabel` names each slice as the donut does, and the arrow keys go clockwise from 12 o'clock, though D3 keeps its paths in data order.
+
+**Setup.** Run `npm run dev` and open `donut.html` at the address Vite prints, for example `http://localhost:5173/donut.html`. **Reload before you start**, so the page is fresh: Ball, Data order, no matches added. The matches are seeded, so match 1 always adds 3 saved and 3 off target. The page's tab order: the three motion buttons, the three effect buttons (Ball, Wiggle, Pulse), the two order buttons, "Next match", the donut (one stop), its "Data table", the D3 pie (one stop), the columns (one stop), then their "Data table". Use NVDA + Chrome, with the setup from [A](#a-nvda--chrome-windows).
+
+**Listen for:**
+
+1. Each slice is read **once, as one item**, with its count and share: "Saved: 112 shots, 28%". Never the category, the number or the percentage on its own.
+2. Moving into the donut says its name ("Shot outcomes") and, there or soon after, the total ("406 shots"). The "406" and "shots" in the hole are never read as text of their own.
+3. The arrow keys go round clockwise from 12 o'clock and stop at the ends.
+4. The table's Share column and total row are read with their headers.
+5. "Next match" is announced once, with the match number, without you moving anywhere.
+6. The D3 pie's slices are read like the donut's, and its labels aren't read at all.
+
+**NVDA + Chrome**, starting in browse mode:
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 10 times from the top of the page, until focus reaches the donut's first slice. | "Shot outcomes, grouping", perhaps with "406 shots" after it, then "Goal: 58 shots, 14%, graphic". The ball rolls round Goal. | |
+| 2 | NVDA+Space (focus mode), then Right arrow 3 times. | "Saved: 112 shots, 28%, graphic", "Off target: 149 shots, 37%, graphic", "Blocked: 87 shots, 21%, graphic". The focus ring goes clockwise round the ring. | |
+| 3 | Right arrow once more, then Home, End and Left arrow. | Nothing new for Right (Blocked is the last slice). Then "Goal: 58 shots, 14%", "Blocked: 87 shots, 21%", "Off target: 149 shots, 37%", each a graphic. | |
+| 4 | Escape, then NVDA+Space (back to browse mode). Shift+Tab once, to "Next match". Press Space. | "Next match, button", then "Match 1: Saved and Off target changed". | |
+| 5 | Tab once, back into the donut. | "Shot outcomes, grouping", perhaps with the new total, "412 shots", then "Off target: 152 shots, 37%, graphic", the slice focused last. | |
+| 6 | Tab once, to "Data table". Press Space. | "Data table, button, collapsed", then "expanded". | |
+| 7 | Press T (next table). If nothing happens, press NVDA+Space until NVDA says "Browse mode", then T. | "Shot outcomes, table with 6 rows and 3 columns", then "row 1, column 1, Outcome". | |
+| 8 | Ctrl+Alt+Down, then Ctrl+Alt+Right twice. | "row 2, Goal". Then "shots, column 2, 58", "Share, column 3, 14%". | |
+| 9 | Ctrl+Alt+Down 4 times, then Ctrl+Alt+Left. | "Saved, row 3, 28%", "Off target, row 4, 37%", "Blocked, row 5, 21%", "Total, row 6, 100%". Then "shots, column 2, 412". | |
+| 10 | Press Tab, to the D3 pie. | "Shot outcomes on a D3 pie, grouping", then "Goal: 58 shots, 14%, graphic". The ball rolls round Goal on the pie. | |
+| 11 | NVDA+Space (focus mode), then Right arrow 3 times, then Home. | "Saved: 115 shots, 28%", "Off target: 152 shots, 37%", "Blocked: 87 shots, 21%", then "Goal: 58 shots, 14%", each a graphic. Never "Saved" or "115" on its own. | |
+| 12 | Escape, NVDA+Space (browse mode). Shift+Tab 4 times, to "Largest first". Press Space. | "Largest first, toggle button, not pressed", then "pressed", then the donut's "Sorted highest first". | |
+| 13 | Tab 4 times, back into the D3 pie. NVDA+Space (focus mode), then Home and Right arrow. | "Goal: 58 shots, 14%, graphic" (the slice focused last). Then "Off target: 152 shots, 37%" and "Saved: 115 shots, 28%": the ring is largest first now, and the keys follow it. | |
+
+If the total isn't heard in steps 1 and 5, it's still in the table's total row, but say so: the description may need to move into the group's name.
+
 ## Re-check after M2 step 7
 
 M2 step 7 gave each bar of the library's chart a description: the player's position. The roles, names, table and announcements are unchanged, so only these need hearing again:
@@ -144,6 +185,8 @@ If a description isn't read at all, that's acceptable: the position is also in t
 **VoiceOver + Safari:** the full script hasn't been run yet. It was used to hear the "1 goal" wording above.
 
 **The second chart (section C):** not run yet, with either screen reader.
+
+**The donut page (section D):** not run yet. It's M3's screen-reader check, with NVDA + Chrome.
 
 Template for the next run:
 

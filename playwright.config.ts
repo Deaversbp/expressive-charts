@@ -1,4 +1,4 @@
-// The visual suite: screenshots of demo/bars.html in Chromium, on a stopped clock (tests/visual/demo.ts).
+// The visual suite: screenshots of the demo pages in Chromium, on a stopped clock (tests/visual/demo.ts).
 // Baselines come from Linux in the official Playwright image, the one CI runs in, because fonts
 // render differently on each OS. CONTRIBUTING.md has the commands.
 import { defineConfig } from "@playwright/test";

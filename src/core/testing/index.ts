@@ -1,6 +1,7 @@
 // Test helpers for effects and the runner: the drawing API in memory, a ready-made EffectContext and a
-// recording surface.
-// Internal for now; the conformance suite built on these is exported after M3.
+// recording surface. The public ones (testContext, play and the recording types) are re-exported with
+// the conformance suite from "expressive-charts/testing" (src/testing); recordingSurface, measurePath
+// and flush stay internal.
 
 export { testContext, type TestContext, type TestContextOptions } from "./context";
 export { measurePath, type MeasuredPath, type PathCommand } from "./path";

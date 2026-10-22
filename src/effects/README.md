@@ -10,5 +10,6 @@ Effect plugins and combinators. Effects read only `MarkGeometry` (plus `MarkData
 | `pulse.ts` | `pulse({ times, width, color })`: halos that widen and fade, 1 to 6 times and always within 5 s |
 | `gaits.ts` | `gaits.roll()`, `gaits.step()`, `gaits.slide()`: how an icon moves while it travels |
 | `combinators.ts` | `sequence`, `parallel`, `only`, and `stagger` (never a default) |
+| `define.ts` | `defineEffect` and `defineDataEffect`: effects written outside the library, from their `run` and `end` ([guide](../../docs/effects-guide.md)) |
 
 Planned: `threshold` and `morph`.

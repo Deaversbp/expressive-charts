@@ -26,7 +26,7 @@ Charts and effects both depend on core. They never depend on each other. Icons (
 
 `createClock(source?)` runs one shared frame loop for the whole page. It requests a frame only while something is subscribed, so an idle page costs nothing. Outside the browser it falls back to a 16 ms timer. `defaultClock` is the page-wide instance. `manualClock()` only moves when a test calls `advance(ms)`, which makes every timing test deterministic.
 
-**Driving it in a real browser.** The screenshot tests in `tests/visual/` need frames at exact times on a real page. They use Playwright's fake clock rather than a hook in the library. `page.clock` replaces `performance.now()` and `requestAnimationFrame` before any page script runs, and `defaultClock` looks both up only when it asks for a frame, so `page.clock.runFor(ms)` drives the page-wide clock directly. That keeps the public API as it is: no `setDefaultClock()`, no testing export, no flag in the demo. Two details make the frames repeatable. The fake clock's frames fall every 16 ms. And each test moves the clock to the same reading before it acts, because a page starts at however much real time passed while Playwright installed the clock.
+**Driving it in a real browser.** The screenshot tests in `tests/visual/` need frames at exact times on a real page. They use Playwright's fake clock rather than a hook in the library. `page.clock` replaces `performance.now()` and `requestAnimationFrame` before any page script runs, and `defaultClock` looks both up only when it asks for a frame, so `page.clock.runFor(ms)` drives the page-wide clock directly. That keeps the public API as it is: no `setDefaultClock()` and no flag in the demo (`expressive-charts/testing` runs effects on manual clocks of its own, never the page's). Two details make the frames repeatable. The fake clock's frames fall every 16 ms. And each test moves the clock to the same reading before it acts, because a page starts at however much real time passed while Playwright installed the clock.
 
 ### Easing
 
@@ -128,7 +128,7 @@ describe.arc({ key: "Saved", cx: 0, cy: 0, inner: 70, outer: 116, start: d.start
 
 ### Geometry helpers
 
-For effect authors, experimental until M3:
+For effect authors, and public (the [effects guide](effects-guide.md) covers them):
 
 ```ts
 matrix.translate(x, y); matrix.rotate(radians, about?); matrix.scale(sx, sy?, about?);
@@ -180,7 +180,11 @@ Each one has `run`, `end` (the final state, used for reduced motion) and `clear`
 | `onChange()` | Called when the geometry moves |
 | `previous` | The geometry before this update, on update events |
 
-Planned: `threshold({ compareTo, color })`, `morph()`, and the experimental author helpers `defineEffect` and `defineDataEffect`.
+Planned: `threshold({ compareTo, color })` and `morph()`.
+
+### Writing effects
+
+Effects written outside the library are made with `defineEffect(spec)` and `defineDataEffect<D>(spec)` (`src/effects/define.ts`). A spec is the effect without its `kind`, with `clear` optional. Each fills in the kind and a `clear()` that does nothing, throws a `TypeError` unless `run` and `end` are functions (every effect needs an end state, for reduced motion), and freezes the result, keeping only `run`, `end`, `clear` and, for data effects, a frozen copy of `needs`. `DataEffectSpec<D>`'s functions are properties, as on `DataEffect`, so a spec that reads fields `D` doesn't have is a type error. The [effects guide](effects-guide.md) is the author's documentation: the contract, the context and drawing API, timing, end states, the data guardrails, data effects, composing, testing with `checkEffect`, worked examples and a review checklist. This API, with `matrix`, `offset`, `describe.*`, the contracts and `expressive-charts/testing`, is under the 0.x promise in [CHANGELOG.md](../CHANGELOG.md).
 
 ### travel
 
@@ -282,7 +286,7 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 
 ### Testing effects without a DOM
 
-`src/core/testing` has in-memory versions for effect tests. It's internal until the conformance suite is exported after M3.
+`src/core/testing` has in-memory versions for effect tests. `testContext`, `play` and the recording types are public, re-exported from `expressive-charts/testing` with the conformance suite (below); the rest is internal.
 
 - `recordingLayer()` and `recordingMark()` record every call and keep what's drawn now. `picture()` gives that as plain data with numbers rounded, so a full run can be compared with `end()`.
 - `testContext({ mode, scaling, icons, batch, previous })` is a complete `EffectContext` on a manual clock, with `abort()`, `clear()` and `change(mark)` (fires `onChange`). It's built on the same run scope the runner gives every run, so `clear()` is exactly the runner's cleanup after `effect.clear(ctx)`.
@@ -290,7 +294,22 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 - `measurePath(d)` measures the path data the geometry writes: length, start, end and commands.
 - `play(clock, running)` advances a manual clock a frame at a time until a run settles, letting promise callbacks run between frames, and resolves with the ms it took.
 
-`src/effects/conformance.test.ts` runs the conformance checks from plan §8 for every built-in effect (`travel` with each gait and option, `flash`, `wiggle`, `pulse`, a staggered `flash` on a later mark of a batch, and combinations of them) on bars (positive, negative, columns, stacked, too short), a donut slice, a line and a point: a full run ends with the same picture and mark style as `end()`, clearing leaves nothing, an abort mid-run settles, and with motion off no frames run. `src/conformance.test.ts` runs the same checks on real marks: bars from `barChart` and `expressive()`, and slices from `donutChart` and a D3 pie through `expressive()`, with no change to the effects.
+**The conformance suite**, `expressive-charts/testing` (`src/testing/`, its own build entry), runs plan §8's checks for any effect: `checkEffect(effect, { marks, icons, data, batch, name })`. On every mark it checks that:
+
+1. a full run ends with the same picture and mark style as `end()` (pictures as `picture()` gives them; styles rounded the same way, key order and unset fields ignored);
+2. clearing (`effect.clear(ctx)`, then the runner's cleanup) leaves nothing drawn and the mark's own style, and nothing comes back over the next three frames;
+3. an abort two frames in settles the run without more frames, as a resolve rather than a rejection, and clears to nothing with no frames left running;
+4. with motion off, the run asks for no frames and draws what `end()` draws.
+
+It imports no test runner: it resolves when everything passes, and otherwise rejects with one `Error` listing each failure (the mark, the check and what differed), so it works in Vitest, Jest, `node:test` or Mocha. A test removes the runner's globals while it runs to keep it that way.
+
+- **Marks.** `fixtures` by default: a bar, a negative bar, a column, a stack with a gap, a 6 px bar, a donut slice, a line and a point. `marks` takes named marks, or a list such as `chart.marks()`, each named by its key.
+- **Icons.** None by default, so the suite doesn't bring in `src/icons`; `icons` gives the ones an effect looks up by name.
+- **Data effects** get `data(mark)`, or by default no datum, samples from 0 to 1 and no related series. An effect that `needs` related series without `data` throws a `TypeError`, and one typed for its own rows without `data` is a type error.
+- **Batch.** `batch` places the mark in its event's batch, so a staggered effect waits its turn first.
+- Also a failure: `run()` not returning a promise, a run that hasn't settled after 10 s, and anything that throws.
+
+`src/effects/conformance.test.ts` runs `checkEffect` for every built-in effect (`travel` with each gait and option, and by icon name; `flash`; `wiggle`; `pulse`; a staggered `flash` on the third mark of five; and combinations) on the fixtures. `src/conformance.test.ts` runs it for the same effects on real marks: bars from `barChart` and `expressive()`, and slices from `donutChart` and a D3 pie through `expressive()`, with no change to the effects. `src/effects-guide.test.ts` runs it on the guide's worked examples.
 
 ## Runner
 
@@ -562,3 +581,4 @@ SVG first, in `src/charts/render/`. Canvas or WebGL rendering is a later option 
 - `dist/expressive-charts.global.js`: script-tag bundle exposing `window.ExpressiveCharts`.
 - `dist/expressive-charts.css`: the stylesheet the charts inject, as a file, exported as `expressive-charts/style.css` for pages that use `configure({ injectStyles: false })`. `package.json` lists CSS in `sideEffects`, so bundlers keep `import "expressive-charts/style.css"`, which imports no names; webpack would otherwise drop it. `src/package.test.ts` checks the patterns as bundlers read them, since the repo's own bundlers (Vite 8, esbuild) keep the import either way.
 - `dist/icons/sport.js`, `.cjs` and `.d.ts`: the optional sport icon pack, imported as `expressive-charts/icons/sport`. It's a separate entry, so the core build doesn't carry the ball and cleat. The script-tag bundle doesn't include it.
+- `dist/testing.js`, `.cjs` and `.d.ts`: the conformance suite for effect authors, imported as `expressive-charts/testing`. A separate entry, like the sport pack, and not in the script-tag bundle.

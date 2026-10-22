@@ -1,22 +1,14 @@
 import type { MarkGeometry, Matrix, Point } from "../core";
 import { describe as build, matrix } from "../core";
 import { play, testContext, type TestContext } from "../core/testing";
+import { fixtures } from "../testing";
 import { wiggle } from "./wiggle";
 
 const bar = (width: number, more: Partial<Parameters<typeof build.bar>[0]> = {}): MarkGeometry =>
   build.bar({ key: "Okafor", series: "goals", x: 0, y: 0, width, height: 20, baseline: "left", ...more });
 
-// The marks from conformance.test.ts.
-const marks: Record<string, MarkGeometry> = {
-  bar: bar(200, { radius: 4 }),
-  "negative bar": build.bar({ key: "n", series: "goals", x: 0, y: 0, width: 120, height: 20, baseline: "right" }),
-  column: build.bar({ key: "c", series: "goals", x: 0, y: 0, width: 20, height: 150, baseline: "bottom" }),
-  stacked: bar(222, { series: undefined, gap: 2, segments: [{ series: "goals", size: 160 }, { series: "assists", size: 62 }] }),
-  "short bar": bar(6),
-  slice: build.arc({ key: "Saved", cx: 150, cy: 150, inner: 70, outer: 116, start: 0.3, end: 2.4 }),
-  line: build.line({ key: "goals", series: "goals", points: [{ x: 0, y: 100 }, { x: 80, y: 60 }, { x: 160, y: 90 }, { x: 240, y: 20 }], width: 2 }),
-  point: build.point({ key: "p", x: 10, y: 10, r: 3 })
-};
+// Every kind of mark: the ones checkEffect runs on by default.
+const marks: Record<string, MarkGeometry> = fixtures;
 
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
 const distance = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);

@@ -1,49 +1,9 @@
-// Effects written by someone outside the project, against the experimental author API.
-import { barChart, defineDataEffect, defineEffect, expressive, offset, sequence, threshold, type DataEffect, type MarkData } from "expressive-charts";
-
-/**
- * A highlighter stroke that draws itself along the walk, then stays.
- * Ends where end() starts, so reduced motion shows the finished stroke.
- */
-export const trace = (color = "mark") =>
-  defineEffect({
-    async run(mark, ctx) {
-      const stroke = ctx.layer.path(mark.slice(0, 0), { stroke: color, width: 3, opacity: 0.5, linecap: "round" });
-      await ctx.tween({ duration: 500, timing: "effect", update: (p) => stroke.update(mark.slice(0, p)) }).finished;
-    },
-    end(mark, ctx) {
-      ctx.layer.path(mark.slice(0, 1), { stroke: color, width: 3, opacity: 0.5, linecap: "round" });
-    }
-  });
-
-const finalValue = (data: MarkData | undefined): number => {
-  const samples = data?.samples ?? [];
-  return samples[samples.length - 1]?.value ?? 0;
-};
-
-/**
- * "+2" beside a bar whose value just changed. It rises into place and stays until the next
- * update clears it. It doesn't fade away: then reduced motion (end state only) would never
- * show the change at all.
- */
-export const delta = (format = (n: number) => (n > 0 ? `+${n}` : `${n}`)) =>
-  defineDataEffect({
-    async run(mark, data, ctx) {
-      const change = finalValue(data) - finalValue(data.previous);
-      if (change === 0) return;
-      const rest = offset(mark.end, mark.angle(1), 10);
-      const label = ctx.layer.text(format(change), { at: offset(rest, mark.angle(1) - Math.PI / 2, -8), anchor: "start", opacity: 0 });
-      await ctx.tween({
-        duration: 400,
-        timing: "effect",
-        update: (p) => label.update({ opacity: p, at: offset(rest, mark.angle(1) - Math.PI / 2, -8 * (1 - p)) })
-      }).finished;
-    },
-    end(mark, data, ctx) {
-      const change = finalValue(data) - finalValue(data.previous);
-      if (change !== 0) ctx.layer.text(format(change), { at: offset(mark.end, mark.angle(1), 10), anchor: "start" });
-    }
-  });
+// Effects written by someone outside the project, against the public author API. They're the worked
+// examples in docs/effects-guide.md: ./effects/trace.ts and ./effects/delta.ts.
+import { barChart, defineDataEffect, expressive, sequence, threshold, type DataEffect } from "expressive-charts";
+import { checkEffect } from "expressive-charts/testing";
+import { delta } from "./effects/delta";
+import { trace } from "./effects/trace";
 
 interface Region {
   region: string;
@@ -87,3 +47,12 @@ barChart("#bad", { label: "Bad", data: teams, y: "team", x: "points", on: { upda
 declare const needsMore: DataEffect<Region & { target: number }>;
 // @ts-expect-error Region rows have no target field.
 barChart("#bad", { label: "Bad", data: sales, y: "region", x: "revenue", on: { update: needsMore } });
+
+// The conformance suite checks an effect on every kind of mark, in any test runner: it throws one
+// Error listing every failure.
+await checkEffect(trace());
+await checkEffect(delta());
+// An effect typed for its own rows is checked on those rows: data(mark) gives each mark's.
+// @ts-expect-error revenueOnly reads Region rows, so the suite needs data(mark) to give them.
+await checkEffect(revenueOnly);
+await checkEffect(revenueOnly, { data: (mark) => ({ datum: sales.find((d) => d.region === mark.key)!, samples: [], related: () => undefined }) });

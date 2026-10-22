@@ -1,13 +1,27 @@
-// The plan §8 conformance checks for the built-in effects, on real marks from four sources: bars
-// from the reference barChart and from expressive() on bars drawn by other code, the slices of the
-// reference donutChart, and the slices of a D3 pie through expressive(). This test brings charts and
-// effects together, so it lives beside src/index.ts, the only module allowed to.
+// The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
+// four sources: bars from the reference barChart and from expressive() on bars drawn by other code,
+// the slices of the reference donutChart, and the slices of a D3 pie through expressive(). This test
+// brings charts and effects together, so it lives beside src/index.ts, the only module allowed to.
 
 import { select } from "d3-selection";
 import { arc, pie, type PieArcDatum } from "d3-shape";
-import { play, testContext, type TestContextOptions } from "./core/testing";
-import { barChart, describe as build, donutChart, expressive, flash, parallel, pulse, sequence, stagger, travel, wiggle, type GeometryEffect, type MarkGeometry } from "./index";
+import {
+  barChart,
+  describe as build,
+  donutChart,
+  expressive,
+  flash,
+  parallel,
+  pulse,
+  sequence,
+  stagger,
+  travel,
+  wiggle,
+  type GeometryEffect,
+  type MarkGeometry
+} from "./index";
 import { cleat, soccerBall } from "./icons/sport";
+import { checkEffect, type CheckEffectOptions } from "./testing";
 
 interface Player {
   name: string;
@@ -104,8 +118,8 @@ const effects: Record<string, GeometryEffect> = {
   "staggered flash, third of five": stagger(flash())
 };
 
-/** The batch an effect runs in, where it matters: a staggered mark waits its turn first. */
-const batches: Record<string, TestContextOptions["batch"]> = { "staggered flash, third of five": { index: 2, count: 5 } };
+/** More than the defaults, where an effect needs it: a later mark of a batch. */
+const options: Record<string, CheckEffectOptions> = { "staggered flash, third of five": { batch: { index: 2, count: 5 } } };
 
 const bars: Record<string, () => readonly MarkGeometry[]> = { barChart: chartMarks, "expressive() bars": adapterMarks };
 const sources: Record<string, () => readonly MarkGeometry[]> = { ...bars, donutChart: donutMarks, "D3 pie through expressive()": pieMarks };
@@ -146,60 +160,7 @@ describe("slices from a D3 pie through expressive()", () => {
 });
 
 describe.each(Object.entries(sources))("effects on marks from %s", (_source, marksOf) => {
-  for (const [effectName, effect] of Object.entries(effects)) {
-    describe(effectName, () => {
-      const context = (options: TestContextOptions = {}): ReturnType<typeof testContext> => testContext({ batch: batches[effectName], ...options });
-
-      it("ends a full run with the same picture and mark style as end()", async () => {
-        for (const mark of marksOf()) {
-          const ran = context();
-          await play(ran.clock, effect.run(mark, ran));
-          const ended = context();
-          effect.end(mark, ended);
-          expect(ran.layer.picture()).toEqual(ended.layer.picture());
-          expect(ran.mark.style).toEqual(ended.mark.style);
-        }
-      });
-
-      it("leaves nothing behind once cleared", async () => {
-        for (const mark of marksOf()) {
-          const ctx = context();
-          await play(ctx.clock, effect.run(mark, ctx));
-          effect.clear(ctx);
-          ctx.clear();
-          expect(ctx.layer.drawn).toEqual([]);
-          expect(ctx.mark.style).toEqual({});
-        }
-      });
-
-      it("settles when aborted mid-run, and clears to nothing", async () => {
-        for (const mark of marksOf()) {
-          const ctx = context();
-          const running = effect.run(mark, ctx);
-          ctx.clock.advance(16);
-          ctx.clock.advance(16);
-          ctx.abort();
-          await expect(running).resolves.toBeUndefined();
-          effect.clear(ctx);
-          ctx.clear();
-          expect(ctx.layer.drawn).toEqual([]);
-          expect(ctx.mark.style).toEqual({});
-          expect(ctx.clock.idle).toBe(true);
-        }
-      });
-
-      it("runs no frames when motion is off, and draws the end state", async () => {
-        for (const mark of marksOf()) {
-          const ctx = context({ mode: "off" });
-          const running = effect.run(mark, ctx);
-          expect(ctx.clock.idle).toBe(true);
-          await running;
-          const ended = context({ mode: "off" });
-          effect.end(mark, ended);
-          expect(ctx.layer.picture()).toEqual(ended.layer.picture());
-          expect(ctx.mark.style).toEqual(ended.mark.style);
-        }
-      });
-    });
-  }
+  it.each(Object.keys(effects))("%s passes the conformance checks on every mark", async (name) => {
+    await checkEffect(effects[name]!, { name, marks: marksOf(), ...options[name] });
+  });
 });

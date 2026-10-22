@@ -5,7 +5,8 @@
     "types": [],
     "paths": {
       "expressive-charts": ["./api.ts"],
-      "expressive-charts/icons/sport": ["./icons-sport.ts"]
+      "expressive-charts/icons/sport": ["./icons-sport.ts"],
+      "expressive-charts/testing": ["./testing.ts"]
     }
   },
   "include": ["./**/*.ts"]

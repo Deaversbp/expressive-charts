@@ -169,7 +169,7 @@ M2 step 7 gave each bar of the library's chart a description: the player's posit
 
 | Screen reader | Do | Expect to hear (roughly) | What you heard |
 | --- | --- | --- | --- |
-| NVDA + Chrome | Section A, steps 1 and 3. | After each bar's name and "graphic", its position, perhaps after a pause: "Okafor: 16 goals, graphic, Forward"; "Castillo: 1 goal, graphic, Midfielder". **Not** the name or numbers a second time. | |
+| NVDA + Chrome | Section A, steps 1 and 3. | After each bar's name and "graphic", its position, perhaps after a pause: "Okafor: 16 goals, graphic, Forward"; "Castillo: 1 goal, graphic, Midfielder". **Not** the name or numbers a second time. | Passed (22 October 2026): each bar's position was read after its name, and nothing was read twice. |
 | VoiceOver + Safari | Section B, steps 1 and 2. | After each bar's name and "image", its position, perhaps after a pause (VoiceOver may read descriptions only after a delay, or with VO+Shift+H). **Not** the name or numbers a second time. | |
 
 If a description isn't read at all, that's acceptable: the position is also in the data table. If the name or numbers are read twice, the description isn't working as intended.
@@ -180,7 +180,7 @@ If a description isn't read at all, that's acceptable: the position is also in t
 - That run heard "Castillo: 1 goals" in step 3, a known issue then. The demo now words its bars' names with `markLabel`, so the steps above say "1 goal". Only the wording changed, not the roles or the structure. **The new wording was heard as "Castillo: 1 goal" with NVDA + Chrome and with VoiceOver + Safari (October 2026).**
 - The one hitch was the tester's, not the page's. In step 11, T did nothing because NVDA was still in focus mode; after NVDA+Space back to browse mode, it found the table. Step 11 now says so.
 
-**M2 step 7's descriptions:** not re-checked yet; see [Re-check after M2 step 7](#re-check-after-m2-step-7).
+**M2 step 7's descriptions, NVDA + Chrome on Windows, 22 October 2026: passed.** In [the re-check](#re-check-after-m2-step-7) (section A, steps 1 and 3), each bar's position was read after its name, and neither the name nor the numbers were read twice. So `markDescription` works as intended, and the descriptions stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on the descriptions.
 
 **VoiceOver + Safari:** the full script hasn't been run yet. It was used to hear the "1 goal" wording above.
 

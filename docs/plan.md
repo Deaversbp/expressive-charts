@@ -661,6 +661,7 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
   2. `clear()` leaves the layer empty and the mark style reset.
   3. Aborting mid-run settles the promise and leaves nothing behind.
   4. With mode off, no frames are scheduled.
+  5. After a full run, and after `end()`, a `change()` to the mark moved elsewhere leaves what `end()` draws there (added in M4, decision 11).
 
   This suite is how CONTRIBUTING's "check the effect against every built-in chart" becomes automatic. M3 step 5 exports it as `checkEffect` from `expressive-charts/testing`, for effects written outside the project too.
 - **Charts.** Diffing by key (keys stay stable across sorts), ARIA attributes, roving focus with keyboard events, table contents, pointer events → hover/leave, and fixed `width` (jsdom has no layout).
@@ -1183,7 +1184,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
      - `legend` moves to the shared chart options.
    - `svgMarkHandle`: on an open outline, emphasis mixes the stroke colour, and the halo is stroked behind the line at its thickness plus the halo's width. Hover dimming and emphasis get rules for strokes, for the line step to use.
    - **Done when** the tests and visual baselines for bars, the donut and the adapter pass with none changed, and the new code paths have tests of their own.
-2. **`threshold`.** Owns `src/effects/threshold.ts` and its tests, the fifth check in `src/testing/check.ts` (with the fixtures' moved twins in `src/testing/fixtures.ts`), `threshold`'s entries in `src/effects/conformance.test.ts`, and the guide's threshold section.
+2. ✅ **`threshold`.** Owns `src/effects/threshold.ts` and its tests, the fifth check in `src/testing/check.ts` (with the fixtures' moved twins in `src/testing/fixtures.ts`), `threshold`'s entries in `src/effects/conformance.test.ts`, and the guide's threshold section.
    - As decision 11, tested on the manual clock with the recording layer:
      - crossings on the line fixture against a constant, and against a related series both by `at` and by `t`;
      - `when: "above"` on a bar;
@@ -1192,6 +1193,15 @@ Each step names the files it owns, so steps in the same wave can run in parallel
      - `expectTypeOf` checks for the kind and `needs`.
    - The fifth check, with a test that an effect which draws once and ignores `onChange` fails it. If the guide's `trace` or `delta` fails it, fix the example and the guide together.
    - Docs: a `threshold` section in architecture.md's Effects, README, `src/effects/README.md`, the guide (`threshold` as the built-in data effect, and samples on each chart) and CHANGELOG. Delete the sketch's `threshold` declaration.
+   - **Built** as decision 11 describes ([architecture.md](architecture.md#threshold)), with no change to the other effects. Decisions beyond the plan:
+     - **Matching by `at`** needs every sample of both series to have a number or a `Date` there; string labels, or `at` on one side only, fall back to `t`.
+     - **The reference's own samples count.** Between two of the mark's samples, the comparison is split wherever the reference has a sample (where it bends), so a reference with more samples than the mark is followed exactly, not cut across.
+     - **Equal within 1e-9**, relative to the values' size, counts as equal, so float noise in a cumulative sum colours nothing. A sample whose value isn't finite colours neither leg beside it, and a missing related series draws nothing.
+     - It keeps its paths across changes, updating them in place, and takes the data that `onChange` passes, keeping the last when none comes.
+     - **The fifth check also runs after `end()`.** With motion off the runner draws `end()` instead of running, and the mark still moves, so `checkEffect` changes the mark after a full run and after `end()`, and compares both with `end()` on the moved mark. It waits for any animation a change starts (up to 10 s). `moved: (mark) => MarkGeometry | undefined` gives a page's own marks theirs. The fixtures' twins stay internal (`src/testing/fixtures.ts`), so the testing entry's exports don't change.
+     - **The guide's `trace` and `delta` failed it**, as did its first example (`underline`, also in the README), which drew once. All three now redraw from `onChange` in `run()` and in `end()`; `trace` and `delta` draw through one helper each, so a run's last frame and `end()` can't differ.
+     - **Real marks too.** `src/conformance.test.ts` draws each of its four sources again at another size, for the fifth check, and runs `threshold` against a constant there with `checkEffect`'s default data. Every built-in effect passes on the fixtures and on those marks.
+     - The guide shows what `threshold` compares on each chart in a table of its own, so step 4 still owns the `samples` row of the `MarkData` table.
 3. **`playback()` and `playButton()`.** Owns `src/core/playback.ts` and `src/charts/controls/play-button.ts`, with their tests, and the `.ec-play` rules in `src/charts/render/theme.ts`.
    - As decision 12, tested on the manual clock:
      - playing over the remaining share of the duration;

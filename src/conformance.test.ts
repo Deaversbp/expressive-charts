@@ -1,7 +1,9 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
 // four sources: bars from the reference barChart and from expressive() on bars drawn by other code,
-// the slices of the reference donutChart, and the slices of a D3 pie through expressive(). This test
-// brings charts and effects together, so it lives beside src/index.ts, the only module allowed to.
+// the slices of the reference donutChart, and the slices of a D3 pie through expressive(). Each
+// source also draws its marks at another size, as a resize would, for the check that effects follow
+// onChange. This test brings charts and effects together, so it lives beside src/index.ts, the only
+// module allowed to.
 
 import { select } from "d3-selection";
 import { arc, pie, type PieArcDatum } from "d3-shape";
@@ -15,9 +17,10 @@ import {
   pulse,
   sequence,
   stagger,
+  threshold,
   travel,
   wiggle,
-  type GeometryEffect,
+  type AnyMarkEffect,
   type MarkGeometry
 } from "./index";
 import { cleat, soccerBall } from "./icons/sport";
@@ -44,18 +47,19 @@ function el(tag: string, attributes: Record<string, string | number>, parent: El
   return element;
 }
 
-/** The reference chart's marks: stacked goals and assists, at a fixed width (jsdom has no layout). */
-function chartMarks(): readonly MarkGeometry[] {
+/** The reference chart's marks: stacked goals and assists, at a fixed width (jsdom has no layout), narrower when moved. */
+function chartMarks(moved = false): readonly MarkGeometry[] {
   const container = document.body.appendChild(document.createElement("div"));
-  const chart = barChart<Player>(container, { label: "Goals and assists", data: players, y: "name", stack: ["goals", "assists"], width: 600 });
+  const chart = barChart<Player>(container, { label: "Goals and assists", data: players, y: "name", stack: ["goals", "assists"], width: moved ? 480 : 600 });
   return chart.marks();
 }
 
 /**
  * Marks from bars drawn by hand, the way D3 code would draw them: a translated plot group, one <g>
- * per series, and each rect's row on __data__. 20 px per goal or assist, 34 px rows.
+ * per series, and each rect's row on __data__. 20 px per goal or assist (16 when moved), 34 px rows.
  */
-function adapterMarks(): readonly MarkGeometry[] {
+function adapterMarks(moved = false): readonly MarkGeometry[] {
+  const unit = moved ? 16 : 20;
   const svg = el("svg", { width: 600, height: 120 }, document.body);
   const plot = el("g", { transform: "translate(90,4)" }, svg);
   const rects: Element[] = [];
@@ -63,7 +67,7 @@ function adapterMarks(): readonly MarkGeometry[] {
     const group = el("g", { class: series }, plot);
     players.forEach((player, i) => {
       const before = s === 0 ? 0 : player.goals;
-      const rect = el("rect", { x: before * 20, y: i * 34 + 7, width: player[series] * 20, height: 20 }, group);
+      const rect = el("rect", { x: before * unit, y: i * 34 + 7, width: player[series] * unit, height: 20 }, group);
       (rect as unknown as { __data__: unknown }).__data__ = { row: player, series };
       rects.push(rect);
     });
@@ -84,30 +88,31 @@ const shots: Shot[] = [
   { outcome: "Blocked", shots: 87 }
 ];
 
-/** The reference donut's slices: the prototype's shot outcomes, clockwise from 12 o'clock in data order. */
-function donutMarks(): readonly MarkGeometry[] {
+/** The reference donut's slices: the prototype's shot outcomes, clockwise from 12 o'clock in data order, narrower when moved. */
+function donutMarks(moved = false): readonly MarkGeometry[] {
   const container = document.body.appendChild(document.createElement("div"));
-  const chart = donutChart<Shot>(container, { label: "Shot outcomes", data: shots, category: "outcome", value: "shots", width: 640 });
+  const chart = donutChart<Shot>(container, { label: "Shot outcomes", data: shots, category: "outcome", value: "shots", width: moved ? 520 : 640 });
   return chart.marks();
 }
 
-/** A real D3 donut: d3.pie() with its default sort, d3.arc() paths in a centred <g>, each slice described with describe.arc. */
-function pieMarks(): readonly MarkGeometry[] {
+/** A real D3 donut: d3.pie() with its default sort, d3.arc() paths in a centred <g>, each slice described with describe.arc; smaller when moved. */
+function pieMarks(moved = false): readonly MarkGeometry[] {
+  const [inner, outer] = moved ? [60, 100] : [70, 116];
   const plot = select(document.body).append("svg").attr("width", 640).attr("height", 300).append("g").attr("transform", "translate(320,150)");
   const slices = plot
     .selectAll<SVGPathElement, PieArcDatum<Shot>>("path")
     .data(pie<Shot>().value((d) => d.shots)(shots))
     .join("path")
-    .attr("d", arc<PieArcDatum<Shot>>().innerRadius(70).outerRadius(116));
+    .attr("d", arc<PieArcDatum<Shot>>().innerRadius(inner).outerRadius(outer));
   const fx = expressive(slices, {
     key: (d) => d.data.outcome,
     value: (d) => d.value,
-    geometry: (_el, d, key) => build.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle })
+    geometry: (_el, d, key) => build.arc({ key, cx: 0, cy: 0, inner, outer, start: d.startAngle, end: d.endAngle })
   });
   return fx.marks();
 }
 
-const effects: Record<string, GeometryEffect> = {
+const effects: Record<string, AnyMarkEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
   "ball then cleat": sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" })),
@@ -115,14 +120,18 @@ const effects: Record<string, GeometryEffect> = {
   "flash while the ball rolls": parallel(flash(), travel(soccerBall, { along: "goals" })),
   wiggle: wiggle(),
   pulse: pulse(),
-  "staggered flash, third of five": stagger(flash())
+  "staggered flash, third of five": stagger(flash()),
+  // checkEffect's default data runs from 0 to 1 along each walk, so this colours the last 40%.
+  "threshold past a target": threshold({ compareTo: 0.6, when: "above" })
 };
 
 /** More than the defaults, where an effect needs it: a later mark of a batch. */
 const options: Record<string, CheckEffectOptions> = { "staggered flash, third of five": { batch: { index: 2, count: 5 } } };
 
-const bars: Record<string, () => readonly MarkGeometry[]> = { barChart: chartMarks, "expressive() bars": adapterMarks };
-const sources: Record<string, () => readonly MarkGeometry[]> = { ...bars, donutChart: donutMarks, "D3 pie through expressive()": pieMarks };
+/** A source's marks, or with `true` the same marks moved. */
+type Source = (moved?: boolean) => readonly MarkGeometry[];
+const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars": adapterMarks };
+const sources: Record<string, Source> = { ...bars, donutChart: donutMarks, "D3 pie through expressive()": pieMarks };
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -160,7 +169,16 @@ describe("slices from a D3 pie through expressive()", () => {
 });
 
 describe.each(Object.entries(sources))("effects on marks from %s", (_source, marksOf) => {
+  it("draws the marks moved: the same keys, at another size", () => {
+    const marks = marksOf();
+    const twins = marksOf(true);
+    expect(twins.map((twin) => twin.key)).toEqual(marks.map((mark) => mark.key));
+    marks.forEach((mark, i) => expect(twins[i]!.slice(0, 1), mark.key).not.toBe(mark.slice(0, 1)));
+  });
+
   it.each(Object.keys(effects))("%s passes the conformance checks on every mark", async (name) => {
-    await checkEffect(effects[name]!, { name, marks: marksOf(), ...options[name] });
+    const twins = marksOf(true);
+    const moved = (mark: MarkGeometry) => twins.find((twin) => twin.key === mark.key);
+    await checkEffect(effects[name]!, { name, marks: marksOf(), moved, ...options[name] });
   });
 });

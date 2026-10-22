@@ -159,7 +159,7 @@ barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("so
 
 ## Effects
 
-The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The effects [`travel`](#travel), [`flash`](#flash), [`wiggle`](#wiggle) and [`pulse`](#pulse), and the combinators `sequence`, `parallel`, `only` and [`stagger`](#stagger), are in `src/effects/`.
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The effects [`travel`](#travel), [`flash`](#flash), [`wiggle`](#wiggle) and [`pulse`](#pulse), the data effect [`threshold`](#threshold), and the combinators `sequence`, `parallel`, `only` and [`stagger`](#stagger), are in `src/effects/`.
 
 There are three kinds, distinguished by a `kind` field:
 
@@ -180,7 +180,7 @@ Each one has `run`, `end` (the final state, used for reduced motion) and `clear`
 | `onChange()` | Called when the geometry moves |
 | `previous` | The geometry before this update, on update events |
 
-Planned: `threshold({ compareTo, color })` and `morph()`.
+Planned: `morph()`.
 
 ### Writing effects
 
@@ -250,6 +250,20 @@ pulse({ times?, width?, color? })   // or the preset: on: { enter: "pulse" }
 - **End state: nothing**, as for `flash`: a pulse is emphasis, and what it points at stays on the chart.
 - `times` is a whole number from 1 to 6, `width` a finite number more than 0, and `color` a non-empty string; anything else throws a `RangeError`.
 
+### threshold
+
+```ts
+threshold({ compareTo, when?, color? })   // on: { decorate: only("goals", threshold({ compareTo: "xg" })) }
+```
+
+`threshold` is the first data effect. It colours the parts of the mark's walk where its values are below `compareTo`, or above it with `when: "above"`: one overlay path per run, `mark.slice(t0, t1)`, stroked in `color` (default `"negative"`) at the mark's `thickness` with butt caps. On a bar that colours the part past a target across the bar's full thickness, with a square end over a rounded tip; on a line it lies exactly over the stroke and ends at the crossing.
+
+- **The reference.** `compareTo` is a number, compared with every sample as it is, or a series' name, read through `data.related(name)` and listed in `needs.related`, so a chart without that series throws when it's created. A series is matched by `at` when every sample of both has a number or a `Date` there: the reference is interpolated between its samples (sorted by `at`), and nothing is coloured outside its range. Otherwise it's matched by `t`. A missing related series draws nothing.
+- **Crossings.** Between neighbouring samples, and at the places in between where the reference has samples of its own (where it bends), both the mark's values and the reference are taken as linear in `t`, so each crossing is where their difference reaches 0. That's exact where the walk is straight between samples: bars, `describe.line` polylines, and a host polyline sampled at its vertices. Along a curve, values aren't linear in distance, so crossings between samples are approximate; denser samples narrow the error (M4 decisions 5 and 11).
+- **Edge cases.** Equal values aren't coloured, and neither are values within 1e-9 of the reference, relative to their size, so float noise in a sum colours nothing. A sample whose value isn't finite colours neither leg beside it. A walk under 0.5 px (a point) draws nothing.
+- **No animation.** It's an encoding, so it draws at once, with no tween; a fade would flicker as a line extends. It redraws on every `onChange` with the latest data, after a run and after `end()`, reusing its paths, so it follows a transition, a resize or a line being revealed. `end()` draws the same picture, so the colour shows with motion off. It belongs in `on.decorate`.
+- `compareTo` must be a finite number or a non-empty string, `when` `"below"` or `"above"`, and `color` a non-empty string, or it throws a `RangeError` when it's made. It reads no row fields, so its type is `DataEffect` (rows `unknown`), which fits any chart.
+
 ### Combinators
 
 - `sequence(...effects)` runs the parts in order. An abort stops the chain. `end()` draws every part's end state in order, and `clear()` clears every part, passing on the first error after all have run. A part with nothing to do finishes at once, so `sequence(travel(ball, { along: "goals" }), travel(cleat, { along: "assists" }))` tells the right story whether the bar shows goals, assists or both.
@@ -294,22 +308,24 @@ The runner empties the layer and resets the mark when a run is cleared, so clean
 - `measurePath(d)` measures the path data the geometry writes: length, start, end and commands.
 - `play(clock, running)` advances a manual clock a frame at a time until a run settles, letting promise callbacks run between frames, and resolves with the ms it took.
 
-**The conformance suite**, `expressive-charts/testing` (`src/testing/`, its own build entry), runs plan §8's checks for any effect: `checkEffect(effect, { marks, icons, data, batch, name })`. On every mark it checks that:
+**The conformance suite**, `expressive-charts/testing` (`src/testing/`, its own build entry), runs plan §8's checks for any effect: `checkEffect(effect, { marks, icons, data, batch, moved, name })`. On every mark it checks that:
 
 1. a full run ends with the same picture and mark style as `end()` (pictures as `picture()` gives them; styles rounded the same way, key order and unset fields ignored);
 2. clearing (`effect.clear(ctx)`, then the runner's cleanup) leaves nothing drawn and the mark's own style, and nothing comes back over the next three frames;
 3. an abort two frames in settles the run without more frames, as a resolve rather than a rejection, and clears to nothing with no frames left running;
-4. with motion off, the run asks for no frames and draws what `end()` draws.
+4. with motion off, the run asks for no frames and draws what `end()` draws;
+5. after a full run, and after `end()` with motion off (what the runner draws instead of running), a `change()` to the mark moved somewhere else leaves the picture and mark style `end()` draws on the moved mark, once any animation the change started has finished. So an effect that should stay attached is checked to follow `onChange` (M4 decision 11).
 
 It imports no test runner: it resolves when everything passes, and otherwise rejects with one `Error` listing each failure (the mark, the check and what differed), so it works in Vitest, Jest, `node:test` or Mocha. A test removes the runner's globals while it runs to keep it that way.
 
 - **Marks.** `fixtures` by default: a bar, a negative bar, a column, a stack with a gap, a 6 px bar, a donut slice, a line and a point. `marks` takes named marks, or a list such as `chart.marks()`, each named by its key.
+- **Moved marks.** Each fixture has a moved twin (internal, in `src/testing/fixtures.ts`): the same key and series, somewhere else and another size. The bars are a row lower and shorter, the stack's segments in another ratio, the slice turned on a smaller ring, the line rescaled with a fifth point, and the point moved. `moved(mark)` gives other marks theirs, such as the same chart drawn at another width; without it, check 5 is skipped on them. A data effect's change gets `data(moved)`.
 - **Icons.** None by default, so the suite doesn't bring in `src/icons`; `icons` gives the ones an effect looks up by name.
 - **Data effects** get `data(mark)`, or by default no datum, samples from 0 to 1 and no related series. An effect that `needs` related series without `data` throws a `TypeError`, and one typed for its own rows without `data` is a type error.
 - **Batch.** `batch` places the mark in its event's batch, so a staggered effect waits its turn first.
 - Also a failure: `run()` not returning a promise, a run that hasn't settled after 10 s, and anything that throws.
 
-`src/effects/conformance.test.ts` runs `checkEffect` for every built-in effect (`travel` with each gait and option, and by icon name; `flash`; `wiggle`; `pulse`; a staggered `flash` on the third mark of five; and combinations) on the fixtures. `src/conformance.test.ts` runs it for the same effects on real marks: bars from `barChart` and `expressive()`, and slices from `donutChart` and a D3 pie through `expressive()`, with no change to the effects. `src/effects-guide.test.ts` runs it on the guide's worked examples.
+`src/effects/conformance.test.ts` runs `checkEffect` for every built-in effect (`travel` with each gait and option, and by icon name; `flash`; `wiggle`; `pulse`; a staggered `flash` on the third mark of five; `threshold` against a constant, above in a colour, against a related series, and with a riding ball; and combinations) on the fixtures. `src/conformance.test.ts` runs it for the same effects on real marks: bars from `barChart` and `expressive()`, and slices from `donutChart` and a D3 pie through `expressive()`, each drawn again at another size for check 5, with no change to the effects. `src/effects-guide.test.ts` runs it on the guide's worked examples.
 
 ## Runner
 

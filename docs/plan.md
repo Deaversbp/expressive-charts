@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1, M2 and M3 are complete (October 2026, §9). M4 is planned step by step in §9 and is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1, M2 and M3 are complete (October 2026, §9). M4 is planned step by step in §9, and its steps 1–7 are built: what's left is your checklist walk and screen-reader check of `demo/line.html`, and step 8 (the Vega helper) or its move to M6. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -1300,7 +1300,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 **Wave 3:**
 
-7. **`demo/line.html`, its screenshots and the listening script.** Owns `demo/line.html`, `demo/line.ts`, a hand-written D3 line in `demo/`, the link in `demo/index.html`, `tests/visual/line.spec.ts` with its `line-` baselines, and section E of `docs/a11y-check.md`.
+7. ✅ **`demo/line.html`, its screenshots and the listening script.** Owns `demo/line.html`, `demo/line.ts`, a hand-written D3 line in `demo/`, the link in `demo/index.html`, `tests/visual/line.spec.ts` with its `line-` baselines, and section E of `docs/a11y-check.md`.
    - **The page**, as decision 8, with the lab's card 2:
      - the lab's season: seed 42, 38 matchweeks, cumulative goals and xG;
      - its legend's three entries ("Goals scored", "Expected goals (xG)", "Goals below xG") and its table (Matchweek, Goals, xG, Difference);
@@ -1322,6 +1322,16 @@ Each step names the files it owns, so steps in the same wave can run in parallel
      Reduced motion and Analysis are checked in the DOM: Play ends at once with the colour and the ball drawn, and Analysis plays in about 2 s. The page fits 1000 × 2000, and the baselines are made in Docker.
    - A listening script for the line chart and the D3 line. **You run it** with NVDA + Chrome, and the names and roles are adjusted to what you hear.
    - Then check the "Done when" list in the browser with you, at real frame rates if the pane is hidden.
+   - **Built** (October 2026) as decision 8 and this step describe, with nothing in `src/` changed: `demo/line.html` and `demo/line.ts`, the D3 line in `demo/d3-line.ts`, 12 tests in `tests/visual/line.spec.ts` with nine `line-` baselines made in Docker (the suite passes 44/44, with no other baseline changed), and section E of [a11y-check.md](a11y-check.md#e-the-line-page-linechart-and-a-d3-line). The page records the deliberate differences above under "Differences from the lab's card". Decisions beyond the plan:
+     - **Layout.** The two charts sit side by side from 860 px, under one bar with "Play season", the scrubber and its status, so a viewer sees both play at once. Their cards share rows (CSS subgrid), so the charts start at the same height. At 1000 px wide the page is about 1,650 px tall.
+     - **The scrubber** is named "Matchweek", and its `aria-valuetext` is "Through matchweek N", so a screen reader hears the week as it moves. The status beside it isn't a live region. Both name the last whole week drawn, where the lab rounds. As step 3 asked, `onFrame` sets the slider only while the season plays.
+     - **Names.** Each week is named "Matchweek 12: 18 goals, 19.0 xG" (`markLabel`, with "1 goal" in the singular) and described as "-1.0 vs expected" (`markDescription`), and the chart has a `description`. The D3 lines are named for the whole season ("Goals scored: 56 goals by matchweek 38"), whatever is revealed, as the line chart's names are (decision 2); `watch` never calls `markLabel` per frame anyway.
+     - **Tooltip.** A tooltip function's text is plain, so the page's CSS makes its first line, the week, bold (`::first-line`). The lab's grey "vs expected" line is the same colour as the rest.
+     - **The D3 line** is drawn by hand with d3-selection and d3-shape (d3-scale and d3-axis aren't dev dependencies): gridlines, ticks, and two paths with butt caps, so a red run ends where its data does, as on `lineChart`. Its HTML legend copies the line chart's. It reveals itself (`reveal(week)` sets each path's rows and `d`), and `resize()` draws it again at its parent's width, followed by `refresh()`. Its `value` is the line's value at its revealed end, so that refresh isn't taken for an update.
+     - **Screenshots:** `line-page-light` and `-dark`; `line-play-week-20` (the controls and both charts at the first frame past week 20, with the button reading Pause); `line-tooltip` (week 12); `line-focus-chart-` and `line-focus-d3-` in both themes; `line-d3-hover`. **DOM checks:** Play takes 6.5 s in Presentation and 1.95 s in Analysis, and Pause holds both charts; the scrubber glides and hides the weeks after it; the names, legend and table; and with reduced motion, Play ends at once with three red runs and the ball where it rests at load (on the D3 line one frame later, when `watch` reads it).
+     - **Checked at real frame rates** in headless Chromium, since the browser pane was hidden: Play took 6,516 ms in Presentation and 1,963 ms in Analysis with every frame at 16.7 ms, and ended at once in Off. The scrubber, hover, the keyboard and both themes behaved as in the tests, with no console errors.
+     - **Where the plan and the code differ:** the table's headers are the series' labels, "Goals scored" and "Expected goals (xG)", not the lab's "Goals" and "xG", since `seriesLabels` names a series everywhere and the legend needs the long names. Its values share the chart's one `format`, so an xG of 20.0 reads "20" (weeks 5, 7, 9, 12, 13 and 30). Either would need a per-series option; the page lists both among its differences.
+     - **Noticed, for you to decide:** decorations draw above the points, so the red run crosses the hovered goals dot where goals are below xG. And in the dark theme the xG dot's strong orange is close to the negative red. Both are the library's, not the page's.
 
 **Wave 4** (if it fits; otherwise it moves to M6):
 

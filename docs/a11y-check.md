@@ -1,6 +1,6 @@
 # Screen-reader check: `barChart` (M2 step 5)
 
-This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
+This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3), and [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html` (M4). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
 
 **Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) passed with NVDA + Chrome too (22 October 2026).**
 
@@ -163,6 +163,49 @@ If a bar is read twice or in pieces here but not on the first chart, the differe
 
 If the total isn't heard in steps 1 and 5, it's still in the table's total row, but say so: the description may need to move into the group's name.
 
+## E. The line page: `lineChart` and a D3 line
+
+`demo/line.html` (M4) shows the lab's second card twice: goals against expected goals over a season on the library's `lineChart`, and on a line the page draws with D3, which `expressive()` names. One "Play season" button and one scrubber drive both.
+
+- **The line chart.** The `<svg>` is `role="group"`, named by its label ("Goals vs expected goals, season to date"), with a description in a `<desc>`: "Cumulative goals scored and expected goals over 38 matchweeks. The goals line is red wherever goals are below xG." The lines, dots, end labels, axes and the ball are hidden. Each matchweek is one focus stop, `role="img"`, named by `markLabel` with both values ("Matchweek 12: 18 goals, 19.0 xG"), and described by `markDescription` with only the gap ("-1.0 vs expected"), so nothing is read twice.
+- **Keyboard order.** The chart is one tab stop. The arrow keys go one week at a time (Right and Down to the next, Left and Up to the previous), Home and End to the ends, with no wrap-around. Weeks past the scrubber's week are hidden and can't be reached, but the names and the table always cover the whole season.
+- **The data table.** Matchweek, "Goals scored", "Expected goals (xG)" and Difference, a row per week, each named by its week. There's no total row.
+- **The controls.** "Play season" is a button whose name says what a click does: "Pause" while it plays. The scrubber is a slider named "Matchweek" whose value is read as "Through matchweek 38". Nothing is announced while the season plays.
+- **The D3 line.** The page's `<svg>` is `role="group"`, named "Goals and expected goals on a D3 line", and its axes are hidden. `markLabel` names each line for the whole season ("Goals scored: 56 goals by matchweek 38"), whatever the scrubber shows, as the line chart's names do. The arrow keys go from the goals line to the xG line.
+
+**Setup.** Run `npm run dev` and open `line.html` at the address Vite prints, for example `http://localhost:5173/line.html`. **Reload before you start**, so the whole season shows. The page's tab order: the three motion buttons, "Play season", the scrubber, the line chart (one stop), its "Data table", then the D3 line (one stop). Use NVDA + Chrome, with the setup from [A](#a-nvda--chrome-windows). NVDA switches to focus mode on its own on the scrubber; where a step says "focus mode", press NVDA+Space until NVDA says "Focus mode".
+
+**Listen for:**
+
+1. Each matchweek is read **once, as one item**, with both values: "Matchweek 12: 18 goals, 19.0 xG". Then, perhaps after a pause, its gap: "-1.0 vs expected". Never the values twice, and never a number on its own.
+2. Moving into the chart says its name once, and perhaps its description.
+3. The arrow keys go one week at a time and stop at the ends. When only part of the season shows, they stop at the last week shown.
+4. The scrubber is read as "Through matchweek …" as it moves, and nothing is read while the season plays.
+5. The table's Difference column is read with its header, and each row is named by its matchweek.
+6. The D3 line's two lines are each read once, by name.
+7. Nothing is read that you can't see: not the end labels, the axes or the ball.
+
+**Known, no need to report:** "-0.6" may be read "minus 0.6", "vs" as "versus", and "xG" as "x g". Do say if any of it is hard to follow: the page words the names and gaps itself, so they're easy to change.
+
+**NVDA + Chrome**, starting in browse mode:
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 6 times from the top of the page, until focus reaches the line chart's first week. | "Matchweek, slider, Through matchweek 38" on the way past the scrubber. Then "Goals vs expected goals, season to date, grouping", perhaps with its description, then "Matchweek 1: 0 goals, 0.6 xG, graphic", then "-0.6 vs expected". The crosshair and tooltip show at week 1. | |
+| 2 | Focus mode, then Right arrow twice. | "Matchweek 2: 0 goals, 1.7 xG, graphic, -1.7 vs expected", then "Matchweek 3: 3 goals, 3.5 xG, graphic, -0.5 vs expected". The crosshair moves a week at a time. | |
+| 3 | End, Left arrow, Home, then Left arrow again. | "Matchweek 38: 56 goals, 56.5 xG … -0.5 vs expected", "Matchweek 37: 55 goals, 55.1 xG … -0.1 vs expected", "Matchweek 1: 0 goals, 0.6 xG …", then nothing new: week 1 is the first. | |
+| 4 | Shift+Tab once, to the scrubber. Press Home, then Right arrow 4 times. | "Matchweek, slider, Through matchweek 38". Then "Through matchweek 1", "Through matchweek 2" … "Through matchweek 5". Both charts glide back to week 5. | |
+| 5 | Tab once, back into the line chart. Focus mode, then End, then Right arrow. | "Matchweek 1: 0 goals, 0.6 xG, graphic …" (the week focused last). Then "Matchweek 5: 4 goals, 6.0 xG, graphic, -2.0 vs expected": the last week shown. Then nothing new for Right. | |
+| 6 | Shift+Tab twice, to "Play season". Press Space. Wait until the season stops (about 5 seconds), then press NVDA+Tab. | "Play season, button". Then nothing while it plays (perhaps "Pause" once, as the button's name changes). Then "Play season, button" again. | |
+| 7 | Tab 3 times, to "Data table". Press Space. | "Data table, button, collapsed", then "expanded". | |
+| 8 | Press T (next table). If nothing happens, press NVDA+Space until NVDA says "Browse mode", then T. | "Goals vs expected goals, season to date, table with 39 rows and 4 columns", then "row 1, column 1, Matchweek". | |
+| 9 | Ctrl+Alt+Down, then Ctrl+Alt+Right 3 times. | "row 2, 1". Then "Goals scored, column 2, 0", "Expected goals (xG), column 3, 0.6", "Difference, column 4, -0.6". | |
+| 10 | Ctrl+Alt+Down. | "2, row 3, -1.7": the row's matchweek with the new row. | |
+| 11 | Press Tab, to the D3 line. | "Goals and expected goals on a D3 line, grouping", then "Goals scored: 56 goals by matchweek 38, graphic". | |
+| 12 | Focus mode, then Right arrow twice, then Left arrow. | "Expected goals (xG): 56.5 by matchweek 38, graphic", then nothing new, then "Goals scored: 56 goals by matchweek 38, graphic". The focus ring goes round each line, and the other line dims. | |
+
+If the chart's description isn't heard in step 1, it's also in the card's note, but say so: it may need to move.
+
 ## Re-check after M2 step 7
 
 M2 step 7 gave each bar of the library's chart a description: the player's position. The roles, names, table and announcements are unchanged, so only these need hearing again:
@@ -187,6 +230,8 @@ If a description isn't read at all, that's acceptable: the position is also in t
 **The second chart (section C):** not run yet, with either screen reader.
 
 **The donut page (section D), NVDA + Chrome on Windows, 22 October 2026: passed.** All 13 steps read as expected, so every "Listen for" item passed: each slice was read once as one item with its share, the donut's name and total were heard on the way in, the arrow keys went clockwise from 12 o'clock and stopped at the ends, the table's Share column and total row were read with their headers, each match was announced once, and the D3 pie read like the donut with its labels silent. The names and roles stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
+
+**The line page (section E):** not run yet.
 
 Template for the next run:
 

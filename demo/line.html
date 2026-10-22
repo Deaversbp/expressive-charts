@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goals vs expected goals · expressive-charts</title>
+<style>
+  /* Page chrome only, as on bars.html. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #7d7b75;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+  /* The two charts side by side where there's room, so a viewer sees both play at once. Each card's
+     title, note and chart share rows with the other's, so the charts start at the same height. */
+  .season { display: grid; gap: 20px; min-width: 0; }
+  .pair { display: grid; gap: 20px; min-width: 0; }
+  @media (min-width: 860px) {
+    .pair { grid-template-columns: 1fr 1fr; }
+    .pair > .card { grid-row: span 3; grid-template-rows: subgrid; }
+  }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 20px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
+  .note { font-size: 14px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  /* playButton() appends its button here, first in the bar. */
+  .slot { display: contents; }
+  .status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 17ch; }
+  input[type="range"] { flex: 1 1 200px; min-width: 0; max-width: 520px; accent-color: var(--accent); }
+  /* The page's own controls only: the charts draw their own focus rings. */
+  button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+  #line, .d3-box { min-width: 0; }
+  .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  a { color: var(--accent); }
+  /* The tooltip function's text is plain; its first line, the week, is bold as in the lab. */
+  #line .ec-tooltip::first-line { font-weight: 600; }
+  /* The D3 line's own styles: it's someone else's chart, so the page styles it, not the library. Its
+     series take the line chart's palette slots, and its legend copies the line chart's. */
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { flex: none; width: 10px; height: 10px; border-radius: 3px; }
+  .swatch-goals { background: var(--ec-series-1, #2a78d6); }
+  .swatch-xg { background: var(--ec-series-2, #eb6834); }
+  .swatch-below { background: var(--ec-negative, #d03b3b); }
+  #d3-line { display: block; max-width: 100%; height: auto; overflow: visible; }
+  #d3-line .tick { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
+  #d3-line .grid { stroke: var(--ec-grid, #e1e0d9); }
+  #d3-line .baseline { stroke: var(--ec-axis, #c3c2b7); }
+  /* Butt caps, so a red run ends where its data does, as on the line chart. */
+  #d3-line .line { fill: none; stroke-linejoin: round; stroke-linecap: butt; }
+  #d3-line .line-goals { stroke: var(--ec-series-1, #2a78d6); }
+  #d3-line .line-xg { stroke: var(--ec-series-2, #eb6834); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Milestone 4 · line chart and data effects</p>
+    <h1>Goals vs expected goals, two ways</h1>
+    <p class="lede">The prototype's second card on the library: a season of goals against expected goals on <code>lineChart</code>, and the same story on a line drawn with D3. One Play button, one scrubber and the motion switch drive both. Each carries one decoration, <code>only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" })))</code>, with no change to effect code.</p>
+  </header>
+
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
+
+  <!-- The scrubber and both charts: what plays together. -->
+  <div class="season" id="season">
+    <div class="bar">
+      <span class="slot" id="play"></span>
+      <input type="range" id="week" min="1" max="38" step="1" value="38" aria-label="Matchweek" aria-valuetext="Through matchweek 38">
+      <!-- Not a live region: the scrubber's own value text says the week to a screen reader. -->
+      <span class="status" id="week-status">Through matchweek 38</span>
+    </div>
+
+    <div class="pair">
+      <section class="card" aria-labelledby="line-title">
+        <h2 id="line-title">Goals vs expected goals, season to date</h2>
+        <p class="note">The library's own <code>lineChart</code>. The goals line turns red wherever the team has scored fewer goals than its chances were worth, and the ball rides its leading edge as the season plays. Hover anywhere, or Tab in and use the arrow keys, to read both lines and the gap week by week.</p>
+        <div id="line"></div>
+      </section>
+
+      <section class="card" aria-labelledby="d3-title">
+        <h2 id="d3-title">The same story on a D3 line</h2>
+        <p class="note">Drawn the way D3 code would draw it, with <code>d3.line()</code>. <code>expressive()</code> describes each path from its points, samples it with <code>samplesAlong</code>, and adds the same decoration; <code>watch</code> follows each frame the page draws. Tab reaches the lines, and hovering one dims the other.</p>
+        <div class="d3-box">
+          <div class="legend"><span><i class="swatch-goals"></i>Goals scored</span><span><i class="swatch-xg"></i>Expected goals (xG)</span><span><i class="swatch-below"></i>Goals below xG</span></div>
+          <!-- A group, not an image: screen readers skip what's inside an image, and its lines take focus. -->
+          <svg id="d3-line" role="group" aria-label="Goals and expected goals on a D3 line"></svg>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card" aria-labelledby="check-title">
+    <h2 id="check-title">Milestone 4: done when</h2>
+    <ul class="checklist">
+      <li><code>lineChart</code> draws the lab's card 2: two lines with end labels, a crosshair across both with the tooltip, a legend with the page's "Goals below xG", a table with a Difference column, a name for each matchweek, one tab stop whose arrow keys go week by week, and staged updates. Light and dark come from the library's defaults.</li>
+      <li><code>threshold({ compareTo: "xg" })</code> colours the goals line below xG on <code>lineChart</code> and on the D3 line through <code>expressive()</code>, with samples from <code>samplesAlong</code>. It follows every frame of a reveal, and shows with motion off.</li>
+      <li><code>playback()</code> and <code>playButton()</code> play the season (about 6.5 s in Presentation, 2 s in Analysis, at once in Off) and pause it; the scrubber seeks; and <code>reveal()</code> fires no events.</li>
+      <li>The ball rides the goals line's leading edge on both charts, with no change to <code>travel</code> or its gaits during the milestone.</li>
+      <li><code>checkEffect</code>, with its fifth check, passes for every built-in effect, <code>threshold</code> included, on every fixture, and on real marks from <code>barChart</code>, <code>donutChart</code>, <code>lineChart</code>, <code>expressive()</code> bars, D3 pies and D3 lines.</li>
+      <li><code>expressive()</code> has <code>samples</code> and <code>samplesAlong</code>, the <code>needs</code> check, stroke colours and open-outline halos, hover emphasis under <code>dim: true</code>, and opt-in <code>watch</code>, with its cost measured.</li>
+      <li>The line screenshots are green in CI, and no other baseline has changed apart from step 4's host hover ones. The line chart's screen-reader check in <code>docs/a11y-check.md</code> passes.</li>
+      <li>The package still has no runtime dependencies, and <code>typecheck</code>, <code>test</code> and <code>build</code> are green. <code>fromVegaView()</code> reads a Vega-Lite line on this page, or has moved to milestone 6 with a note saying why.</li>
+    </ul>
+  </section>
+
+  <section class="card" aria-labelledby="differences-title">
+    <h2 id="differences-title">Differences from the lab's card</h2>
+    <ul class="checklist">
+      <li>The ball riding the goals line is new; the lab has none.</li>
+      <li>The goals line's end dot and hover dot keep their series colour, since <code>threshold</code> draws nothing on a dot. The tooltip's "vs expected" line and the table's Difference column still say when goals are below xG.</li>
+      <li>"Goals below xG" comes after the series in the legend, since a page's entries follow the chart's own.</li>
+      <li>The table's headers are the series' names, "Goals scored" and "Expected goals (xG)", and its values share the chart's one format, so an xG of 20.0 reads "20".</li>
+    </ul>
+  </section>
+</main>
+<script type="module" src="./line.ts"></script>
+</body>
+</html>

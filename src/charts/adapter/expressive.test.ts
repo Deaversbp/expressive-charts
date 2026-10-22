@@ -226,10 +226,14 @@ function dataRecorder(needs?: string[]) {
   return { effect, seen, last };
 }
 
-/** The host's colour mixed toward black, as hover darkening and full emphasis write it (jsdom may write a hex as rgb()). */
-const darker = (hex: string, rgb: string): RegExp => new RegExp(`^color-mix\\(in srgb, (${hex}|rgb\\(${rgb}\\)) 75%, black\\)$`);
-const BLUE = darker("#2a78d6", "42, 120, 214");
-const ORANGE = darker("#eb6834", "235, 104, 52");
+/**
+ * The host's strong colour, as the hover colour under dim and full emphasis write it: a quarter of the way to
+ * the theme's text colour, as our charts' -strong colours step, so darker in light and lighter in dark
+ * (jsdom may write a hex as rgb()).
+ */
+const strongOf = (hex: string, rgb: string): RegExp => new RegExp(`^color-mix\\(in oklab, (${hex}|rgb\\(${rgb}\\)), var\\(--ec-text, #0b0b0b\\) 25%\\)$`);
+const BLUE = strongOf("#2a78d6", "42, 120, 214");
+const ORANGE = strongOf("#eb6834", "235, 104, 52");
 
 afterEach(() => {
   document.body.textContent = "";
@@ -562,8 +566,8 @@ describe("expressive: hover", () => {
     expect(assists.style.getPropertyValue("transform")).toBe("matrix(1, 0, 0, 1, 5, 0)");
     expect(assists.style.getPropertyValue("transform-origin")).toBe("0 0");
     expect(assists.style.getPropertyValue("opacity")).toBe("0.5");
-    // The host's colour, mixed toward black (jsdom writes the hex as rgb()).
-    expect(assists.style.getPropertyValue("fill")).toMatch(/^color-mix\(in srgb, (#eb6834|rgb\(235, 104, 52\)) 75%, black\)$/);
+    // The host's strong colour, toward the text colour (jsdom writes the hex as rgb()).
+    expect(assists.style.getPropertyValue("fill")).toMatch(ORANGE);
     expect(assists.getAttribute("transform")).toBeNull();
     const halo = overlayOf(host.svg).querySelector(".ec-halos > .ec-halo")!;
     expect(halo.querySelectorAll(":scope > path")).toHaveLength(2);
@@ -948,7 +952,7 @@ describe("expressive: stroked marks", () => {
     const { fx } = setup<Trace>(host.paths, { ...traced, on: { hover: glow } });
     const [goals] = host.paths;
     pointer("pointerover", goals!);
-    // Emphasis darkens the stroke and leaves the fill alone.
+    // Emphasis colours the stroke and leaves the fill alone.
     expect(goals!.style.getPropertyValue("stroke")).toMatch(BLUE);
     expect(goals!.style.getPropertyValue("fill")).toBe("");
     // Runs draw in the line's colour.
@@ -995,14 +999,14 @@ describe("expressive: stroked marks", () => {
   });
 });
 
-describe("expressive: hover darkening", () => {
-  it("under dim, darkens the hovered mark as our charts do: each segment's fill on a bar", () => {
+describe("expressive: hover colour", () => {
+  it("under dim, gives the hovered mark its strong colour, as our charts do: each segment's fill on a bar", () => {
     const host = d3Stack();
     setup(host.selection(), { ...stacked, dim: true });
     pointer("pointerover", host.rect("Okafor", "goals"));
     expect(host.rect("Okafor", "goals").style.getPropertyValue("fill")).toMatch(BLUE);
     expect(host.rect("Okafor", "assists").style.getPropertyValue("fill")).toMatch(ORANGE);
-    // The others dim and keep their colours; the darkening fades in with the stylesheet's transition.
+    // The others dim and keep their colours; the strong colour fades in with the stylesheet's transition.
     expect(host.rect("Tanaka", "goals").style.getPropertyValue("fill")).toBe("");
     expect(host.rect("Okafor", "goals").style.getPropertyValue("transition")).toBe("");
     expect(document.querySelector("style[data-expressive-charts]")!.textContent).toContain(
@@ -1016,7 +1020,7 @@ describe("expressive: hover darkening", () => {
     expect(host.rects().map((rect) => rect.style.getPropertyValue("fill"))).toEqual(host.rects().map(() => ""));
   });
 
-  it("darkens a line's stroke, for keyboard focus too, and gives way to an effect's emphasis", () => {
+  it("gives a line's stroke its strong colour, for keyboard focus too, and gives way to an effect's emphasis", () => {
     const host = d3Lines();
     const soften: GeometryEffect = { kind: "geometry", run: async (_mark, ctx) => ctx.mark.set({ emphasis: 0 }), end: () => {}, clear: () => {} };
     const { fx } = setup<Trace>(host.paths, { ...traced, dim: true, keyboard: true });

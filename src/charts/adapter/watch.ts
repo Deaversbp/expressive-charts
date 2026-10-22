@@ -4,8 +4,8 @@
 // attributes. What changed is handed on once a frame, on the chart's clock, however many
 // attributes the host wrote in between.
 //
-// The marks' own style isn't watched: the adapter writes it (effects' transforms, emphasis, hover
-// darkening), so it would hear itself.
+// The marks' own style isn't watched: the adapter writes it (effects' transforms, emphasis, the hover
+// colour), so it would hear itself.
 
 import type { Clock } from "../../core";
 

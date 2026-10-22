@@ -36,5 +36,6 @@ The rest of the API (charts, adapters, built-in effects, controls) can still cha
 
 - `matrix` and `offset` are no longer experimental.
 - `sequence` starts each part on the mark's geometry and data as they are when that part starts, not as they were when the sequence started, so a part after a travel follows a line that grew meanwhile.
+- `expressive()`'s hovered mark under `dim: true` takes its strong colour as our charts' marks do: its colour stepped a quarter of the way toward `--ec-text` (in OKLab), so lighter in the dark theme rather than mixed with black in both. `emphasis` on host marks mixes toward the same colour.
 - `expressive()` reads a `<rect>` through its parent's coordinates and its own `transform` attribute, no longer through its own screen CTM, so the CSS transform an effect gives a bar is never read back as geometry. A CSS transform a host puts on the rect element itself isn't seen either (on its groups, it still is).
 - `onChange` listeners in the `update` slot get data that keeps the previous values the run was given, so `stagger` and `sequence` no longer drop them when they start an effect on the latest data.

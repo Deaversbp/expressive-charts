@@ -68,8 +68,9 @@ export interface ExpressiveOptions<D> {
    */
   readonly keyboard?: boolean;
   /**
-   * Dim the other marks while one is hovered (to --ec-dim-opacity), and darken the hovered one, as our
-   * charts do: its fill, or its stroke when the fill is none (a line). Default false: the host owns its styling.
+   * Dim the other marks while one is hovered (to --ec-dim-opacity), and give the hovered one its strong
+   * colour, as our charts do: its fill, or its stroke when the fill is none (a line), stepped toward the
+   * text colour, so darker in the light theme and lighter in the dark. Default false: the host owns its styling.
    */
   readonly dim?: boolean;
   /**

@@ -119,7 +119,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   const clock = env.clock ?? defaultClock;
   const dim = options.dim === true;
   const edits = hostEdits();
-  /** The host's colours per element, kept while an effect or hover darkening overrides them. */
+  /** The host's colours per element, kept while an effect or the hover colour overrides them. */
   const colorCache = new WeakMap<Element, ReturnType<typeof hostColors>>();
   let source = target;
   let warnedIndex = false;
@@ -286,7 +286,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   function colorsOf(element: Element, svg: Element): HostPart["colors"] {
-    // While an effect or hover darkening sets the colour, the computed one is ours: keep the host's from before.
+    // While an effect or the hover colour sets it, the computed one is ours: keep the host's from before.
     if ((edits.styled(element, "fill") || edits.styled(element, "stroke")) && colorCache.has(element)) return colorCache.get(element);
     const colors = hostColors(element, svg);
     colorCache.set(element, colors);
@@ -503,9 +503,9 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   /**
-   * With `dim`, this attachment's other marks fade while one is hovered, and the hovered one darkens
-   * (its fill, or its stroke on a line), as on our charts. The fade is classes, so host CSS can
-   * override it, and only on its own marks, so attachments sharing an <svg> leave each other alone.
+   * With `dim`, this attachment's other marks fade while one is hovered, and the hovered one takes its
+   * strong colour (its fill, or its stroke on a line), as on our charts. The fade is classes, so host
+   * CSS can override it, and only on its own marks, so attachments sharing an <svg> leave each other alone.
    * Both are CSS transitions timed by motion, like the charts'.
    */
   function applyDim(): void {

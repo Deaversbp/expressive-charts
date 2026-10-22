@@ -33,6 +33,7 @@ import {
   placeXTick,
   placeYTick,
   pointKey,
+  positions,
   xText,
   type LineFrame,
   type LineLayout,
@@ -592,7 +593,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     if (moved) runner.change(geometry, placed.data);
   }
 
-  /** Draws the point as `placed`, hidden past the reveal. Its runs hear about it when it moved. */
+  /** Draws the point as `placed`. Its runs hear about it when it moved. */
   function showPoint(record: PointRecord<D>, placed: Placed<D>): void {
     const before = record.shown;
     const moved = geometryChanged(before.geometry, placed.geometry) || !sameData(before.data, placed.data);
@@ -621,11 +622,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
    * can't be hovered or focused.
    */
   function paintColumns(frame: LineFrame, states: readonly { readonly record: RowRecord<D>; readonly state: RowState<D> }[]): void {
-    const x = (value: number): number => {
-      const { box: b } = frame;
-      const span = b.xHi - b.xLo;
-      return span > 0 ? b.left + ((value - b.xLo) / span) * (b.right - b.left) : (b.left + b.right) / 2;
-    };
+    const { x } = positions(frame);
     const shown = states.filter(({ record }) => revealed(record));
     const columns = placeColumns(frame, shown.map(({ state }) => x(state.x)));
     shown.forEach(({ record }, i) => setAttributes(record.hit, { ...columns[i]! }));

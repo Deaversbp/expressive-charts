@@ -50,6 +50,8 @@ export interface VegaItem {
   readonly strokeWidth?: number;
   readonly cornerRadius?: number;
   readonly defined?: boolean;
+  /** How a line is drawn between its points: only "linear" (or unset) can be read. */
+  readonly interpolate?: string;
 }
 
 /** A value for data effects: alone, or with where it is along x (`at`), which threshold matches series by. */
@@ -76,8 +78,11 @@ export interface VegaAttachment<D> extends Omit<Attachment<D>, "refresh"> {
 const MARK_TYPES = ["line", "rect", "arc", "symbol"] as const;
 type MarkType = (typeof MARK_TYPES)[number];
 
-/** Attributes Vega writes when it draws marks somewhere new: a data change, a resize, a signal. */
-const DRAWN = ["d", "transform", "x", "y", "width", "height"];
+/**
+ * Attributes Vega writes when it draws marks somewhere new (a data change, a resize, a signal), and
+ * `stroke-width`, which a line's thickness, and so its decorations and focus ring, are read from.
+ */
+const DRAWN = ["d", "transform", "x", "y", "width", "height", "stroke-width"];
 
 /** One read of the View: the elements to attach, in visual order, and each mark's geometry and samples. */
 interface ViewRead {
@@ -368,9 +373,20 @@ function namesIn(root: VegaMark): string[] {
   return [...names];
 }
 
-/** A line's points, from its mark's items. A point Vega leaves out (`defined: false`) would be a gap, which lines can't have yet. */
+/**
+ * A line's points, from its mark's items. Lines are straight between their points (M4 decision 5),
+ * so a curve Vega interpolates (monotone, basis, step and the rest; it reads the first item's) would
+ * be described as a different path from the one drawn, and throws instead. So does a point Vega
+ * leaves out (`defined: false`), which would be a gap, which lines can't have yet.
+ */
 function pointsOf(first: VegaItem): { item: VegaItem; point: Point }[] {
   const items = first.mark?.items ?? [first];
+  const interpolate = items[0]?.interpolate;
+  if (interpolate !== undefined && interpolate !== "linear") {
+    throw new TypeError(
+      `fromVegaView: a line is drawn with interpolate "${interpolate}", but only straight lines can be read. Use interpolate "linear" (the default), or describe the curve with expressive()'s geometry option.`
+    );
+  }
   if (items.some((item) => item.defined === false)) {
     throw new TypeError("fromVegaView: a line has a gap (a point with defined: false). Lines with gaps can't be read yet.");
   }

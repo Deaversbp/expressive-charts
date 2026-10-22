@@ -241,6 +241,22 @@ describe("fromVegaView: a Vega-Lite line", () => {
     expect(events).toEqual(["update goals", "update xg"]);
   });
 
+  it("follows a stroke width a signal changes alone, which redraws no path data", async () => {
+    const spec = lineSpec() as TopLevelSpec & { mark: object };
+    const { view, svg } = await render({ ...spec, params: [{ name: "lineWidth", value: WIDTH }], mark: { type: "line", strokeWidth: { expr: "lineWidth" } } } as TopLevelSpec);
+    const e = env("off");
+    const fx = fromVegaView(view, { ...lineOptions, on: { decorate: only("goals", threshold({ compareTo: "xg" })) } }, e);
+    expect(goalsOf(fx).thickness).toBe(WIDTH);
+    const d = linePaths(svg)[0]!.getAttribute("d");
+    await view.signal("lineWidth", 4).runAsync();
+    await delivered();
+    e.clock.advance(16);
+    expect(linePaths(svg)[0]!.getAttribute("d")).toBe(d);
+    expect(linePaths(svg)[0]!.getAttribute("stroke-width")).toBe("4");
+    expect(goalsOf(fx).thickness).toBe(4);
+    for (const path of runPaths(svg)) expect(path.getAttribute("stroke-width")).toBe("4");
+  });
+
   it("attaches before the View first runs, and to its marks once Vega draws them", async () => {
     const { view, svg } = await render(lineSpec(), false);
     const e = env("off");
@@ -427,6 +443,16 @@ describe("fromVegaView: what it can't read", () => {
   it("names the marks it has when the one asked for isn't there", async () => {
     const { view } = await render(lineSpec());
     expect(() => fromVegaView(view, { ...lineOptions, mark: "lines" }, env())).toThrow(/no mark named "lines". Its named marks: "marks"/);
+  });
+
+  it.each(["monotone", "basis", "step"])("refuses a line Vega draws as a curve (%s), rather than describing straight segments", async (interpolate) => {
+    const { view } = await render({ ...lineSpec(), mark: { type: "line", strokeWidth: WIDTH, interpolate } } as TopLevelSpec);
+    expect(() => fromVegaView(view, lineOptions, env())).toThrow(new RegExp(`interpolate "${interpolate}", but only straight lines can be read`));
+  });
+
+  it("reads a line drawn with interpolate \"linear\", the default", async () => {
+    const { view } = await render({ ...lineSpec(), mark: { type: "line", strokeWidth: WIDTH, interpolate: "linear" } } as TopLevelSpec);
+    expect(fromVegaView(view, lineOptions, env()).marks()).toHaveLength(2);
   });
 
   it("reads only rects, arcs, symbols and lines", async () => {

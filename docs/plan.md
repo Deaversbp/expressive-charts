@@ -1375,6 +1375,9 @@ Each step names the files it owns, so steps in the same wave can run in parallel
      - **Conformance.** Every built-in effect, and `threshold` against xG with the View's own samples, passes `checkEffect` (five checks, with moved twins) on the View's lines. The checks are in `src/vega.test.ts`: the shared conformance file's sources are synchronous, and a View renders asynchronously.
      - **Screenshots.** Five new: `line-vega-light`, `line-vega-dark`, `line-vega-focus-light`, `line-vega-focus-dark` and `line-vega-hover`. `line-page-light` and `line-page-dark` were remade, since the page has a new card. No other baseline changed. Docker passed 50 of 50 twice.
      - **Screen reader.** Section E gains steps 13 and 14 for the Vega-Lite line, not run yet. Vega still gives the groups round its lines roles of its own (`graphics-object`, `graphics-symbol`), so step 13 listens for anything unnamed.
+     - **Fixed after Codex's review on PR #48:**
+       - A line Vega draws as a curve (any `interpolate` but `"linear"`) now throws, instead of being described as straight segments the effects would draw off the curve (decision 5).
+       - A change to a line's `stroke-width` alone is now followed. The helper watches that attribute too, and `expressive()`'s `refresh()` now counts a mark whose thickness changed as moved, so its decorations hear `change()`. Before, only an outline or segment change did, so a D3 line whose width changed kept its old decorations as well. Six new tests (1,346 in all).
 
 **Done when:**
 - `lineChart` draws the lab's card 2 on the library: two lines with end labels, a crosshair across both with the tooltip, a legend with the page's "Goals below xG", a table with a Difference column, a name for each matchweek, one tab stop whose arrow keys go week by week, and staged updates. Light and dark come from the library's defaults.
@@ -1404,7 +1407,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
   - Beyond step 4's host hover baselines, two other kinds changed. Step 6 remade two dark host focus baselines, for your hover-colour decision. Step 8 remade the two full-page line baselines, since the page has a new card.
   - CI runs on step 8's pull request.
 - **Screen reader.** Your NVDA + Chrome check of section E passed (steps 1–12). Steps 13 and 14, for the Vega-Lite line, haven't been run.
-- **Packaging.** No runtime dependencies, and `typecheck`, `test` (1,340 tests) and `build` are green.
+- **Packaging.** No runtime dependencies, and `typecheck`, `test` (1,346 tests) and `build` are green.
 
 **Left for you:**
 - look at the Vega-Lite card on `demo/line.html` in the browser;

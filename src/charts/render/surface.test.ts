@@ -80,6 +80,20 @@ describe("svgSurface groups", () => {
     expect(mark(clearedGroup)).toBe("var(--ec-series-4, #c28409)");
     expect(() => surface.recolor("missing")).not.toThrow();
   });
+
+  it("hides a key's groups, and the ones it gets later, until it's shown again", () => {
+    const { overlay, surface } = setup();
+    surface.group("a", "decorate", 1);
+    surface.group("b", "decorate", 2);
+    surface.hide("a", true);
+    surface.group("a", "hover", 3);
+    const visibility = () => Array.from(overlay.children, (g) => `${g.getAttribute("data-key")}:${g.getAttribute("visibility")}`);
+    expect(visibility()).toEqual(["a:hidden", "b:null", "a:hidden"]);
+    surface.hide("a", false);
+    expect(visibility()).toEqual(["a:null", "b:null", "a:null"]);
+    surface.group("a", "enter", 4);
+    expect(overlay.lastElementChild!.getAttribute("visibility")).toBeNull();
+  });
 });
 
 describe("svgLayer icons", () => {

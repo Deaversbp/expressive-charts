@@ -125,8 +125,11 @@ interface LineRecord<D> extends MarkBase<D> {
 interface PointRecord<D> extends MarkBase<D> {
   readonly kind: "point";
   row: RowRecord<D>;
-  /** Past the reveal: hidden, overlays and all. */
-  hidden: boolean;
+  /**
+   * Past the reveal: hidden, overlays and all. Undefined until it's first drawn, so a new point sets
+   * its overlays' visibility whatever a gone point with its key left there.
+   */
+  hidden: boolean | undefined;
 }
 
 type MarkRecord<D> = LineRecord<D> | PointRecord<D>;
@@ -401,7 +404,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       handle: svgMarkHandle(() => record),
       target: placed,
       shown: placed,
-      hidden: false,
+      hidden: undefined,
       leave: undefined
     };
     return record;
@@ -460,7 +463,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     paintLines(frame, states.map((s) => s.state));
     for (const { record, state } of states) {
       const placed = new Map(placePoints(frame, state, record.points.map((point) => point.series)).map((point) => [point.key, point]));
-      for (const point of record.points) if (drawn(point)) showPoint(point, placed.get(point.key)!);
+      showAll(record.points.filter(drawn).map((point) => ({ record: point, placed: placed.get(point.key)! })));
     }
     paintColumns(frame, states);
     followHover();
@@ -517,11 +520,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
         return to ? [{ record, to }] : [];
       });
       const kept = pairs.every(({ record, to }) => sameGeometry(record.target.geometry, to.geometry) && sameData(record.target.data, to.data));
-      for (const { record, to } of pairs) {
-        if (!kept) record.target = to;
-        if (record.kind === "line") showLine(record, record.target);
-        else showPoint(record, record.target);
-      }
+      if (!kept) for (const { record, to } of pairs) record.target = to;
+      showAll(pairs.map(({ record }) => ({ record, placed: record.target })));
     };
     settle(lineOrder, (line) => placed.lines.get(line.series));
     paintLabels(frame, new Map(lineOrder.flatMap((line) => (placed.lines.has(line.series) ? [[line, placed.lines.get(line.series)!] as const] : []))));
@@ -555,12 +555,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     const drawnLines = [...lineOrder, ...leavingLines()];
     if (states.length === 0 || drawnLines.length === 0) return;
     const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut));
-    const ends = new Map<LineRecord<D>, PlacedLine<D>>();
-    drawnLines.forEach((line, i) => {
-      showLine(line, placed[i]!);
-      ends.set(line, placed[i]!);
-    });
-    paintLabels(frame, ends);
+    showAll(drawnLines.map((line, i) => ({ record: line, placed: placed[i]! })));
+    paintLabels(frame, new Map(drawnLines.map((line, i) => [line, placed[i]!])));
   }
 
   /** Each line's end label, counting between values, kept 16 px apart; or none with `labels: false`. */
@@ -580,10 +576,22 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     });
   }
 
-  /** Draws the line as `placed`, with its end dot. Its runs hear about it when its geometry or data changed, so decorations follow. */
-  function showLine(record: LineRecord<D>, placed: Placed<D>): void {
-    const before = record.shown;
-    const moved = geometryChanged(before.geometry, placed.geometry) || !sameData(before.data, placed.data);
+  /**
+   * Draws each mark as placed. Their data link to each other through `related` (the lines; a row's
+   * points), so when any one's data changed, every one's runs hear about it with the new data: a
+   * threshold on the goals line follows a change to xG alone.
+   */
+  function showAll(marks: readonly { readonly record: MarkRecord<D>; readonly placed: Placed<D> }[]): void {
+    const related = marks.some(({ record, placed }) => !sameData(record.shown.data, placed.data));
+    for (const { record, placed } of marks) {
+      if (record.kind === "line") showLine(record, placed, related);
+      else showPoint(record, placed, related);
+    }
+  }
+
+  /** Draws the line as `placed`, with its end dot. Its runs hear about it when it moved or `related` data changed, so decorations follow. */
+  function showLine(record: LineRecord<D>, placed: Placed<D>, related: boolean): void {
+    const moved = related || geometryChanged(record.shown.geometry, placed.geometry);
     record.shown = placed;
     const { geometry } = placed;
     paint(record, seriesColors(colors.slot(record.series)), { visible: geometry.length >= VISIBLE, open: { width: geometry.thickness } });
@@ -593,10 +601,9 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     if (moved) runner.change(geometry, placed.data);
   }
 
-  /** Draws the point as `placed`. Its runs hear about it when it moved. */
-  function showPoint(record: PointRecord<D>, placed: Placed<D>): void {
-    const before = record.shown;
-    const moved = geometryChanged(before.geometry, placed.geometry) || !sameData(before.data, placed.data);
+  /** Draws the point as `placed`. Its runs hear about it when it moved or `related` data changed. */
+  function showPoint(record: PointRecord<D>, placed: Placed<D>, related: boolean): void {
+    const moved = related || geometryChanged(record.shown.geometry, placed.geometry);
     record.shown = placed;
     paint(record, seriesColors(colors.slot(record.series)), { visible: true });
     if (moved) runner.change(placed.geometry, placed.data);

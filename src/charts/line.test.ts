@@ -302,6 +302,22 @@ describe("lineChart: reveal", () => {
     chart.reveal(4);
     expect(svg.querySelectorAll(".ec-overlay > .ec-run[visibility='hidden']")).toHaveLength(0);
   });
+
+  it("shows what effects draw on a point that comes back revealed, after it went while hidden", async () => {
+    const decorate = recorder((mark, ctx) => {
+      if (mark.length === 0) ctx.layer.path(`M${mark.center.x},${mark.center.y}h1`, { stroke: "mark" });
+    });
+    const { chart, svg, settle } = setup({ on: { decorate: decorate.effect } });
+    chart.reveal(3);
+    // Week 4 goes while it's hidden, the reveal moves past where it was, and it comes back.
+    await settle(chart.update({ data: weeks.slice(0, 3) }));
+    expect(svg.querySelector('.ec-point[data-key="goals@4"]')).toBeNull();
+    chart.reveal(Infinity);
+    await settle(chart.update({ data: weeks }));
+    expect(chart.marks().map((mark) => mark.key)).toContain("goals@4");
+    expect(svg.querySelector('.ec-point[data-key="goals@4"]')!.getAttribute("visibility")).toBeNull();
+    expect(Array.from(svg.querySelectorAll('.ec-overlay > .ec-run[data-key$="@4"]'), (g) => g.getAttribute("visibility"))).toEqual([null, null]);
+  });
 });
 
 describe("lineChart: hover", () => {
@@ -506,6 +522,23 @@ describe("lineChart: effects and data", () => {
     expect(() => setup({ series: ["goals"], on: { decorate: needsXg } })).toThrow(/on\.decorate needs the series "xg", but the chart's series are "goals"/);
     const { chart } = setup({ on: { decorate: needsXg } });
     await expect(chart.update({ series: ["goals"] })).rejects.toThrow(/needs the series "xg"/);
+  });
+
+  it("tells a line's and a point's runs when only the related series changed", async () => {
+    const data = dataRecorder();
+    const { chart, settle } = setup({ on: { decorate: data.effect } });
+    const outline = chart.marks()[0]!.outline.d;
+    const lineBefore = data.latest.get("goals")!;
+    const pointBefore = data.latest.get("goals@2")!;
+    // Only week 2's xG changes: the goals rows are the same objects, the scale stays 0–6, so the goals
+    // line and its points don't move, but what they compare with does.
+    const next = [weeks[0]!, { ...weeks[1]!, xg: 2.4 }, weeks[2]!, weeks[3]!];
+    await settle(chart.update({ data: next }));
+    expect(chart.marks()[0]!.outline.d).toBe(outline);
+    expect(data.latest.get("goals")).not.toBe(lineBefore);
+    expect(data.latest.get("goals")!.related("xg")!.samples[1]!.value).toBe(2.4);
+    expect(data.latest.get("goals@2")).not.toBe(pointBefore);
+    expect(data.latest.get("goals@2")!.related("xg")!.samples[0]!.value).toBe(2.4);
   });
 
   it("restyles a point through ctx.mark, moving its ring with it", () => {

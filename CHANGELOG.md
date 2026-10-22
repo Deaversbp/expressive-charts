@@ -33,3 +33,5 @@ The rest of the API (charts, adapters, built-in effects, controls) can still cha
 ### Changed
 
 - `matrix` and `offset` are no longer experimental.
+- `sequence` starts each part on the mark's geometry and data as they are when that part starts, not as they were when the sequence started, so a part after a travel follows a line that grew meanwhile.
+- `onChange` listeners in the `update` slot get data that keeps the previous values the run was given, so `stagger` and `sequence` no longer drop them when they start an effect on the latest data.

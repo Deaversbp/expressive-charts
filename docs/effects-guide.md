@@ -209,7 +209,7 @@ const belowTarget = defineDataEffect<Region>({
 - **Row types are checked.** An effect for `Region` rows is a type error on a chart of other rows, and combining it with a generic effect doesn't hide that. An effect that reads no row fields is `defineDataEffect({ … })`, with `D` left as `unknown`, and fits any chart.
 - **`needs: { related: ["xg"] }`** lists the series the effect reads through `related()`. A chart without them throws when it's created, instead of the effect silently drawing nothing.
 - Keep the distinction: an effect that only needs geometry should be a geometry effect, so it runs everywhere, including on host marks with no data.
-- `onChange(listener)` passes the mark's latest data as its second argument, so an effect that reads values can follow them as they change (a line being revealed). It can be undefined; keep the data you had.
+- `onChange(listener)` passes the mark's latest data as its second argument, so an effect that reads values can follow them as they change (a line being revealed). In the `update` slot it keeps `previous`. It can be undefined; keep the data you had.
 
 ### `threshold`, the built-in data effect
 
@@ -251,7 +251,7 @@ only("revenue", underline);           // on marks whose key or series is "revenu
 stagger(pulse({ times: 1 }));         // each mark of a batch a little after the one before
 ```
 
-- Parts share the run's context: one overlay group, one mark handle (whose `set()` merges fields) and one signal. A part with nothing to do should finish at once, so one `sequence` tells the whole story whatever the chart shows.
+- Parts share the run's context: one overlay group, one mark handle (whose `set()` merges fields) and one signal. A sequence starts each part on the mark's geometry and data as they are by then. A part with nothing to do should finish at once, so one `sequence` tells the whole story whatever the chart shows.
 - A combination is a data effect if any part is one, and it needs every part's rows and related series.
 - `stagger` is never a default: research finds it helps little and can hurt. Its waits use `"stagger"` timing, so nothing waits in Analysis or Off.
 - `registerPreset("underline", () => underline)` makes an effect usable by name in any chart's `on`.

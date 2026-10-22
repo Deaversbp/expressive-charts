@@ -549,6 +549,29 @@ describe("createRunner", () => {
       expect(calls[4]!.ctx.batch).toEqual({ index: 1, count: 2 });
     });
 
+    it("keeps an update run's previous values in the data its changes bring", () => {
+      const seen: { slot: string; value?: number; previous?: number }[] = [];
+      const listen = (slot: string): DataEffect<Row> => ({
+        kind: "data",
+        run: async (_mark, _data, ctx) => {
+          ctx.onChange((_next, data) => void seen.push({ slot, value: (data as MarkData<Row> | undefined)?.datum.value, previous: (data as MarkData<Row> | undefined)?.previous?.datum.value }));
+        },
+        end: () => {},
+        clear: () => {}
+      });
+      const { runner } = setup<Row>({ decorate: listen("decorate"), update: listen("update") });
+      runner.enter([{ mark: bar("a"), data: dataOf(100) }]);
+      runner.update([{ mark: bar("a", 60), data: dataOf(60) }]);
+      runner.change(bar("a", 80));
+      runner.change(bar("a", 61), dataOf(61));
+      expect(seen).toEqual([
+        { slot: "decorate", value: 60, previous: undefined },
+        { slot: "update", value: 60, previous: 100 },
+        { slot: "decorate", value: 61, previous: undefined },
+        { slot: "update", value: 61, previous: 100 }
+      ]);
+    });
+
     it("keeps an update's previous values when the mode turns off mid-run", () => {
       const ended: MarkData<Row>[] = [];
       const update: DataEffect<Row> = {

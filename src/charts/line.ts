@@ -316,7 +316,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   function placedFor(next: LineLayout<D>): { readonly lines: Map<string, PlacedLine<D>>; readonly points: Map<string, PlacedPoint<D>> } {
     const states = next.rows.map(restState);
     return {
-      lines: new Map(placeLines(next.frame, states, next.series, revealedIn(next)).map((line) => [line.series, line])),
+      lines: new Map(placeLines(next.frame, states, next.series, drawnThrough(next)).map((line) => [line.series, line])),
       points: new Map(states.flatMap((state) => placePoints(next.frame, state, next.series)).map((point) => [point.key, point]))
     };
   }
@@ -326,6 +326,15 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     const first = next.rows[0];
     const last = next.rows[next.rows.length - 1];
     return first && last ? Math.min(Math.max(through, first.x), last.x) : through;
+  }
+
+  /**
+   * Where lines end: at the reveal, or with every row drawn when it's at the end of `next`'s rows,
+   * so rows that fold away past the new last one stay drawn while they fold.
+   */
+  function drawnThrough(next: LineLayout<D>): number {
+    const last = next.rows[next.rows.length - 1];
+    return last && through < last.x ? revealedIn(next) : Infinity;
   }
 
   /** Live, and at or before the reveal. */
@@ -447,10 +456,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     const frame = currentFrame();
     const states = currentRows();
     paintFrame(frame);
-    paintLines(
-      frame,
-      states.map((s) => s.state)
-    );
+    paintLines(frame, states.map((s) => s.state));
     for (const { record, state } of states) {
       const placed = new Map(placePoints(frame, state, record.points.map((point) => point.series)).map((point) => [point.key, point]));
       for (const point of record.points) if (drawn(point)) showPoint(point, placed.get(point.key)!);
@@ -463,10 +469,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   function drawReveal(): void {
     const frame = currentFrame();
     const states = currentRows();
-    paintLines(
-      frame,
-      states.map((s) => s.state)
-    );
+    paintLines(frame, states.map((s) => s.state));
     paintColumns(frame, states);
     followHover();
   }
@@ -550,12 +553,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   function paintLines(frame: LineFrame, states: readonly RowState<D>[]): void {
     const drawnLines = [...lineOrder, ...leavingLines()];
     if (states.length === 0 || drawnLines.length === 0) return;
-    const placed = placeLines(
-      frame,
-      states,
-      drawnLines.map((line) => line.series),
-      revealedIn(laidOut)
-    );
+    const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut));
     const ends = new Map<LineRecord<D>, PlacedLine<D>>();
     drawnLines.forEach((line, i) => {
       showLine(line, placed[i]!);
@@ -629,10 +627,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       return span > 0 ? b.left + ((value - b.xLo) / span) * (b.right - b.left) : (b.left + b.right) / 2;
     };
     const shown = states.filter(({ record }) => revealed(record));
-    const columns = placeColumns(
-      frame,
-      shown.map(({ state }) => x(state.x))
-    );
+    const columns = placeColumns(frame, shown.map(({ state }) => x(state.x)));
     shown.forEach(({ record }, i) => setAttributes(record.hit, { ...columns[i]! }));
     const visible = new Set(shown.map(({ record }) => record));
     for (const record of [...rowOrder, ...leavingRows.values()]) {
@@ -876,7 +871,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
         const values = [...stayed].some((record) => valueIn(was.get(record)!, name) !== valueIn(record.row, name));
         if (rowsMoved || values) diff.changed.push({ record: line, from: line.shown.geometry });
       } else {
-        line = recall<LineRecord<D>>(name) ?? createLine(name, target, true);
+        line = recall<LineRecord<D>>(name, "line") ?? createLine(name, target, true);
         lines.set(name, line);
         diff.entering.push(line);
       }
@@ -894,7 +889,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
         if (point) {
           if (old && valueIn(old, name) !== valueIn(record.row, name)) diff.changed.push({ record: point, from: point.shown.geometry });
         } else {
-          point = recall<PointRecord<D>>(key) ?? createPoint(record, target);
+          point = recall<PointRecord<D>>(key, "point") ?? createPoint(record, target);
           point.row = record;
           points.set(key, point);
           diff.entering.push(point);
@@ -914,12 +909,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       rowOrder.map((record) => record.column),
       hover.active
     );
-    orderElements(
-      linesLayer,
-      previousLines.map((line) => line.group),
-      lineOrder.map((line) => line.group),
-      () => null
-    );
+    orderElements(linesLayer, previousLines.map((line) => line.group), lineOrder.map((line) => line.group), () => null);
     rowChanges = changes;
     // New marks are drawn where they start, so hover and exit report them as they are on screen.
     dirty = true;
@@ -928,8 +918,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   }
 
   /** Brings back the mark leaving under `key`, if there is one and it's the kind wanted: it keeps its element, and the runner cancels its exit. */
-  function recall<R extends MarkRecord<D>>(key: string): R | undefined {
-    return leaving.recall(key) as R | undefined;
+  function recall<R extends MarkRecord<D>>(key: string, kind: R["kind"]): R | undefined {
+    return leaving.get(key)?.kind === kind ? (leaving.recall(key) as R) : undefined;
   }
 
   /**
@@ -1154,8 +1144,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       unwatchFonts();
       for (const record of [...rowOrder, ...leavingRows.values()]) for (const value of [record.x, record.values, record.presence]) value.stop();
       for (const line of [...lineOrder, ...leavingLines()]) line.presence.stop();
-      for (const record of [...points.values(), ...leaving.values()]) record.leave?.resolve();
-      for (const line of lineOrder) line.leave?.resolve();
+      for (const record of leaving.values()) record.leave?.resolve();
       scale.stop();
       box.stop();
       for (const tick of [...yTicks.values(), ...xTicks.values()]) tick.opacity.stop();

@@ -631,6 +631,23 @@ describe("lineChart: update", () => {
     expect(chart.element.querySelector('.ec-column[data-key="1"]')).toBeNull();
   });
 
+  it("folds rows removed from the end into the last one that stays, rather than cutting the line", async () => {
+    const { chart, clock, settle } = setup();
+    const line = () => chart.marks()[0]!;
+    const end = line().end.x;
+    // Week 4 goes: the values' scale shrinks to 0–4 first, then the x range to weeks 1–3.
+    const running = chart.update({ data: weeks.slice(0, 3) });
+    expect(line().end.x).toBeCloseTo(end, 6);
+    clock.advance(750);
+    // The x range loses week 4 at the pace week 4 folds into week 3: the line's end stays on the
+    // plot's right edge while week 3 slides to it.
+    expect(line().end.x).toBeCloseTo(end, 3);
+    expect(chart.marks().find((m) => m.key === "goals@3")!.center.x).toBeLessThan(end - 1);
+    await settle(running);
+    expect(line().end.x).toBeCloseTo(chart.marks().find((m) => m.key === "goals@3")!.center.x, 6);
+    expect(line().end.x).toBeCloseTo(end, 3);
+  });
+
   it("counts end labels between values", async () => {
     const { chart, clock, line, settle } = setup();
     const label = () => line("goals").querySelector(".ec-end-label")!.textContent;

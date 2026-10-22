@@ -1077,13 +1077,16 @@ M2's re-check of the bar descriptions is still open; it's separate from M3.
    - A line's point marks (`goals@12`) are `describe.point`s, with length 0. `travel` does nothing on them and `threshold` draws nothing, while halos and `wiggle` still work.
    - This matters because `only("goals", …)` matches each goals point by its series as well as the line by its key. With dots, it acts on the line alone.
    - §2.4 and §2.5 are corrected; no builder changes.
-5. **Straight lines only in v0.1** (open question 9). Lines are polylines, so arc length and `threshold`'s crossings stay exact. A `curve` option goes to the backlog. Host lines drawn with curves still work, through the geometry the page describes.
+5. **Straight lines only in v0.1** (open question 9). Lines are polylines, so arc length and `threshold`'s crossings stay exact. A `curve` option goes to the backlog. Host lines drawn with curves work only approximately:
+   - the page has to describe the curve with enough points taken from the path itself (`describe.shape` is planned for that);
+   - `threshold`'s crossings between samples are then approximate (decision 11).
 6. **The Vega helper is the last step, and can slip to M6.** vega and vega-lite become dev dependencies pinned to exact versions, as D3 is (M3 decision 1). The helper is duck-typed on the View, so the library imports nothing from Vega and gains no runtime dependency.
 7. **The adapter darkens the hovered mark under `dim: true`**, as our charts do: the stroke of a line, the fill of a bar or slice. Without `dim`, the host's styling stays untouched. The host-chart hover screenshots on `bars.html` and `donut.html` change once, in step 4.
 8. **The demo** is `demo/line.html`: the lab's card 2 on `lineChart`, beside the same story on a D3 line through `expressive()` (`samples`, `samplesAlong`, `watch`). One Play button, one scrubber and the motion switch drive both. A Vega-Lite line joins them if step 8 lands.
 9. **Drawing the line chart.**
    - **Options.** `lineChart(target, { label, data, x, series, key?, labels?, legend?, … })`, plus the shared chart options (`on`, `tooltip`, `markLabel`, `markDescription`, `table`, `announce`, `format`, `colors`, `seriesLabels`, `dim`, `width`, `height`, `motion`).
      - There's one row per x, drawn in ascending x. `key` defaults to x, is converted with `String()`, and must be unique.
+     - x values must be unique too, whatever the keys: a duplicate x throws, since each x is one focus target, one hit column and one place to reveal to (decision 1). This holds even when a page's own `key` keeps the rows apart.
      - `series` lists numeric fields.
      - A missing or non-finite value throws for now. A line can't count it as 0, the way a bar does, and gaps are backlog.
      - There's no `pointer` option: the crosshair is the line chart's hover, and hovering the nearest point alone is backlog.
@@ -1126,7 +1129,7 @@ M2's re-check of the bar descriptions is still open; it's separate from M3.
       - a series, by `at` where both have it, with the reference interpolated between its samples and no colour outside its range;
       - otherwise by `t`.
 
-      On a straight leg, values are linear in `t` between neighbouring samples, so crossings are exact on our lines and on samples from `samplesAlong`.
+      Crossings are found by interpolating linearly in `t` between neighbouring samples. That's exact only where the walk is straight between them: on our lines, and on a host polyline whose samples sit at its vertices (`samplesAlong` on the points that drew it). Along a curve, values aren't linear in distance, so a crossing between two samples is approximate. A page with curved lines can pass denser samples to narrow the error.
     - **Drawing.** It draws one overlay path per run of samples below the reference (or above it, with `when: "above"`): `mark.slice(t0, t1)`, stroked in `color` at the mark's `thickness` with butt caps.
       - On a bar, that colours the part past a target across the bar's full thickness, with a square end over a rounded tip.
       - A walk shorter than 0.5 px draws nothing.
@@ -1159,7 +1162,8 @@ M2's re-check of the bar descriptions is still open; it's separate from M3.
     - **Stroked marks.** When the fill is `none`, a mark's colours come from its stroke, so halos are in the line's own colour and emphasis darkens the stroke. On an open outline, the masked halo cuts out the stroke, as the ring does, and is stroked at the line's thickness plus its own width, so as much of it shows as round a closed mark.
 14. **`watch: true` is opt-in** (open question 13).
     - A `MutationObserver` on the attachment's elements notes changes to geometry attributes (`d`, `x`, `y`, `width`, `height`, `cx`, `cy`, `r`, `points`, `transform`).
-    - Once a frame, on the chart's clock, the adapter re-reads only the marks that changed (their datum, geometry and samples) and calls `runner.change()`, with no events and no interrupt, as our charts' frames do.
+    - It also watches `transform` and `style` on every ancestor from the marks up to the root `<svg>`. A host that animates a parent `<g transform>` changes none of the marks' own attributes, but the marks' geometry and the overlay's transform both depend on that chain.
+    - Once a frame, on the chart's clock, the adapter re-reads only the marks that changed (their datum, geometry and samples) and calls `runner.change()`, with no events and no interrupt, as our charts' frames do. A change on an ancestor re-reads every mark below it. A change at or above the marks' common ancestor also recomputes the overlay's transform.
     - So a decoration follows a host's own transition, or a page's per-frame redraw, without `refresh()`. `refresh()` would fire `update` and cut hover short.
     - The page's `geometry` should read the element, or a datum the host updates each frame (as the demo's reveal does). One that reads the transition's target datum only sees the end.
     - Step 6 measures the cost and says whether `watch` stays opt-in.
@@ -1220,7 +1224,11 @@ Each step names the files it owns, so steps in the same wave can run in parallel
    - Docs: a Line chart section in architecture.md, README, the `MarkData` comment, and §2.4 if anything else differs. Replace the sketch's `LineChartOptions`. `lineChart` stays declared, like `barChart` and `donutChart`, until chart handles have `focus()`. Example 02 uses the real options.
    - Suggested as two PRs: the drawn, interactive chart with `reveal`, then animated updates.
 6. **`watch`, and the proof on a real D3 line.** Owns `src/charts/adapter/` (after step 4), `src/d3-line.test.ts` (new) and the D3 line source in `src/conformance.test.ts`.
-   - `watch` as decision 14, with jsdom tests: the `MutationObserver` batched to one change a frame, only changed marks re-read, no events, and `destroy()` disconnecting it.
+   - `watch` as decision 14, with jsdom tests:
+     - the `MutationObserver` batched to one change a frame;
+     - only changed marks re-read, with no events;
+     - a parent `<g transform>` animated by the host, which moves the decorations and the overlay with the marks;
+     - `destroy()` disconnecting it.
    - `src/d3-line.test.ts` on real `d3.line()` paths: `threshold` through `samples` and `samplesAlong`, the riding ball, keyboard order, and a page-driven reveal followed with `watch`.
    - **Measure** `watch` in headless Chromium, against the same frames without it:
      - the cost per frame of a D3 transition on a host bar chart;
@@ -1336,7 +1344,7 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 6. **More subpath exports** (`expressive-charts/core`, `/effects`) for smaller bundles. The first one (`/icons/sport`) is needed in M1. *Recommendation:* decide the rest in M6 using real bundle numbers.
 7. **TypeScript 7** (the native compiler) is a separate upgrade. *Recommendation:* after M1, once there's real code to typecheck.
 8. **Framework wrappers** (React, Vue, Svelte) are out of scope for 0.1. The imperative `update()` API is designed to be easy to wrap.
-9. **Line smoothing.** v0.1 lines are straight polylines, which keeps `threshold` crossings exact and arc length cheap. Curves would mean sampled arc-length tables and approximate crossings. *Decided in M4 planning: straight lines only in v0.1* (M4 decision 5). A `curve` option is in the backlog. Host charts drawn with curves still work, through the geometry the page describes.
+9. **Line smoothing.** v0.1 lines are straight polylines, which keeps `threshold` crossings exact and arc length cheap. Curves would mean sampled arc-length tables and approximate crossings. *Decided in M4 planning: straight lines only in v0.1* (M4 decision 5). A `curve` option is in the backlog. Host charts drawn with curves work only approximately: the page describes the curve with points taken from the path, and `threshold`'s crossings between samples are approximate.
 10. **Naming.** Keep the draft's `path` and `angle`, or rename them to `walk` and `heading` to avoid confusion with `outline`? *Recommendation:* keep them; the doc comments carry the meaning.
 11. **Releasing.** Check that the npm name is available, and publish from CI with provenance.
 12. **D3 in demos and tests.** Adapter demos and tests are most convincing against real D3, but D3 would be a new dev dependency (never a runtime one). *Decided in M3 planning: yes, `d3-shape` and `d3-selection` only, pinned, as dev dependencies* (M3 decision 1). *Recommendation:* M1 uses a hand-written SVG chart; decide on D3 as a dev dependency in M3, when pie paths need it.

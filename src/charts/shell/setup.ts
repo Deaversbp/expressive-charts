@@ -70,7 +70,7 @@ export function checkNeeds<D>(effects: SlotEffects<D>, series: readonly string[]
 }
 
 /** The options every chart takes, as checkChartOptions reads them. */
-type CommonOptions = { readonly [K in "label" | "data" | "width" | "height" | "tooltip" | "markLabel" | "markDescription" | "legend" | "seriesLabels" | "table" | "announce"]?: unknown };
+type CommonOptions = { readonly [K in "label" | "data" | "width" | "height" | "format" | "tooltip" | "markLabel" | "markDescription" | "legend" | "seriesLabels" | "table" | "announce"]?: unknown };
 
 /** Throws on the options every chart shares when they're the wrong kind of thing. `chart` names the chart in the message. */
 export function checkChartOptions(options: CommonOptions, chart: string): void {
@@ -81,7 +81,8 @@ export function checkChartOptions(options: CommonOptions, chart: string): void {
     const value = options[field];
     if (value !== undefined && !(typeof value === "number" && Number.isFinite(value) && value > 0)) throw new RangeError(`${chart}: ${field} must be a positive number of px, got ${String(value)}.`);
   }
-  const { tooltip, markLabel, markDescription, legend, announce } = options;
+  const { format, tooltip, markLabel, markDescription, legend, announce } = options;
+  if (format !== undefined && typeof format !== "function") throw new TypeError(`${chart}: format must be a function that turns a value into text.`);
   if (tooltip !== undefined && typeof tooltip !== "boolean" && typeof tooltip !== "function") throw new TypeError(`${chart}: tooltip must be true, false or a function that returns a row's text.`);
   if (markLabel !== undefined && typeof markLabel !== "function") throw new TypeError(`${chart}: markLabel must be a function that returns a mark's accessible name.`);
   if (markDescription !== undefined && markDescription !== false && typeof markDescription !== "function") {

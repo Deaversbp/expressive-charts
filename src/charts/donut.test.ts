@@ -204,6 +204,20 @@ describe("donutChart: drawing", () => {
     expect(container.querySelectorAll("svg")).toHaveLength(1);
     expect(() => donutChart("#nowhere", { label: "x", data: shots, category: "outcome", value: "shots" }, env)).toThrow(/donutChart: no element matches "#nowhere"/);
   });
+
+  it("leaves nothing behind when format throws, even when only the slices' names use it", () => {
+    const { env } = setup();
+    const container = document.body.appendChild(document.createElement("div"));
+    const broken = (): string => {
+      throw new Error("no format");
+    };
+    expect(() => donutChart<Shot>(container, { label: "x", data: shots, category: "outcome", value: "shots", table: false, center: false, format: broken }, env)).toThrow("no format");
+    expect(container.childElementCount).toBe(0);
+    expect(() => donutChart<Shot>(container, { label: "x", data: shots, category: "outcome", value: "shots", format: "0.0" as unknown as () => string }, env)).toThrow(
+      /donutChart: format must be a function/
+    );
+    expect(container.childElementCount).toBe(0);
+  });
 });
 
 describe("donutChart: legend and data table", () => {
@@ -542,6 +556,25 @@ describe("donutChart: updates", () => {
     await expect(chart.update({ data: [{ outcome: "Goal", shots: Number.POSITIVE_INFINITY }] })).rejects.toThrow(/finite number/);
     await expect(chart.update({ on: {} })).rejects.toThrow(/`on` can't be changed/);
     expect(keys()).toEqual(["Goal", "Saved", "Off target", "Blocked"]);
+  });
+
+  it("rejects a format that throws, even when only the slices' names use it, changing nothing", async () => {
+    const { chart, container, mark, settle } = setup({ table: false, center: false });
+    const before = container.innerHTML;
+    let settled = false;
+    const running = chart.update({ data: [{ outcome: "Goal", shots: 70 }, ...shots.slice(1)] }).then(() => (settled = true));
+    const broken = (): string => {
+      throw new Error("no format");
+    };
+    await expect(chart.update({ data: shots.slice(0, 2), format: broken })).rejects.toThrow("no format");
+    // The update in flight goes on, untouched.
+    expect(mark("Goal").getAttribute("aria-label")).toBe("Goal: 70 shots, 17%");
+    expect(mark("Blocked").getAttribute("aria-label")).toBe("Blocked: 87 shots, 21%");
+    expect(mark("Blocked").classList.contains("ec-leaving")).toBe(false);
+    await settle(running);
+    expect(settled).toBe(true);
+    expect(container.innerHTML).not.toBe(before);
+    expect(chart.marks().map((m) => m.key)).toEqual(["Goal", "Saved", "Off target", "Blocked"]);
   });
 
   it("re-lays out without animating when the container's width changes", () => {

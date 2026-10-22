@@ -118,11 +118,15 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
 
   let laidOut: DonutLayout<D>;
   let firstTable: TableModel | undefined;
+  /** Each slice's accessible name, by key, for the latest layout. */
+  let names: ReadonlyMap<string, string>;
   try {
-    // Throws on data it can't draw, or a table column it can't read. Nothing but the <svg> is in
-    // place yet (no listeners, observers or elements beside it), so that's all to undo.
+    // Throws on data it can't draw, a table column it can't read, or a `format` that throws. Nothing
+    // but the <svg> is in place yet (no listeners, observers or elements beside it), so that's all to undo.
     laidOut = layout(current);
     firstTable = tableFor(current, laidOut);
+    // Last, so a markLabel that throws is reported only for a layout the chart draws.
+    names = namesFor(current, laidOut);
   } catch (error) {
     svg.remove();
     throw error;
@@ -472,7 +476,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
 
   /** The slice's accessible name, from where it's heading, and its description (`markDescription`, or a tooltip function's text). */
   function labelMark(record: SliceRecord<D>): void {
-    record.group.setAttribute("aria-label", markLabel(record.row, current));
+    record.group.setAttribute("aria-label", names.get(record.key)!);
     tooltip.describe(record.group, record.row);
   }
 
@@ -675,14 +679,17 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
       if (next.motion !== undefined && next.motion !== current.motion) throw new TypeError("donutChart: `motion` can't be changed by update() yet.");
       const merged: DonutChartOptions<D> = { ...current, ...next };
       checkOptions(merged);
-      // Throws on data it can't draw, or a table column it can't read, before anything changes.
+      // Throws on data it can't draw, a table column it can't read, or a `format` that throws, before
+      // anything changes.
       const nextLayout = layout(merged);
       const nextTable = tableFor(merged, nextLayout);
+      const nextNames = namesFor(merged, nextLayout);
       if ("colors" in next) colors = toColorAssignment(merged.colors);
       const previous = current;
       const totalBefore = laidOut.total;
       current = merged;
       laidOut = nextLayout;
+      names = nextNames;
       describeDonut();
       syncLegend();
       table.render(nextTable);
@@ -753,6 +760,14 @@ function valueText<D>(slice: DonutSlice<D>, options: DonutChartOptions<D>): stri
   const formatted = format(options)(slice.value);
   const label = seriesLabel(options.seriesLabels, slice.series);
   return slice.series === "value" && label === "value" ? formatted : `${formatted} ${label}`;
+}
+
+/**
+ * Every slice's name in `layout`, by key. Worked out before anything changes, since `format` may
+ * first run here: with no table and no centre text, nothing else calls it.
+ */
+function namesFor<D>(options: DonutChartOptions<D>, layout: DonutLayout<D>): ReadonlyMap<string, string> {
+  return new Map(layout.slices.map((slice) => [slice.key, markLabel(slice, options)]));
 }
 
 /**

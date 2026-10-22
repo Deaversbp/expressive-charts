@@ -46,14 +46,22 @@
   a { color: var(--accent); }
   /* The tooltip function's text is plain; its first line, the week, is bold as in the lab. */
   #line .ec-tooltip::first-line { font-weight: 600; }
+  /* xG is what goals are read against: a dashed grey on both charts, so it can't be mistaken for the
+     red below it, whatever the viewer's colour vision. It's xG's palette slot on these two charts, so
+     its end dot, hover point and legend swatch follow. */
+  #line, .d3-box { --ec-series-2: var(--ec-text-muted, #75736d); --ec-series-2-strong: var(--ink-2); }
+  #line .ec-line[data-key="xg"] .ec-stroke, #d3-line .line-xg { stroke-dasharray: 6 4; }
+  /* Legend swatches as short lines, so xG's shows its dash. */
+  #line .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
+  #line .ec-legend-item[data-series="xg"] .ec-legend-swatch { border-top-style: dashed; }
   /* The D3 line's own styles: it's someone else's chart, so the page styles it, not the library. Its
      series take the line chart's palette slots, and its legend copies the line chart's. */
   .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
-  .legend i { flex: none; width: 10px; height: 10px; border-radius: 3px; }
-  .swatch-goals { background: var(--ec-series-1, #2a78d6); }
-  .swatch-xg { background: var(--ec-series-2, #eb6834); }
-  .swatch-below { background: var(--ec-negative, #d03b3b); }
+  .legend i { flex: none; width: 16px; height: 0; border-top: 3px solid; }
+  .legend .swatch-goals { border-top-color: var(--ec-series-1, #2a78d6); }
+  .legend .swatch-xg { border-top: 3px dashed var(--ec-series-2); }
+  .legend .swatch-below { border-top-color: var(--ec-negative, #d03b3b); }
   #d3-line { display: block; max-width: 100%; height: auto; overflow: visible; }
   #d3-line .tick { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
   #d3-line .grid { stroke: var(--ec-grid, #e1e0d9); }
@@ -61,7 +69,7 @@
   /* Butt caps, so a red run ends where its data does, as on the line chart. */
   #d3-line .line { fill: none; stroke-linejoin: round; stroke-linecap: butt; }
   #d3-line .line-goals { stroke: var(--ec-series-1, #2a78d6); }
-  #d3-line .line-xg { stroke: var(--ec-series-2, #eb6834); }
+  #d3-line .line-xg { stroke: var(--ec-series-2); }
 </style>
 </head>
 <body>
@@ -120,7 +128,8 @@
   <section class="card" aria-labelledby="differences-title">
     <h2 id="differences-title">Differences from the lab's card</h2>
     <ul class="checklist">
-      <li>The ball riding the goals line is new; the lab has none.</li>
+      <li>The ball riding the goals line is new; the lab has none. It's drawn at 11 px, smaller than its own 17, so it doesn't hide the last weeks.</li>
+      <li>xG is a dashed grey line, where the lab's is orange: orange sat too close to the red below xG, and the dash tells the lines apart whatever the viewer's colour vision. The legends draw each entry as a short line, so xG's shows its dash.</li>
       <li>The goals line's end dot and hover dot keep their series colour, since <code>threshold</code> draws nothing on a dot. The tooltip's "vs expected" line and the table's Difference column still say when goals are below xG.</li>
       <li>"Goals below xG" comes after the series in the legend, since a page's entries follow the chart's own.</li>
       <li>The table's headers are the series' names, "Goals scored" and "Expected goals (xG)", and its values share the chart's one format, so an xG of 20.0 reads "20".</li>

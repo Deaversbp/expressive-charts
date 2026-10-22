@@ -67,8 +67,11 @@ function signed(value: number): string {
 /** The lab's "+0.4 vs expected": goals less xG. */
 const versus = (d: Week): string => `${signed(d.goals - d.xg)} vs expected`;
 
+/** The ball's width in px: smaller than its own 17 px, so it doesn't hide the lines' last weeks. */
+const BALL = 11;
+
 /** The goals line red wherever it's below xG, and a ball riding its leading edge. One each, per chart. */
-const story = () => only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" })));
+const story = () => only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on", size: BALL })));
 
 const chart = lineChart<Week>("#line", {
   label: "Goals vs expected goals, season to date",
@@ -76,6 +79,7 @@ const chart = lineChart<Week>("#line", {
   data: weeks,
   x: "week",
   series: ["goals", "xg"],
+  // xG takes slot 2, which the page's CSS makes a dashed grey, so the red below it stands out.
   colors: { goals: 1, xg: 2 },
   seriesLabels: { goals: "Goals scored", xg: "Expected goals (xG)" },
   // The lab's end labels: "28 goals", "27.6 xG".

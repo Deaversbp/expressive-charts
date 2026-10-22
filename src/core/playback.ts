@@ -101,25 +101,30 @@ export function playback(options: PlaybackOptions): Playback {
     return current?.moved ?? false;
   };
 
-  /** Ends a play that didn't reach the end: halted by a pause, a seek, destroy() or a failing onFrame. */
+  /** Ends a play that didn't reach the end: halted by a pause, a seek, destroy(), or a failing onFrame or ease. */
   const stopPlaying = (): void => {
     if (!playing) return;
     playing = false;
     notify("pause");
   };
 
-  // Draws a new position. If onFrame throws, everything stops where it is and the error goes on to the
-  // caller (or to the clock, which reports it), so a broken draw is reported once rather than every frame.
+  // When the page's onFrame or ease throws, everything stops where it is and the error goes on to the
+  // caller (or to the clock, which reports it), so a broken callback is reported once rather than every frame.
+  const fail = (error: unknown): never => {
+    generation++;
+    halt();
+    stopPlaying();
+    throw error;
+  };
+
+  /** Draws a new position. */
   const assign = (x: number): void => {
     if (x === position) return;
     position = x;
     try {
       onFrame(x);
     } catch (error) {
-      generation++;
-      halt();
-      stopPlaying();
-      throw error;
+      fail(error);
     }
   };
 
@@ -141,7 +146,13 @@ export function playback(options: PlaybackOptions): Playback {
         const t = view.mode === "off" ? 1 : (now - start) / ms;
         if (t < 1) {
           current.moved = true;
-          assign(origin + (target - origin) * curve(t));
+          let progress: number;
+          try {
+            progress = curve(t);
+          } catch (error) {
+            return fail(error);
+          }
+          assign(origin + (target - origin) * progress);
           return;
         }
         halt();

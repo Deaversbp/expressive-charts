@@ -387,6 +387,25 @@ describe("playback", () => {
     expect(player.position).toBe(90);
   });
 
+  it("stops where it is when its ease throws, and the clock reports it once", () => {
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    const boom = new Error("boom");
+    const { clock, player, events } = setup({
+      ease: (t) => {
+        if (t > 0.35) throw boom;
+        return t;
+      }
+    });
+    player.play();
+    while (!clock.idle) clock.advance(100);
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(reportError).toHaveBeenCalledWith(boom);
+    expect(player.playing).toBe(false);
+    expect(player.position).toBeCloseTo(30);
+    expect(events).toEqual(["play", "pause"]);
+  });
+
   it("uses the page-wide motion unless given one", () => {
     pageMotion.chooseMode("off");
     const frames: number[] = [];

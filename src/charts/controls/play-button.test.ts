@@ -111,6 +111,7 @@ describe("playButton", () => {
     expect(() => playButton(42 as unknown as Element, season)).toThrow(TypeError);
     expect(() => playButton(target, {} as typeof season)).toThrow(/needs a Playback/);
     expect(() => playButton(target, season, { labels: { play: "" } })).toThrow(/labels.play/);
+    expect(() => playButton(target, season, { labels: { play: " \n\t " } })).toThrow(/labels.play must be a string with some text/);
     expect(() => playButton(target, season, { labels: { pause: 3 as unknown as string } })).toThrow(/labels.pause/);
     expect(target.childElementCount).toBe(0);
   });

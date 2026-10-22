@@ -88,8 +88,9 @@ function checkOptions(options: PlayButtonOptions): void {
   const { labels } = options;
   if (labels === undefined) return;
   for (const [key, text] of Object.entries(labels)) {
-    if (typeof text !== "string" || text === "") {
-      throw new TypeError(`playButton: labels.${key} must be a non-empty string, got ${JSON.stringify(text) ?? String(text)}.`);
+    // Only spaces would collapse to a blank button with no accessible name.
+    if (typeof text !== "string" || text.trim() === "") {
+      throw new TypeError(`playButton: labels.${key} must be a string with some text, got ${JSON.stringify(text) ?? String(text)}.`);
     }
   }
 }

@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1, M2 and M3 are complete (October 2026, §9). M4's steps 1–8 are all built (§9). `demo/line.html` passed your checklist walk and your screen-reader check. What's left is for you: a look at its new Vega-Lite card, and two short listening steps for it (section E, steps 13 and 14). Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1, M2 and M3 are complete (October 2026, §9). M4's steps 1–8 are all built (§9). `demo/line.html` passed your checklist walk and your screen-reader check. What's left is for you: a look at its new Vega-Lite card, and two short listening steps for it (section E, steps 13 and 14). M5 is planned step by step in §9 and is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -401,7 +401,7 @@ All of them preserve the kind: if any child is a `DataEffect`, the result is a `
 | `pulse({ times = 2, width, color })` | geometry | A halo along the outline that widens to 12 px while fading from 0.4 to 0, 600 ms base each. `times` is a whole number from 1 to 6, and repeats that would end after 5 s (after the motion's scaling) are dropped. | Nothing. |
 | `flash()` | geometry | One halo blink (the prototype's `stroke-width` 0 → 8 → 0). | Nothing. |
 | `threshold({ compareTo, when = "below", color = "negative" })` | data | Finds where `samples` fall below (or, with `when: "above"`, above) the reference (a series or a constant), interpolates the crossings, and draws `slice()` overlays. Redraws on `onChange`. | The overlays drawn. |
-| `morph({ points = 160 })` | transition | Interpolates `outline.sample(n)` side by side between two geometries. | The target outline. |
+| `morph({ points = 160, align })` | transition | Interpolates `outline.sample(n)` side by side between two geometries; `align` picks "unroll" or the lab's "drop" (M5 decision 1). | The target outline. |
 
 ### 4.6 Travel options
 
@@ -1415,9 +1415,156 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 ### M5: Morph
 
-The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label tweening, and shared colour assignment. That includes colouring bars by category: today `barChart` colours by series, so the lab's columns would all be one colour. With category colours, one `ColorAssignment` keeps each outcome's colour from slice to column (found in the PR #30 review).
+The `TransitionEffect` kind played for real, `morph()`, `chartSwitch`, label tweening, and shared colour assignment. That includes colouring bars by category: today `barChart` colours by series, so the lab's columns would all be one colour. With category colours, one `ColorAssignment` keeps each outcome's colour from slice to column (found in the PR #30 review). Transition effects become part of the effect-author API, with a checker of their own.
 
-**Demo:** card 3 of the lab.
+**Demo:** `demo/morph.html`, the lab's card 3 with its morph: the shot outcomes as a donut that morphs into columns and back.
+
+**Where M5 starts** (checked against main while planning, 22 October 2026):
+
+- **Already built.**
+  - **Canonical outline sampling.** A closed outline's `sample(n)` takes n/4 points per side, in the order left, end, right, start, clockwise from the start-left corner, with corners at 0, n/4, n/2 and 3n/4 for every kind of mark. Tests pin it.
+    - A slice's sides are its outer arc, its end edge, its inner arc and its start edge.
+    - A column's sides are its left edge (going up), its top, its right edge and its baseline.
+    - So matching side to side is decision 1's "unroll", and the lab's "drop" turns the column's samples by a quarter.
+    - A bar's rounded tip is part of its end side. A point is four quarter arcs.
+  - **The type.** `TransitionEffect` exists as a type (`run(from, to, ctx)`, `end`, `clear`), and every mark slot, `sequence` and `stagger` reject it with a clear `TypeError`.
+  - **Pieces to build on.** The runner exports `runScope`, which builds a run's context. `testContext()` can already be passed to a transition's `run`.
+  - **Colours.** `colorAssignment()` is shared by passing the same object; the donut colours by key; and the legend lists categories (`categories()`).
+  - **Focus.** The keyboard has `focus(key)`, and the adapter's handle exposes one.
+  - **Timing.** `"transition"` timing scales a 950 ms base exactly as the lab's `dur(950)` does: 950 ms in Presentation, 200 in Analysis.
+  - **The labels to tween.** The donut's category and share labels (`ec-label`, `ec-value`), its centre text, and the columns' category and value labels.
+- **Assumed by the plan but not built.** `morph()`, `chartSwitch` and a way to check a transition effect exist only as the sketch's declarations (`morph` without `align`; `ChartSwitch` without `chart(view)`).
+- **Gaps.**
+  - Nothing plays a `TransitionEffect`. The runner plays mark slots only, and its surface's groups are typed by mark slot.
+  - `checkEffect` takes mark effects only, and throws on a transition.
+  - **Chart handles** have no `focus(key)`, no way to hide their marks, and no way to read their labels; labels exist only as `<text>` in the DOM.
+  - **Bars colour by series:** every column takes `colors.slot("shots")`, one colour for all. A single series has no legend.
+  - **Overlay styling.** The stylesheet's text sizes are scoped to `.ec-chart`, so a separate overlay `<svg>` needs that class.
+  - **Hidden containers.** A chart in a container with no width lays out at 640 px and its `ResizeObserver` ignores the 0.
+  - **The public list.** `TransitionEffect` isn't in the 0.x promise's list, and its context has no way to start part way.
+- **Out of date** (each fixed by a step below or by this plan):
+  - M5's own first line listed "side-matched outline sampling", which M1 built.
+  - §4.5's `morph({ points = 160 })` has no `align`.
+  - architecture.md says "Planned: `morph()`", and that bars can't colour by category "until M5's morph".
+  - The sketch declares `barChart`, `donutChart` and `lineChart` only until handles have `focus()`.
+
+**Decided while planning M5 (October 2026):** decisions 1–8 are yours, and 9–14 follow from them and the code.
+
+1. **Correspondence: both, picked in the demo** (open question 1). `morph()` matches two closed outlines side by side, with an `align` option for the two mappings:
+   - **"unroll"** maps each side to the same side. A slice's walk becomes the column's walk, so the slice stands up: its outer arc becomes the column's side, and the angle it spans becomes the column's height.
+   - **"drop"** turns the mapping by one side, as the lab does. The slice's outer arc becomes the column's top, so it settles onto the baseline.
+
+   The demo shows both (step 4), and you choose the default in the browser; the other stays an option.
+2. **Labels tween, as the lab's do.** Each chart's handle reports its labels by key and role, with their text and where they sit (`labels()`). `chartSwitch` moves each label from its place in the old view to its place in the new one, and swaps its text half way ("28%" becomes "112"). A label with no partner fades.
+3. **The demo is a new page,** `demo/morph.html`. `donut.html`, its 13 baselines and listening script D stay as they are.
+4. **Reference charts only.** `chartSwitch` morphs between `barChart`, `donutChart` and `lineChart`, which step 2 lets hide their marks, report their labels and take focus by key. Its views are typed by what it uses, so adapters can join later (backlog).
+5. **Transition effects are public.** `TransitionEffect` joins the 0.x promise's list in CHANGELOG, and `checkTransition(effect, { pairs })` joins `expressive-charts/testing`: the four checks `checkEffect` runs, on pairs of fixture marks. `morph()` is the first transition effect written against it.
+6. **A switch back mid-way reverses from where the shapes are,** as the lab's card does. A transition run's context gets `start`, from 0 to 1, so a run can begin part way: `chartSwitch` plays the reverse pair from 1 minus the progress the first had reached.
+7. **Unmatched marks fade.** A key in only one view fades out over the first half, or in over the second, where it stands, while the matched marks morph.
+8. **`colorBy: "category"`** is a new `barChart` option. With one series, each bar takes its category's slot through `colors`, which can be shared with a donut, and the legend lists the categories, as the donut's does. The chart then never asks the assignment for its series' slot, so "shots" can't take a slot that a shared assignment would give an outcome. A stack still colours by series, and `colorBy: "category"` on a stack throws.
+9. **Playing a transition.** A small player in core (`src/core/transition.ts`, internal, beside the runner, and built on its `runScope`) plays a `TransitionEffect` on pairs of marks, with the runner's rules:
+   - Each pair gets a context of its own: `signal`, `motion`, `tween()`, a `layer` group, `icons` and `batch`, plus `start`.
+   - The context's `mark` handle does nothing, since both views' marks are hidden while a transition plays, and `onChange` never fires: a resize mid-switch lands it (decision 11).
+   - With motion off, `end()` runs on a fresh context instead of `run()`.
+   - Clearing aborts, calls `clear()` and empties the group. An effect that throws is reported and cleared, and the switch carries on.
+   - `TransitionEffect.run` and `end` take a `TransitionContext`, an `EffectContext` with `start`.
+10. **`morph({ points = 160, align })`.**
+    - `points` is a whole multiple of 4, or it throws a `RangeError`.
+    - **Two closed outlines** (bars, slices, points): both are sampled at `points`, and each point moves in a straight line to its partner. They're drawn as one filled path in the mark's colour.
+    - **Which point is whose partner.** `"unroll"` pairs point i with point i. `"drop"` turns the pairing by a quarter of the points, and it's fixed by the marks' geometry, never by which one comes first:
+      - The turn goes from a mark that goes round its pivot to one that doesn't. A mark goes round its pivot when its `start`, `center` and `end` are the same distance from it, more than 0.5 px away: a slice does, a bar doesn't. This is the test the adapter's ring order uses, and it reads geometry, not a chart type.
+      - The round mark's side along its walk (a slice's outer arc) meets the other's end side (a column's top), whichever is `from`. Swapping the operands inverts the turn, so a switch back retraces the same pairing instead of twisting.
+      - Between two marks that both go round their pivots, or neither does, `"drop"` pairs as `"unroll"` does.
+    - **A run that starts part way** starts from `start` in the shapes' progress, after easing, so a reverse run from `start: 1 - p` begins exactly where the forward run had drawn the shapes.
+    - **Two open outlines** (lines): the strokes are sampled along their length and drawn stroked, their width moving from one thickness to the other.
+    - **A closed and an open outline:** the first fades out as the second fades in.
+    - **Timing.** 950 ms base, the lab's, with `transition` timing (≤ 200 ms in Analysis, a jump in Off) and `easeInOutCubic`. A run that starts part way takes the rest of the time.
+    - **End state:** the target outline. `chartSwitch` then clears it and shows the real mark.
+11. **`chartSwitch(target, { views, initial, transition, colors, announce })`** returns `{ show(view), current, chart(view), destroy() }`.
+    - **Layout.** One container per view, stacked in one grid cell, and an overlay `<svg>` over them, `aria-hidden` and taking no pointer events. The overlay has the charts' `ec-chart` class, so tweened labels keep the stylesheet's text sizes. Each view's marks are mapped into the overlay from their own `<svg>`'s place in the cell, since each chart lays out in its own px.
+    - **The inactive view** is `visibility: hidden`, `inert` and `aria-hidden`. It keeps its layout (a container with no width would lay its chart out at the 640 px fallback), so its geometry is ready for a morph, but it can't be seen, reached or read.
+    - **A switch.**
+      - The active chart's hover ends.
+      - Both views' marks and mark labels are hidden.
+      - The old view's other parts (axes, the centre total, the legend, the table) fade out by 40% of the way, and the new view's fade in from half way, as the lab's centre and baseline do.
+      - Each pair morphs in the overlay, and each label tweens.
+      - Then the overlay is cleared, the new view's marks show, and the old view goes inactive.
+      - Focus on a mark of the old view moves to the same key in the new one, or to its first mark.
+    - **Interrupting.** A `show()` back to the old view mid-switch reverses (decision 6); one to a third view lands the switch first. A resize mid-switch lands it. With motion off, `show()` resolves before it returns.
+    - **Colours.** One `ColorAssignment` for every view (`colors`, or a new one), so a key keeps its colour. Each pair's run draws in that key's slot.
+    - **`announce`** is off by default, as on the charts. When it's on, a polite live region says the new view's label after a switch.
+    - **The default transition.** `transition` is filled in with `morph()` by the composition root when it's left out, since charts never import effects.
+12. **What chart handles gain.**
+    - `focus(key)`, as the adapter's: it moves focus to a mark as a key press would.
+    - `labels()`: each mark's labels by key and role (category or value), with their text, where they sit in the chart's `<svg>`, and their element. `chartSwitch` clones each element into its overlay, so a moving label keeps the chart's styling.
+    - The shared stylesheet hides each chart's marks and mark labels while its `<svg>` has the class `ec-morphing` (bars' and slices' marks, lines and points), so no chart needs a method for it.
+    - The sketch stops declaring `barChart`, `donutChart` and `lineChart`, which were declared only until handles had `focus()`.
+13. **Accessibility of a switch.** One view is in the accessibility tree at a time, each with its own table. The page's button names the other view ("Show as columns"). The demo turns `announce` on. You run a short listening script (section F) with NVDA + Chrome.
+14. **A smooth reverse** needs `start` on the context only, and `morph()` honours it; a transition effect that ignores `start` just replays from its beginning. `checkTransition` checks that a run from `start: 0.5` ends as `end()` draws, and that it **retraces**: on each pair, the picture a run from `b` to `a` draws at its start, from `start: 1 - p`, is the one a run from `a` to `b` draws at progress `p`. So a pairing that depends on operand order fails it.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `src/index.ts`, `src/core/index.ts`, `src/effects/index.ts`, `src/charts/index.ts`, `src/charts/types.ts`, `src/charts/render/theme.ts`, `src/registries.ts`, the two conformance test files, `docs/architecture.md`, `README.md`, `CHANGELOG.md`, `docs/effects-guide.md`, `docs/sketches/api.ts` and this plan.
+
+**Wave 1** (parallel):
+
+1. **Transition effects: the player, `morph()` and `checkTransition`.** Owns `src/core/transition.ts` (new) and its tests, `TransitionEffect` and `TransitionContext` in `src/core/contracts/effect.ts`, `src/effects/morph.ts` and its tests, `checkTransition` in `src/testing/check.ts` with the fixture pairs in `src/testing/fixtures.ts`, and the transition entries in `src/effects/conformance.test.ts`.
+   - As decisions 5, 6, 9, 10 and 14, tested on the manual clock with the recording layer:
+     - `morph()` between every fixture pair, both ways, with each `align`, ends as `end()` draws;
+     - `"drop"` pairs a slice's outer arc with a column's top whichever is `from`, and a run back from `start: 1 - p` begins where the run forward was at `p`, with no jump or twist;
+     - a closed and an open outline crossfade;
+     - a run from `start` takes the rest of the time and ends where a full run does;
+     - with motion off, nothing waits for a frame;
+     - an abort leaves nothing behind.
+   - `checkTransition(effect, { pairs, name })` runs the four checks on each pair, a run from `start: 0.5`, and the retrace check (decision 14). Its default pairs are fixture marks: a slice and a column, a bar and a column, two slices, two lines and two points.
+   - Docs: a `morph` section and the transition contract in architecture.md's Effects, README, the guide (transition effects and `checkTransition`), and CHANGELOG (`TransitionEffect` in the promise's list, `checkTransition`). Replace the sketch's `morph` declaration.
+2. **Charts ready to switch.** Owns `colorBy` in `src/charts/bar.ts` and `BarChartOptions`; `focus()` and `labels()` on the handles in `src/charts/bar.ts`, `donut.ts` and `line.ts`, and on `Chart` in `src/charts/types.ts`; the shell's `focus` in `src/charts/shell/hover.ts`; and the `.ec-morphing` rules in `src/charts/render/theme.ts`.
+   - As decisions 8 and 12.
+   - **Done when** every existing test and visual baseline passes with none changed, and the new paths have tests of their own: category colours shared with a donut, a category legend, `colorBy` on a stack throwing, `focus(key)` on each chart, each chart's `labels()`, and `.ec-morphing` hiding marks and their labels and nothing else.
+   - Docs: architecture.md (bar colours, the chart handle), README. The sketch stops declaring `barChart`, `donutChart` and `lineChart`.
+
+**Wave 2** (after wave 1 lands):
+
+3. **`chartSwitch`.** Owns `src/charts/switch.ts` and its tests, its rules in `theme.ts`, its exports, and `src/morph.test.ts` (new, beside `src/index.ts`, since it brings a chart switch and `morph()` together).
+   - As decisions 4, 6, 7, 11 and 13. jsdom tests on a donut and columns:
+     - switching both ways, marks matched by key;
+     - an unmatched key fading;
+     - a switch back mid-way reversing from the progress it reached;
+     - focus following its key;
+     - the inactive view inert and hidden from screen readers;
+     - `announce`;
+     - Off landing at once, and a resize landing a switch;
+     - `destroy()` putting everything back.
+   - `src/morph.test.ts` switches a real `donutChart` and `barChart` with the real `morph()`, both ways and with each `align`, and checks the halfway shapes and labels.
+   - Docs: a Switching between charts section in architecture.md (the plan's §5.7 is its sketch), README. Replace the sketch's `chartSwitch` declaration; example 03 uses the real API, with `colorBy`.
+
+**Wave 3:**
+
+4. **`demo/morph.html`, its screenshots and the listening script.** Owns `demo/morph.html` and `demo/morph.ts`, the link in `demo/index.html`, `tests/visual/morph.spec.ts` with its `morph-` baselines, section F of `docs/a11y-check.md`, and, once you've chosen it, the default `align` in `src/effects/morph.ts`.
+   - **The page**, as decision 3, with the lab's card 3:
+     - the lab's shot outcomes (Goal 58, Saved 112, Off target 149, Blocked 87) as a donut and as columns (`colorBy: "category"`);
+     - a toggle button ("Show as columns", "Show as donut"), and a control for the two `align` mappings, so they can be compared;
+     - the legend, the table, the motion switch, and a checklist that is the "Done when" list below.
+   - **Screenshots,** all `morph-`:
+     - light and dark in each view;
+     - half way, with each `align`;
+     - the focus ring after a switch.
+
+     Reduced motion and Analysis are checked in the DOM, and a switch back mid-way is checked to reverse. The page fits 1000 × 2000, and the baselines are made in Docker.
+   - A listening script, section F. **You run it** with NVDA + Chrome.
+   - Then check the "Done when" list in the browser with you. You pick the default `align` there.
+
+**Done when:**
+- `demo/morph.html` reproduces the lab's card 3 on the library:
+  - the shot outcomes as a donut and as columns, each outcome in the same colour in both;
+  - a toggle that morphs every slice into its column and back, the labels moving with their shapes and swapping their text half way;
+  - the centre total fading out and the axes fading in;
+  - a legend, a table and the motion switch;
+  - light and dark from the library's defaults.
+- **Timing.** A switch takes about 950 ms in Presentation, 200 ms in Analysis, and none in Off or under reduced motion, and a switch back mid-way reverses from where the shapes are.
+- **`morph()`** passes `checkTransition` on every fixture pair, both ways and with each `align`. `checkTransition` is exported from `expressive-charts/testing`, and CHANGELOG lists `TransitionEffect` in the 0.x promise.
+- **Focus and the screen reader.** Keyboard focus follows its key across a switch, and only the active view can be reached or read.
+- **Charts.** `barChart` takes `colorBy: "category"`, and every chart handle has `focus(key)` and `labels()`. No existing baseline has changed.
+- **Your choices.** You've picked the default `align` in the browser, and your morph screen-reader check passes.
+- **Packaging.** The package still has no runtime dependencies, and `typecheck`, `test` and `build` are green.
 
 ### M6: Hardening and 0.1.0
 
@@ -1445,6 +1592,7 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
   - `label((data) => text)`: text computed from the mark's own data, such as last sample minus first (slopes) or a step's own signed value (waterfalls).
   - Comparisons between neighbouring marks (funnel conversion) are computed into the rows by the chart or the page, because effects only see their own mark and related series.
 - **"Pour" (maybe).** Decorative droplets for funnels. Only after measuring its rendering cost, and never without a reduced-motion end state.
+- **Switching between host charts** (deferred in M5 planning, decision 4): `chartSwitch` views that are `expressive()` attachments, so a D3 pie can morph into D3 bars. It needs a way to hide a host's marks while the morph plays, and labels would crossfade, since a host's labels can't be read.
 - **Line chart extras** (deferred in M4 planning):
   - a `curve` option, which needs sampled arc-length tables and approximate threshold crossings (M4 decision 5);
   - gaps for missing values: M4's line throws on them (decision 9);
@@ -1456,7 +1604,7 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 
 ### Open questions (each has a recommendation; none blocks M1)
 
-1. **Morph correspondence.** Side-matched sampling (§2.2) *unrolls* a slice: its arc becomes the bar's height. The prototype instead *drops* the slice, so the outer arc becomes the bar's top. *Recommendation:* build the generic unroll in M5, compare it in the demo, and add a `morph({ align })` option only if the prototype's version reads better.
+1. **Morph correspondence.** Side-matched sampling (§2.2) *unrolls* a slice: its arc becomes the bar's height. The prototype instead *drops* the slice, so the outer arc becomes the bar's top. *Recommendation:* build the generic unroll in M5, compare it in the demo, and add a `morph({ align })` option only if the prototype's version reads better. *Decided in M5 planning: both* (M5 decision 1). `morph({ align })` offers "unroll" and "drop", the demo shows both, and you pick the default in the browser in M5 step 4.
 2. **CSS delivery.** *Decided in M2 planning: both* (M2 step 1). Auto-injected `<style>` vs a CSS file. *Recommendation:* both, with injection on by default (§7.1).
 3. **Persisting the viewer's motion choice** across pages (`localStorage`). *Decided: opt-in `persist`* (M2 step 4). *Recommendation:* opt-in `motionSwitch(el, motion, { persist: "key" })`.
 4. **Live-region announcements** on update, on or off by default. *Decided: off by default, with an `announce` option* (M2 step 5). *Recommendation:* off by default, with a one-line option.

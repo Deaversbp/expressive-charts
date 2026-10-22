@@ -1470,10 +1470,15 @@ The `TransitionEffect` kind played for real, `morph()`, `chartSwitch`, label twe
    - `TransitionEffect.run` and `end` take a `TransitionContext`, an `EffectContext` with `start`.
 10. **`morph({ points = 160, align })`.**
     - `points` is a whole multiple of 4, or it throws a `RangeError`.
-    - **Two closed outlines** (bars, slices, points): both are sampled at `points`, turned by `align` (the same mapping both ways, so a switch back undoes it), and each point moves in a straight line to its partner. They're drawn as one filled path in the mark's colour.
+    - **Two closed outlines** (bars, slices, points): both are sampled at `points`, and each point moves in a straight line to its partner. They're drawn as one filled path in the mark's colour.
+    - **Which point is whose partner.** `"unroll"` pairs point i with point i. `"drop"` turns the pairing by a quarter of the points, and it's fixed by the marks' geometry, never by which one comes first:
+      - The turn goes from a mark that goes round its pivot to one that doesn't. A mark goes round its pivot when its `start`, `center` and `end` are the same distance from it, more than 0.5 px away: a slice does, a bar doesn't. This is the test the adapter's ring order uses, and it reads geometry, not a chart type.
+      - The round mark's side along its walk (a slice's outer arc) meets the other's end side (a column's top), whichever is `from`. Swapping the operands inverts the turn, so a switch back retraces the same pairing instead of twisting.
+      - Between two marks that both go round their pivots, or neither does, `"drop"` pairs as `"unroll"` does.
+    - **A run that starts part way** starts from `start` in the shapes' progress, after easing, so a reverse run from `start: 1 - p` begins exactly where the forward run had drawn the shapes.
     - **Two open outlines** (lines): the strokes are sampled along their length and drawn stroked, their width moving from one thickness to the other.
     - **A closed and an open outline:** the first fades out as the second fades in.
-    - **Timing.** 950 ms base, the lab's, with `transition` timing (≤ 200 ms in Analysis, a jump in Off) and `easeInOutCubic`. A run that starts part way takes the rest of the time from `start`.
+    - **Timing.** 950 ms base, the lab's, with `transition` timing (≤ 200 ms in Analysis, a jump in Off) and `easeInOutCubic`. A run that starts part way takes the rest of the time.
     - **End state:** the target outline. `chartSwitch` then clears it and shows the real mark.
 11. **`chartSwitch(target, { views, initial, transition, colors, announce })`** returns `{ show(view), current, chart(view), destroy() }`.
     - **Layout.** One container per view, stacked in one grid cell, and an overlay `<svg>` over them, `aria-hidden` and taking no pointer events. The overlay has the charts' `ec-chart` class, so tweened labels keep the stylesheet's text sizes. Each view's marks are mapped into the overlay from their own `<svg>`'s place in the cell, since each chart lays out in its own px.
@@ -1495,7 +1500,7 @@ The `TransitionEffect` kind played for real, `morph()`, `chartSwitch`, label twe
     - The shared stylesheet hides each chart's marks and mark labels while its `<svg>` has the class `ec-morphing` (bars' and slices' marks, lines and points), so no chart needs a method for it.
     - The sketch stops declaring `barChart`, `donutChart` and `lineChart`, which were declared only until handles had `focus()`.
 13. **Accessibility of a switch.** One view is in the accessibility tree at a time, each with its own table. The page's button names the other view ("Show as columns"). The demo turns `announce` on. You run a short listening script (section F) with NVDA + Chrome.
-14. **A smooth reverse** needs `start` on the context only, and `morph()` honours it; a transition effect that ignores `start` just replays from its beginning. `checkTransition` checks that a run from `start: 0.5` ends as `end()` draws.
+14. **A smooth reverse** needs `start` on the context only, and `morph()` honours it; a transition effect that ignores `start` just replays from its beginning. `checkTransition` checks that a run from `start: 0.5` ends as `end()` draws, and that it **retraces**: on each pair, the picture a run from `b` to `a` draws at its start, from `start: 1 - p`, is the one a run from `a` to `b` draws at progress `p`. So a pairing that depends on operand order fails it.
 
 Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `src/index.ts`, `src/core/index.ts`, `src/effects/index.ts`, `src/charts/index.ts`, `src/charts/types.ts`, `src/charts/render/theme.ts`, `src/registries.ts`, the two conformance test files, `docs/architecture.md`, `README.md`, `CHANGELOG.md`, `docs/effects-guide.md`, `docs/sketches/api.ts` and this plan.
 
@@ -1504,11 +1509,12 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 1. **Transition effects: the player, `morph()` and `checkTransition`.** Owns `src/core/transition.ts` (new) and its tests, `TransitionEffect` and `TransitionContext` in `src/core/contracts/effect.ts`, `src/effects/morph.ts` and its tests, `checkTransition` in `src/testing/check.ts` with the fixture pairs in `src/testing/fixtures.ts`, and the transition entries in `src/effects/conformance.test.ts`.
    - As decisions 5, 6, 9, 10 and 14, tested on the manual clock with the recording layer:
      - `morph()` between every fixture pair, both ways, with each `align`, ends as `end()` draws;
+     - `"drop"` pairs a slice's outer arc with a column's top whichever is `from`, and a run back from `start: 1 - p` begins where the run forward was at `p`, with no jump or twist;
      - a closed and an open outline crossfade;
      - a run from `start` takes the rest of the time and ends where a full run does;
      - with motion off, nothing waits for a frame;
      - an abort leaves nothing behind.
-   - `checkTransition(effect, { pairs, name })` runs the four checks on each pair, and a run from `start: 0.5`. Its default pairs are fixture marks: a slice and a column, a bar and a column, two slices, two lines and two points.
+   - `checkTransition(effect, { pairs, name })` runs the four checks on each pair, a run from `start: 0.5`, and the retrace check (decision 14). Its default pairs are fixture marks: a slice and a column, a bar and a column, two slices, two lines and two points.
    - Docs: a `morph` section and the transition contract in architecture.md's Effects, README, the guide (transition effects and `checkTransition`), and CHANGELOG (`TransitionEffect` in the promise's list, `checkTransition`). Replace the sketch's `morph` declaration.
 2. **Charts ready to switch.** Owns `colorBy` in `src/charts/bar.ts` and `BarChartOptions`; `focus()` and `labels()` on the handles in `src/charts/bar.ts`, `donut.ts` and `line.ts`, and on `Chart` in `src/charts/types.ts`; the shell's `focus` in `src/charts/shell/hover.ts`; and the `.ec-morphing` rules in `src/charts/render/theme.ts`.
    - As decisions 8 and 12.

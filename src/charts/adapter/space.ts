@@ -6,13 +6,28 @@ import type { Matrix, Point, Rect } from "../../core";
 import { matrix } from "../../core";
 import { invert, parseTransform } from "../../core/geometry";
 
+/** An element's screen CTM as a matrix, or undefined where there's no layout. */
+export type ScreenMatrix = (element: Element) => Matrix | undefined;
+
+/**
+ * Screen CTMs remembered per element, for one read while nothing changes: every mark of a read asks
+ * for the common ancestor's and its parent's, which most marks share.
+ */
+export function screenMatrices(): ScreenMatrix {
+  const known = new Map<Element, Matrix | undefined>();
+  return (element) => {
+    if (!known.has(element)) known.set(element, screenMatrix(element));
+    return known.get(element);
+  };
+}
+
 /**
  * Maps points in `inner`'s user space (after its own transform) into `outer`'s. Both are inside
  * `root`. Without CTMs, nested `<svg>` viewports and CSS transforms aren't seen.
  */
-export function between(outer: Element, inner: Element, root: Element): Matrix {
-  const a = screenMatrix(outer);
-  const b = a && screenMatrix(inner);
+export function between(outer: Element, inner: Element, root: Element, screen: ScreenMatrix = screenMatrix): Matrix {
+  const a = screen(outer);
+  const b = a && screen(inner);
   if (a && b) return matrix.multiply(invert(a), b);
   return matrix.multiply(invert(fromRoot(outer, root)), fromRoot(inner, root));
 }

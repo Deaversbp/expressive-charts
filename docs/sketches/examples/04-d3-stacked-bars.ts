@@ -33,11 +33,18 @@ export function render(next: Player[]): void {
   fx.refresh(updated); // enter / update / exit by key, so effects stay in step
 }
 
-// Alternative: follow the host's transition frame by frame instead of refreshing at the end.
+// Alternative: follow the host's transition frame by frame. refresh() still says what the data did
+// (enter, update, exit), called right after the join, before the transition starts; watch then moves
+// the effects with every frame the transition draws, so the flash's halo grows with its bar.
 export const live = expressive(rects, {
   key: (d) => d.data.name,
   segment: (d) => d.key,
+  value: (d) => d[1] - d[0], // an update is a change in values since the last refresh()
   baseline: "auto", // all rects share their left edge, so the baseline is "left"
   watch: true,
   on: { update: "flash" }
 });
+
+export function renderLive(next: Player[]): void {
+  live.refresh(drawWithD3(next, { duration: motion.duration(600) }));
+}

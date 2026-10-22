@@ -26,6 +26,13 @@ export function readSource<D>(source: MarkSource<D>): SourceMarks<D> {
   throw new TypeError("expressive needs marks: a selector, an element, a list of elements or a D3 selection.");
 }
 
+/** A selection's rows by element, when its data() lines up with its nodes(); otherwise undefined, and each element's own `__data__` is its row. */
+export function boundRows<D>(source: MarkSource<D>): Map<Element, D> | undefined {
+  if (!isSelection<D>(source)) return undefined;
+  const { elements, data } = readSource(source);
+  return data && new Map(elements.map((element, i) => [element, data[i]!]));
+}
+
 /** The outermost <svg> around the elements, which must all share it. */
 export function rootOf(elements: readonly Element[]): SVGSVGElement {
   let root: SVGSVGElement | undefined;

@@ -1,6 +1,6 @@
 import { invert, parseTransform } from "../../core/geometry";
 import { matrix } from "../../core";
-import { axisAligned, between, boxIn, rectOf } from "./space";
+import { axisAligned, between, boxIn, rectOf, screenMatrices } from "./space";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -55,6 +55,20 @@ describe("between", () => {
     Object.assign(plot, { getScreenCTM: ctm(1, 1, 100, 50) });
     Object.assign(rect, { getScreenCTM: ctm(2, 2, 110, 70) });
     close(between(plot, rect, svg), [2, 0, 0, 2, 10, 20]);
+  });
+
+  it("reads each element's CTM once through screenMatrices(), for one read of many marks", () => {
+    const svg = svgTree(`<svg xmlns="${SVG}"><g id="plot"><rect id="a"/><rect id="b"/></g></svg>`);
+    const plot = svg.querySelector("#plot")!;
+    const calls: string[] = [];
+    const ctm = (id: string, e: number) => () => (calls.push(id), { a: 1, b: 0, c: 0, d: 1, e, f: 0 });
+    Object.assign(plot, { getScreenCTM: ctm("plot", 100) });
+    for (const [id, e] of [["a", 110], ["b", 120]] as const) Object.assign(svg.querySelector(`#${id}`)!, { getScreenCTM: ctm(id, e) });
+    const screen = screenMatrices();
+    close(between(plot, svg.querySelector("#a")!, svg, screen), [1, 0, 0, 1, 10, 0]);
+    close(between(plot, svg.querySelector("#b")!, svg, screen), [1, 0, 0, 1, 20, 0]);
+    close(between(plot, svg.querySelector("#a")!, svg, screen), [1, 0, 0, 1, 10, 0]);
+    expect(calls).toEqual(["plot", "a", "b"]);
   });
 });
 

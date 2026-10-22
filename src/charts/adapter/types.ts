@@ -81,6 +81,16 @@ export interface ExpressiveOptions<D> {
    * writes no ARIA, and the host names its own marks.
    */
   readonly markLabel?: (datum: D, mark: HostMark<D>) => string;
+  /**
+   * Follows the host's own transitions, frame by frame, without refresh(): a MutationObserver notes
+   * changes to the marks' geometry attributes (d, x, y, width, height, cx, cy, r, points, transform),
+   * and to transform and style on their ancestors up to the root <svg>. Once a frame, on the clock,
+   * the marks that changed are read again (their rows, geometry and samples) and their effects follow,
+   * with no events. Values, colours, names and the elements themselves stay as the last refresh() read
+   * them: call refresh() when the host joins new data. `geometry` should read the element, or a row the
+   * host updates each frame; one that reads a transition's target row sees only the end. Default false.
+   */
+  readonly watch?: boolean;
 }
 
 /** What `markLabel` is given beside the row: the mark's key and its parts. */

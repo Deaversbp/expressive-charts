@@ -9,7 +9,7 @@
  * options, accessors, colorAssignment), the donut chart's options, the icons (defineIcon, iconFromSvg, icons), the first
  * effects (travel with its gaits, flash, wiggle, pulse, threshold, sequence, parallel, only, stagger), the
  * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch, playback with its
- * playButton, and the adapter's types (MarkSource, Attachment, ExpressiveOptions). The conformance suite is ./testing.ts.
+ * playButton, and the adapter, expressive() with its types (MarkSource, Attachment, ExpressiveOptions). The conformance suite is ./testing.ts.
  * Everything still declared here is planned. Lines marked NEW were
  * added because writing the examples in ./examples exposed a gap in docs/plan.md.
  */
@@ -17,17 +17,14 @@
 export * from "../../src/index";
 import type {
   Accessor,
-  Attachment,
   BarChartOptions as BuiltBarChartOptions,
   Chart as BuiltChart,
   ChartOptions as BuiltChartOptions,
   ColorAssignment,
   describe as builders,
   DonutChartOptions,
-  ExpressiveOptions as BuiltExpressiveOptions,
   MarkEvents,
   MarkGeometry,
-  MarkSource,
   NumericKey,
   Sample,
   TransitionEffect
@@ -98,24 +95,15 @@ export declare const describe: typeof builders & {
 
 // ── Adapters: effects on charts built with other libraries ───────────────────
 
-// MarkSource, Attachment (with refresh() and focus()) and ExpressiveOptions are built, in
-// src/charts/adapter, and so is expressive() itself (M1 step 10, for rects). Changed from the sketch:
-// `key` may return a number (converted with String()), `datum` defaults to a selection's data() before
-// element.__data__, `geometry` is called once per mark with its first element, and `baseline: "auto"`
-// also finds negative bars (a mark whose far edge is on the shared line grows the other way). The
-// `samples` option is built too (M4 step 4): it's also called for each named segment, its samples are
-// checked when read, and rects with a numeric `value` get the bar chart's samples without it.
-
-/** Planned for M4: following the host's own transitions. */
-interface PlannedExpressiveOptions {
-  /** Re-read geometry on every attribute change, so decorations follow the host's own transitions. */
-  readonly watch?: boolean;
-}
-
-export interface ExpressiveOptions<D> extends BuiltExpressiveOptions<D>, PlannedExpressiveOptions {}
-
-/** Built in M1 step 10 (src/charts/adapter), with `samples` since M4 step 4; declared here until it has `watch` (M4 step 6). */
-export declare function expressive<D = unknown>(target: MarkSource<D>, options: ExpressiveOptions<D>): Attachment<D>;
+// expressive() with MarkSource, Attachment (with refresh() and focus()) and ExpressiveOptions is built,
+// in src/charts/adapter (M1 step 10, for rects). Changed from the sketch: `key` may return a number
+// (converted with String()), `datum` defaults to a selection's data() before element.__data__,
+// `geometry` is called once per mark with its first element, and `baseline: "auto"` also finds
+// negative bars (a mark whose far edge is on the shared line grows the other way). The `samples`
+// option is built too (M4 step 4): it's also called for each named segment, its samples are checked
+// when read, and rects with a numeric `value` get the bar chart's samples without it. So is `watch`
+// (M4 step 6): it re-reads only the marks whose geometry attributes changed, or that sit in an
+// ancestor that moved, once a frame, and fires no events, so refresh() still says what the data did.
 
 // ── Reference charts ─────────────────────────────────────────────────────────
 

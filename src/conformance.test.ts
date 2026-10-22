@@ -1,12 +1,13 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// four sources: bars from the reference barChart and from expressive() on bars drawn by other code,
-// the slices of the reference donutChart, and the slices of a D3 pie through expressive(). Each
+// these sources: bars from the reference barChart and from expressive() on bars drawn by other code,
+// the slices of the reference donutChart, the slices of a D3 pie through expressive(), and the
+// lines of a D3 line chart through expressive(), with samples from samplesAlong. Each
 // source also draws its marks at another size, as a resize would, for the check that effects follow
 // onChange. This test brings charts and effects together, so it lives beside src/index.ts, the only
 // module allowed to.
 
 import { select } from "d3-selection";
-import { arc, pie, type PieArcDatum } from "d3-shape";
+import { arc, line, pie, type PieArcDatum } from "d3-shape";
 import {
   barChart,
   describe as build,
@@ -15,6 +16,7 @@ import {
   flash,
   parallel,
   pulse,
+  samplesAlong,
   sequence,
   stagger,
   threshold,
@@ -112,6 +114,50 @@ function pieMarks(moved = false): readonly MarkGeometry[] {
   return fx.marks();
 }
 
+interface Week {
+  week: number;
+  goals: number;
+  xg: number;
+}
+
+/** Cumulative goals and xG over six weeks, crossing twice. */
+const weeks: Week[] = [
+  { week: 1, goals: 1, xg: 0.6 },
+  { week: 2, goals: 1, xg: 1.5 },
+  { week: 3, goals: 3, xg: 2.4 },
+  { week: 4, goals: 3, xg: 3.6 },
+  { week: 5, goals: 5, xg: 4.1 },
+  { week: 6, goals: 6, xg: 5.2 }
+];
+
+/**
+ * A real D3 line: two d3.line() paths in a margin <g>, one per series, each described from the
+ * points that drew it, with samplesAlong samples. 80 px a week and 30 px a goal (64 and 24 when moved).
+ */
+function lineMarks(moved = false): readonly MarkGeometry[] {
+  const [across, up] = moved ? [64, 24] : [80, 30];
+  const x = (week: number): number => across * (week - 1);
+  const y = (value: number): number => 200 - up * value;
+  const plot = select(document.body).append("svg").attr("width", 520).attr("height", 240).append("g").attr("transform", "translate(40,20)");
+  const paths = plot
+    .selectAll<SVGPathElement, { series: "goals" | "xg"; rows: Week[] }>("path")
+    .data((["goals", "xg"] as const).map((series) => ({ series, rows: weeks })))
+    .join("path")
+    .attr("fill", "none")
+    .attr("stroke-width", 2)
+    .attr("d", (d) =>
+      line<Week>()
+        .x((w) => x(w.week))
+        .y((w) => y(w[d.series]))(d.rows)
+    );
+  const fx = expressive(paths, {
+    key: (d) => d.series,
+    geometry: (_el, d, key) => build.line({ key, series: d.series, points: d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]) })), width: 2 }),
+    samples: (d, mark) => samplesAlong(mark, d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]), value: w[d.series], at: w.week })))
+  });
+  return fx.marks();
+}
+
 const effects: Record<string, AnyMarkEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
@@ -131,7 +177,7 @@ const options: Record<string, CheckEffectOptions> = { "staggered flash, third of
 /** A source's marks, or with `true` the same marks moved. */
 type Source = (moved?: boolean) => readonly MarkGeometry[];
 const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars": adapterMarks };
-const sources: Record<string, Source> = { ...bars, donutChart: donutMarks, "D3 pie through expressive()": pieMarks };
+const sources: Record<string, Source> = { ...bars, donutChart: donutMarks, "D3 pie through expressive()": pieMarks, "D3 line through expressive()": lineMarks };
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -164,6 +210,18 @@ describe("slices from a D3 pie through expressive()", () => {
     for (const mark of marks) {
       expect(mark.segments).toBeUndefined();
       expect(mark.pivot).toEqual({ x: 0, y: 0 });
+    }
+  });
+});
+
+describe("lines from a D3 line through expressive()", () => {
+  it("finds a line for each series, in document order, in the margin group's coordinates", () => {
+    const marks = lineMarks();
+    expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg"]);
+    for (const mark of marks) {
+      expect(mark.outline.closed).toBe(false);
+      expect(mark.start).toEqual({ x: 0, y: 200 - 30 * weeks[0]![mark.key as "goals" | "xg"] });
+      expect(mark.end.x).toBe(400);
     }
   });
 });

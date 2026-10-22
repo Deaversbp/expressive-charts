@@ -156,6 +156,7 @@ describe("barChart: drawing", () => {
     expect(() => barChart("#nothing", { label: "Goals", data: players, y: "name", x: "goals" }, env)).toThrow(/no element matches/);
     expect(() => barChart(host, { label: " ", data: players, y: "name", x: "goals" }, env)).toThrow(/needs a label/);
     expect(() => barChart(host, { label: "Goals", data: players, y: "name", x: "goals", width: -5 }, env)).toThrow(/width must be/);
+    expect(() => barChart(host, { label: "Goals", data: players, y: "name", x: "goals", format: "0.0" as unknown as () => string }, env)).toThrow(/barChart: format must be a function/);
   });
 
   it("leaves nothing behind when its first layout throws", () => {

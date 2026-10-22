@@ -83,6 +83,24 @@ describe("tableModel", () => {
     expect(model.rows[0]!.cells.map((cell) => cell.text)).toEqual(["A", "3", "0", "3"]);
   });
 
+  it("adds a donut's Share column and total row, in <tfoot>", () => {
+    const model = tableModel(input({ series: ["goals"], rows: input().rows.map((row) => ({ ...row, values: [row.values[0]!], total: row.values[0]!.value })), shares: true }))!;
+    expect(model.headers.map((cell) => cell.text)).toEqual(["name", "goals", "Share"]);
+    expect(model.rows.map((row) => row.cells.map((cell) => cell.text))).toEqual([
+      ["Okafor", "16", "50%"],
+      ["Tanaka", "6", "19%"],
+      ["Lindqvist", "10", "31%"]
+    ]);
+    expect(model.footer).toEqual([
+      { text: "Total", numeric: false },
+      { text: "32", numeric: true },
+      { text: "100%", numeric: true }
+    ]);
+    const empty = tableModel(input({ series: ["goals"], rows: [], shares: true }))!;
+    expect(empty.footer!.map((cell) => cell.text)).toEqual(["Total", "0", "0%"]);
+    expect(tableModel(input())!.footer).toBeUndefined();
+  });
+
   it("right-aligns an extra column only when it holds numbers", () => {
     const model = tableModel(
       input({

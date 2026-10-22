@@ -3,6 +3,7 @@ import { createRegistry, type PresetFactory } from "../core/registry";
 import { play } from "../core/testing";
 import { barChart, type ChartEnv } from "./bar";
 import { colorAssignment } from "./colors";
+import { chartLegend } from "./legend";
 import { seriesColors } from "./render/theme";
 import type { BarChartOptions } from "./types";
 
@@ -108,6 +109,20 @@ describe("barChart: legend", () => {
 
   it("rejects a legend option that isn't a boolean", () => {
     expect(() => setup({ legend: "top" as unknown as boolean })).toThrow(/legend must be true or false/);
+  });
+
+  it("lists categories by key, one included, for a donut", () => {
+    const svg = document.body.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "svg"));
+    const legend = chartLegend(svg);
+    const colors = colorAssignment({ Saved: 3 });
+    legend.categories([{ key: "Saved", label: "Saved" }], colors, true);
+    const items = () => Array.from(document.querySelectorAll<HTMLElement>(".ec-legend-item"));
+    expect(items().map((item) => [item.getAttribute("data-key"), item.textContent, item.style.getPropertyValue("--ec-mark")])).toEqual([["Saved", "Saved", seriesColors(3).color]]);
+    expect(items()[0]!.hasAttribute("data-series")).toBe(false);
+    legend.categories([{ key: "Saved", label: "Saved" }], colors, false);
+    expect(document.querySelector(".ec-legend")).toBeNull();
+    legend.categories([], colors, true);
+    expect(document.querySelector(".ec-legend")).toBeNull();
   });
 
   it("is removed with the chart", () => {

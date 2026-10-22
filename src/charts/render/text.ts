@@ -2,7 +2,21 @@
 // chart's CSS apply. Where there's no layout (jsdom, a hidden container), widths are estimated from
 // the character count.
 
-import { svgElement } from "./svg";
+import { setAttributes, svgElement } from "./svg";
+
+/** Where a piece of text goes: its baseline's anchor point, and how it's anchored there. */
+export interface TextPlacement {
+  readonly x: number;
+  readonly y: number;
+  readonly anchor: "start" | "middle" | "end";
+  readonly text: string;
+}
+
+/** Moves a <text> to `placement` and sets its text, when it changed. */
+export function placeText(element: SVGTextElement, placement: TextPlacement): void {
+  setAttributes(element, { x: placement.x, y: placement.y, "text-anchor": placement.anchor });
+  if (element.textContent !== placement.text) element.textContent = placement.text;
+}
 
 export interface TextMeasure {
   /** Width in px of `text` drawn with `className` at `size` px (the size is only used for estimates). */

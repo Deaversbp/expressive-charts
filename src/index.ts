@@ -4,11 +4,14 @@
 import { motion as pageMotion, type Motion } from "./core";
 import {
   barChart as drawBarChart,
+  donutChart as drawDonutChart,
   expressive as attach,
   type Attachment,
   type BarChart,
   type BarChartOptions,
   type ChartEnv,
+  type DonutChart,
+  type DonutChartOptions,
   type ExpressiveOptions,
   type MarkSource
 } from "./charts";
@@ -32,6 +35,8 @@ export type {
   ChartChange,
   ChartOptions,
   ColorAssignment,
+  DonutChart,
+  DonutChartOptions,
   ExpressiveOptions,
   HostMark,
   KeyOfType,
@@ -40,6 +45,7 @@ export type {
   MarkSource,
   MarkSummary,
   NumericKey,
+  SliceSummary,
   StyleOptions,
   TableColumn,
   TableOptions
@@ -55,6 +61,15 @@ const env: ChartEnv = { presets: presetRegistry, icons: iconRegistry, motion: pa
  */
 export function barChart<D>(target: string | Element, options: BarChartOptions<D>): BarChart<D> {
   return drawBarChart(target, options, env);
+}
+
+/**
+ * A donut chart in `target` (an element or a selector). `category` names each slice and `value` sizes
+ * it; slices go clockwise from 12 o'clock, in data order or largest first with `sort: "value"`; `on`
+ * attaches effects by slot.
+ */
+export function donutChart<D>(target: string | Element, options: DonutChartOptions<D>): DonutChart<D> {
+  return drawDonutChart(target, options, env);
 }
 
 /**

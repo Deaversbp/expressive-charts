@@ -5,8 +5,8 @@
 import type { MarkHandle, MarkStyle, Matrix } from "../../core";
 import { matrix } from "../../core";
 import { mergeFields } from "../../core/merge";
-import { setAttributes, setStyles, svgElement, transformAttribute } from "../render/svg";
-import { cssColor, type SeriesColors } from "../render/theme";
+import { maskedHalo } from "../render/outside";
+import type { SeriesColors } from "../render/theme";
 import type { HostEdits } from "./edits";
 import { ownTransform } from "./space";
 
@@ -28,8 +28,6 @@ export interface HostMarkHandle extends MarkHandle {
   repaint(): void;
 }
 
-let maskIds = 0;
-
 /**
  * - `transform` is in the common ancestor's space. Each element gets an inline CSS transform that
  *   moves it by that much, composed with its own transform attribute, with origin 0 0 in its user space.
@@ -39,7 +37,7 @@ let maskIds = 0;
  */
 export function hostMarkHandle(parts: () => readonly HostPart[], edits: HostEdits, halos: () => SVGGElement | undefined): HostMarkHandle {
   let style: MarkStyle = {};
-  let halo: SVGGElement | undefined;
+  const halo = maskedHalo();
 
   const repaint = (): void => {
     const { transform, opacity, emphasis } = style;
@@ -58,29 +56,8 @@ export function hostMarkHandle(parts: () => readonly HostPart[], edits: HostEdit
   };
 
   const paintHalo = (): void => {
-    const spec = style.halo;
-    const container = halos();
-    const visible = parts().filter((part) => part.outline !== undefined);
-    if (!spec || !container || visible.length === 0) {
-      halo?.remove();
-      halo = undefined;
-      return;
-    }
-    if (!halo || halo.parentNode !== container) {
-      halo?.remove();
-      halo = svgElement("g", { class: "ec-halo" }, container);
-    }
-    halo.textContent = "";
-    const id = `ec-halo-mask-${++maskIds}`;
-    const reach = spec.width;
-    const mask = svgElement("mask", { id, maskUnits: "userSpaceOnUse", x: -1e5, y: -1e5, width: 2e5, height: 2e5 }, halo);
-    svgElement("rect", { x: -1e5, y: -1e5, width: 2e5, height: 2e5, fill: "white" }, mask);
-    for (const part of visible) svgElement("path", { d: part.outline, fill: "black" }, mask);
-    setAttributes(halo, { transform: style.transform && transformAttribute(style.transform) });
-    for (const part of visible) {
-      const path = svgElement("path", { d: part.outline, "stroke-width": reach, "stroke-opacity": spec.opacity, "stroke-linejoin": "round", mask: `url(#${id})` }, halo);
-      setStyles(path, { fill: "none", stroke: spec.color === undefined ? (part.colors?.color ?? cssColor("mark")) : cssColor(spec.color) });
-    }
+    const visible = parts().flatMap((part) => (part.outline === undefined ? [] : [{ d: part.outline, color: part.colors?.color }]));
+    halo.paint(halos(), visible, style.halo, style.transform);
   };
 
   return {

@@ -1,5 +1,5 @@
-// Numbers as a chart shows them: the `format` option or its default, and the rounding a counting label
-// uses between two values.
+// Numbers as a chart shows them: the `format` option or its default, the rounding a counting label
+// uses between two values, and a share as a percent.
 
 /** The chart's `format`, or the default: the locale's, to at most 2 decimals. */
 export function format(options: { readonly format?: ((value: number) => string) | undefined }): (value: number) => string {
@@ -25,4 +25,9 @@ export function round(value: number, digits: number): number {
   const rounded = Math.round(value * factor) / factor;
   // No "-0" on a label counting down to zero.
   return rounded === 0 ? 0 : rounded;
+}
+
+/** A share, from 0 to 1, as a whole percent: "28%". */
+export function percent(share: number): string {
+  return `${round(share * 100, 0)}%`;
 }

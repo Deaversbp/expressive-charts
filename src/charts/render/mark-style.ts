@@ -3,6 +3,7 @@
 
 import type { MarkHandle, MarkStyle } from "../../core";
 import { mergeFields } from "../../core/merge";
+import { maskedHalo } from "./outside";
 import { setAttributes, setStyles, svgElement, transformAttribute } from "./svg";
 import { cssColor, type SeriesColors } from "./theme";
 
@@ -22,6 +23,15 @@ export interface StyleTarget {
   readonly parts: readonly StyledPart[];
 }
 
+export interface SvgMarkHandleOptions {
+  /**
+   * Where halos go instead of behind the mark: a group above the marks, where each is masked to
+   * outside its mark (render/outside.ts). For marks that touch, such as slices, so a halo shows evenly
+   * on every side instead of under the neighbour drawn after it.
+   */
+  readonly halos?: () => SVGGElement | undefined;
+}
+
 export interface SvgMarkHandle extends MarkHandle {
   readonly style: MarkStyle;
   /** Applies the current style again, after the mark was redrawn (new parts or outlines). */
@@ -34,11 +44,12 @@ export interface SvgMarkHandle extends MarkHandle {
  * - `emphasis` mixes each part's colour toward its strong colour, without the CSS hover transition
  *   (effects animate it themselves).
  * - `halo` strokes each visible part's outline behind the mark: `width` is the stroke width, so half
- *   of it shows outside the mark.
+ *   of it shows outside the mark. With `halos`, it's drawn there instead, masked to outside the mark.
  */
-export function svgMarkHandle(target: () => StyleTarget | undefined): SvgMarkHandle {
+export function svgMarkHandle(target: () => StyleTarget | undefined, options: SvgMarkHandleOptions = {}): SvgMarkHandle {
   let style: MarkStyle = {};
   let halo: SVGGElement | undefined;
+  const above = options.halos && maskedHalo();
 
   const repaint = (): void => {
     const current = target();
@@ -60,6 +71,11 @@ export function svgMarkHandle(target: () => StyleTarget | undefined): SvgMarkHan
 
   const paintHalo = (body: SVGGElement, parts: readonly StyledPart[]): void => {
     const spec = style.halo;
+    if (above) {
+      const visible = parts.flatMap((part) => (part.visible ? [{ d: part.d, color: part.colors.color }] : []));
+      above.paint(options.halos?.(), visible, spec, style.transform);
+      return;
+    }
     if (!spec) {
       halo?.remove();
       halo = undefined;

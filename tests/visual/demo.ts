@@ -1,4 +1,4 @@
-// Shared steps for the visual suite: open demo/bars.html with time stopped, and operate its controls.
+// Shared steps for the visual suite: open a demo page with time stopped, and operate its controls.
 //
 // Time is Playwright's fake clock (page.clock). The library's page-wide clock looks up
 // performance.now() and requestAnimationFrame each time it needs a frame, and the fake clock replaces
@@ -19,13 +19,27 @@ export const FRAME = 16;
 export type Mode = "Presentation" | "Analysis" | "Off";
 export type Metric = "Goals" | "Assists" | "Goals + assists";
 
-/** Opens the demo with time stopped at START. */
-export async function openDemo(page: Page): Promise<void> {
+/** A demo page, and how to tell that its charts are drawn. */
+export interface Demo {
+  readonly path: string;
+  ready(page: Page): Promise<void>;
+}
+
+/** demo/bars.html: eight players on the library's chart and on the hand-written one. */
+export const barsDemo: Demo = {
+  path: "/bars.html",
+  async ready(page) {
+    await expect(page.locator("#chart .ec-mark")).toHaveCount(8);
+    await expect(page.locator("#host-chart .host-goals rect")).toHaveCount(8);
+  }
+};
+
+/** Opens a demo, bars.html unless another is given, with time stopped at START. */
+export async function openDemo(page: Page, demo: Demo = barsDemo): Promise<void> {
   await page.clock.install({ time: 0 });
   await page.clock.pauseAt(START);
-  await page.goto("/bars.html");
-  await expect(page.locator("#chart .ec-mark")).toHaveCount(8);
-  await expect(page.locator("#host-chart .host-goals rect")).toHaveCount(8);
+  await page.goto(demo.path);
+  await demo.ready(page);
   const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
   if (scrollHeight > (page.viewportSize()?.height ?? 0)) {
     throw new Error(`The page (${scrollHeight} px) is taller than the viewport; raise its height in playwright.config.ts.`);

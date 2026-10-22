@@ -277,6 +277,11 @@ npm install
 npm run dev
 ```
 
+The dev server's index links the demos built on the library:
+
+- `demo/bars.html`: the lab's first card on `barChart`, with the ball and cleat, staged sorting, "Play next matchweek", and the same story on a hand-written SVG chart through `expressive()`.
+- `demo/donut.html`: the lab's third card without its morph. The shot outcomes on `donutChart`, as columns on `barChart`, and on a D3 pie through `expressive()`, with one picker for the hover effect (the ball, `"wiggle"` or `"pulse"`) and "Next match" flashing the slices that changed (`stagger(flash())`).
+
 ## Development
 
 | Command | What it does |
@@ -284,7 +289,7 @@ npm run dev
 | `npm run dev` | Serves the `demo/` folder with live reload |
 | `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` and `testing` entries), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
 | `npm test` | Runs the test suite |
-| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
+| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html` and `demo/donut.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
 | `npm run typecheck` | Checks types without building |
 
 Requires Node.js 22 or newer (CI tests 22 and 24).

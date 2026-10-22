@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1 is complete, and M2 is complete apart from a short screen-reader re-check (October 2026, §9). M3 is planned step by step in §9 and is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 is complete. M2 is complete apart from a short screen-reader re-check. M3 is built, and waits only on your donut screen-reader check (October 2026, §9). M4 is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -829,7 +829,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 The flash is checked by tests, not by eye: `src/matchweek.test.ts` (only changed bars flash, on both charts), the flash unit tests, and the visual suite's mid-change screenshots. A hidden browser pane throttles frames past the 900 ms blink, so it can't be watched there.
 
-### M3: Donut, plus the proof that effects are chart-agnostic
+### M3: Donut, plus the proof that effects are chart-agnostic ✅ (pending your donut screen-reader check)
 
 `donutChart` (slice geometry from `describe.arc`, built in M1, and a centre label). The same `travel`, now rolling around slices, with **no change to effect code**, on our donut and on D3 pie paths through `expressive({ geometry })`. `wiggle`, `pulse`, `stagger` and string presets, shown on bars and on the donut (`on: { hover: "wiggle" }`).
 
@@ -974,11 +974,21 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 **Wave 3:**
 
-6. **`demo/donut.html`, its screenshots and the listening script.** Owns `demo/donut.html`, `demo/donut.ts`, a hand-written D3 pie in `demo/`, the link in `demo/index.html`, `tests/visual/donut.spec.ts` with its `donut-` baselines, a small edit to `tests/visual/demo.ts` (opening a given page), the donut section of `docs/a11y-check.md`, and the visual-tests paragraph in CONTRIBUTING.md.
+6. ✅ **`demo/donut.html`, its screenshots and the listening script.** Owns `demo/donut.html`, `demo/donut.ts`, a hand-written D3 pie in `demo/`, the link in `demo/index.html`, `tests/visual/donut.spec.ts` with its `donut-` baselines, a small edit to `tests/visual/demo.ts` (opening a given page), the donut section of `docs/a11y-check.md`, and the visual-tests paragraph in CONTRIBUTING.md.
    - The page as decision 11, with the lab's shot outcomes (Goal 58, Saved 112, Off target 149, Blocked 87), the motion switch, and a checklist that is the "Done when" list below. "Next match" adds a seeded match's shots, announced, and stops after a fixed number of matches.
    - The screenshots as decision 11, made in Docker (`npm run test:visual:update`).
    - A donut listening script in `docs/a11y-check.md`. **You run it** with NVDA + Chrome, and the names and roles are adjusted to what you hear.
    - Then check the "Done when" list in the browser with you.
+   - **Built** (October 2026), with nothing in `src/` changed. Decisions:
+     - **Layout.** On one column the page was 2,415 px tall, past the visual suite's 2,000 px viewport. From 860 px wide, the donut and the D3 pie sit side by side, so the same effect can be compared on both, with the columns below; narrower, it's one column. The page ends at 1,819 px at 1000 px wide.
+     - **An order control (Data order, Largest first), beyond decision 11.** "Next match" never changes the order with these numbers (the gaps of 25 to 37 shots widen over the matches), so without it the donut's second stage, the turn, couldn't be seen. It drives all three: the donut's and the columns' `sort`, and `pie.sort(null)` or `d3.pie()`'s default on the D3 pie.
+     - **The effect picker** destroys and rebuilds the donut, the columns and the attachment with the data and order as they are (open question 14). The motion is page-wide and the donut's colours are pinned by outcome (`colors`), with the D3 pie given the same slots in the page's CSS, so both survive a rebuild, and focus stays on the picker, which isn't rebuilt. A test checks all four.
+     - **Matches** are seeded (seed 11, the bars demo's generator): each adds from none to twice an outcome's average (Goal 1.5, Saved 3.5, Off target 4.5, Blocked 2.5), so some slices don't change and don't flash. After ten, the total is 505. Only the donut announces ("Match 1: Saved and Off target changed"), so a screen reader hears each match once; the status line beside the button isn't a live region.
+     - **The D3 pie** (`demo/d3-pie.ts`) is drawn as D3 code would draw it: `d3.pie()` and `d3.arc()` (outer radius up to 108 px, inner 0.6 × that), paths joined by outcome so each keeps its element, labels (the outcome over its count) `aria-hidden`, and fills from classes the page maps to `--ec-series-N`. `expressive()` gets `value: (d) => d.value`, `describe.arc` with the radii read at each refresh, `keyboard`, `dim`, and a `markLabel` that names slices as the donut does ("Saved: 112 shots, 28%"). It's refreshed after every redraw, and on resize.
+     - **Screenshots.** 13 baselines, all `donut-…`, from 14 tests; `openDemo(page, demo)` takes the page and its readiness check, bars by default. The mid-roll frame is 80 ms in, since `travel` eases out and is 86% of the way round at 200 ms. Hovers aim at the point inside the slice farthest from its edge: a large slice's bounding-box centre is in the hole. Docker passed all 32 tests twice, and no bars baseline changed.
+     - **Checked at real frame rates** in headless Chromium, since the browser pane was hidden (a hidden pane throttles frames). Hover, on all three charts: in Presentation the ball takes 400–500 ms, a wiggle 450 ms and two pulses 1.2 s; in Analysis the ball and the wiggle end within 200 ms and the pulses take about 420 ms; Off shows the ball at its end at once, and wiggle and pulse draw nothing. "Next match": in Presentation the slices resize over 470 ms and the changed ones flash about 50 ms apart; Analysis is one stage under 200 ms, with the flashes together; Off jumps, with no flash. A re-order alone turns for 500 ms, and a match with a re-order runs both stages, about 980 ms. The keys walked the listening script's tab order and ring order, before and after a re-order.
+     - **Phone width** (open question 15): at 375 and 320 px wide all four labels fit, because the ring shrinks (an outer radius of about 107 px at 375, 92 at 320) before any label is dropped. No horizontal scroll.
+     - **Noticed, not changed:** the donut's table heads its value column "shots", the field's name, beside "Share". Only `seriesLabels` renames it, and that also changes the slices' names and the centre ("406 Shots"), so the page leaves it. And on hover the donut darkens the slice (its built-in emphasis) while the D3 pie only dims the others, since the adapter leaves styling to the host.
 
 **Done when:**
 - `donutChart` draws the lab's card 3 donut on the library: slices with separators, outside labels, the centre total, a legend, the tooltip, a data table with share and total, ARIA names, keyboard order around the ring, and staged updates. Light and dark come from the library's defaults.
@@ -989,6 +999,16 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 - `demo/donut.html` passes its checklist in the browser. The donut screenshots are green in CI, and the bar baselines haven't changed.
 - Your donut screen-reader check passes.
 - The package still has no runtime dependencies, and `typecheck`, `test` and `build` are green.
+
+**Status: built, waiting on your donut screen-reader check (October 2026).** Everything else on the "Done when" list is met:
+- **The donut** draws the lab's card 3 on `demo/donut.html`: separators, outside labels, the centre total, a legend, the tooltip, a table with Share and a total row, ARIA names, keyboard order round the ring, and staged updates (step 6's frame timings). Both themes come from the library's stylesheet; the page sets no `--ec-*` tokens.
+- **The same `travel`** rolls round slices on `donutChart` and on a real `d3.pie()` through `expressive({ geometry })`. `src/effects/travel.ts` and `gaits.ts` last changed in M1 step 6, before M3 began.
+- **`wiggle`, `pulse` and `stagger`** are built (step 2), with tests for the 3 px, 5 s and no-stagger-in-Analysis-or-Off guardrails. The `"wiggle"` and `"pulse"` presets play on the donut, the columns and the D3 pie, checked at real frame rates in each mode.
+- **`checkEffect`** passes for every built-in effect on every fixture and on real marks from `barChart`, `donutChart`, `expressive()` bars and D3 pies (step 5). The effect API is public, `expressive-charts/testing` is exported, the guide's examples are type-checked, and `CHANGELOG.md` states the 0.x promise.
+- **The demo's checklist** passed in the browser with you: the hover stories on all three charts, the effect picker, "Next match" and the order in each mode, keyboard focus, and dark mode. The donut screenshots pass in Docker, in the image CI runs, and the bar baselines haven't changed; CI runs them on the pull request.
+- **No runtime dependencies** (`npm ls --omit=dev` is empty), and `typecheck`, `test` and `build` are green.
+
+Two checks wait on you: the donut listening script ([a11y-check section D](a11y-check.md#d-the-donut-page-donutchart-and-a-d3-pie)), which is this milestone's last item, and M2's re-check of the bar descriptions, which is still open.
 
 ### M4: Line chart and data effects
 
@@ -1050,7 +1070,7 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 12. **D3 in demos and tests.** Adapter demos and tests are most convincing against real D3, but D3 would be a new dev dependency (never a runtime one). *Decided in M3 planning: yes, `d3-shape` and `d3-selection` only, pinned, as dev dependencies* (M3 decision 1). *Recommendation:* M1 uses a hand-written SVG chart; decide on D3 as a dev dependency in M3, when pie paths need it.
 13. **Cost of `watch`.** Following a host's transition through attribute changes means re-reading geometry on every frame. *Recommendation:* measure it in M4 before making it more than opt-in.
 14. **Changing effects with `update({ on })`.** Charts can't change `on` after they're created, so M3's demo recreates its charts when the viewer picks another effect. A page that switches effects loses focus and replays its enter effects. *Recommendation:* add it when a page needs it, by M6 at the latest. The runner would clear the slots' runs and resolve the new ones.
-15. **Donut labels at narrow widths.** M3 drops a label that would overlap the one before it, and every slice stays named in the legend, the tooltip, the table and its ARIA name. Leader lines, or labels inside large slices, would keep more of them. *Recommendation:* look at the demo at phone width in M3 step 6 and decide then. Don't add a label-placement engine before a page needs one.
+15. **Donut labels at narrow widths.** M3 drops a label that would overlap the one before it, and every slice stays named in the legend, the tooltip, the table and its ARIA name. Leader lines, or labels inside large slices, would keep more of them. *Recommendation:* look at the demo at phone width in M3 step 6 and decide then. Don't add a label-placement engine before a page needs one. *Looked at in M3 step 6:* with the lab's four outcomes, every label stays at 375 and 320 px wide, because the ring shrinks first (to an outer radius of about 92 px at 320). Nothing is dropped, so the demo needs neither. Revisit with a page of many small slices.
 16. **A test-runner flavour of `checkEffect`.** M3 exports one runner-agnostic function that throws. A Vitest helper that makes one test per fixture would report failures more readably, but it would tie the package to one runner. *Recommendation:* wait until effect authors ask for it.
 
 ### Risks

@@ -23,7 +23,7 @@ jobs:
       - run: npm run build
 
   visual:
-    # Screenshots of demo/bars.html in Chromium (playwright.config.ts). The job runs in the official
+    # Screenshots of the demo pages in Chromium (playwright.config.ts). The job runs in the official
     # Playwright image, which comes with Chromium and its fonts, so nothing is downloaded per run and
     # the pictures match baselines made locally with `npm run test:visual:update` in the same image.
     # The tag must match @playwright/test in package.json (Playwright says so if they differ).

@@ -25,6 +25,9 @@ export type { MotionEnv, Tween, TweenOptions, TweenResult } from "./tween";
 export { animated, interpolateNumber, interpolatePoint, interpolateRecord } from "./animated";
 export type { Animated, AnimatedOptions, AnimateOptions, Interpolator } from "./animated";
 
+export { playback } from "./playback";
+export type { Playback, PlaybackEvent, PlaybackOptions, SeekOptions } from "./playback";
+
 export type {
   AnyMarkEffect,
   Color,

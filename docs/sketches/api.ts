@@ -8,8 +8,8 @@
  * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
  * options, accessors, colorAssignment), the donut chart's options, the icons (defineIcon, iconFromSvg, icons), the first
  * effects (travel with its gaits, flash, wiggle, pulse, sequence, parallel, only, stagger), the
- * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch and the adapter's
- * types (MarkSource, Attachment, ExpressiveOptions). The conformance suite is ./testing.ts.
+ * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch, playback with its
+ * playButton, and the adapter's types (MarkSource, Attachment, ExpressiveOptions). The conformance suite is ./testing.ts.
  * Everything still declared here is planned. Lines marked NEW were
  * added because writing the examples in ./examples exposed a gap in docs/plan.md.
  */
@@ -26,15 +26,12 @@ import type {
   DataEffect,
   describe as builders,
   DonutChartOptions,
-  Easing,
   ExpressiveOptions as BuiltExpressiveOptions,
   MarkEvents,
   MarkGeometry,
   MarkSource,
-  MotionView,
   NumericKey,
   Sample,
-  Timing,
   TransitionEffect
 } from "../../src/index";
 
@@ -182,27 +179,10 @@ export declare function chartSwitch<V extends string>(
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 
-export interface Playback {
-  play(): void;
-  pause(): void;
-  seek(x: number): void;
-  readonly playing: boolean;
-  readonly position: number;
-}
-
-export declare function playback(options: {
-  readonly from: number;
-  readonly to: number;
-  /** Base ms for the whole run; scaled with "playback" timing. */
-  readonly duration: number;
-  readonly ease?: Easing;
-  readonly timing?: Timing;
-  readonly motion?: MotionView;
-  readonly onFrame: (x: number) => void;
-}): Playback;
-
-/** A Play/Pause toggle button (WCAG 2.2.2). */
-export declare function playButton(target: string | Element, playback: Playback): { destroy(): void };
+// playback (src/core) and playButton (src/charts/controls) are built. Changed from the sketch: playback
+// also takes a clock, as animated values do; seek takes { animate }; and it has subscribe() and
+// destroy(). playButton takes { labels } and returns a PlayButton ({ element, destroy() }), and it has no
+// aria-pressed, since its name changes between Play and Pause.
 
 // motionSwitch, the Presentation / Analysis / Off control, is built (src/charts/controls). Changed
 // from the sketch: it takes options ({ persist }) and returns a MotionSwitch.

@@ -544,7 +544,7 @@ Adapters follow the chart rules:
 
 ## Controls
 
-On-page controls the viewer operates are in `src/charts/controls/`. Like the charts, they import only core, and the composition root hands them the page-wide motion by default.
+On-page controls the viewer operates are in `src/charts/controls/`. Like the charts, they import only core, and the composition root hands them the page-wide motion by default. The `playback()` controller that the play button drives has no DOM, so it's in core (`src/core/playback.ts`).
 
 ### Motion switch
 
@@ -559,6 +559,41 @@ motionSwitch(target, motion?, { label?, labels?, hints?, persist? }) // → { el
 - **Persisting.** `persist: "key"` is opt-in: the viewer's choice is saved in `localStorage` under the key and restored when the switch is made, so it carries across pages and visits; `clearChoice()` removes it. A stored value that isn't a mode is ignored, and storage that's blocked or full is skipped (every access is guarded).
 - `label`, `labels` and `hints` replace the text, for other languages. `destroy()` removes the switch and stops following the motion; the viewer's choice stays.
 - **Styles.** Its rules are in the shared stylesheet, so `expressive-charts/style.css` and `configure()` cover them as they do the charts'. They use `:where()` and theme tokens (`--ec-text`, `--ec-text-muted`, `--ec-surface`, `--ec-ring`, `--ec-focus`), so they follow light and dark, and host CSS restyles them without specificity fights.
+
+### Playback
+
+```ts
+playback({ from, to, duration, ease?, timing?, motion?, clock?, onFrame })
+// → { play(), pause(), seek(x, { animate? }?), position, playing, subscribe(listener), destroy() }
+playButton(target, playback, { labels? }) // → { element, destroy() }
+```
+
+`playback()` plays a value through a range, such as a season revealed week by week, and `onFrame` draws each position. It's a controller on the clock with no DOM, so it runs in Node and, in tests, on a manual clock. It follows the page-wide motion and clock unless it's given its own (`motion`, `clock`, as on [animated values](#animated-values)). Nothing plays by itself: there's no autoplay option.
+
+- **Where it starts.** At rest at `to`, the way a chart shows all its data until something reveals less. `onFrame` isn't called until the position changes.
+- **`play()`** goes on from where it is to `to`, or starts again from `from` when it's at the end. The whole range takes `duration` scaled by `timing` (default `"playback"`: base in Presentation, × 0.3 in Analysis). A play from part way takes its share of that scaled time, so the speed is the same wherever it starts and whatever the timing's rule: the lab's season takes 6.5 s from week 1, or 1.95 s in Analysis. It moves at constant speed (`ease` defaults to `linear`). With motion off it jumps to `to`. If motion turns off mid-play, it jumps there on the next frame, as tweens do; other mode changes keep the speed it started with. `play()` while playing does nothing.
+- **`pause()`** stops a play where it is, and the next `play()` carries on from there. Pause is the control WCAG 2.2.2 asks for, so there's no `stop()`: `seek(to)` shows the end. `pause()` doesn't stop a seek on its way, so a scrubber's handler can call both.
+- **`seek(x)`** pauses and moves to `x`, clamped to the range, over 350 ms base `"transition"` timing (122.5 ms in Analysis, a jump in Off), as the lab's scrubber does. From rest it eases in and out. A seek while the position is moving (playing, or on its way to another seek) starts from where it is and eases out, as animated values do. `{ animate: false }` jumps.
+- **`subscribe(listener)`** hears `"play"`, `"pause"`, `"end"` and `"seek"`, not frames, which go to `onFrame`. A seek during a play is heard as `"pause"` and then `"seek"`, and a play with motion off as `"play"` and then `"end"`. A listener can call the playback; whatever it starts wins. A listener that throws is reported, and the rest still hear.
+- **Errors.** If `onFrame` throws, the position stops where it is (a play is heard as paused) and the error is reported once: by the clock, or thrown to whoever caused a jump. The options are checked when it's made: `from` and `to` finite and different (`from` above `to` plays backwards), `duration` a non-negative number of ms, `timing` one of the five, and `onFrame` a function.
+- `destroy()` pauses it, telling its listeners, and then every call does nothing.
+
+`playButton(target, playback, { labels })` is the pause control a playback needs: a real `<button type="button">` in `target` (an element or a selector) whose text is Play or Pause, for what a click does. It has no `aria-pressed`, since a toggle button's name stays the same and this one's changes. `labels` gives the page's words (`{ play: "Play season" }`); the defaults are "Play" and "Pause". It follows `playback.subscribe`, so it goes back to Play at the end, on a seek, or when the page pauses, and it's the same element throughout, so focus stays on it. Its `.ec-play` rules are in the shared stylesheet, which it injects as `motionSwitch` does. `destroy()` removes it and stops following the playback, which carries on.
+
+The page wires its own `<input type="range">` to `seek()`, and its status to `onFrame`:
+
+```js
+const season = playback({
+  from: 1, to: 38, duration: 6500,                           // 6.5 s in Presentation, 1.95 s in Analysis, at once in Off
+  onFrame(week) {
+    chart.reveal(week);                                      // planned: lineChart (M4 step 5)
+    status.textContent = `Through matchweek ${Math.round(week)}`;
+    if (season.playing) range.value = String(Math.round(week)); // a seek leaves the slider where the viewer put it
+  }
+});
+playButton("#play", season, { labels: { play: "Play season" } });
+range.addEventListener("input", () => season.seek(Number(range.value)));
+```
 
 ## Rendering
 

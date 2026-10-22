@@ -1,4 +1,4 @@
-import { barChart, colorAssignment, donutChart, expressive, motion, motionSwitch, registerPreset, travel, VERSION } from "./index";
+import { barChart, colorAssignment, donutChart, expressive, motion, motionSwitch, playback, playButton, registerPreset, travel, VERSION } from "./index";
 
 describe("expressive-charts", () => {
   it("exposes a version", () => {
@@ -115,5 +115,25 @@ describe("motionSwitch from the composition root", () => {
     expect(motion.viewerChoice).toBe("analysis");
     expect(motion.mode).toBe("analysis");
     control.destroy();
+  });
+});
+
+describe("playback and playButton from the composition root", () => {
+  afterEach(() => {
+    motion.clearChoice();
+    document.body.textContent = "";
+  });
+
+  it("follow the page-wide motion by default: with Off chosen, Play shows the end at once", () => {
+    motion.chooseMode("off");
+    const weeks: number[] = [];
+    const season = playback({ from: 1, to: 38, duration: 6500, onFrame: (week) => weeks.push(week) });
+    season.seek(10, { animate: false });
+    const control = playButton(document.body.appendChild(document.createElement("div")), season, { labels: { play: "Play season" } });
+    control.element.click();
+    expect(weeks).toEqual([10, 38]);
+    expect(control.element.textContent).toBe("Play season");
+    control.destroy();
+    season.destroy();
   });
 });

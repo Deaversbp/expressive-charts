@@ -27,6 +27,7 @@ The rest of the API (charts, adapters, built-in effects, controls) can still cha
 ### Added
 
 - **The effect-author API is public** ([guide](docs/effects-guide.md)). `defineEffect(spec)` and `defineDataEffect<D>(spec)` make an effect from its `run` and `end`: they fill in the kind and a `clear()` that does nothing, throw a `TypeError` without `run` or `end` (every effect needs an end state), and freeze the effect. A data effect's spec is checked against its row type strictly.
+- **`samplesAlong(mark, points)`** gives data effects their samples on marks the library didn't draw. It projects each point `{ x, y, value, at? }`, in the marks' coordinates, onto the nearest point of the mark's walk and returns the samples in `t` order; a point on the walk, such as a vertex of the line it drew, lands exactly there. It pairs with `expressive()`'s new `samples` option, and its points' type is `SamplePoint`.
 - **`expressive-charts/testing`**, a separate entry with the conformance suite. `checkEffect(effect, { marks, icons, data, batch, name })` runs four checks on every mark (a full run ends as `end()` draws; clearing leaves nothing; an abort settles; with motion off no frames run) and throws one `Error` listing every failure, in any test runner. With it: `fixtures` (one of each kind of mark), `testContext` and `play`.
 
 ### Changed

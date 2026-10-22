@@ -1,6 +1,6 @@
 // What expressive() takes and returns: effects on SVG marks drawn by other code.
 
-import type { Baseline, EffectSlots, MarkGeometry, Motion, MotionMode } from "../../core";
+import type { Baseline, EffectSlots, MarkGeometry, Motion, MotionMode, Sample } from "../../core";
 import type { MarkEvents } from "../types";
 
 /**
@@ -39,6 +39,16 @@ export interface ExpressiveOptions<D> {
    */
   readonly geometry?: (element: Element, datum: D, key: string) => MarkGeometry;
   /**
+   * Data effects' samples: values along the mark's walk, `{ t, value, at? }`, with `t` in [0, 1] and
+   * never decreasing, and finite values. Called on every read for each mark, with its row (its first
+   * part's) and its geometry, and for each of its named segments, with that part's row and the
+   * segment's geometry. They're checked when read: bad samples throw, changing nothing.
+   * `samplesAlong(mark, points)` gives a line its samples from the points that drew it. Default: rects
+   * with a numeric `value` get the bar chart's samples (from 0 at the baseline to their total, each
+   * segment over its own range); other marks get none.
+   */
+  readonly samples?: (datum: D, mark: MarkGeometry) => readonly Sample[];
+  /**
    * The edge rects grow from. Default "auto": the line every mark has an edge on, so bars sharing
    * their left edge grow right; a bar whose other edge is on the line grows the other way, like a
    * negative bar.
@@ -57,7 +67,10 @@ export interface ExpressiveOptions<D> {
    * focus plays the hover effects. Escape or leaving the chart stops them.
    */
   readonly keyboard?: boolean;
-  /** Dim the other marks while one is hovered (to --ec-dim-opacity). Default false: the host owns its styling. */
+  /**
+   * Dim the other marks while one is hovered (to --ec-dim-opacity), and darken the hovered one, as our
+   * charts do: its fill, or its stroke when the fill is none (a line). Default false: the host owns its styling.
+   */
   readonly dim?: boolean;
   /**
    * Names each mark for screen readers, as one item: "Okafor: 16 goals, 4 assists". The element that

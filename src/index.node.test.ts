@@ -25,6 +25,7 @@ describe("importing in Node", () => {
     expect(bar.path(0.5)).toEqual({ x: 50, y: 10 });
     expect(bar.segments?.[0]?.key).toBe("a/goals");
     expect(lib.matrix.apply(lib.matrix.translate(1, 2), lib.offset({ x: 0, y: 0 }, 0, 3))).toEqual({ x: 4, y: 2 });
+    expect(lib.samplesAlong(bar, [{ x: 50, y: 10, value: 8, at: "mid" }])).toEqual([{ t: 0.5, value: 8, at: "mid" }]);
   });
 
   it("registers presets and icons", async () => {

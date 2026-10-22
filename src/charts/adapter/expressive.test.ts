@@ -1,4 +1,16 @@
-import { createMotion, describe as build, manualClock, type EffectContext, type GeometryEffect, type MarkGeometry, type MotionMode } from "../../core";
+import {
+  createMotion,
+  describe as build,
+  manualClock,
+  samplesAlong,
+  type DataEffect,
+  type EffectContext,
+  type GeometryEffect,
+  type MarkData,
+  type MarkGeometry,
+  type MotionMode,
+  type Sample
+} from "../../core";
 import { createRegistry, type PresetFactory } from "../../core/registry";
 import type { ChartEnv } from "../bar";
 import { expressive } from "./expressive";
@@ -138,6 +150,84 @@ function hoverLog<D>(fx: Attachment<D>): string[] {
 }
 
 const overlayOf = (svg: SVGSVGElement) => svg.querySelector(":scope > .ec-overlay") as SVGGElement;
+
+interface Week {
+  week: number;
+  goals: number;
+  xg: number;
+}
+type SeriesName = "goals" | "xg";
+/** A D3 line path's datum: its series, and the rows it was drawn from. */
+interface Trace {
+  name: SeriesName;
+  rows: Week[];
+}
+
+/** Cumulative goals and xG over five weeks: the goals fall below xG in weeks 2 and 3. */
+const season: Week[] = [
+  { week: 1, goals: 1, xg: 0.5 },
+  { week: 2, goals: 1, xg: 1.6 },
+  { week: 3, goals: 2, xg: 2.9 },
+  { week: 4, goals: 5, xg: 3.7 },
+  { week: 5, goals: 6, xg: 4.4 }
+];
+const lineX = (week: number): number => 50 * (week - 1);
+const lineY = (value: number): number => 200 - 25 * value;
+const vertices = (d: Trace) => d.rows.map((row) => ({ x: lineX(row.week), y: lineY(row[d.name]) }));
+const datumOf = (element: Element): unknown => (element as unknown as { __data__: unknown }).__data__;
+
+/**
+ * What a D3 page draws for a line chart: a margin group and one <path> per series from d3.line()'s
+ * default (straight) curve, its datum the series with its rows, stroked with no fill. `draw` redraws
+ * the paths it's given, with new rows.
+ */
+function d3Lines(rows: Week[] = season) {
+  const svg = el("svg", { width: 300, height: 240 }, document.body);
+  const plot = el("g", { transform: "translate(30,20)" }, svg);
+  const names: SeriesName[] = ["goals", "xg"];
+  const paths = names.map((name, i) => el("path", { class: `line ${name}`, fill: "none", stroke: i === 0 ? "#2a78d6" : "#eb6834", "stroke-width": 2 }, plot));
+  const draw = (next: Week[], which: readonly SVGPathElement[] = paths): void => {
+    for (const path of which) {
+      const trace: Trace = { name: names[paths.indexOf(path)]!, rows: next };
+      path.setAttribute("d", vertices(trace).map((p, j) => `${j === 0 ? "M" : "L"}${p.x},${p.y}`).join(""));
+      Object.assign(path, { __data__: trace });
+    }
+  };
+  draw(rows);
+  return { svg, plot, paths, draw };
+}
+
+/** What a D3 line page passes: each path described from the points that drew it, and its samples from the same points. */
+const traced: ExpressiveOptions<Trace> = {
+  key: (d) => d.name,
+  geometry: (_el, d, key) => build.line({ key, series: d.name, points: vertices(d), width: 2 }),
+  samples: (d, mark) => samplesAlong(mark, d.rows.map((row) => ({ x: lineX(row.week), y: lineY(row[d.name]), value: row[d.name], at: row.week })))
+};
+
+/** A data effect that records the data it's given, when it runs and on every change. */
+function dataRecorder(needs?: string[]) {
+  const seen: { key: string; data: MarkData }[] = [];
+  const effect: DataEffect = {
+    kind: "data",
+    ...(needs ? { needs: { related: needs } } : {}),
+    run(mark, data, ctx) {
+      seen.push({ key: mark.key, data });
+      ctx.onChange((moved, next) => seen.push({ key: moved.key, data: next! }));
+      return Promise.resolve();
+    },
+    end(mark, data) {
+      seen.push({ key: mark.key, data });
+    },
+    clear() {}
+  };
+  const last = (key: string): MarkData | undefined => [...seen].reverse().find((entry) => entry.key === key)?.data;
+  return { effect, seen, last };
+}
+
+/** The host's colour mixed toward black, as hover darkening and full emphasis write it (jsdom may write a hex as rgb()). */
+const darker = (hex: string, rgb: string): RegExp => new RegExp(`^color-mix\\(in srgb, (${hex}|rgb\\(${rgb}\\)) 75%, black\\)$`);
+const BLUE = darker("#2a78d6", "42, 120, 214");
+const ORANGE = darker("#eb6834", "235, 104, 52");
 
 afterEach(() => {
   document.body.textContent = "";
@@ -636,6 +726,328 @@ describe("expressive: value", () => {
     host.redraw(players.map((p) => ({ ...p, goals: p.goals + 1 })));
     fx.refresh(host.selection());
     expect(updates).toEqual([]);
+  });
+});
+
+describe("expressive: data on host marks", () => {
+  it("gives data effects the page's samples: on a D3 line, the points that drew it, at its vertices", () => {
+    const host = d3Lines();
+    const decoration = dataRecorder();
+    const calls: string[] = [];
+    const { fx } = setup<Trace>(host.paths, {
+      ...traced,
+      samples: (d, mark) => {
+        calls.push(`${d.name} on ${mark.key}`);
+        return traced.samples!(d, mark);
+      },
+      on: { decorate: decoration.effect }
+    });
+    expect(calls).toEqual(["goals on goals", "xg on xg"]);
+
+    const goals = decoration.last("goals")!;
+    expect(goals.datum).toBe(datumOf(host.paths[0]!));
+    expect(goals.samples.map((s) => [s.at, s.value])).toEqual(season.map((row) => [row.week, row.goals]));
+    // Each sample is at its vertex: t is the distance along the line to it, over the line's length.
+    const line = fx.marks()[0]!;
+    goals.samples.forEach((sample, i) => {
+      const at = line.path(sample.t);
+      const vertex = vertices({ name: "goals", rows: season })[i]!;
+      expect(at.x).toBeCloseTo(vertex.x, 9);
+      expect(at.y).toBeCloseTo(vertex.y, 9);
+    });
+    expect([goals.samples[0]!.t, goals.samples[4]!.t]).toEqual([0, 1]);
+  });
+
+  it("without samples, gives rects with a numeric value the bar chart's samples, and other marks none", () => {
+    const host = d3Stack();
+    const decoration = dataRecorder();
+    setup(host.selection(), { ...stacked, value: (d) => d[1] - d[0], on: { decorate: decoration.effect } });
+    // Okafor: 16 goals and 4 assists. From 0 at the baseline to the total at the tip, as on barChart.
+    const okafor = decoration.last("Okafor")!;
+    expect(okafor.datum).toBe(datumOf(host.rect("Okafor", "goals")));
+    expect(okafor.samples).toEqual([
+      { t: 0, value: 0 },
+      { t: 1, value: 20 }
+    ]);
+    // Each segment over its own range, with its own row: the stack point it was drawn from.
+    const assists = okafor.related("assists")!;
+    expect(assists.datum).toBe(datumOf(host.rect("Okafor", "assists")));
+    expect(assists.samples).toEqual([
+      { t: 0, value: 16 },
+      { t: 1, value: 20 }
+    ]);
+    expect(okafor.related("goals")!.samples).toEqual([
+      { t: 0, value: 0 },
+      { t: 1, value: 16 }
+    ]);
+
+    // Without value there's nothing to read the values from, and a line described with geometry has
+    // no samples unless the page gives them.
+    const plain = dataRecorder();
+    setup(d3Stack().selection(), { ...stacked, on: { decorate: plain.effect } });
+    expect(plain.last("Okafor")!.samples).toEqual([]);
+    const lines = dataRecorder();
+    setup<Trace>(d3Lines().paths, { key: traced.key, geometry: traced.geometry!, on: { decorate: lines.effect } });
+    expect(lines.last("goals")!.samples).toEqual([]);
+  });
+
+  it("checks samples when read: t in [0, 1] and never decreasing, finite values", () => {
+    const attach = (samples: unknown) => () => setup<Trace>(d3Lines().paths, { ...traced, samples: () => samples as Sample[] });
+    expect(attach([{ t: -0.1, value: 1 }])).toThrow(/samples for "goals": samples\[0\]\.t must be in \[0, 1\], got -0\.1\./);
+    expect(attach([{ t: 0.5, value: 1 }, { t: 0.4, value: 2 }])).toThrow(/samples for "goals" must be in t order: samples\[1\]\.t is 0\.4, after 0\.5\./);
+    expect(attach([{ t: 0, value: Number.NaN }])).toThrow(/samples\[0\]\.value must be a finite number, got NaN/);
+    expect(attach([{ t: 0, value: "3" }])).toThrow(/got "3"/);
+    expect(attach([null])).toThrow(/samples\[0\]\.t must be in \[0, 1\], got undefined/);
+    expect(attach("0 to 1")).toThrow(TypeError);
+    // A step, two values at one t, is fine.
+    expect(attach([{ t: 0, value: 1 }, { t: 0.5, value: 1 }, { t: 0.5, value: 2 }])).not.toThrow();
+  });
+
+  it("throws on bad samples in refresh() before anything changes", () => {
+    const host = d3Lines();
+    const decoration = dataRecorder();
+    let broken = false;
+    const { fx } = setup<Trace>(host.paths, { ...traced, samples: (d, mark) => (broken ? [{ t: 2, value: 0 }] : traced.samples!(d, mark)), on: { decorate: decoration.effect } });
+    const events: string[] = [];
+    for (const type of ["enter", "update", "exit"] as const) fx.on(type, (e) => events.push(`${type} ${e.mark.key}`));
+    const before = fx.marks();
+    const seen = decoration.seen.length;
+
+    broken = true;
+    host.draw(season.map((row) => ({ ...row, goals: row.goals + 1 })));
+    expect(() => fx.refresh()).toThrow(/samples for "goals": samples\[0\]\.t must be in \[0, 1\], got 2/);
+    expect(fx.marks()).toEqual(before);
+    expect(events).toEqual([]);
+    expect(decoration.seen).toHaveLength(seen);
+    broken = false;
+    fx.refresh();
+    expect(fx.marks()[0]!.start.y).toBe(lineY(2));
+    expect(decoration.last("goals")!.samples[0]!.value).toBe(2);
+  });
+
+  it("finds a related series on another mark of that series: two D3 line paths", () => {
+    const host = d3Lines();
+    const decoration = dataRecorder();
+    setup<Trace>(host.paths, { ...traced, on: { decorate: decoration.effect } });
+    const goals = decoration.last("goals")!;
+    const xg = goals.related("xg")!;
+    expect(xg.datum).toBe(datumOf(host.paths[1]!));
+    expect(xg.samples.map((s) => [s.at, s.value])).toEqual(season.map((row) => [row.week, row.xg]));
+    expect(xg.related("goals")!.datum).toBe(goals.datum);
+    expect(goals.related("assists")).toBeUndefined();
+  });
+
+  it("prefers the mark's own segment of a series, then the first other mark of it in visual order", () => {
+    // Grouped bars: each rect is a mark of its own, one part named by segment, so it has that series.
+    const host = d3Stack();
+    const seriesOf = (element: Element): string => (element.parentElement as unknown as { __data__: { key: string } }).__data__.key;
+    const decoration = dataRecorder();
+    setup(host.selection(), {
+      key: (d, element) => `${d.data.name} ${seriesOf(element)}`,
+      segment: (_d, element) => seriesOf(element),
+      value: (d) => d[1] - d[0],
+      baseline: "left",
+      on: { decorate: decoration.effect }
+    });
+    // Its own segment, though every player's goals bar has the series "goals".
+    expect(decoration.last("Tanaka goals")!.related("goals")!.datum).toBe(datumOf(host.rect("Tanaka", "goals")));
+    // No segment of its own: the first assists bar, top to bottom, which needn't be the same player's.
+    expect(decoration.last("Tanaka goals")!.related("assists")!.datum).toBe(datumOf(host.rect("Okafor", "assists")));
+  });
+
+  it("checks the series data effects need, on creation and on every refresh(), before anything changes", () => {
+    const needsXg = dataRecorder(["xg"]);
+    const host = d3Lines();
+    const { fx } = setup<Trace>(host.paths, { ...traced, on: { decorate: needsXg.effect } });
+
+    // Lines whose geometry names no series have none to find.
+    const unnamed: ExpressiveOptions<Trace> = { ...traced, geometry: (_el, d, key) => build.line({ key, points: vertices(d) }), on: { decorate: needsXg.effect } };
+    expect(() => setup<Trace>(d3Lines().paths, unnamed)).toThrow(/^expressive: on\.decorate needs the series "xg", but the marks have no series\. Name each mark's series/);
+    // A stack's series are its parts'.
+    expect(() => setup(d3Stack().selection(), { ...stacked, on: { hover: dataRecorder(["xg"]).effect } })).toThrow(
+      /on\.hover needs the series "xg", but the marks' series are "goals", "assists"\./
+    );
+    // With no marks yet, there's nothing to check.
+    expect(() => setup<Trace>([], { ...traced, on: { decorate: needsXg.effect } })).not.toThrow();
+
+    // The host stops drawing xG: refresh() throws, and the attachment stays as it was.
+    const events: string[] = [];
+    fx.on("exit", (e) => events.push(`exit ${e.mark.key}`));
+    host.paths[1]!.remove();
+    expect(() => fx.refresh(host.paths.slice(0, 1))).toThrow(/needs the series "xg", but the marks' series are "goals"\./);
+    expect(fx.marks().map((m) => m.key)).toEqual(["goals", "xg"]);
+    expect(events).toEqual([]);
+  });
+
+  it("tells a mark that may read a related series when that series changes, though the mark didn't", () => {
+    const later = season.map((row) => ({ ...row, xg: row.xg + 1 }));
+    const host = d3Lines();
+    const needsXg = dataRecorder(["xg"]);
+    const { fx } = setup<Trace>(host.paths, { ...traced, on: { decorate: needsXg.effect } });
+    needsXg.seen.length = 0;
+    // The host redraws xG alone; the goals path and its row stay as they were.
+    host.draw(later, [host.paths[1]!]);
+    fx.refresh();
+    expect(needsXg.seen.map((entry) => entry.key)).toEqual(["xg", "goals"]);
+    expect(needsXg.last("goals")!.related("xg")!.samples.map((s) => s.value)).toEqual(later.map((row) => row.xg));
+
+    // With no effect that needs xG, the goals line isn't told.
+    const other = d3Lines();
+    const plain = dataRecorder();
+    const second = setup<Trace>(other.paths, { ...traced, on: { decorate: plain.effect } });
+    plain.seen.length = 0;
+    other.draw(later, [other.paths[1]!]);
+    second.fx.refresh();
+    expect(plain.seen.map((entry) => entry.key)).toEqual(["xg"]);
+  });
+
+  it("sees samples that changed though the geometry and the row didn't", () => {
+    const host = d3Lines();
+    const decoration = dataRecorder();
+    let scale = 1;
+    const { fx } = setup<Trace>(host.paths, {
+      ...traced,
+      samples: (d, mark) => traced.samples!(d, mark).map((s) => ({ ...s, value: s.value * scale })),
+      on: { decorate: decoration.effect }
+    });
+    decoration.seen.length = 0;
+    fx.refresh();
+    expect(decoration.seen).toEqual([]);
+    scale = 2;
+    fx.refresh();
+    expect(decoration.seen.map((entry) => [entry.key, entry.data.samples[4]!.value])).toEqual([
+      ["goals", 12],
+      ["xg", 8.8]
+    ]);
+  });
+});
+
+describe("expressive: stroked marks", () => {
+  /** Full emphasis and a 6 px halo while hovered, and a trace of the walk in the mark's colour. */
+  const glowAt = (mark: MarkGeometry, ctx: EffectContext): void => {
+    ctx.mark.set({ emphasis: 1, halo: { width: 6, opacity: 0.4 } });
+    ctx.layer.path(mark.slice(0, 1), { stroke: "mark", width: 1 });
+  };
+  const glow: GeometryEffect = { kind: "geometry", run: async (mark, ctx) => glowAt(mark, ctx), end: glowAt, clear: () => {} };
+
+  it("takes a line's colours from its stroke when the fill is none: emphasis, halos and the mark colour", () => {
+    const host = d3Lines();
+    const { fx } = setup<Trace>(host.paths, { ...traced, on: { hover: glow } });
+    const [goals] = host.paths;
+    pointer("pointerover", goals!);
+    // Emphasis darkens the stroke and leaves the fill alone.
+    expect(goals!.style.getPropertyValue("stroke")).toMatch(BLUE);
+    expect(goals!.style.getPropertyValue("fill")).toBe("");
+    // Runs draw in the line's colour.
+    expect(overlayOf(host.svg).querySelector<SVGGElement>(".ec-run")!.style.getPropertyValue("--ec-mark")).toMatch(/^(#2a78d6|rgb\(42, 120, 214\))$/);
+    // The halo is in the line's colour too, and goes round its stroke: cut out of the mask without a
+    // fill, which would close the line into a polygon, and as wide as the stroke plus the halo.
+    const halo = overlayOf(host.svg).querySelector(".ec-halos > .ec-halo")!;
+    const cut = halo.querySelector("mask path")!;
+    expect(["fill", "stroke", "stroke-width"].map((name) => cut.getAttribute(name))).toEqual(["none", "black", "2"]);
+    const stroke = halo.querySelector<SVGPathElement>(":scope > path")!;
+    expect(stroke.getAttribute("d")).toBe(fx.marks()[0]!.outline.d);
+    expect(stroke.getAttribute("stroke-width")).toBe("8");
+    expect(stroke.style.getPropertyValue("stroke")).toMatch(/^(#2a78d6|rgb\(42, 120, 214\))$/);
+
+    pointer("pointerleave", host.svg);
+    expect(goals!.getAttribute("style")).toBeNull();
+    expect(overlayOf(host.svg).querySelector(".ec-halo")).toBeNull();
+  });
+
+  it("rings an open outline outside its stroke, on both sides", () => {
+    const host = d3Lines();
+    const { fx } = setup<Trace>(host.paths, { ...traced, keyboard: true });
+    fx.focus("xg");
+    const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
+    const hole = overlayOf(host.svg).querySelector(":scope > mask path")!;
+    expect(ring.getAttribute("d")).toBe(fx.marks()[1]!.outline.d);
+    expect(["fill", "stroke-width"].map((name) => hole.getAttribute(name))).toEqual(["none", "6"]);
+    expect(ring.getAttribute("stroke-width")).toBe("10");
+  });
+
+  it("reads strokes set in CSS as well as attributes, and finds no colour in a gradient", () => {
+    const host = d3Lines();
+    const [goals, xg] = host.paths;
+    for (const name of ["fill", "stroke"]) goals!.removeAttribute(name);
+    goals!.setAttribute("style", "fill: none; stroke: rgb(42, 120, 214)");
+    xg!.setAttribute("stroke", "url(#fade)");
+    setup<Trace>(host.paths, { ...traced, on: { hover: glow } });
+    pointer("pointerover", goals!);
+    expect(goals!.style.getPropertyValue("stroke")).toMatch(BLUE);
+    // No colour to start from: emphasis leaves a gradient as it is.
+    pointer("pointerover", xg!);
+    expect(xg!.style.getPropertyValue("stroke")).toBe("");
+    expect(xg!.style.getPropertyValue("fill")).toBe("");
+  });
+});
+
+describe("expressive: hover darkening", () => {
+  it("under dim, darkens the hovered mark as our charts do: each segment's fill on a bar", () => {
+    const host = d3Stack();
+    setup(host.selection(), { ...stacked, dim: true });
+    pointer("pointerover", host.rect("Okafor", "goals"));
+    expect(host.rect("Okafor", "goals").style.getPropertyValue("fill")).toMatch(BLUE);
+    expect(host.rect("Okafor", "assists").style.getPropertyValue("fill")).toMatch(ORANGE);
+    // The others dim and keep their colours; the darkening fades in with the stylesheet's transition.
+    expect(host.rect("Tanaka", "goals").style.getPropertyValue("fill")).toBe("");
+    expect(host.rect("Okafor", "goals").style.getPropertyValue("transition")).toBe("");
+    expect(document.querySelector("style[data-expressive-charts]")!.textContent).toContain(
+      ":where(.ec-attached) { transition: opacity var(--ec-hover-duration, 100ms) ease-out, fill var(--ec-hover-duration, 100ms) ease-out, stroke var(--ec-hover-duration, 100ms) ease-out; }"
+    );
+
+    pointer("pointerover", host.rect("Tanaka", "assists"));
+    expect(host.rect("Okafor", "goals").style.getPropertyValue("fill")).toBe("");
+    expect(host.rect("Tanaka", "goals").style.getPropertyValue("fill")).toMatch(BLUE);
+    pointer("pointerleave", host.svg);
+    expect(host.rects().map((rect) => rect.style.getPropertyValue("fill"))).toEqual(host.rects().map(() => ""));
+  });
+
+  it("darkens a line's stroke, for keyboard focus too, and gives way to an effect's emphasis", () => {
+    const host = d3Lines();
+    const soften: GeometryEffect = { kind: "geometry", run: async (_mark, ctx) => ctx.mark.set({ emphasis: 0 }), end: () => {}, clear: () => {} };
+    const { fx } = setup<Trace>(host.paths, { ...traced, dim: true, keyboard: true });
+    const [goals, xg] = host.paths;
+    pointer("pointerover", goals!);
+    expect(goals!.style.getPropertyValue("stroke")).toMatch(BLUE);
+    expect(goals!.style.getPropertyValue("fill")).toBe("");
+    expect(xg!.classList.contains("ec-dimmed")).toBe(true);
+    pointer("pointerleave", host.svg);
+    fx.focus("xg");
+    expect(xg!.style.getPropertyValue("stroke")).toMatch(ORANGE);
+    expect(goals!.style.getPropertyValue("stroke")).toBe("");
+    fx.destroy();
+    expect(host.paths.map((path) => path.getAttribute("style"))).toEqual([null, null]);
+
+    // An effect that sets emphasis decides the colour while it's set.
+    setup<Trace>(host.paths, { ...traced, dim: true, on: { hover: soften } });
+    pointer("pointerover", goals!);
+    expect(goals!.style.getPropertyValue("stroke")).toMatch(/^(#2a78d6|rgb\(42, 120, 214\))$/);
+  });
+
+  it("follows the hovered mark onto the elements the host redraws, and leaves the old ones as they were", () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), { ...stacked, dim: true });
+    pointer("pointerover", host.rect("Okafor", "goals"));
+    // A host that redraws makes a new element from the row, without the old one's inline style.
+    const old = host.rect("Okafor", "goals");
+    const fresh = old.cloneNode() as SVGRectElement;
+    for (const name of ["style", "class"]) fresh.removeAttribute(name);
+    old.replaceWith(Object.assign(fresh, { __data__: datumOf(old) }));
+    fx.refresh(host.selection());
+    expect(host.rect("Okafor", "goals").style.getPropertyValue("fill")).toMatch(BLUE);
+    expect(old.getAttribute("style")).toBeNull();
+  });
+
+  it("leaves the host's colours alone without dim", () => {
+    const bars = d3Stack();
+    setup(bars.selection(), stacked);
+    pointer("pointerover", bars.rect("Okafor", "goals"));
+    expect(bars.rects().map((rect) => rect.getAttribute("style"))).toEqual(bars.rects().map(() => null));
+    const lines = d3Lines();
+    setup<Trace>(lines.paths, traced);
+    pointer("pointerover", lines.paths[0]!);
+    expect(lines.paths.map((path) => path.getAttribute("style"))).toEqual([null, null]);
   });
 });
 

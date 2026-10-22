@@ -83,6 +83,19 @@ describe("maskedHalo", () => {
     halo.paint(container, [{ d: slice.outline.d, color: "red" }], undefined, undefined);
     expect(container.querySelector(".ec-halo")).toBeNull();
   });
+
+  it("goes round an open outline outside its stroke, on both sides, as wide as round a closed mark", () => {
+    const line = build.line({ key: "xg", points: [{ x: 0, y: 0 }, { x: 50, y: 20 }, { x: 100, y: 0 }], width: 3 });
+    const container = overlay();
+    maskedHalo().paint(container, [{ d: line.outline.d, color: "red", stroke: line.thickness }], { width: 8, opacity: 0.4 }, undefined);
+    // The mask cuts out the 3 px stroke without filling it, which would close the line into a
+    // triangle; the halo is 3 + 8 px wide, so 4 px of it shows either side, as round a closed mark.
+    const cut = container.querySelector(".ec-halo mask path")!;
+    expect(["d", "fill", "stroke", "stroke-width", "stroke-linejoin"].map((name) => cut.getAttribute(name))).toEqual([line.outline.d, "none", "black", "3", "round"]);
+    const path = container.querySelector<SVGPathElement>(".ec-halo > path")!;
+    expect(["d", "stroke-width"].map((name) => path.getAttribute(name))).toEqual([line.outline.d, "11"]);
+    expect(path.style.getPropertyValue("fill")).toBe("none");
+  });
 });
 
 describe("svgMarkHandle with halos above", () => {

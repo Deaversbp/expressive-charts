@@ -17,7 +17,7 @@ const shots = chartSwitch("#shots", {
       donutChart(el, {
         label: "Shot outcomes, share of total",
         data: outcomes,
-        key: "outcome",
+        category: "outcome",
         value: "shots",
         colors,
         center: (total) => `${total} shots`,
@@ -43,4 +43,4 @@ document.querySelector("#morph")?.addEventListener("click", () => {
 });
 
 // @ts-expect-error the initial view must be one of the views.
-chartSwitch("#bad", { views: { a: (el) => donutChart(el, { label: "A", data: outcomes, value: "shots" }) }, transition: morph(), initial: "b" });
+chartSwitch("#bad", { views: { a: (el) => donutChart(el, { label: "A", data: outcomes, category: "outcome", value: "shots" }) }, transition: morph(), initial: "b" });

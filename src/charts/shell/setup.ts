@@ -5,6 +5,8 @@ import type { Clock, IconSource, Motion } from "../../core";
 import { EFFECT_SLOTS, type PresetFactory, type Registry } from "../../core/registry";
 import type { SlotEffects } from "../../core/runner";
 import { svgElement } from "../render/svg";
+import { checkSeriesLabels } from "../series";
+import { checkTableOption } from "../table";
 
 /** What the composition root hands every chart, so charts never import the registries or effects. */
 export interface ChartEnv {
@@ -65,4 +67,29 @@ export function checkNeeds<D>(effects: SlotEffects<D>, series: readonly string[]
       throw new RangeError(`${chart}: on.${slot} needs the series "${name}", but the chart's series are ${series.map((s) => `"${s}"`).join(", ")}.`);
     }
   }
+}
+
+/** The options every chart takes, as checkChartOptions reads them. */
+type CommonOptions = { readonly [K in "label" | "data" | "width" | "height" | "format" | "tooltip" | "markLabel" | "markDescription" | "legend" | "seriesLabels" | "table" | "announce"]?: unknown };
+
+/** Throws on the options every chart shares when they're the wrong kind of thing. `chart` names the chart in the message. */
+export function checkChartOptions(options: CommonOptions, chart: string): void {
+  if (typeof options !== "object" || options === null) throw new TypeError(`${chart} needs options.`);
+  if (typeof options.label !== "string" || options.label.trim() === "") throw new TypeError(`${chart} needs a label: the chart's accessible name.`);
+  if (!Array.isArray(options.data)) throw new TypeError(`${chart}: data must be an array of rows.`);
+  for (const field of ["width", "height"] as const) {
+    const value = options[field];
+    if (value !== undefined && !(typeof value === "number" && Number.isFinite(value) && value > 0)) throw new RangeError(`${chart}: ${field} must be a positive number of px, got ${String(value)}.`);
+  }
+  const { format, tooltip, markLabel, markDescription, legend, announce } = options;
+  if (format !== undefined && typeof format !== "function") throw new TypeError(`${chart}: format must be a function that turns a value into text.`);
+  if (tooltip !== undefined && typeof tooltip !== "boolean" && typeof tooltip !== "function") throw new TypeError(`${chart}: tooltip must be true, false or a function that returns a row's text.`);
+  if (markLabel !== undefined && typeof markLabel !== "function") throw new TypeError(`${chart}: markLabel must be a function that returns a mark's accessible name.`);
+  if (markDescription !== undefined && markDescription !== false && typeof markDescription !== "function") {
+    throw new TypeError(`${chart}: markDescription must be false or a function that returns a mark's accessible description.`);
+  }
+  if (legend !== undefined && typeof legend !== "boolean") throw new TypeError(`${chart}: legend must be true or false.`);
+  checkSeriesLabels(options.seriesLabels, chart);
+  checkTableOption(options.table, chart);
+  if (announce !== undefined && typeof announce !== "boolean" && typeof announce !== "function") throw new TypeError(`${chart}: announce must be true, false or a function that returns the text to announce.`);
 }

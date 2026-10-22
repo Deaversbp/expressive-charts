@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a first bar chart, the `expressive()` adapter for bars drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle` and `pulse`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-a-bar-chart-travel-and-the-adapter)). The other built-in effects are next, so `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart and a donut chart, the `expressive()` adapter for marks drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle` and `pulse`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-and-donut-charts-travel-and-the-adapter)). The other built-in effects are next, so `threshold` and `morph` under "Design target" aren't usable yet. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -54,7 +54,7 @@ barChart("#sales", { label: "Revenue by region", data, y: "region", x: "revenue"
 
 More examples, all type-checked against the proposed API, are in [docs/sketches](docs/sketches/).
 
-## Available now: the motion core, mark geometry, a bar chart, travel and the adapter
+## Available now: the motion core, mark geometry, bar and donut charts, travel and the adapter
 
 The first layer is built: the shared animation clock, tweens, retargetable values and motion modes that charts and effects will run on, plus the shared mark description they meet through.
 
@@ -120,6 +120,24 @@ const chart = barChart("#goals", {
 });
 chart.on("hover", (e) => console.log(e.mark.key, e.data.datum));
 await chart.update({ stack: ["goals", "assists"] }); // resolves once the change has settled
+```
+
+A donut chart shows shares of a total. Its slices go clockwise from 12 o'clock, in data order or largest first, each labelled outside the ring with its share, and the total sits in the hole. It works like the bar chart: the same hover, tooltip, keyboard focus (the arrow keys go round the ring), data table (with each share and a total row), announcements and effect slots, so the effects that run on bars run on its slices unchanged. Screen readers hear each slice as "Saved: 112 shots, 28%". On `update()` the values change first, with every angle a true share of the total as it is, and then the slices turn the shorter way round to their new places:
+
+```js
+import { donutChart, travel } from "expressive-charts";
+import { soccerBall } from "expressive-charts/icons/sport";
+
+const shots = donutChart("#shots", {
+  label: "Shot outcomes",
+  data: outcomes,                      // [{ outcome: "Goal", shots: 58 }, ...]
+  category: "outcome",                 // names each slice, and is its key
+  value: "shots",
+  sort: "value",                       // largest first; the default is data order
+  center: (total, format) => `${format(total)}\nshots`, // the default: the total over the value's label
+  on: { hover: travel(soccerBall), update: "flash" } // the ball rolls round the slice
+});
+await shots.update({ data: afterMatchweek });
 ```
 
 Charts follow the device's light or dark setting, with eight series colours checked for contrast and colour-vision deficiencies in both. Theme them with `--ec-*` custom properties, which your CSS always overrides, and pin a theme with `data-theme` on any ancestor ([Rendering](docs/architecture.md#rendering) has the details):
@@ -219,7 +237,7 @@ The radii live in the arc generator, not in the row, so the page passes them to 
 
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar chart, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar and donut charts, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
 
 ## Writing effects
 

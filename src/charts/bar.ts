@@ -8,31 +8,31 @@
 // through the runner, which draws on the SVG surface. What doesn't depend on bars (events, hover and
 // focus, transitions and leaving marks, DOM order, size and fonts) is in shell/.
 
-import type { AnimateOptions, Animated, MarkGeometry, TweenResult } from "../core";
+import type { AnimateOptions, Animated, TweenResult } from "../core";
 import { animated, defaultClock, interpolateNumber, interpolateRecord } from "../core";
 import { resolveEffects } from "../core/registry";
 import { report } from "../core/report";
 import { createRunner, type RunInput } from "../core/runner";
 import { chartAnnouncer, changeText, type Announcer, type SortName } from "./announce";
-import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLayout, type BarRow, type BarValue, type TextPlacement } from "./bar-layout";
+import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLayout, type BarRow, type BarValue } from "./bar-layout";
 import { toColorAssignment } from "./colors";
 import { chartLegend } from "./legend";
 import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
 import { svgSurface } from "./render/surface";
-import { setAttributes, setStyles, svgElement, transformAttribute } from "./render/svg";
-import { textMeasure } from "./render/text";
+import { setAttributes, setStyles, sizeAttributes, svgElement, transformAttribute } from "./render/svg";
+import { placeText, textMeasure } from "./render/text";
 import { injectStyles, markColorStyles, seriesColors } from "./render/theme";
-import { checkSeriesLabels, seriesLabel } from "./series";
+import { seriesLabel } from "./series";
 import { chartEvents } from "./shell/events";
 import { decimals, format, round } from "./shell/format";
 import { chartHover } from "./shell/hover";
 import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
-import { checkNeeds, containerWidth, describeChart, resolveTarget, type ChartEnv } from "./shell/setup";
-import { chartTransitions, playUpdate, type ChartDiff } from "./shell/transitions";
+import { checkChartOptions, checkNeeds, containerWidth, describeChart, resolveTarget, type ChartEnv } from "./shell/setup";
+import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
-import { chartTable, checkTableOption, tableModel, type TableModel } from "./table";
+import { chartTable, tableModel, type TableModel } from "./table";
 import { chartTooltip, summaryContent } from "./tooltip";
 import type { BarChartOptions, Chart } from "./types";
 
@@ -93,7 +93,7 @@ const RING = 2;
 
 export function barChart<D>(target: string | Element, options: BarChartOptions<D>, env: ChartEnv): BarChart<D> {
   const container = resolveTarget(target, "barChart");
-  checkOptions(options);
+  checkChartOptions(options, "barChart");
   let current = options;
   const motion = chartMotion(options.motion, env.motion);
   const effects = resolveEffects(options.on, env.presets);
@@ -628,7 +628,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       if (next.on !== undefined && next.on !== current.on) throw new TypeError("barChart: `on` can't be changed by update() yet.");
       if (next.motion !== undefined && next.motion !== current.motion) throw new TypeError("barChart: `motion` can't be changed by update() yet.");
       const merged: BarChartOptions<D> = { ...current, ...next };
-      checkOptions(merged);
+      checkChartOptions(merged, "barChart");
       // Throws on data it can't draw, or a table column it can't read, before anything changes.
       const nextLayout = layout(merged);
       const nextTable = tableFor(merged, nextLayout);
@@ -694,35 +694,6 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   };
 }
 
-function checkOptions<D>(options: BarChartOptions<D>): void {
-  if (typeof options !== "object" || options === null) throw new TypeError("barChart needs options.");
-  if (typeof options.label !== "string" || options.label.trim() === "") throw new TypeError("barChart needs a label: the chart's accessible name.");
-  if (!Array.isArray(options.data)) throw new TypeError("barChart: data must be an array of rows.");
-  for (const field of ["width", "height"] as const) {
-    const value = options[field];
-    if (value !== undefined && !(Number.isFinite(value) && value > 0)) throw new RangeError(`barChart: ${field} must be a positive number of px, got ${String(value)}.`);
-  }
-  const { tooltip, markLabel, markDescription, legend, announce } = options;
-  if (tooltip !== undefined && typeof tooltip !== "boolean" && typeof tooltip !== "function") throw new TypeError("barChart: tooltip must be true, false or a function that returns a row's text.");
-  if (markLabel !== undefined && typeof markLabel !== "function") throw new TypeError("barChart: markLabel must be a function that returns a mark's accessible name.");
-  if (markDescription !== undefined && markDescription !== false && typeof markDescription !== "function") {
-    throw new TypeError("barChart: markDescription must be false or a function that returns a mark's accessible description.");
-  }
-  if (legend !== undefined && typeof legend !== "boolean") throw new TypeError("barChart: legend must be true or false.");
-  checkSeriesLabels(options.seriesLabels, "barChart");
-  checkTableOption(options.table, "barChart");
-  if (announce !== undefined && typeof announce !== "boolean" && typeof announce !== "function") throw new TypeError("barChart: announce must be true, false or a function that returns the text to announce.");
-}
-
-function sizeAttributes({ width, height }: { readonly width: number; readonly height: number }): Record<string, string | number> {
-  return { width, height, viewBox: `0 0 ${round(width, 3)} ${round(height, 3)}` };
-}
-
-function placeText(element: SVGTextElement, placement: TextPlacement): void {
-  setAttributes(element, { x: placement.x, y: placement.y, "text-anchor": placement.anchor });
-  if (element.textContent !== placement.text) element.textContent = placement.text;
-}
-
 /**
  * "Okafor: 16 goals, 4 assists", each series said by its label, or the page's wording from `markLabel`.
  * A lone value read by a function (its series is "value") goes unnamed unless it's labelled: "Okafor:
@@ -752,13 +723,6 @@ function valuesChanged<D>(from: BarRow<D>, to: BarRow<D>): boolean {
   return from.values.length !== to.values.length || from.values.some((v, i) => v.series !== to.values[i]!.series || v.value !== to.values[i]!.value);
 }
 
-function geometryChanged(from: MarkGeometry, to: MarkGeometry): boolean {
-  if (from.outline.d !== to.outline.d) return true;
-  const a = from.segments ?? [];
-  const b = to.segments ?? [];
-  return a.length !== b.length || a.some((segment, i) => segment.key !== b[i]!.key || segment.outline.d !== b[i]!.outline.d);
-}
-
 function valuesOf<D>(row: BarRow<D>): Values {
   return Object.fromEntries(row.values.map((v) => [v.series, v.value]));
 }
@@ -786,18 +750,6 @@ function mergeSeries(shown: readonly string[], next: readonly string[]): string[
     out.splice(at, 0, series);
   });
   return out;
-}
-
-/** Still animating, or resting somewhere else than `to`. */
-function busy<T>(value: Animated<T>, to: T, equal: (a: T, b: T) => boolean): boolean {
-  return value.animating || !equal(value.value, to);
-}
-
-const same = (a: number, b: number): boolean => a === b;
-
-function sameFields<T extends object>(a: T, b: T): boolean {
-  const keys = Object.keys(a) as (keyof T)[];
-  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
 }
 
 function sortName<D>(sort: BarChartOptions<D>["sort"]): SortName {

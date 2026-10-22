@@ -6,7 +6,10 @@
 // state in between the same way the layout draws its own.
 
 import { describe, type MarkData, type MarkGeometry, type Rect } from "../core";
+import type { TextPlacement } from "./render/text";
 import type { Accessor, BarChartOptions } from "./types";
+
+export type { TextPlacement } from "./render/text";
 
 export type Orientation = "horizontal" | "vertical";
 
@@ -22,13 +25,6 @@ export interface BarEncoding<D> {
   readonly category: (d: D, i: number) => unknown;
   readonly key: (d: D, i: number) => unknown;
   readonly series: readonly BarSeries<D>[];
-}
-
-export interface TextPlacement {
-  readonly x: number;
-  readonly y: number;
-  readonly anchor: "start" | "middle" | "end";
-  readonly text: string;
 }
 
 export interface BarValue {

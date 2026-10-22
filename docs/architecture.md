@@ -615,13 +615,37 @@ What each library needs (from the [adapter spike](ideas/adapter-spike.md)):
   - after a group, bin or other reducing transform: the index points into the derived data, so `rows[i]` is silently the wrong row. Read the channel values through the mark's `render` option instead.
 
   Plot has no pie mark.
-- **Vega and Vega-Lite** need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, new on every render, so for now they need `datum` (the row is `el.__data__.datum`) and `geometry`, and `value` reads the row's field. A small helper that reads the View, `fromVegaView()`, is planned for M4, as decided in M3 planning: it pays off with lines, whose items give samples, and it needs vega and vega-lite as dev dependencies.
+- **Vega and Vega-Lite** go through `fromVegaView()`, below. They need the SVG renderer (vega-embed's default; a bare `vega.View` uses canvas). Their bars are `<path>` elements and `__data__` is a scenegraph item, new on every render, so plain `expressive()` would need `datum` (the row is `el.__data__.datum`) and `geometry` written for Vega; the helper writes them.
 
 Adapters follow the chart rules:
 
 - They never know specific effects.
 - They express geometry in the marks' nearest common ancestor's coordinates, and draw their overlay on the root `<svg>` with that ancestor's transform.
 - They leave the host's styling, axes and tooltips alone, and undo everything they change.
+
+### Vega and Vega-Lite: fromVegaView()
+
+```ts
+const { view } = await vegaEmbed("#season", spec);  // Vega-Lite: one row per week and series
+const fx = fromVegaView(view, {
+  key: (d) => d.series,                             // required, as for expressive()
+  sample: (d) => ({ value: d.value, at: d.week }),  // each point's value, and its week for threshold
+  keyboard: true,
+  markLabel: (d) => (d.series === "goals" ? "Goals scored" : "Expected goals"),
+  on: { decorate: only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" }))) }
+});
+```
+
+`fromVegaView(view, options)` (`src/charts/adapter/vega.ts`) reads the marks of a Vega or Vega-Lite chart from the View's scenegraph and attaches to the elements Vega drew for them, through `expressive()`, so effects, keyboard focus, names and dimming work as they do there. It's duck-typed on the View (`renderer()`, `scenegraph()` and `container()`), so the library imports nothing from Vega; vega and vega-lite are dev dependencies, pinned to exact versions, for the tests and the demo.
+
+- **Which marks.** `mark` names the Vega mark to read, `"marks"` by default, the name Vega-Lite gives a chart's data mark. Every mark of that name counts, wherever it is in the scenegraph: Vega-Lite draws a line per series inside a facet group. Each item's element is the one whose `__data__` is the item (a line's one path is bound to its first item), and its row is `item.datum`. Vega-Lite derives its own rows, so `key` reads fields, never identity.
+- **Geometry** comes from the items' numbers, mapped from each element's parent's coordinates into the marks' common ancestor's, as `expressive()` expects of `geometry`. Rects are bars, growing from the edge `baseline: "auto"` finds; parts that share a key and are named by `segment` are a stack's segments, ordered from the baseline whatever order Vega-Lite stacks in. Arcs are slices, with their angles put in order (Vega-Lite's can run anticlockwise). Symbols are points of radius √(size/π). Lines are lines at the item's `strokeWidth`, each its own series (its key), so `related("xg")` finds the line keyed `"xg"`. Other mark types throw a `TypeError`; so does a line with a gap (`defined: false`), since lines can't have gaps yet.
+- **Data.** The items say where each point is but not which field it shows, so data effects' values come from `sample(row)`: a number, or `{ value, at }`. A line gets a sample at each point (through `samplesAlong`, exact at the vertices), a bar from 0 at its baseline to its value (a stack's segments each over their own range), a slice from 0 to its value, and a point its value. Unless `value` is given, `sample` is also what each element shows (a line: all its points'), so a re-render that only moves marks, such as a resize, isn't an update. `samples` replaces it.
+- **Following the View.** Vega replaces its mark elements when its data changes, and redraws them on a resize or a signal. Its data and resize listeners, and `runAfter`, run before it renders, so they'd read the old elements; instead a `MutationObserver` on the View's `<svg>` notes what Vega draws (new elements, and `d`, `transform`, `x`, `y`, `width` and `height`), ignoring the adapter's own overlay, and the View is read again on the next frame through `refresh()`, as a page would call it. A View that hasn't run yet attaches with no marks and takes them up once Vega draws. The attachment's own `refresh()` reads the View again at once, and `destroy()` stops following.
+- **Errors.** A renderer other than SVG, a `mark` that isn't there (the error lists the names there are) and an unreadable mark type throw when attaching. A later read that fails is reported, changing nothing.
+- **Frame by frame.** Every data change gives new elements, so a page that played a Vega chart frame by frame would have the adapter re-read it each frame (about 1.8 ms on the demo's line, beside Vega's own 0.7 ms), fire an `update` for every mark each frame, replace a focused mark's element each frame, and run a frame behind. The demo's Vega-Lite line shows the whole season instead.
+
+The tests (`src/vega.test.ts`) run on real Vega-Lite charts rendered as SVG in jsdom: a two-series line (geometry, samples, `threshold` against xG, the riding ball, keyboard order, following new data and a resize, attaching before the first run, `destroy()`), bars, a stack, a donut and points, the errors, and `checkEffect` for every built-in effect on the View's lines, with their moved twins.
 
 ## Controls
 

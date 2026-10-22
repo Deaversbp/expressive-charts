@@ -206,6 +206,15 @@ If the total isn't heard in steps 1 and 5, it's still in the table's total row, 
 
 If the chart's description isn't heard in step 1, it's also in the card's note, but say so: it may need to move.
 
+**Added with M4 step 8: the Vega-Lite line.** Below the two charts, the page draws the season a third time as a Vega-Lite line, which `fromVegaView()` names. It doesn't play: it shows the whole season. Its `<svg>` is `role="group"`, named "Goals and expected goals on a Vega-Lite line"; Vega hides its axes (`aria-hidden`), and `markLabel` names each line as on the D3 line. Vega still gives the groups around its lines roles of its own (`graphics-object`, `graphics-symbol`), with no names. It's one tab stop, after the D3 line. Steps 13 and 14 haven't been run yet. Listen for:
+
+8. Each Vega-Lite line is read once, by name, and nothing unnamed (a "graphic" or "group" with no name) is read before it.
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 13 | After step 12, press Escape, then NVDA+Space (browse mode), then Tab. | "Goals and expected goals on a Vega-Lite line, grouping", then "Goals scored: 56 goals by matchweek 38, graphic". | |
+| 14 | Focus mode, then Right arrow, then Left arrow. | "Expected goals (xG): 56.5 by matchweek 38, graphic", then "Goals scored: 56 goals by matchweek 38, graphic". The focus ring goes round each line, and the other line dims. | |
+
 ## Re-check after M2 step 7
 
 M2 step 7 gave each bar of the library's chart a description: the player's position. The roles, names, table and announcements are unchanged, so only these need hearing again:
@@ -230,6 +239,8 @@ If a description isn't read at all, that's acceptable: the position is also in t
 **The second chart (section C):** not run yet, with either screen reader.
 
 **The donut page (section D), NVDA + Chrome on Windows, 22 October 2026: passed.** All 13 steps read as expected, so every "Listen for" item passed: each slice was read once as one item with its share, the donut's name and total were heard on the way in, the arrow keys went clockwise from 12 o'clock and stopped at the ends, the table's Share column and total row were read with their headers, each match was announced once, and the D3 pie read like the donut with its labels silent. The names and roles stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
+
+**The Vega-Lite line on the line page (section E, steps 13 and 14, added with M4 step 8):** not run yet.
 
 **The line page (section E), NVDA + Chrome on Windows, 22 October 2026: passed.** All 12 steps read as expected, so every "Listen for" item passed:
 - each matchweek was read once, as one item, with both values and then its gap;

@@ -201,8 +201,8 @@ const belowTarget = defineDataEffect<Region>({
 
 | Field | What it is |
 | --- | --- |
-| `datum` | the row behind the mark (a line gets all its rows) |
-| `samples` | values along the walk, `{ t, value, at? }`, t ascending: on `barChart`, from 0 at the baseline to the total at the tip; on the donut, from 0 to the slice's share. On `expressive()`, the page's `samples` option (`samplesAlong` gives a host's line its own from the points that drew it), or without it the bar chart's samples on rects with a numeric `value`, and none on other marks |
+| `datum` | the row behind the mark: a bar's or a slice's row, a line point's row, and for a line the row at its revealed end |
+| `samples` | values along the walk, `{ t, value, at? }`, t ascending: on `barChart`, from 0 at the baseline to the total at the tip; on the donut, from 0 to the slice's share; on `lineChart`, one per revealed row with its x as `at`, plus the end part way to the next row, and a point's one value. On `expressive()`, the page's `samples` option (`samplesAlong` gives a host's line its own from the points that drew it), or without it the bar chart's samples on rects with a numeric `value`, and none on other marks |
 | `related(series)` | another series of the same mark or chart, as `MarkData`, if there is one |
 | `previous` | the values before this update, in the `update` slot |
 
@@ -236,6 +236,7 @@ What it compares on each chart, from the samples the chart gives:
 | --- | --- | --- |
 | `barChart` | 0 at the baseline to the bar's total at the tip, so `compareTo: 10` colours the part past 10 | that series' segment of the stack, with samples over the segment's own walk |
 | `donutChart` | 0 to the slice's share of the total, so `compareTo: 0.25, when: "above"` colours the part past a quarter | its own series only |
+| `lineChart` | a line's value at each revealed row, with the row's x as `at`, plus its end part way to the next row, so `compareTo: "xg"` colours the goals line below xG and follows every frame of a reveal. A point has its one value, and draws nothing | the other line; for a point, the other series' point at the same x |
 | `expressive()` | the page's `samples` option: on a D3 line, `samplesAlong` on the points that drew it, so `compareTo: "xg"` colours it below the xG line. Without it, rects with a numeric `value` get `barChart`'s samples, and other marks none, so it draws nothing | the mark's own segment of that series, else the first other mark of that series (another line path) |
 
 ## Composing

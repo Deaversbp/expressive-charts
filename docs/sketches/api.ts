@@ -6,7 +6,8 @@
  * MarkData, the drawing API, EffectContext, the effect kinds, Icon, the effect slots), the geometry
  * (describe.bar, .arc, .line, .point, matrix, offset), the preset and icon registries
  * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
- * options, accessors, colorAssignment), the donut chart's options, the icons (defineIcon, iconFromSvg, icons), the first
+ * options, accessors, colorAssignment), the donut chart's options, the line chart's options and handle
+ * (LineChartOptions, LineChart with reveal), the icons (defineIcon, iconFromSvg, icons), the first
  * effects (travel with its gaits, flash, wiggle, pulse, threshold, sequence, parallel, only, stagger), the
  * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch, playback with its
  * playButton, and the adapter's types (MarkSource, Attachment, ExpressiveOptions). The conformance suite is ./testing.ts.
@@ -16,7 +17,6 @@
 
 export * from "../../src/index";
 import type {
-  Accessor,
   Attachment,
   BarChartOptions as BuiltBarChartOptions,
   Chart as BuiltChart,
@@ -25,10 +25,11 @@ import type {
   describe as builders,
   DonutChartOptions,
   ExpressiveOptions as BuiltExpressiveOptions,
+  LineChart as BuiltLineChart,
+  LineChartOptions,
   MarkEvents,
   MarkGeometry,
   MarkSource,
-  NumericKey,
   Sample,
   TransitionEffect
 } from "../../src/index";
@@ -130,20 +131,14 @@ export interface Chart<D, O> extends BuiltChart<D, O>, MarkSourceHandle<D> {}
 
 export interface BarChartOptions<D> extends BuiltBarChartOptions<D> {}
 
-export interface LineChartOptions<D> extends ChartOptions<D> {
-  readonly x: Accessor<D, number | Date>;
-  readonly series: readonly NumericKey<D>[];
-  /** "x": hover every series at the nearest x (crosshair). */
-  readonly pointer?: "x" | "nearest";
-}
-
-export interface LineChart<D> extends Chart<D, LineChartOptions<D>> {
-  /** Show data up to x, instantly. Driven by playback. */
-  reveal(x: number): void;
-}
+// LineChartOptions and the LineChart handle (with reveal) are built (M4 step 5, src/charts). Changed from
+// the sketch: x is a number for now (M4 decision 3; dates come by M6), there's no `pointer` option,
+// since the crosshair is the line chart's hover (decision 9), and `labels` words the end labels.
+export interface LineChart<D> extends BuiltLineChart<D>, MarkSourceHandle<D> {}
 
 /** Built in M1 step 5 (src/charts); declared here until its handle has focus(). */
 export declare function barChart<D>(target: string | Element, options: BarChartOptions<D>): Chart<D, BarChartOptions<D>>;
+/** Built in M4 step 5 (src/charts), with its options; declared here until its handle has focus(), like barChart. */
 export declare function lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D>;
 /**
  * Built in M3 step 4 (src/charts), with its options, which are the real DonutChartOptions (`category`

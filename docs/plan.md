@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1 and M3 are complete, and M2 is complete apart from a short screen-reader re-check (October 2026, §9). M4 is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 and M3 are complete, and M2 is complete apart from a short screen-reader re-check (October 2026, §9). M4 is planned step by step in §9 and is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -125,26 +125,26 @@ export interface MarkData<D = unknown> {
 | Field | Bar | Stacked bar row | Line series | Line point | Donut slice |
 | --- | --- | --- | --- | --- | --- |
 | `key` | category (`Okafor`) | `Okafor`; segments `Okafor/goals` | series (`goals`) | `goals@12` | category (`Saved`) |
-| walk | baseline → tip along the centre line | whole stack; each segment its own span | first point → last *revealed* point | first point → this point | start angle → end angle on the mid-radius arc, clockwise |
-| `angle` | 0 (π if negative, −π/2 for columns) | same | per polyline segment | same | arc tangent |
+| walk | baseline → tip along the centre line | whole stack; each segment its own span | first point → last *revealed* point | none: length 0 at the point | start angle → end angle on the mid-radius arc, clockwise |
+| `angle` | 0 (π if negative, −π/2 for columns) | same | per polyline segment | 0 | arc tangent |
 | `thickness` | bar height | bar height | stroke width | marker diameter | R − r |
 | `outline` | rounded rect, closed | union of segments, closed | the line, open | marker circle, closed | annular sector, closed |
 | `pivot` | middle of the baseline edge | same | first point | the point | donut centre |
 | `center` | middle of the bar | middle of the stack | `path(0.5)` | the point | mid-angle, mid-radius |
 | `segments` | one, named after the value field | one per stacked series, in stack order | none | none | none |
-| `samples` | `[0 → v]` | `[0 → total]`; each segment covers its own range | one per vertex | one per vertex, up to the point | `[0 → share]` |
+| `samples` | `[0 → v]` | `[0 → total]`; each segment covers its own range | one per revealed vertex, with `at` | one: its value | `[0 → share]` |
 
-Marks with no direction (future scatter dots) have `length` 0 and `start = end = center`. Travel does nothing on them; wiggle, pulse and flash still work.
+Marks with no direction (line points, future scatter dots) have `length` 0 and `start = end = center`. Travel does nothing on them; wiggle, pulse and flash still work. A line point was first planned with a walk along the line up to it. M4 planning made it a dot (M4 decision 4), so effects meant for the line, which `only("goals", …)` also matches on every goals point, act on the line alone.
 
 ### 2.5 Paper test: every effect against every mark
 
 | Effect | Reads | Bar | Stacked | Line series | Line point | Slice | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `travel` | walk, `length`, `thickness`, `segments` | ✓ | ✓ via `along` | ✓ rides the stroke | ✓ rides up to the point | ✓ rolls around the ring | Insets need `length`, rolling needs distance, sizing needs `thickness`. Polyline corners need angle smoothing. |
+| `travel` | walk, `length`, `thickness`, `segments` | ✓ | ✓ via `along` | ✓ rides the stroke | does nothing (length 0; M4 decision 4) | ✓ rolls around the ring | Insets need `length`, rolling needs distance, sizing needs `thickness`. Polyline corners need angle smoothing. |
 | `wiggle` | `pivot`, `outline` | ✓ rotates about the baseline | ✓ whole row | ✓ (barely visible on long marks, by design) | ✓ | ✓ rotates about the donut centre | The swing is capped so the far end moves ≤ 3 px and data stays readable. The far end is the outline point farthest from `pivot` (from `outline.sample()`), not `length`: on a slice it's on the outer radius, which the mid-radius walk doesn't reach (corrected in M3 planning). |
 | `pulse` | `outline`, `thickness` | ✓ halo | ✓ | ✓ glow along the stroke | ✓ | ✓ | Uses a halo, never a scale change, so values don't look bigger. |
 | `flash` | `outline` | ✓ | ✓ | ✓ | ✓ | ✓ | A single halo blink, as in the prototype. |
-| `threshold` | `slice`, `samples`, `related` | ✓ against a constant (colours the part below a target, or past it with `when: "above"`) | ✓ | ✓ against another series | n/a (series level) | allowed but meaningless | Data effect. |
+| `threshold` | `slice`, `samples`, `related` | ✓ against a constant (colours the part below a target, or past it with `when: "above"`) | ✓ | ✓ against another series | draws nothing (length 0) | allowed but meaningless | Data effect. |
 | `morph` | `outline.sample` | ✓ | ✓ | open ↔ open only | ✓ | ✓ | Transition effect: it takes two geometries. |
 
 Every cell is filled with no chart-type branch. The two cells marked "meaningless" are valid but not useful; that's a documentation issue, not a contract gap.
@@ -496,13 +496,13 @@ chart.update({ stack: ["assists"] }); // metric switch; the goals segments exit
 chart.update({ sort: "key" });
 
 // Lines. One row per x; each listed field becomes a series mark plus point marks.
+// The pointer and focus snap to the nearest x, and hover fires for every series' point there (M4 decisions 1 and 9).
 lineChart<Week>("#xg", {
   label: "Goals vs expected goals",
   data: weeks, x: "week", series: ["goals", "xg"],
-  decorate: effects.only("goals", effects.threshold({ compareTo: "xg" })),
-  pointer: "x"                        // pointer snaps to the nearest x; hover fires for every series' point there
+  on: { decorate: effects.only("goals", effects.threshold({ compareTo: "xg" })) }
 });
-chart.reveal(24.5);                   // show data up to x, instantly; used by playback
+chart.reveal(24.5);                   // show data up to x, instantly, with no events; used by playback (M4 decision 2)
 
 // Donut. `category` names each slice and is its key, as on bars (M3 decision 5; the first sketch said `key`).
 donutChart<Outcome>("#shots", { label: "Shot outcomes", data: outcomes, category: "outcome", value: "shots", center: (total) => `${total}\nshots` });
@@ -643,7 +643,7 @@ The prefix is `--ec-`. Defaults come from the prototype palette:
 - **Keyboard.** Each chart is one tab stop (roving `tabindex`). Arrow keys move between marks in visual order, following the current sort, and Home/End jump to the ends. Focus fires `hover` (`source: "keyboard"`), so effects play. Escape or blur fires `leave`. The focus ring is drawn from `mark.outline` in `--ec-focus`, because browser focus outlines on SVG are inconsistent.
 - **Host charts.** `expressive()` writes no ARIA unless asked. `markLabel(datum, mark)` names each host mark as one item, as `barChart` does: the element that takes the mark's focus becomes `role="img"` with the name, and the mark's other parts are hidden. The `<svg>`'s role (`group`, not `img`) and the host's own text stay the host's; the adapter warns about a `role="img"` root.
 - **Data table.** On by default: a `<details>` "Data table" after the chart, as in the prototype. It follows the current sort and updates with the data. `"hidden"` makes it visually hidden but readable by screen readers.
-- **Pause controls (WCAG 2.2.2).** Nothing auto-plays by default. The `playback()` controller (play, pause, seek, stop) comes with a `playButton()` helper whose label switches between Play and Pause. Effects can't loop forever in v0.1: `pulse` repeats are capped below 5 s. If looping is ever added, the chart must render a pause control.
+- **Pause controls (WCAG 2.2.2).** Nothing auto-plays by default. The `playback()` controller (play, pause, seek) comes with a `playButton()` helper whose label switches between Play and Pause. Pause is the control 2.2.2 asks for, so there's no separate stop (M4 decision 12). Effects can't loop forever in v0.1: `pulse` repeats are capped below 5 s. If looping is ever added, the chart must render a pause control.
 - **Tooltips** are `aria-hidden`, since the same text is in the mark's label and the table. On touch they follow the tap. A tooltip function's text is also the mark's description (M2 step 3, built).
 - **Updates.** An optional polite live region announces summaries like "Sorted A to Z": `announce`, off by default (M2 step 5).
 
@@ -1013,11 +1013,276 @@ M2's re-check of the bar descriptions is still open; it's separate from M3.
 
 ### M4: Line chart and data effects
 
-`lineChart` with series and point marks and crosshair hover across series. `MarkData` samples, plus `samplesAlong` and `watch` for adapters. `threshold` in `on.decorate`, following `onChange`. The `playback()` controller with `playButton()` (WCAG 2.2.2) and `reveal()`. A ball riding the line (`ride: "on"`).
+`lineChart`, with series lines, point marks and a crosshair that hovers every series at the nearest x. `MarkData` samples along a line, plus `samples`, `samplesAlong` and `watch` for adapters. `threshold` in `on.decorate`, following `onChange`. The `playback()` controller, with `playButton()` (WCAG 2.2.2) and the chart's `reveal()`. A ball riding the line's leading edge (`ride: "on"`). Last, and free to slip to M6: the Vega helper `fromVegaView()` ([adapter spike](ideas/adapter-spike.md), recommendation 3), moved here in M3 planning (M3 decision 2). Vega's line items carry every vertex with its row, so they give `samples` without `samplesAlong`.
 
-**Moved here from M3:** the Vega helper, `fromVegaView(view, mark = "marks")` ([adapter spike](ideas/adapter-spike.md), recommendation 3). Vega's line items carry every vertex with its row, so they give `samples` without `samplesAlong`. It needs vega and vega-lite as dev dependencies, pinned to a major version, because it reads Vega internals. Plan it as the milestone's last step, so it can slip to M6 without holding up the line chart.
+**Demo:** `demo/line.html`, the lab's card 2: goals vs expected goals over a season, with the goals line red wherever it's below xG, "Play season" with a pause button, and a scrubber. Beside it, the same story on a D3 line through `expressive()`.
 
-**Demo:** card 2 of the lab.
+**Where M4 starts** (checked against main while planning, 22 October 2026):
+
+- **Already built.**
+  - `describe.line` and `describe.point`. A line of one point has length 0, a repeated point keeps the direction so far, and `slice(t0, t1)` interpolates part of a leg. So a line revealed part way through a week is a `describe.line` of the vertices so far plus the interpolated end. A point is a dot: length 0, with `start`, `end` and `center` at the point.
+  - The runner's `decorate` slot. It starts on enter and stays until exit, and `change()` hands every live run, finished or not, the new geometry and the mark's latest data. `runner.hover()` takes several marks and gives each its place in the batch, though every caller passes one today.
+  - `travel`'s `ride: "on"`. On `onChange` it keeps its progress and plans the trip again, so a ball resting at the end of a growing line moves to the new end and turns (a roll's spin is distance ÷ radius). The ball comes back when a walk that shrank under 0.5 px grows again. So a ball riding the leading edge during playback needs no change to `travel`.
+  - `"playback"` timing (×1 in Presentation, ×0.3 in Analysis, 0 in Off) and `linear`, both public.
+  - `Paint` has `width` and `linecap` (`"butt"` or `"round"`), and the SVG layer joins strokes round.
+  - `Sample.at` (the x value behind a sample). The conformance fixtures include a line (four points, 2 px wide) and a point, and `testContext().change(mark)` exists for effect tests.
+  - `placeTooltip(anchor, …)` is pure, and its anchor is just an x with a top and a bottom, so a crosshair can give one. The adapter's masked focus ring already goes round an open outline.
+  - `d3-shape`, `line()` included, is already a dev dependency.
+- **Assumed by the plan but not built.** `lineChart`, `reveal`, `threshold`, `playback`, `playButton`, `samplesAlong`, the adapter's `samples` and `watch`, and `fromVegaView` exist only as declarations in `docs/sketches/api.ts`.
+- **Gaps.**
+  - **One mark at a time.** The shell hovers one mark: `chartHover` keeps one key, marks one element `ec-hot`, shows one tooltip and passes one mark to the runner. The keyboard is a flat list with one key per element. That's enough if a line chart's focus targets are its x positions (decision 1).
+  - **Pointer hover** maps an element to a mark and reads no coordinates. That's enough if each x has its own hit column, as each bar has its band.
+  - **The tooltip.** `chartTooltip.show()` takes a `MarkGeometry`, not a point.
+  - **The table** adds a Total column whenever there's more than one series. A line chart mustn't: goals plus xG means nothing. Extra columns can only go after the category, but the lab's Difference column is last.
+  - **The legend** lists series or categories, in palette colours only, so a page can't add "Goals below xG" in `--ec-negative`. And `legend` is only a bar and donut option.
+  - **Hover styling assumes filled marks.**
+    - Dimming fades every `.ec-mark` that isn't hovered.
+    - Emphasis is a `fill` rule for `.ec-segment` and `.ec-slice`.
+    - `svgMarkHandle`'s halo and emphasis don't handle open outlines.
+  - **`MarkData.datum`** is typed `D`, one row, but its comment says a line series gets all its rows.
+  - **The adapter:**
+    - Data effects get `samples: []`, and `needs.related` is never checked.
+    - A mark's colours are read from `fill` only, so a stroked line has none: emphasis does nothing, and the `"mark"` colour falls back to series 1.
+    - `maskedHalo` fills each part's path in its mask, which closes an open line into a polygon.
+    - Nothing watches attributes, and `refresh()` re-reads every mark.
+    - Without `value`, a growing line fires `update`.
+    - On hover it dims the other marks but doesn't darken the hovered one (noticed in M3).
+  - **`checkEffect` never calls `change()`.** So following `onChange`, which is `threshold`'s whole job, isn't checked. Neither conformance file runs a data effect.
+- **Out of date.** Each item is fixed by a step below or by this plan:
+  - §2.4 and §2.5 give a line point a walk from the first point to it, but `describe.point` is a dot (decision 4).
+  - §5.2's line example puts `decorate` at the top level instead of under `on`, and has a `pointer` option that decision 9 drops.
+  - §7.2 lists a `stop()` the sketch never had.
+  - The sketch types `x` as `number | Date` (decision 3).
+  - The `MarkData` comment above.
+  - architecture.md's planned `threshold({ compareTo, color })` has no `when`.
+  - The effects guide says `expressive()` gives no samples "yet (planned for M4)".
+
+**Decided while planning M4 (October 2026):** decisions 1–8 are yours, and 9–14 follow from them and the code.
+
+1. **Line focus: one stop per x.**
+   - The `<svg>` is `role="group"`, named by `label`.
+   - Each x is one focus target, `role="img"`. It's named like a stacked bar, from its x and each series' value with its label: "12: 15 goals, 14.2 xg" by default, or "Matchweek 12: 15 goals, 14.2 xG" through `markLabel(d, row)`, which gets the bar chart's `MarkSummary`.
+   - The chart is one tab stop. The arrow keys go to the next or previous x (Down and Right to the next, Up and Left to the previous, as on bars), and Home and End to the ends, with no wrap-around.
+   - Focus hovers every series' point at that x, as the pointer's crosshair does (`source: "keyboard"`).
+   - The lines, markers, end labels and crosshair are `aria-hidden`.
+   - You run a short listening script with NVDA + Chrome, as for bars and the donut.
+2. **`reveal(x)` is a view, not a data change.**
+   - It fires no `enter`, `exit` or `update`.
+   - Each line's walk ends at x, interpolated between vertices, so playback is smooth. The chart calls `change()` for the lines on every reveal, so decorations (the threshold colour, the riding ball) follow.
+   - Points past x are hidden, can't be hovered or focused, and aren't in `marks()`. If the focused x is hidden, focus moves to the nearest revealed x.
+   - The scales are laid out from all the data, so nothing moves while the line plays out.
+   - The table, the names and the announcements cover all the data, whatever is revealed.
+3. **Numbers only on x for now.** `x` is a numeric field or function. Dates come by M6, as an addition: time ticks and `Intl` formatting, written without a dependency. The sketch's `number | Date` narrows to `number` until then.
+4. **A point is a dot.**
+   - A line's point marks (`goals@12`) are `describe.point`s, with length 0. `travel` does nothing on them and `threshold` draws nothing, while halos and `wiggle` still work.
+   - This matters because `only("goals", …)` matches each goals point by its series as well as the line by its key. With dots, it acts on the line alone.
+   - §2.4 and §2.5 are corrected; no builder changes.
+5. **Straight lines only in v0.1** (open question 9). Lines are polylines, so arc length and `threshold`'s crossings stay exact. A `curve` option goes to the backlog. Host lines drawn with curves still work, through the geometry the page describes.
+6. **The Vega helper is the last step, and can slip to M6.** vega and vega-lite become dev dependencies pinned to exact versions, as D3 is (M3 decision 1). The helper is duck-typed on the View, so the library imports nothing from Vega and gains no runtime dependency.
+7. **The adapter darkens the hovered mark under `dim: true`**, as our charts do: the stroke of a line, the fill of a bar or slice. Without `dim`, the host's styling stays untouched. The host-chart hover screenshots on `bars.html` and `donut.html` change once, in step 4.
+8. **The demo** is `demo/line.html`: the lab's card 2 on `lineChart`, beside the same story on a D3 line through `expressive()` (`samples`, `samplesAlong`, `watch`). One Play button, one scrubber and the motion switch drive both. A Vega-Lite line joins them if step 8 lands.
+9. **Drawing the line chart.**
+   - **Options.** `lineChart(target, { label, data, x, series, key?, labels?, legend?, … })`, plus the shared chart options (`on`, `tooltip`, `markLabel`, `markDescription`, `table`, `announce`, `format`, `colors`, `seriesLabels`, `dim`, `width`, `height`, `motion`).
+     - There's one row per x, drawn in ascending x. `key` defaults to x, is converted with `String()`, and must be unique.
+     - `series` lists numeric fields.
+     - A missing or non-finite value throws for now. A line can't count it as 0, the way a bar does, and gaps are backlog.
+     - There's no `pointer` option: the crosshair is the line chart's hover, and hovering the nearest point alone is backlog.
+   - **Marks.**
+     - Each series is a line mark, its `key` and `series` its field: a `describe.line`, drawn 2.25 px wide (the lab's width) with round joins and butt caps, so a coloured part ends exactly at its data.
+     - Each row's value is a point mark keyed `"<series>@<row key>"` (`goals@12`): a dot of radius 4.5 px, ringed in `--ec-surface`, hidden until its x is hovered or focused.
+     - `marks()` gives the lines, then the revealed points by x.
+   - **Data.**
+     - A line's `MarkData` has the row at its revealed end as `datum`. It has one sample per revealed vertex (`t` by distance along the walk, `at` its x), plus the interpolated end when the reveal falls between rows.
+     - A point's data has its row and its one value.
+     - `related(series)` gives the other line or, for a point, the other series' point at the same x.
+     - The `MarkData` comment changes to say so.
+   - **Layout.**
+     - 300 px high unless `height` says otherwise.
+     - y runs from 0 (or from the lowest value, if it's negative) to a nice maximum of all the data, with gridlines and ticks in theme colours. x spans the rows' range.
+     - Each line ends in a dot in its own colour.
+     - The right margin fits each line's end label: its value in `format` and its series' label ("52 goals"), in theme text colours. Labels are kept 16 px apart (the lab's rule), and they count between values while a change or a reveal plays. `labels: false` turns them off, and a function words them.
+   - **Hover.**
+     - Each x has a hit column reaching halfway to its neighbours, so the pointer hovers the nearest revealed x without reading coordinates.
+     - A dashed crosshair in `--ec-axis` marks the x, and the points there show in their strong colours.
+     - The tooltip sits above the highest of those points: the x in bold, then each series' value with its label ("15 goals · 14.2 xg"), or a tooltip function's text from the row.
+     - Nothing dims, since every series is read at once and the lines aren't hover targets. So `dim` does nothing here.
+     - The focus ring goes round each focused point.
+   - **Legend and table.**
+     - The legend lists the series, plus entries the page adds for colours its effects draw, such as `{ label: "Goals below xG", color: "negative" }`. Charts can't know effects, so the page names them.
+     - The table has a row per x: the x column, one column per series and no Total, plus the page's own columns, which can go after the values.
+   - **Colours** follow the series through a `ColorAssignment`, as on bars.
+10. **Updating the line chart.**
+    - `update()` merges and checks the options, and calls the runner in the shell's order. Values animate in data units, per row key.
+    - Presentation stages a change, 500 ms base for each stage:
+      1. values (the y values and the y scale);
+      2. positions (the x scale). New rows grow out of the row before them, and leaving rows fold into theirs.
+    - Analysis runs one stage of at most 200 ms, and Off jumps.
+    - A line gets `update` when any of its values or rows changed, and a point when its own value changed. A new row's points `enter`, and a removed row's `exit`.
+    - Resizes re-lay out without animating.
+11. **`threshold({ compareTo, when = "below", color = "negative" })`.**
+    - **Kind.** A data effect. `compareTo` is a number or a series name. A name goes in `needs.related`, so creating a chart without that series throws.
+    - **Comparing.** It compares the mark's samples with the reference:
+      - a constant, as it is;
+      - a series, by `at` where both have it, with the reference interpolated between its samples and no colour outside its range;
+      - otherwise by `t`.
+
+      On a straight leg, values are linear in `t` between neighbouring samples, so crossings are exact on our lines and on samples from `samplesAlong`.
+    - **Drawing.** It draws one overlay path per run of samples below the reference (or above it, with `when: "above"`): `mark.slice(t0, t1)`, stroked in `color` at the mark's `thickness` with butt caps.
+      - On a bar, that colours the part past a target across the bar's full thickness, with a square end over a rounded tip.
+      - A walk shorter than 0.5 px draws nothing.
+    - **No animation.** It draws at once (it's an encoding, and a fade would flicker as a line extends), and redraws on every `onChange`. Its end state is the same picture, so the colour shows with motion off (Principle 3).
+    - **Edge cases.** Equal values aren't coloured. `compareTo` must be a finite number or a non-empty string, `when` one of the two values, and `color` a non-empty string, or it throws a `RangeError`, as `flash` does.
+    - **`checkEffect` gains a fifth check.**
+      - After a full run, `change()` to another geometry of the same mark must leave the picture that `end()` draws on it. So an effect that should stay attached is checked to follow `onChange`, which the guide already asks for.
+      - The fixtures each get a moved twin; a page's own marks pass `moved(mark)` or skip the check.
+      - Nothing is published yet, so this goes in CHANGELOG's Unreleased section; it doesn't need a 0.2.
+12. **`playback()` and `playButton()`.**
+    - **The controller.** `playback({ from, to, duration, ease = linear, timing = "playback", motion?, onFrame })` returns `{ play(), pause(), seek(x, options?), position, playing, subscribe(listener), destroy() }`. It's in core, as a clock-driven controller with no DOM, and uses the page-wide motion unless it's given one.
+    - **`play()`** goes on from where it is, or from `from` if it's at the end, over the remaining share of `duration`. The lab plays a whole season in 6.5 s and scales that by what's left.
+      - It plays at `linear` speed, and Analysis takes ×0.3.
+      - Off jumps to `to` at once. Motion turning off mid-play also jumps to the end, as tweens do.
+    - **`seek(x)`** pauses and moves to x over 350 ms base `transition` timing (≤ 200 ms in Analysis, a jump in Off), retargeting if it's already moving, as the lab's scrubber does. `{ animate: false }` jumps.
+    - **No `stop()`.** `pause()` meets WCAG 2.2.2, and `seek(to)` shows the end.
+    - **`subscribe`** hears play, pause, the end and seeks, not every frame (that's `onFrame`).
+    - **The button.** `playButton(target, playback, { labels })` is a `<button type="button">` whose text is Play or Pause.
+      - It has no `aria-pressed`, since its name changes.
+      - `labels` gives the page's words ("Play season"). The button goes back to Play at the end.
+      - It's in `src/charts/controls/`, and injects the shared stylesheet like `motionSwitch`.
+    - **Nothing plays by itself:** there's no autoplay option.
+    - The page wires its own `<input type="range">` to `seek()`, and to `subscribe` and `onFrame`.
+13. **Data on host marks.**
+    - **`samples(datum, mark)`** gives a mark's samples. They're checked when read: t in [0, 1] and ascending, and finite values.
+    - **`samplesAlong(mark, points)`** (public, in `src/core/geometry`) projects data points, in the marks' coordinates, onto the nearest point of the walk, and returns the samples in `t` order.
+    - **Without `samples`,** rect marks with a numeric `value` get the bar chart's samples (0 to their total, and each segment its own range), so `threshold` against a constant works on host bars.
+    - **`related(series)`** finds the mark's own segment of that series, or else another mark whose series has that name (two D3 line paths).
+    - **`needs.related`** is checked against the series on creation and on every `refresh()`, and throws before anything changes.
+    - **Stroked marks.** When the fill is `none`, a mark's colours come from its stroke, so halos are in the line's own colour and emphasis darkens the stroke. On an open outline, the masked halo cuts out the stroke, as the ring does, and is stroked at the line's thickness plus its own width, so as much of it shows as round a closed mark.
+14. **`watch: true` is opt-in** (open question 13).
+    - A `MutationObserver` on the attachment's elements notes changes to geometry attributes (`d`, `x`, `y`, `width`, `height`, `cx`, `cy`, `r`, `points`, `transform`).
+    - Once a frame, on the chart's clock, the adapter re-reads only the marks that changed (their datum, geometry and samples) and calls `runner.change()`, with no events and no interrupt, as our charts' frames do.
+    - So a decoration follows a host's own transition, or a page's per-frame redraw, without `refresh()`. `refresh()` would fire `update` and cut hover short.
+    - The page's `geometry` should read the element, or a datum the host updates each frame (as the demo's reveal does). One that reads the transition's target datum only sees the end.
+    - Step 6 measures the cost and says whether `watch` stays opt-in.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `src/index.ts`, `src/core/index.ts`, `src/effects/index.ts`, `src/charts/index.ts`, `src/charts/controls/index.ts`, `src/charts/types.ts`, `src/charts/render/theme.ts`, `package.json`, the two conformance test files, `docs/architecture.md`, `README.md`, `CHANGELOG.md`, `docs/effects-guide.md`, `docs/sketches/api.ts` and this plan.
+
+**Wave 1** (parallel):
+
+1. **Shared code for marks hovered together.** Owns `src/charts/shell/hover.ts`, `src/charts/tooltip.ts`, `src/charts/table.ts`, `src/charts/legend.ts` and `src/charts/render/mark-style.ts`, with their tests; `src/charts/keyboard.ts`, if it needs any change; and the `legend` option's type in `src/charts/types.ts`.
+   - `chartHover` hovers a target that stands for several marks. The chart maps a target key to its marks' keys, and each mark gets `ec-hot`, a runner hover in one batch, and a `hover` event with its place in the batch. Leaving ends them all. Bars and the donut map each key to itself. The keyboard stays a flat list of targets.
+   - The tooltip shows at a point (the crosshair), as well as at a mark.
+   - The table:
+     - lets the chart say whether there's a Total column;
+     - lets a page column go after the values.
+   - The legend:
+     - takes extra entries `{ label, color }`, a theme token or a CSS colour, after the series;
+     - `legend` moves to the shared chart options.
+   - `svgMarkHandle`: on an open outline, emphasis mixes the stroke colour, and the halo is stroked behind the line at its thickness plus the halo's width. Hover dimming and emphasis get rules for strokes, for the line step to use.
+   - **Done when** the tests and visual baselines for bars, the donut and the adapter pass with none changed, and the new code paths have tests of their own.
+2. **`threshold`.** Owns `src/effects/threshold.ts` and its tests, the fifth check in `src/testing/check.ts` (with the fixtures' moved twins in `src/testing/fixtures.ts`), `threshold`'s entries in `src/effects/conformance.test.ts`, and the guide's threshold section.
+   - As decision 11, tested on the manual clock with the recording layer:
+     - crossings on the line fixture against a constant, and against a related series both by `at` and by `t`;
+     - `when: "above"` on a bar;
+     - a reference with fewer samples, or more;
+     - redrawing on `change()`, and nothing drawn on a point;
+     - `expectTypeOf` checks for the kind and `needs`.
+   - The fifth check, with a test that an effect which draws once and ignores `onChange` fails it. If the guide's `trace` or `delta` fails it, fix the example and the guide together.
+   - Docs: a `threshold` section in architecture.md's Effects, README, `src/effects/README.md`, the guide (`threshold` as the built-in data effect, and samples on each chart) and CHANGELOG. Delete the sketch's `threshold` declaration.
+3. **`playback()` and `playButton()`.** Owns `src/core/playback.ts` and `src/charts/controls/play-button.ts`, with their tests, and the `.ec-play` rules in `src/charts/render/theme.ts`.
+   - As decision 12, tested on the manual clock:
+     - playing over the remaining share of the duration;
+     - each mode's scaling, Off jumping, and motion turning off mid-play;
+     - pause and resume;
+     - `seek` animating and retargeting;
+     - `subscribe`'s notifications;
+     - the button's text and focus across play, pause and the end.
+   - Docs: a Playback section under Controls in architecture.md, README, and §7.2. Replace the sketch's `playback` and `playButton` declarations.
+4. **Data on host marks.** Owns `src/charts/adapter/`, `src/core/geometry/samples.ts` (`samplesAlong`) and its tests, the open-outline halo in `src/charts/render/outside.ts`, and the host-chart hover baselines on `bars.html` and `donut.html`.
+   - As decisions 7 and 13, tested in jsdom on hand-built D3-style lines:
+     - samples given and missing;
+     - `samplesAlong` on the line's own vertices and between them;
+     - `related` across marks;
+     - `needs` throwing on creation and on `refresh()`;
+     - a stroked line's colours, and the halo and ring round an open outline;
+     - hover darkening under `dim: true` only.
+
+     The data effect in these tests is a recording one; the real `threshold` on a real D3 line comes in step 6.
+   - Remake the host hover baselines in Docker. No other baseline changes.
+   - Docs: Adapters in architecture.md, README, the guide's samples row, and CHANGELOG (`samplesAlong`). Replace the sketch's `samplesAlong` declaration, and `samples` in `PlannedExpressiveOptions`.
+
+**Wave 2** (after wave 1 lands):
+
+5. **`lineChart`.** Owns `src/charts/line.ts` and `src/charts/line-layout.ts` (pure, like `bar-layout.ts`) with their tests, `LineChartOptions` and `LineChart` in `src/charts/types.ts`, the line chart's rules in `theme.ts`, the line source in `src/conformance.test.ts`, and `src/xg.test.ts` (new).
+   - As decisions 1–4, 9 and 10, built on step 1's shell. `reveal(x)` as decision 2: it's clamped to the rows' range, and the default, `reveal(Infinity)`, shows everything.
+   - **The proof:**
+     - `checkEffect` passes for every built-in effect on real marks from `lineChart` (lines and points), with no change to `src/effects/`. `threshold` gets each line's data from the chart's `enter` events.
+     - `src/xg.test.ts` sits beside `src/index.ts`, like `matchweek.test.ts`, and plays the card's story: `threshold` and a riding ball as one decoration, through a reveal from week 1 to week 38. It checks the red runs and the ball at each step, and that Off shows both at once.
+   - Docs: a Line chart section in architecture.md, README, the `MarkData` comment, and §2.4 if anything else differs. Replace the sketch's `LineChartOptions`. `lineChart` stays declared, like `barChart` and `donutChart`, until chart handles have `focus()`. Example 02 uses the real options.
+   - Suggested as two PRs: the drawn, interactive chart with `reveal`, then animated updates.
+6. **`watch`, and the proof on a real D3 line.** Owns `src/charts/adapter/` (after step 4), `src/d3-line.test.ts` (new) and the D3 line source in `src/conformance.test.ts`.
+   - `watch` as decision 14, with jsdom tests: the `MutationObserver` batched to one change a frame, only changed marks re-read, no events, and `destroy()` disconnecting it.
+   - `src/d3-line.test.ts` on real `d3.line()` paths: `threshold` through `samples` and `samplesAlong`, the riding ball, keyboard order, and a page-driven reveal followed with `watch`.
+   - **Measure** `watch` in headless Chromium, against the same frames without it:
+     - the cost per frame of a D3 transition on a host bar chart;
+     - the cost per frame of the reveal on a D3 line.
+
+     Record the numbers in open question 13, and say whether `watch` stays opt-in.
+   - Docs: Adapters, README and CHANGELOG. Replace the sketch's `expressive` declaration, which then has nothing planned left.
+
+**Wave 3:**
+
+7. **`demo/line.html`, its screenshots and the listening script.** Owns `demo/line.html`, `demo/line.ts`, a hand-written D3 line in `demo/`, the link in `demo/index.html`, `tests/visual/line.spec.ts` with its `line-` baselines, and section E of `docs/a11y-check.md`.
+   - **The page**, as decision 8, with the lab's card 2:
+     - the lab's season: seed 42, 38 matchweeks, cumulative goals and xG;
+     - its legend's three entries ("Goals scored", "Expected goals (xG)", "Goals below xG") and its table (Matchweek, Goals, xG, Difference);
+     - "Play season", and the scrubber with its "Through matchweek N" status;
+     - the motion switch, and a checklist that is the "Done when" list below.
+
+     On both charts the decoration is `only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" })))`.
+   - **Deliberate differences from the lab:**
+     - The ball riding the goals line is new; the lab has none.
+     - The lab turns the goals line's end dot and hover dot red below xG. Here the dots keep their series colour, since `threshold` draws nothing on a dot (decision 4). The tooltip's "vs expected" line and the table's Difference still say it.
+     - "Goals below xG" comes after the series in the legend, since a page's entries follow them; the lab puts it between the two.
+   - **Screenshots,** all named `line-…`:
+     - light and dark at rest;
+     - both charts mid-play, at week 20, with the red runs and the ball at the tip;
+     - the crosshair with its tooltip;
+     - the focus ring in both themes;
+     - the D3 line hovered.
+
+     Reduced motion and Analysis are checked in the DOM: Play ends at once with the colour and the ball drawn, and Analysis plays in about 2 s. The page fits 1000 × 2000, and the baselines are made in Docker.
+   - A listening script for the line chart and the D3 line. **You run it** with NVDA + Chrome, and the names and roles are adjusted to what you hear.
+   - Then check the "Done when" list in the browser with you, at real frame rates if the pane is hidden.
+
+**Wave 4** (if it fits; otherwise it moves to M6):
+
+8. **`fromVegaView(view, mark = "marks")`.** Owns `src/charts/adapter/vega.ts` and its tests, vega and vega-lite in `package.json` and `package-lock.json`, and the Vega-Lite line on `demo/line.html` with its `line-vega-` baselines.
+   - Built to the adapter spike's recommendation 3:
+     - it checks that `view.renderer()` is `"svg"`;
+     - it reads the named mark's items from `view.scenegraph()`: each item's element is the one whose `__data__` is the item, and its row is `item.datum`;
+     - it describes rects as bars, arcs as slices (with their angles ordered), and symbols as points;
+     - it describes lines from the items' x and y, with samples straight from the items (no `samplesAlong`);
+     - it refreshes itself through the View's data and resize listeners (the exact hook still needs checking);
+     - keys come from the page.
+   - Tests on a real Vega-Lite line chart and bar chart with the SVG renderer, including `threshold` on the line: in jsdom, or in Playwright if jsdom can't render them.
+   - Docs: Adapters in architecture.md (what each library needs) and README.
+
+**Done when:**
+- `lineChart` draws the lab's card 2 on the library: two lines with end labels, a crosshair across both with the tooltip, a legend with the page's "Goals below xG", a table with a Difference column, a name for each matchweek, one tab stop whose arrow keys go week by week, and staged updates. Light and dark come from the library's defaults.
+- `threshold({ compareTo: "xg" })` in `on.decorate` colours the goals line below xG on `lineChart` and on a D3 line through `expressive()` (with `samples` from `samplesAlong`). It follows every frame of a reveal, and shows with motion off.
+- `playback()` and `playButton()` play the season (about 6.5 s in Presentation, 2 s in Analysis, at once in Off) and pause it; the scrubber seeks; and `reveal()` fires no events.
+- The ball rides the goals line's leading edge on both charts, with no change to `src/effects/travel.ts` or `src/effects/gaits.ts` during M4.
+- `checkEffect`, with its fifth check, passes for every built-in effect, `threshold` included, on every fixture, and on real marks from `barChart`, `donutChart`, `lineChart`, `expressive()` bars, D3 pies and D3 lines.
+- `expressive()` has:
+  - `samples` and `samplesAlong`;
+  - the `needs` check;
+  - stroke colours and open-outline halos;
+  - hover emphasis under `dim: true`;
+  - opt-in `watch`, with its cost measured and open question 13 answered.
+- `demo/line.html` passes its checklist in the browser. The line screenshots are green in CI, and no other baseline has changed apart from step 4's host hover ones.
+- Your line-chart screen-reader check passes.
+- The package still has no runtime dependencies, and `typecheck`, `test` and `build` are green.
+- `fromVegaView()` reads a Vega-Lite line on the demo, or has moved to M6 with a note saying why.
 
 ### M5: Morph
 
@@ -1028,6 +1293,8 @@ The `TransitionEffect` kind, `chartSwitch`, side-matched outline sampling, label
 ### M6: Hardening and 0.1.0
 
 - A stress demo to set documented SVG limits (§10).
+- Dates on `lineChart`'s x axis: time ticks and `Intl` formatting, with no dependency (M4 decision 3).
+- `fromVegaView()`, if it slipped from M4 (step 8).
 - A full accessibility audit.
 - A bundle-size check in CI, done with a Node script and no new dependency.
 - README API docs.
@@ -1050,6 +1317,10 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
   - `label((data) => text)`: text computed from the mark's own data, such as last sample minus first (slopes) or a step's own signed value (waterfalls).
   - Comparisons between neighbouring marks (funnel conversion) are computed into the rows by the chart or the page, because effects only see their own mark and related series.
 - **"Pour" (maybe).** Decorative droplets for funnels. Only after measuring its rendering cost, and never without a reduced-motion end state.
+- **Line chart extras** (deferred in M4 planning):
+  - a `curve` option, which needs sampled arc-length tables and approximate threshold crossings (M4 decision 5);
+  - gaps for missing values: M4's line throws on them (decision 9);
+  - hovering only the nearest point, instead of the crosshair.
 
 ---
 
@@ -1065,14 +1336,15 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 6. **More subpath exports** (`expressive-charts/core`, `/effects`) for smaller bundles. The first one (`/icons/sport`) is needed in M1. *Recommendation:* decide the rest in M6 using real bundle numbers.
 7. **TypeScript 7** (the native compiler) is a separate upgrade. *Recommendation:* after M1, once there's real code to typecheck.
 8. **Framework wrappers** (React, Vue, Svelte) are out of scope for 0.1. The imperative `update()` API is designed to be easy to wrap.
-9. **Line smoothing.** v0.1 lines are straight polylines, which keeps `threshold` crossings exact and arc length cheap. Curves would mean sampled arc-length tables and approximate crossings.
+9. **Line smoothing.** v0.1 lines are straight polylines, which keeps `threshold` crossings exact and arc length cheap. Curves would mean sampled arc-length tables and approximate crossings. *Decided in M4 planning: straight lines only in v0.1* (M4 decision 5). A `curve` option is in the backlog. Host charts drawn with curves still work, through the geometry the page describes.
 10. **Naming.** Keep the draft's `path` and `angle`, or rename them to `walk` and `heading` to avoid confusion with `outline`? *Recommendation:* keep them; the doc comments carry the meaning.
 11. **Releasing.** Check that the npm name is available, and publish from CI with provenance.
 12. **D3 in demos and tests.** Adapter demos and tests are most convincing against real D3, but D3 would be a new dev dependency (never a runtime one). *Decided in M3 planning: yes, `d3-shape` and `d3-selection` only, pinned, as dev dependencies* (M3 decision 1). *Recommendation:* M1 uses a hand-written SVG chart; decide on D3 as a dev dependency in M3, when pie paths need it.
-13. **Cost of `watch`.** Following a host's transition through attribute changes means re-reading geometry on every frame. *Recommendation:* measure it in M4 before making it more than opt-in.
-14. **Changing effects with `update({ on })`.** Charts can't change `on` after they're created, so M3's demo recreates its charts when the viewer picks another effect. A page that switches effects loses focus and replays its enter effects. *Recommendation:* add it when a page needs it, by M6 at the latest. The runner would clear the slots' runs and resolve the new ones.
+13. **Cost of `watch`.** Following a host's transition through attribute changes means re-reading geometry on every frame. *Recommendation:* measure it in M4 before making it more than opt-in. *Planned in M4* (decision 14, step 6): `watch: true` is opt-in. It re-reads only the marks whose attributes changed, once a frame. Step 6 measures it on a D3 transition and a D3 line's reveal, records the numbers here, and says whether it stays opt-in.
+14. **Changing effects with `update({ on })`.** Charts can't change `on` after they're created, so M3's demo recreates its charts when the viewer picks another effect. A page that switches effects loses focus and replays its enter effects. *Recommendation:* add it when a page needs it, by M6 at the latest. The runner would clear the slots' runs and resolve the new ones. *M4 planning:* the line demo has no effect picker, so M4 doesn't need it either.
 15. **Donut labels at narrow widths.** M3 drops a label that would overlap the one before it, and every slice stays named in the legend, the tooltip, the table and its ARIA name. Leader lines, or labels inside large slices, would keep more of them. *Recommendation:* look at the demo at phone width in M3 step 6 and decide then. Don't add a label-placement engine before a page needs one. *Looked at in M3 step 6:* with the lab's four outcomes, every label stays at 375 and 320 px wide, because the ring shrinks first (to an outer radius of about 92 px at 320). Nothing is dropped, so the demo needs neither. Revisit with a page of many small slices.
 16. **A test-runner flavour of `checkEffect`.** M3 exports one runner-agnostic function that throws. A Vitest helper that makes one test per fixture would report failures more readably, but it would tie the package to one runner. *Recommendation:* wait until effect authors ask for it.
+17. **Naming a donut's value column.** The donut's table heads its value column with the field's name ("shots"). Only `seriesLabels` renames it, and that also changes the slices' names and the centre text (noticed in M3 step 6). *Recommendation:* a `table.value` header, beside `table.share` and `table.total`. M4 step 1 owns `table.ts`, so it could add it there if you want it in M4; otherwise in M6.
 
 ### Risks
 
@@ -1094,6 +1366,12 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 - **Marks that touch.** On a donut, effects and focus can reach a neighbour. A wiggle moves a slice's rim by at most 3 px, a masked halo covers at most half its width, and the focus ring covers a 2 px band. Each is bounded, brief or deliberate, and the neighbours are dimmed while a slice is hovered or focused. Mitigation: the donut screenshots show each case.
 - **Going public too early.** The effect API is public before the line chart, its hardest test, is built. Mitigation: the 0.x promise allows a break in 0.2 with a migration note; the conformance fixtures already include a line and a point; and M4 runs `checkEffect` on the real line chart's marks, as M3 does on the donut's.
 - **Real D3 in tests** can change under us. Mitigation: exact versions, dev dependencies only, and a test that the package has no runtime dependencies.
+- **Runs on every point.** `only("goals", …)` matches every goals point by its series, as well as the line by its key, so a decoration on a 38-week line starts 39 runs, 38 of which draw nothing. Mitigations:
+  - runs make their overlay group only when they first draw, so the empty runs cost objects, not DOM;
+  - points are dots (M4 decision 4), so line effects don't misfire on them;
+  - `only` takes a predicate for a page that wants the line alone;
+  - the M6 stress demo counts it.
+- **Vega internals.** `fromVegaView()` reads `__data__` and the scenegraph, which Vega doesn't document. Mitigations: exact versions, the helper duck-typed so the library never imports Vega, and the step free to slip to M6.
 - **Host charts we don't control.** Adapters run inside other libraries' SVG: transforms on parent groups, marks re-created on every render, and the host's own CSS. Mitigations: geometry in the marks' nearest common ancestor's coordinates (converted with each element's CTM), an overlay on the root `<svg>` with that ancestor's transform (Vega removes foreign children from its own groups when it redraws), keys rather than elements as identity, and never writing a host element's `transform` without composing it with the host's own.
 
 ---

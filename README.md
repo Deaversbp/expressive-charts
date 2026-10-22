@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart and a donut chart, the `expressive()` adapter for marks drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-and-donut-charts-travel-and-the-adapter)). The line chart and `morph` are still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart and a donut chart, the `expressive()` adapter for marks drawn by other code, icons, the first effects (`travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-and-donut-charts-travel-and-the-adapter)). The line chart and `morph` are still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -208,6 +208,16 @@ const control = motionSwitch("#motion", motion, { persist: "site:motion" }); // 
 control.destroy();                                                            // removes it; the choice stays
 ```
 
+`playback()` plays a value through a range, such as a season revealed week by week, and `playButton()` is its Play/Pause button, the pause control WCAG 2.2.2 asks for. A play takes its share of the duration from wherever it is (scaled by the motion mode: 6.5 s becomes 1.95 s in Analysis, and Off jumps to the end), and nothing plays by itself. `seek()` pauses and glides to a position, as a scrubber needs, and `subscribe()` hears play, pause, the end and seeks:
+
+```js
+import { playback, playButton } from "expressive-charts";
+
+const season = playback({ from: 1, to: 38, duration: 6500, onFrame: (week) => drawThrough(week) }); // starts at rest at the end
+playButton("#play", season, { labels: { play: "Play season" } }); // "Play season" / "Pause", back to Play at the end
+range.addEventListener("input", () => season.seek(Number(range.value)));
+```
+
 The same effects run on bars someone else drew. `expressive()` reads keys, rows and geometry from the host's `<rect>` elements and draws on an overlay at the end of its `<svg>`. It leaves the host's styling alone, and `destroy()` puts back everything it changed:
 
 ```js
@@ -247,7 +257,7 @@ The radii live in the arc generator, not in the row, so the page passes them to 
 
 The adapter adds no ARIA of its own unless you pass `markLabel`. Given it, each bar is read as one item, as on `barChart`: the rect that takes the bar's focus becomes `role="img"` named by `markLabel`, and the bar's other segments are hidden from screen readers, so a stack isn't read in pieces. The `<svg>` stays yours: make it `role="group"`, not `role="img"`, whose children screen readers skip, and hide your own value labels if the names already say them.
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar and donut charts, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar and donut charts, [Adapters](docs/architecture.md#adapters) for `expressive()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
 
 ## Writing effects
 

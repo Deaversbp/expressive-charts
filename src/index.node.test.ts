@@ -41,6 +41,17 @@ describe("importing in Node", () => {
     expect(lib.iconFromSvg('<svg viewBox="0 0 4 4"><path d="M0,0L4,4"/></svg>', { name: "n", anchor: { x: 0, y: 0 } }).shapes).toHaveLength(1);
   });
 
+  it("plays a playback, which needs no DOM", async () => {
+    const { createMotion, manualClock, playback } = await import("./index");
+    const clock = manualClock();
+    const frames: number[] = [];
+    const season = playback({ from: 1, to: 38, duration: 6500, clock, motion: createMotion(), onFrame: (x) => frames.push(x) });
+    season.play();
+    clock.advance(6500);
+    expect(frames).toEqual([1, 38]);
+    expect(season.playing).toBe(false);
+  });
+
   it("drives tweens from a timer when requestAnimationFrame is missing", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     const { createMotion, linear, tween } = await import("./index");

@@ -2,3 +2,4 @@
 // hands them the page-wide motion by default.
 
 export { motionSwitch, type MotionSwitch, type MotionSwitchOptions } from "./motion-switch";
+export { playButton, type PlayButton, type PlayButtonOptions } from "./play-button";

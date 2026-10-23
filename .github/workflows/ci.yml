@@ -21,6 +21,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # The bundle-size check (scripts/size.mjs), once: sizes don't depend on Node's version.
+      - run: npm run size
+        if: matrix.node == 24
 
   visual:
     # Screenshots of the demo pages in Chromium (playwright.config.ts). The job runs in the official

@@ -10,6 +10,7 @@ npm run dev        # demo pages with live reload
 npm test           # tests
 npm run typecheck  # types
 npm run build      # package output in dist/
+npm run size       # bundle sizes against their budgets, after a build
 ```
 
 Node.js 22 or newer is required (CI tests 22 and 24).
@@ -41,6 +42,25 @@ Without Docker, run **Update visual baselines** from the repository's Actions ta
 
 The Docker image's tag follows `@playwright/test` in `package.json`. When you upgrade Playwright, pin the exact version, change the image tag in `.github/workflows/ci.yml` and `visual-baselines.yml` to match, and regenerate the baselines.
 
+## Bundle size
+
+`npm run size` measures the build (run `npm run build` first) and fails when a size is over its budget in `scripts/size-budget.json`. CI runs it on Node 24 and puts its tables in the job's summary. It measures:
+
+- each published JS file and the stylesheet, raw, gzip and brotli. An ES module entry counts the chunks it imports;
+- import sets: what a page that imports a few names pays, bundled from `dist/index.js` with Vite and minified. When a small set grows and you didn't change what it imports, something has broken tree-shaking, such as code that runs on import.
+
+Budgets are gzip sizes in KB (1,024 bytes). [architecture.md](docs/architecture.md#bundle-size) has today's sizes.
+
+When the check fails:
+
+1. Find out what grew. The table shows every size; compare it with the one in the summary of main's last CI run.
+2. If the growth isn't meant (tree-shaking broken, or a module pulled in that the page doesn't use), fix it.
+3. If it's meant, because a feature costs what it costs, raise that budget in the same PR: to the new size plus about 10%, rounded up to 0.5 KB. The failure message gives that number. Say in the PR which budget you raised, by how much, and why.
+
+Raise a budget only when it fails, so the room left in the others still catches surprises. After a change that makes something much smaller, you can lower its budget the same way, so the room isn't spent by accident.
+
+A new import set goes in `importSets` in `scripts/size.mjs`, with its budget in `scripts/size-budget.json` under the same name. The check fails when something it measures has no budget, or a budget names something it doesn't measure.
+
 ## Adding an effect
 
 1. Create `src/effects/<name>.ts` that implements `GeometryEffect` or, if it reads values, `DataEffect` (`src/core/contracts/effect.ts`).
@@ -60,6 +80,6 @@ The Docker image's tag follows `@playwright/test` in `package.json`. When you up
 ## Pull requests
 
 - Keep each pull request focused on one change.
-- Run `npm run typecheck && npm test && npm run build` before opening it. CI runs the same checks.
+- Run `npm run typecheck && npm test && npm run build` before opening it, and `npm run size` after the build. CI runs the same checks.
 - If the change affects how the demo looks or moves, run `npm run test:visual:docker` too, and commit updated baselines if the change is intended. CI runs the visual suite as a separate job.
 - Update `README.md` and `docs/architecture.md` when the public API changes.

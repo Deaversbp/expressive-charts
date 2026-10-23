@@ -30,6 +30,8 @@
   .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
   .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+  /* Forced colours drop the wash, which leaves only the weight: the pressed button takes the viewer's selection colours, as the motion switch does. */
+  @media (forced-colors: active) { .seg button[aria-pressed="true"] { background: Highlight; color: HighlightText; } }
   .seg button:hover { background: var(--wash); }
   .btn { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
   .btn:hover:not(:disabled) { background: var(--wash); }

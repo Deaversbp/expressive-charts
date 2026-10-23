@@ -13,7 +13,8 @@
 
 import type { Baseline, MarkData, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
 import { defaultClock, matrix } from "../../core";
-import { goesRound, invert } from "../../core/geometry";
+import { invert } from "../../core/geometry";
+import { goesRound } from "../../core/geometry/ring";
 import { EFFECT_SLOTS, resolveEffects } from "../../core/registry";
 import { report } from "../../core/report";
 import { createRunner, type RunInput } from "../../core/runner";

@@ -11,7 +11,7 @@
 
 import { defaultClock, easeInOutCubic, linear, matrix, tween, type Clock, type MarkGeometry, type Matrix, type MotionEnv, type Point, type TransitionEffect, type Tween } from "../core";
 import { unease } from "../core/easing";
-import { formatPath, parsePath, transformPath } from "../core/geometry";
+import { formatPath, parsePath, transformPath } from "../core/geometry/path";
 import { isTransitionEffect, playTransition, type Transition, type TransitionPair, type TransitionSurface } from "../core/transition";
 import { between, boxIn } from "./adapter/space";
 import { chartAnnouncer, type Announcer } from "./announce";

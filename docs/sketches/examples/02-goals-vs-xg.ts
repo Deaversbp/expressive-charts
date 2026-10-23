@@ -49,7 +49,7 @@ interface LabelledWeek extends Week {
   label: string;
 }
 declare const labelled: LabelledWeek[];
-// @ts-expect-error x must be a numeric field for now (dates come later); "label" holds strings.
+// @ts-expect-error x must be a field of numbers or Dates; "label" holds strings.
 lineChart("#bad", { label: "Bad", data: labelled, x: "label", series: ["goals"] });
 
 // @ts-expect-error there's no pointer option: the crosshair is the line chart's hover.

@@ -5,14 +5,15 @@
 // keyboard, with a tooltip; a legend, a data table and, with `announce`, a live region for screen
 // readers. reveal(x) shows the data up to x, as playback drives it. update() animates the change:
 // staged in presentation (values, then positions), in one short stage in analysis, at once when
-// motion is off.
+// motion is off. x is numbers or Dates: a time axis has its own ticks and wording (time.ts), and is
+// otherwise drawn in ms like any number.
 //
 // The chart never names an effect: it resolves `on` through the presets it's handed and plays them
 // through the runner, which draws on the SVG surface. What doesn't depend on lines (events, hover and
 // focus, transitions and leaving marks, DOM order, size and fonts) is in shell/. Each x is a hover
 // target standing for every series' point there; the lines themselves are never hovered.
 
-import type { AnimateOptions, Animated, MarkData, MarkGeometry, TweenResult } from "../core";
+import type { AnimateOptions, Animated, MarkData, MarkGeometry, Sample, TweenResult } from "../core";
 import { animated, defaultClock, interpolateNumber, interpolateRecord, matrix } from "../core";
 import { resolveEffects } from "../core/registry";
 import { report } from "../core/report";
@@ -34,7 +35,6 @@ import {
   placeYTick,
   pointKey,
   positions,
-  xText,
   type LineFrame,
   type LineLayout,
   type LineRow,
@@ -142,6 +142,8 @@ interface TickRecord {
   /** A value's gridline; x ticks have none. */
   readonly line: SVGLineElement | undefined;
   readonly label: SVGTextElement;
+  /** An x tick's text in its latest layout: a time's depends on the step. A value's is worded by `format` as it's drawn. */
+  text: string;
   /** Ticks a scale gains fade in, and ones it loses fade out. */
   readonly opacity: Animated<number>;
   /** In the latest layout. */
@@ -327,8 +329,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   function placedFor(next: LineLayout<D>): { readonly lines: Map<string, PlacedLine<D>>; readonly points: Map<string, PlacedPoint<D>> } {
     const states = next.rows.map(restState);
     return {
-      lines: new Map(placeLines(next.frame, states, next.series, drawnThrough(next)).map((line) => [line.series, line])),
-      points: new Map(states.flatMap((state) => placePoints(next.frame, state, next.series)).map((point) => [point.key, point]))
+      lines: new Map(placeLines(next.frame, states, next.series, drawnThrough(next), next.time).map((line) => [line.series, line])),
+      points: new Map(states.flatMap((state) => placePoints(next.frame, state, next.series, next.time)).map((point) => [point.key, point]))
     };
   }
 
@@ -470,7 +472,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     paintFrame(frame);
     paintLines(frame, states.map((s) => s.state));
     for (const { record, state } of states) {
-      const placed = new Map(placePoints(frame, state, record.points.map((point) => point.series)).map((point) => [point.key, point]));
+      const placed = new Map(placePoints(frame, state, record.points.map((point) => point.series), laidOut.time).map((point) => [point.key, point]));
       showAll(record.points.filter(drawn).map((point) => ({ record: point, placed: placed.get(point.key)! })));
     }
     paintColumns(frame, states);
@@ -553,7 +555,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       setAttributes(tick.label, { opacity });
     }
     for (const tick of xTicks.values()) {
-      placeText(tick.label, placeXTick(frame, tick.value, xText(tick.value)).label);
+      placeText(tick.label, placeXTick(frame, tick.value, tick.text).label);
       setAttributes(tick.label, { opacity: tick.opacity.value < 1 ? tick.opacity.value : undefined });
     }
   }
@@ -562,7 +564,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   function paintLines(frame: LineFrame, states: readonly RowState<D>[]): void {
     const drawnLines = [...lineOrder, ...leavingLines()];
     if (states.length === 0 || drawnLines.length === 0) return;
-    const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut));
+    const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut), laidOut.time);
     showAll(drawnLines.map((line, i) => ({ record: line, placed: placed[i]! })));
     paintLabels(frame, new Map(drawnLines.map((line, i) => [line, placed[i]!])));
   }
@@ -953,6 +955,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       for (const value of wanted) if (!ticks.has(value)) addTick(ticks, value, 0, lined);
       for (const tick of ticks.values()) tick.wanted = wanted.has(tick.value);
     }
+    for (const tick of next.xTicks) xTicks.get(tick.value)!.text = tick.label.text;
     const goingLines = leavingLines();
     const folding = [...leavingRows.values()];
 
@@ -999,11 +1002,12 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     return running;
   }
 
-  function addTick(ticks: Map<number, TickRecord>, value: number, opacity: number, lined: boolean): void {
+  function addTick(ticks: Map<number, TickRecord>, value: number, opacity: number, lined: boolean, text = ""): void {
     const tick: TickRecord = {
       value,
       line: lined ? svgElement("line", { class: value === 0 ? "ec-baseline" : "ec-gridline" }, grid) : undefined,
       label: svgElement("text", { class: "ec-tick" }, axis),
+      text,
       opacity: animated(opacity, interpolateNumber, { clock, motion, onChange: changed }),
       wanted: true
     };
@@ -1062,7 +1066,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   {
     const placed = placedFor(laidOut);
     for (const tick of laidOut.yTicks) addTick(yTicks, tick.value, 1, true);
-    for (const tick of laidOut.xTicks) addTick(xTicks, tick.value, 1, false);
+    for (const tick of laidOut.xTicks) addTick(xTicks, tick.value, 1, false, tick.label.text);
     rowOrder = laidOut.rows.map((row) => {
       const record = createRow(row, false);
       rows.set(row.key, record);
@@ -1126,9 +1130,12 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
     reveal(x) {
       if (destroyed) return;
-      if (typeof x !== "number" || Number.isNaN(x)) throw new RangeError(`lineChart: reveal(x) needs a number, got ${typeof x === "string" ? JSON.stringify(x) : String(x)}.`);
+      // A Date is its time in ms, which is how a time axis has its x's.
+      if (x instanceof Date && Number.isNaN(x.getTime())) throw new RangeError("lineChart: reveal(x) needs a valid Date, got an invalid Date.");
+      const at: unknown = x instanceof Date ? x.getTime() : x;
+      if (typeof at !== "number" || Number.isNaN(at)) throw new RangeError(`lineChart: reveal(x) needs a number, got ${typeof at === "string" ? JSON.stringify(at) : String(at)}.`);
       const before = revealedIn(laidOut);
-      through = x;
+      through = at;
       if (revealedIn(laidOut) === before) return;
       // A view, not a data change: no events. The lines (and their decorations, through change())
       // end at x, and the x's past it are hidden.
@@ -1218,8 +1225,13 @@ function sameData<D>(a: MarkData<D>, b: MarkData<D>): boolean {
   if (a.datum !== b.datum || a.samples.length !== b.samples.length) return false;
   return a.samples.every((s, i) => {
     const o = b.samples[i]!;
-    return s.t === o.t && s.value === o.value && s.at === o.at;
+    return s.t === o.t && s.value === o.value && sameAt(s.at, o.at);
   });
+}
+
+/** The same x: Dates by their time, since each placing makes its own. */
+function sameAt(a: Sample["at"], b: Sample["at"]): boolean {
+  return a === b || (a instanceof Date && b instanceof Date && a.getTime() === b.getTime());
 }
 
 /** Each series' value with its label: what the tooltip and the x's name say. Copies, so a page can't change the layout's. */

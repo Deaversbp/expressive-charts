@@ -104,10 +104,11 @@ export declare const describe: typeof builders & {
 // with their options (tooltips and the data table too, since M2) and their handles, which have
 // focus(key) and labels() since M5 step 2, so they're no longer declared here. Changed from the sketch:
 // the donut's `category` names each slice (the sketch's `key` is the optional key, as on bars); the
-// line chart's x is a number for now (M4 decision 3; dates come by M6), it has no `pointer` option,
-// since the crosshair is its hover (M4 decision 9), and `labels` words its end labels. NEW in M5:
-// barChart's `colorBy: "category"` colours each bar by its key, so a ColorAssignment shared with a
-// donut keeps each category's colour (M5 decision 8).
+// line chart's x is number | Date, as sketched (Dates since M6 step 1, with `timeZone` and `xFormat`,
+// and reveal() takes a Date too), it has no `pointer` option, since the crosshair is its hover (M4
+// decision 9), and `labels` words its end labels. NEW in M5: barChart's `colorBy: "category"` colours
+// each bar by its key, so a ColorAssignment shared with a donut keeps each category's colour (M5
+// decision 8).
 
 /** NEW NoInfer on `on` (built): without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
 export interface ChartOptions<D> extends BuiltChartOptions<D> {}

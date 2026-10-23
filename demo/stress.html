@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stress cases · expressive-charts</title>
+<style>
+  /* Page chrome only, as on bars.html. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #7d7b75;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 24px; display: grid; gap: 14px; }
+  /* Two cases side by side where there's room; the date line takes the whole row. */
+  .cases { display: grid; gap: 14px; min-width: 0; }
+  @media (min-width: 860px) {
+    .cases { grid-template-columns: 1fr 1fr; }
+    .cases > .wide { grid-column: 1 / -1; }
+  }
+  h1 { font-size: clamp(26px, 5vw, 32px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 18px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 72ch; }
+  .lede { font-size: 14px; }
+  .note { font-size: 13px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .label { font-size: 13px; color: var(--muted); }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
+  .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 3px 8px; border-radius: 6px; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+  .seg button:hover { background: var(--wash); }
+  /* The start buttons, and playButton()'s, which the library styles as .ec-play. */
+  .btn { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); padding: 4px 12px; border-radius: 8px; cursor: pointer; }
+  .btn:hover { background: var(--wash); }
+  /* playButton() appends its button here, first in the bar. */
+  .slot { display: contents; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* The frame readout: what the last run measured, as text. */
+  .readout { font-size: 13px; color: var(--ink-2); margin: 0; font-variant-numeric: tabular-nums; min-height: 2lh; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+  .chart { min-width: 0; }
+  .checklist { color: var(--ink-2); font-size: 13px; margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+  a { color: var(--accent); }
+  /* The 28-day averages are what a day is read against: dashed, so they can't be mistaken for the red below them. */
+  #line-chart .ec-line[data-key="average"] .ec-stroke, #line-chart .ec-line[data-key="earlierAverage"] .ec-stroke { stroke-dasharray: 6 4; }
+  #line-chart { --ec-series-2: var(--ec-text-muted, #75736d); --ec-series-2-strong: var(--ink-2); }
+  /* Legend swatches as short lines, so the averages show their dash. */
+  #line-chart .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
+  #line-chart .ec-legend-item[data-series="average"] .ec-legend-swatch, #line-chart .ec-legend-item[data-series="earlierAverage"] .ec-legend-swatch { border-top-style: dashed; }
+  /* The D3 columns' own styles: someone else's chart, so the page styles it, not the library. */
+  #host-chart { display: block; max-width: 100%; height: auto; overflow: visible; }
+  #host-chart .host-column { fill: var(--ec-series-1, #2a78d6); }
+  #host-chart .host-target { stroke: var(--ec-axis, #c3c2b7); stroke-dasharray: 4 3; }
+  #host-chart .host-baseline { stroke: var(--ec-axis, #c3c2b7); }
+  #host-chart .tick { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; line-height: 1.4; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { flex: none; width: 10px; height: 10px; border-radius: 2px; }
+  .legend .swatch-column { background: var(--ec-series-1, #2a78d6); }
+  .legend .swatch-above { background: var(--ec-negative, #d03b3b); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Milestone 6 · hardening</p>
+    <h1>Stress cases</h1>
+    <p class="lede">Each case up to past its limit, with the library's defaults: legends, tables and a name for every mark. Nothing plays until you press its button. <b>Smooth</b> is a 95th percentile of 20 ms or less between frames, no frame over 50 ms, and a hover shown within 100 ms.</p>
+  </header>
+
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
+
+  <div class="cases">
+    <section class="card" id="update-case" aria-labelledby="update-title">
+      <h2 id="update-title">Bars that update</h2>
+      <p class="note">Every value changes in one staged update: values, then the order.</p>
+      <div class="bar">
+        <span class="label" id="update-size-label">Bars</span>
+        <div class="seg" role="group" aria-labelledby="update-size-label" data-size>
+          <button type="button" data-value="100">100</button>
+          <button type="button" data-value="500">500</button>
+          <button type="button" data-value="1000">1,000</button>
+          <button type="button" data-value="2000">2,000</button>
+          <button type="button" data-value="5000">5,000</button>
+        </div>
+        <span class="label" id="update-effect-label">Update effect</span>
+        <div class="seg" role="group" aria-labelledby="update-effect-label" data-effect>
+          <button type="button" data-value="none">None</button>
+          <button type="button" data-value="flash">flash</button>
+        </div>
+        <button type="button" class="btn" data-start>Change every bar</button>
+      </div>
+      <p class="readout" role="status" data-readout>Not run yet.</p>
+      <div class="chart" id="update-chart"></div>
+    </section>
+
+    <section class="card" id="hover-case" aria-labelledby="hover-title">
+      <h2 id="hover-title">Hover on a large chart</h2>
+      <p class="note">Hovers a bar every 50 ms, each dimming every other bar.</p>
+      <div class="bar">
+        <span class="label" id="hover-size-label">Bars</span>
+        <div class="seg" role="group" aria-labelledby="hover-size-label" data-size>
+          <button type="button" data-value="100">100</button>
+          <button type="button" data-value="500">500</button>
+          <button type="button" data-value="1000">1,000</button>
+          <button type="button" data-value="2000">2,000</button>
+          <button type="button" data-value="5000">5,000</button>
+        </div>
+        <button type="button" class="btn" data-start>Sweep across</button>
+      </div>
+      <p class="readout" role="status" data-readout>Not run yet.</p>
+      <div class="chart" id="hover-chart"></div>
+    </section>
+
+    <section class="card wide" id="line-case" aria-labelledby="line-title">
+      <h2 id="line-title">A line on dates, playing</h2>
+      <p class="note">Daily visits, red below their 28-day average (with one series, the period's), and the core arrow riding the leading edge: <code>only("visits", parallel(threshold(…), travel("arrow", …)))</code>, played by <code>playback()</code> into <code>reveal()</code>.</p>
+      <div class="bar">
+        <span class="label" id="line-years-label">Years</span>
+        <div class="seg" role="group" aria-labelledby="line-years-label" data-size>
+          <button type="button" data-value="1">1</button>
+          <button type="button" data-value="2">2</button>
+          <button type="button" data-value="5">5</button>
+          <button type="button" data-value="10">10</button>
+        </div>
+        <span class="label" id="line-series-label">Series</span>
+        <div class="seg" role="group" aria-labelledby="line-series-label" data-series>
+          <button type="button" data-value="1">1</button>
+          <button type="button" data-value="2">2</button>
+          <button type="button" data-value="3">3</button>
+          <button type="button" data-value="4">4</button>
+        </div>
+        <span class="slot" id="line-play"></span>
+        <!-- Not a live region: the readout says how far it got. -->
+        <span class="status" id="line-status"></span>
+      </div>
+      <p class="readout" role="status" data-readout>Not run yet.</p>
+      <div class="chart" id="line-chart"></div>
+    </section>
+
+    <section class="card" id="host-case" aria-labelledby="host-title">
+      <h2 id="host-title">Host columns with <code>watch</code></h2>
+      <p class="note">D3 columns in a hand-written transition, red above 50 through <code>expressive()</code>.</p>
+      <div class="bar">
+        <span class="label" id="host-size-label">Columns</span>
+        <div class="seg" role="group" aria-labelledby="host-size-label" data-size>
+          <button type="button" data-value="20">20</button>
+          <button type="button" data-value="100">100</button>
+          <button type="button" data-value="200">200</button>
+          <button type="button" data-value="500">500</button>
+          <button type="button" data-value="1000">1,000</button>
+          <button type="button" data-value="2000">2,000</button>
+        </div>
+        <span class="label" id="host-follow-label">Follow</span>
+        <div class="seg" role="group" aria-labelledby="host-follow-label" data-follow>
+          <button type="button" data-value="watch">watch</button>
+          <button type="button" data-value="refresh">refresh() at the end</button>
+        </div>
+        <button type="button" class="btn" data-start>Change every column</button>
+      </div>
+      <p class="readout" role="status" data-readout>Not run yet.</p>
+      <div class="chart">
+        <div class="legend"><span><i class="swatch-column"></i>Value</span><span><i class="swatch-above"></i>Above 50</span></div>
+        <!-- A group, not an image: screen readers skip what's inside an image, and its columns take focus. -->
+        <svg id="host-chart" role="group" aria-label="Columns drawn with D3"></svg>
+      </div>
+    </section>
+
+    <section class="card" id="switch-case" aria-labelledby="switch-title">
+      <h2 id="switch-title">A switch with many pairs</h2>
+      <p class="note">Bars turning into columns with <code>morph()</code>.</p>
+      <div class="bar">
+        <span class="label" id="switch-size-label">Bars</span>
+        <div class="seg" role="group" aria-labelledby="switch-size-label" data-size>
+          <button type="button" data-value="20">20</button>
+          <button type="button" data-value="100">100</button>
+          <button type="button" data-value="200">200</button>
+          <button type="button" data-value="500">500</button>
+          <button type="button" data-value="1000">1,000</button>
+        </div>
+        <button type="button" class="btn" data-start>Show as columns</button>
+      </div>
+      <p class="readout" role="status" data-readout>Not run yet.</p>
+      <div class="chart" id="switch-chart"></div>
+    </section>
+
+    <section class="card" id="draw-case" aria-labelledby="draw-title">
+      <h2 id="draw-title">The first draw</h2>
+      <p class="note">Static columns, to the first frame that shows them.</p>
+      <div class="bar">
+        <span class="label" id="draw-size-label">Columns</span>
+        <div class="seg" role="group" aria-labelledby="draw-size-label" data-size>
+          <button type="button" data-value="1000">1,000</button>
+          <button type="button" data-value="2000">2,000</button>
+          <button type="button" data-value="5000">5,000</button>
+          <button type="button" data-value="10000">10,000</button>
+        </div>
+        <button type="button" class="btn" data-start>Draw again</button>
+      </div>
+      <p class="readout" role="status" data-readout>Not run yet.</p>
+      <div class="chart" id="draw-chart"></div>
+    </section>
+
+    <section class="card" aria-labelledby="check-title">
+      <h2 id="check-title">Milestone 6: done when</h2>
+      <ul class="checklist">
+        <li><b>Limits.</b> Each case runs past its limit here, and nothing plays by itself. <code>scripts/bench.mjs</code> has measured them at 1× and 4×, and the limits, open question 13 and "Runs on every point" have their numbers in the docs.</li>
+        <li><b>Dates.</b> <code>lineChart</code> takes dates on x, worded with <code>Intl</code>, in UTC by default.</li>
+        <li><b>Size.</b> CI checks the bundle sizes against their budgets.</li>
+        <li><b>Accessibility.</b> The WCAG 2.2 AA audit is written; C, E 13–14 and G pass with NVDA.</li>
+        <li><b>Docs.</b> README is npm's landing page; a test checks the API reference.</li>
+        <li><b>The API</b> matches the 0.x promise.</li>
+        <li><b>The carried items</b> are built, with no baseline changed.</li>
+        <li><b>Plot</b> passes <code>checkEffect</code> through <code>expressive()</code>.</li>
+        <li><b>Packaging.</b> <code>pack-check</code> and every check are green.</li>
+        <li><b>0.1.0 is on npm,</b> with provenance and its release.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+<script type="module" src="./stress.ts"></script>
+</body>
+</html>

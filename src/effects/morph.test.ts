@@ -85,6 +85,14 @@ describe("morph", () => {
       for (let i = 0; i <= quarter; i++) expect(partner(outer[i]!, points[i]!).x).toBeCloseTo(LEFT, 2);
     });
 
+    it('matches as "unroll" when align is left out, the default picked in the morph demo', async () => {
+      const ctx = context(0.5);
+      void morph().run(slice, column, ctx);
+      await flush();
+      expect(ctx.layer.picture()).toEqual(await opening(slice, column, 0.5, "unroll"));
+      expect(ctx.layer.picture()).not.toEqual(await opening(slice, column, 0.5, "drop"));
+    });
+
     it('"drop" turns the matching by a side: a slice\'s outer arc goes to a column\'s top', async () => {
       const [halfway] = await opening(slice, column, 0.5, "drop");
       const points = corners((halfway as { d: string }).d);

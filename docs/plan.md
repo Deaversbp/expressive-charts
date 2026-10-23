@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1, M2 and M3 are complete (October 2026, §9). M4's steps 1–8 are all built (§9). `demo/line.html` passed your checklist walk and your screen-reader check. What's left is for you: a look at its new Vega-Lite card, and two short listening steps for it (section E, steps 13 and 14). M5 is planned step by step in §9 and is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1, M2 and M3 are complete (October 2026, §9). M4's steps 1–8 are all built (§9). `demo/line.html` passed your checklist walk and your screen-reader check. What's left is for you: a look at its new Vega-Lite card, and two short listening steps for it (section E, steps 13 and 14). M5's steps 1–4 are built (§9): you walked `demo/morph.html`'s checklist and kept `"unroll"` as `morph()`'s default. What's left of M5 is for you: the morph page's screen-reader check (section F of [a11y-check.md](a11y-check.md)). Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -1456,7 +1456,7 @@ The `TransitionEffect` kind played for real, `morph()`, `chartSwitch`, label twe
    - **"unroll"** maps each side to the same side. A slice's walk becomes the column's walk, so the slice stands up: its outer arc becomes the column's side, and the angle it spans becomes the column's height.
    - **"drop"** turns the mapping by one side, as the lab does. The slice's outer arc becomes the column's top, so it settles onto the baseline.
 
-   The demo shows both (step 4), and you choose the default in the browser; the other stays an option.
+   The demo shows both (step 4), and you choose the default in the browser; the other stays an option. **You kept "unroll"** (step 4, 23 October 2026).
 2. **Labels tween, as the lab's do.** Each chart's handle reports its labels by key and role, with their text and where they sit (`labels()`). `chartSwitch` moves each label from its place in the old view to its place in the new one, and swaps its text half way ("28%" becomes "112"). A label with no partner fades.
 3. **The demo is a new page,** `demo/morph.html`. `donut.html`, its 13 baselines and listening script D stay as they are.
 4. **Reference charts only.** `chartSwitch` morphs between `barChart`, `donutChart` and `lineChart`, which step 2 lets hide their marks, report their labels and take focus by key. Its views are typed by what it uses, so adapters can join later (backlog).
@@ -1527,7 +1527,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
      - **The ring test is morph's own copy** of the adapter's (`goesRound` in `src/charts/adapter/expressive.ts`): effects can't import from charts, and the adapter isn't this step's file. Moving it into `src/core/geometry` for both is a small follow-up.
      - **`points`** must also be at least 4. A context without a number for `start` (`testContext()` alone) plays from 0, and one above 1 draws the end at once.
      - **`checkTransition`.** Retracing is checked at p = 0.25, 0.5 and 0.75 on each pair, comparing the picture each run draws before its first frame: a checker can't know an effect's easing, so "the picture a run from a to b draws at p" is the one it begins with from `start: p`, which `morph`'s own tests check against a full run's frames. `pairs` takes named pairs or a list, like `marks`; a long path's difference is shown where the two part. `checkEffect` on a transition (and `checkTransition` on a mark effect) says which checker to use. `fixturePairs` is exported with `checkTransition`, as `fixtures` is with `checkEffect`, so `package.test.ts`'s export list gains both. `testContext` has no `start` option: a transition's test context is `{ ...testContext(), start }`.
-     - **The default `align` is `"unroll"`**, provisional until step 4, and documented as such.
+     - **The default `align` is `"unroll"`**, provisional until step 4, and documented as such. Step 4 kept it: you picked "unroll" in the demo.
 2. ✅ **Charts ready to switch.** Owns `colorBy` in `src/charts/bar.ts` and `BarChartOptions`; `focus()` and `labels()` on the handles in `src/charts/bar.ts`, `donut.ts` and `line.ts`, and on `Chart` in `src/charts/types.ts`; the shell's `focus` in `src/charts/shell/hover.ts`; and the `.ec-morphing` rules in `src/charts/render/theme.ts`.
    - As decisions 8 and 12.
    - **Done when** every existing test and visual baseline passes with none changed, and the new paths have tests of their own: category colours shared with a donut, a category legend, `colorBy` on a stack throwing, `focus(key)` on each chart, each chart's `labels()`, and `.ec-morphing` hiding marks and their labels and nothing else.
@@ -1572,7 +1572,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 **Wave 3:**
 
-4. **`demo/morph.html`, its screenshots and the listening script.** Owns `demo/morph.html` and `demo/morph.ts`, the link in `demo/index.html`, `tests/visual/morph.spec.ts` with its `morph-` baselines, section F of `docs/a11y-check.md`, and, once you've chosen it, the default `align` in `src/effects/morph.ts`.
+4. ✅ **`demo/morph.html`, its screenshots and the listening script.** Owns `demo/morph.html` and `demo/morph.ts`, the link in `demo/index.html`, `tests/visual/morph.spec.ts` with its `morph-` baselines, section F of `docs/a11y-check.md`, and, once you've chosen it, the default `align` in `src/effects/morph.ts`.
    - **The page**, as decision 3, with the lab's card 3:
      - the lab's shot outcomes (Goal 58, Saved 112, Off target 149, Blocked 87) as a donut and as columns (`colorBy: "category"`);
      - a toggle button ("Show as columns", "Show as donut"), and a control for the two `align` mappings, so they can be compared;
@@ -1585,6 +1585,22 @@ Each step names the files it owns, so steps in the same wave can run in parallel
      Reduced motion and Analysis are checked in the DOM, and a switch back mid-way is checked to reverse. The page fits 1000 × 2000, and the baselines are made in Docker.
    - A listening script, section F. **You run it** with NVDA + Chrome.
    - Then check the "Done when" list in the browser with you. You pick the default `align` there.
+   - **Built** (23 October 2026) as decisions 1, 3 and 13 describe: `demo/morph.html` and `demo/morph.ts`, `tests/visual/morph.spec.ts` with seven `morph-` baselines, and section F of [a11y-check.md](a11y-check.md#f-the-morph-page-a-chart-switch). The Docker visual suite passes, 63 tests, with no other baseline changed, and there are 1453 unit tests (one new: `morph()` with no `align` matches as `"unroll"`). You walked the checklist in the browser and kept `"unroll"`, so `morph.ts` keeps its default and only the docs that called it provisional changed (its own, README, architecture.md and CHANGELOG). Decisions beyond the plan:
+     - **The page.** One `chartSwitch` with `announce: true`: the donut ("Shot outcomes, share of total") and category columns ("Shot outcomes, counts"), each given the switch's colours. The switch makes its own assignment, which gives the outcomes slots 1 to 4 in data order, as `donut.html` pins them. The toggle's name is set from `current` right after `show()`. The Morph control (Drop, Unroll) destroys the switch and builds it again with `initial: current`, so a pick mid-switch lands where it was heading, and focus stays on the control.
+     - **V on a focused slice or column switches.** The plan has only the button, but a click moves focus to it, and focus that has left the switch stays put, so without a key on the marks focus could never follow its key on the page. V reaches the page in NVDA's focus mode. Raised with you in the walk, and kept.
+     - **Screenshots,** all through `openDemo(page, morphDemo)` (the page fits 1000 × 2000): the whole page in the donut view and the switch's card in the columns view, light and dark; `#shots` 475 ms after `show()` with each mapping; and the card after V on Saved, with the ring and the tooltip on its column. Frames fall every 16 ms of fake time, so "475 ms" draws the 472 ms frame, just short of half way: the labels still show the shares, and neither view's legend, centre or axes shows. The test checks that, and that one frame later the labels show the counts.
+     - **Only the view shown can be read** is checked in Chrome's own accessibility tree (`Accessibility.getFullAXTree` over CDP). Playwright's `getByRole` doesn't model `inert`, so it still found the old view mid-switch, where Chrome's tree has neither view.
+     - **At real frame rates** (headless Chromium, since the browser pane was hidden): a switch took 960 ms in Presentation at a steady 60 fps, 211 ms in Analysis and none in Off; a switch back at 380 ms landed 380 ms later; V moved focus to the same outcome both ways, with the announcement; dark mode looked right.
+     - **The blink.** Between 40% and 50% of the way, neither view's legend, centre, axes or table shows, from decision 11's fade timings. Raised with you in the walk, and left as built.
+     - **Where the plan and the code differ.**
+       - At real speed, a switch back can jump by up to about 0.17 px, where decision 14 asks for none. The switch's own tween is made after the pairs' runs have sampled their outlines and drawn their first picture, so on the live `performance.now()` clock it starts about 0.2 ms later, and the progress a reverse starts from lags the shapes by that much. The labels follow that progress, so they don't jump. On the visual suite's stopped clock the reverse is exact. The fix belongs in `switch.ts`: a follow-up.
+       - Decision 4's line charts can't be switch views yet (step 3's finding): a follow-up.
+   - **Follow-ups from M5** (none blocks it):
+     - Line charts as chart-switch views (decision 4). A chart needs to say which marks a switch draws (a line's points aren't drawn at rest), or each mark's colour (points are keyed `"goals@12"` but coloured by series).
+     - One start time for the switch's tween and the pairs' runs, so a reverse at real speed starts exactly where the shapes are.
+     - A chart handle method to end its hover, replacing the switch's blur and synthetic `pointerleave` (step 3).
+     - Move `unease` (switch.ts, morph.ts) and `goesRound` (morph.ts, the adapter) into core, and the path transforms from `src/icons/path.ts` into `src/core/geometry` (steps 1 and 3).
+     - Let a transition effect report its progress, so a switch can keep a transition with other timing in step (step 3, after Codex's review on PR #52).
 
 **Done when:**
 - `demo/morph.html` reproduces the lab's card 3 on the library:
@@ -1638,7 +1654,7 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 
 ### Open questions (each has a recommendation; none blocks M1)
 
-1. **Morph correspondence.** Side-matched sampling (§2.2) *unrolls* a slice: its arc becomes the bar's height. The prototype instead *drops* the slice, so the outer arc becomes the bar's top. *Recommendation:* build the generic unroll in M5, compare it in the demo, and add a `morph({ align })` option only if the prototype's version reads better. *Decided in M5 planning: both* (M5 decision 1). `morph({ align })` offers "unroll" and "drop", the demo shows both, and you pick the default in the browser in M5 step 4.
+1. **Morph correspondence.** Side-matched sampling (§2.2) *unrolls* a slice: its arc becomes the bar's height. The prototype instead *drops* the slice, so the outer arc becomes the bar's top. *Recommendation:* build the generic unroll in M5, compare it in the demo, and add a `morph({ align })` option only if the prototype's version reads better. *Decided in M5 planning: both* (M5 decision 1). `morph({ align })` offers "unroll" and "drop", the demo shows both, and you pick the default in the browser in M5 step 4. *Picked in M5 step 4: "unroll".*
 2. **CSS delivery.** *Decided in M2 planning: both* (M2 step 1). Auto-injected `<style>` vs a CSS file. *Recommendation:* both, with injection on by default (§7.1).
 3. **Persisting the viewer's motion choice** across pages (`localStorage`). *Decided: opt-in `persist`* (M2 step 4). *Recommendation:* opt-in `motionSwitch(el, motion, { persist: "key" })`.
 4. **Live-region announcements** on update, on or off by default. *Decided: off by default, with an `announce` option* (M2 step 5). *Recommendation:* off by default, with a one-line option.

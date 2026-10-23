@@ -1,6 +1,6 @@
 # Screen-reader check: `barChart` (M2 step 5)
 
-This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3), and [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html` (M4). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
+This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3), [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html` (M4), and [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html` (M5). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
 
 **Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026).**
 
@@ -215,6 +215,50 @@ If the chart's description isn't heard in step 1, it's also in the card's note, 
 | 13 | After step 12, press Escape, then NVDA+Space (browse mode), then Tab. | "Goals and expected goals on a Vega-Lite line, grouping", then "Goals scored: 56 goals by matchweek 38, graphic". | |
 | 14 | Focus mode, then Right arrow, then Left arrow. | "Expected goals (xG): 56.5 by matchweek 38, graphic", then "Goals scored: 56 goals by matchweek 38, graphic". The focus ring goes round each line, and the other line dims. | |
 
+## F. The morph page: a chart switch
+
+`demo/morph.html` (M5) shows the lab's shot outcomes as a donut and as columns in one `chartSwitch`. A button switches between them, and the slices morph into their columns and back. This script covers what the switch adds; the donut reads as in [section D](#d-the-donut-page-donutchart-and-a-d3-pie) and the columns as section A's bars.
+
+- **One view at a time.** Each view is a whole chart with its own legend and data table. The view that isn't shown is hidden from screen readers (`aria-hidden`) and can't be reached (`inert`). During a switch, about a second in Presentation, neither view can be read or reached.
+- **The two charts.** The donut's `<svg>` is `role="group"`, named "Shot outcomes, share of total", and its slices are named as in section D ("Saved: 112 shots, 28%"). The columns' is named "Shot outcomes, counts", and each column "Saved: 112 shots".
+- **The button.** "Show as columns" is a plain button whose name is the view a click goes to. It changes as soon as it's pressed, to "Show as donut", and focus stays on it. A second press mid-way switches back.
+- **The announcement.** When a switch lands, a polite live region says the new view's name: "Shot outcomes, counts" or "Shot outcomes, share of total".
+- **Focus follows its key.** With a slice or column focused, V switches too. When the switch lands, focus is on the same outcome in the other view, with its focus ring.
+- **The Morph buttons.** "Drop" and "Unroll" are toggle buttons in a group named "Morph". They change how the shapes move, not what's read; a press rebuilds the switch in the view it was showing, with focus staying on the button.
+
+**Setup.** Run `npm run dev` and open `morph.html` at the address Vite prints, for example `http://localhost:5173/morph.html`. **Reload before you start**, so the page is fresh: the donut showing, in Presentation. Leave the motion on Presentation, so each switch takes about a second. The page's tab order: the three motion buttons, "Show as columns", the two Morph buttons (Drop, Unroll), the chart shown (one stop), then its "Data table". Use NVDA + Chrome, with the setup from [A](#a-nvda--chrome-windows). V reaches the page only in focus mode; in browse mode NVDA keeps letter keys for itself.
+
+**Listen for:**
+
+1. Each slice and column is read **once, as one item**: "Saved: 112 shots, 28%" on the donut, "Saved: 112 shots" on the columns.
+2. The button is read by the view it goes to: "Show as columns", then "Show as donut" after a press.
+3. After each switch, the new view's name is announced once, about a second after the key press, without you moving anywhere.
+4. After V on a slice, the same outcome is read in the columns ("Saved: 112 shots"), and after V on a column, in the donut.
+5. Only the view shown is read. Reading down the card never reaches the other view's slices or columns, its legend or its table, and T finds one table.
+6. Nothing is read that you can't see, apart from the table's caption and the announcement.
+
+**Known, no need to report:** after V, NVDA may read the new chart's name twice: once as the group focus moves into, and once as the announcement. Do say if it's too much.
+
+**NVDA + Chrome**, starting in browse mode:
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 7 times from the top of the page, until focus reaches the donut's first slice. | On the way: "Show as columns, button", "Morph, grouping, Drop, toggle button, not pressed", "Unroll, toggle button, pressed". Then "Shot outcomes, share of total, grouping", perhaps with "406 shots", then "Goal: 58 shots, 14%, graphic". | |
+| 2 | NVDA+Space (focus mode), then Right arrow. | "Saved: 112 shots, 28%, graphic". | |
+| 3 | Press V. | Nothing for about a second while the slices turn into columns. Then "Shot outcomes, counts, grouping", "Saved: 112 shots, graphic", and the announcement "Shot outcomes, counts". The focus ring is on the Saved column. | |
+| 4 | Right arrow, then Left arrow. | "Off target: 149 shots, graphic", then "Saved: 112 shots, graphic". Never a share ("28%"): those are the donut's. | |
+| 5 | Press V again. | After about a second, "Shot outcomes, share of total, grouping", "Saved: 112 shots, 28%, graphic", and "Shot outcomes, share of total". The focus ring is on the Saved slice. | |
+| 6 | Escape, then NVDA+Space (browse mode). Shift+Tab 3 times, to "Show as columns". Press Space. | "Show as columns, button". Then perhaps "Show as donut", as the name changes, and after about a second, "Shot outcomes, counts". | |
+| 7 | Press NVDA+Tab. | "Show as donut, button": focus stayed on the button. | |
+| 8 | Press Down arrow until you reach the heading "Two ways to morph". | "Morph", the Drop and Unroll buttons, the legend ("Goal", "Saved", "Off target", "Blocked"), "Shot outcomes, counts, grouping", the four columns ("Goal: 58 shots, graphic" … "Blocked: 87 shots, graphic"), "Data table, button, collapsed", then "Two ways to morph, heading, level 2". **Never** a slice, a share or the donut's "406 shots", and the legend only once. | |
+| 9 | Press Shift+Tab until you're back on "Show as donut" (about 4 times), then press Space twice, quickly. | "Show as donut, button", then perhaps "Show as columns" and "Show as donut" as the name changes back. The columns start to turn into slices and go back. After about a second, one announcement: "Shot outcomes, counts". | |
+| 10 | Press Tab 4 times, to "Data table". Press Space. | On the way, "Shot outcomes, counts, grouping" and "Goal: 58 shots, graphic". Then "Data table, button, collapsed", then "expanded". | |
+| 11 | Press T (next table). If nothing happens, press NVDA+Space until NVDA says "Browse mode", then T. | "Shot outcomes, counts, table with 5 rows and 2 columns", then "row 1, column 1, Outcome". | |
+| 12 | Press T again. | "No next table": the donut's table is hidden with the donut. | |
+| 13 | Shift+Tab until you reach "Drop" (about 3 times), and press Space. | "Drop, toggle button, not pressed", then "pressed". Nothing else: the switch is rebuilt, still showing the columns, and focus stays on Drop. | |
+
+If the announcement in steps 3, 5, 6 or 9 isn't heard, or is heard before the switch lands, say so: the live region is written when the switch lands, and could move.
+
 ## Re-check after M2 step 7
 
 M2 step 7 gave each bar of the library's chart a description: the player's position. The roles, names, table and announcements are unchanged, so only these need hearing again:
@@ -251,6 +295,8 @@ If a description isn't read at all, that's acceptable: the position is also in t
 - the D3 line's two lines were each read once, by name.
 
 The names, descriptions and roles stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
+
+**The morph page (section F):** not run yet.
 
 Template for the next run:
 

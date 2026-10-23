@@ -8,15 +8,14 @@ import * as testing from "./testing";
 /** Stands for a type in the lists below: its type argument has to exist, or typecheck fails. */
 const type = <T>(): T | undefined => undefined;
 
-/** The promised values. A dotted name is a member of a promised object. */
+/**
+ * The promised values, by the names CHANGELOG gives them: `describe`'s members one by one, `matrix`
+ * as a whole. So `matrix` stands for all of its members, which are each named here.
+ */
 const values = {
   defineEffect: lib.defineEffect,
   defineDataEffect: lib.defineDataEffect,
-  "matrix.translate": lib.matrix.translate,
-  "matrix.rotate": lib.matrix.rotate,
-  "matrix.scale": lib.matrix.scale,
-  "matrix.multiply": lib.matrix.multiply,
-  "matrix.apply": lib.matrix.apply,
+  matrix: [lib.matrix.translate, lib.matrix.rotate, lib.matrix.scale, lib.matrix.multiply, lib.matrix.apply],
   offset: lib.offset,
   "describe.bar": lib.describe.bar,
   "describe.arc": lib.describe.arc,
@@ -106,25 +105,26 @@ async function readChangelog(): Promise<string> {
   return fs.readFile(new URL("../CHANGELOG.md", import.meta.url), "utf8");
 }
 
-/** The names in the promise's lists: each `code` span that's a name, up to "From 0.1.0:", with `describe.bar` read as `describe`. */
+/** The names in the promise's lists, as written: each `code` span that's a name (`describe.bar` too), up to "From 0.1.0:". */
 function promisedNames(changelog: string): string[] {
   const start = changelog.indexOf("## The 0.x promise");
   const end = changelog.indexOf("From 0.1.0:", start);
   if (start < 0 || end < 0) throw new Error('CHANGELOG.md has no "## The 0.x promise" section ending at "From 0.1.0:".');
   const spans = [...changelog.slice(start, end).matchAll(/`([^`]+)`/g)].map((match) => match[1]!);
-  return unique(spans.filter((span) => /^[A-Za-z]\w*(\.\w+)?$/.test(span)).map(topLevel));
+  return unique(spans.filter((span) => /^[A-Za-z]\w*(\.\w+)?$/.test(span)));
 }
 
-const topLevel = (name: string): string => name.split(".")[0]!;
 const unique = (names: readonly string[]): string[] => [...new Set(names)].sort();
 
 describe("the 0.x promise", () => {
   it("exports every promised value", () => {
-    for (const [name, value] of Object.entries(values)) expect(["function", "object"], name).toContain(typeof value);
+    for (const [name, value] of Object.entries(values)) {
+      for (const part of [value].flat()) expect(["function", "object"], name).toContain(typeof part);
+    }
   });
 
   it("names the same values and types as CHANGELOG.md", async () => {
     const names = promisedNames(await readChangelog());
-    expect(names).toEqual(unique([...Object.keys(values).map(topLevel), ...Object.keys(types)]));
+    expect(names).toEqual(unique([...Object.keys(values), ...Object.keys(types)]));
   });
 });

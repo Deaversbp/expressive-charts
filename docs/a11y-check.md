@@ -2,7 +2,7 @@
 
 This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3), [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html` (M4), and [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html` (M5). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
 
-**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026).**
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).**
 
 A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to send back.
 
@@ -296,7 +296,15 @@ If a description isn't read at all, that's acceptable: the position is also in t
 
 The names, descriptions and roles stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
 
-**The morph page (section F):** not run yet.
+**The morph page (section F), NVDA + Chrome on Windows, 23 October 2026: passed.** You reported that all 13 steps sounded as expected, so every "Listen for" item passed:
+- each slice and column was read once, as one item;
+- the button was read by the view it goes to, "Show as columns" and then "Show as donut";
+- each switch announced the new view's name once it landed;
+- after V, focus was read on the same outcome in the other view, both ways;
+- only the view shown was read, and T found one table;
+- nothing was read that can't be seen, apart from the table's caption and the announcement.
+
+The switch's names, roles, announcement and V key stay as built. The Speech Viewer text and the versions weren't recorded. VoiceOver + Safari hasn't been run on this page.
 
 Template for the next run:
 

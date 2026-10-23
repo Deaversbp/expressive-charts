@@ -1,12 +1,14 @@
 // The conformance checks from plan §8, through checkEffect, for every built-in effect on every kind
 // of mark (the testing entry's fixtures): a full run ends with the same picture and mark style as
 // end(), clearing leaves nothing, an abort mid-run settles, with motion off no frames run, and a
-// change() to the fixture's moved twin leaves what end() draws there.
+// change() to the fixture's moved twin leaves what end() draws there. Transition effects go through
+// checkTransition, on the fixture pairs.
 
-import type { AnyMarkEffect, Icon, MarkData, Sample } from "../core";
-import { checkEffect, type CheckEffectOptions } from "../testing";
+import type { AnyMarkEffect, Icon, MarkData, Sample, TransitionEffect } from "../core";
+import { checkEffect, checkTransition, type CheckEffectOptions } from "../testing";
 import { only, parallel, sequence, stagger } from "./combinators";
 import { flash } from "./flash";
+import { morph } from "./morph";
 import { pulse } from "./pulse";
 import { threshold } from "./threshold";
 import { travel } from "./travel";
@@ -79,5 +81,20 @@ const options: Record<string, CheckEffectOptions> = {
 describe.each(Object.entries(effects))("%s", (name, effect) => {
   it("passes the conformance checks on every kind of mark", async () => {
     await checkEffect(effect, { name, ...options[name] });
+  });
+});
+
+// Transition effects, through checkTransition, on every fixture pair both ways: the four checks
+// above, a run from start: 0.5, and a run back from 1 - p retracing the run forward at p.
+const transitions: Record<string, TransitionEffect> = {
+  morph: morph(),
+  "morph, unrolled": morph({ align: "unroll" }),
+  "morph, dropped": morph({ align: "drop" }),
+  "morph with 8 points, dropped": morph({ points: 8, align: "drop" })
+};
+
+describe.each(Object.entries(transitions))("%s", (name, effect) => {
+  it("passes the transition checks on every fixture pair", async () => {
+    await checkTransition(effect, { name });
   });
 });

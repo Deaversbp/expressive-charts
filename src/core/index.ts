@@ -58,6 +58,7 @@ export type {
   Sample,
   TextHandle,
   TextStyle,
+  TransitionContext,
   TransitionEffect
 } from "./contracts";
 

@@ -6,6 +6,7 @@ export { flash, type FlashOptions } from "./flash";
 export { wiggle, type WiggleOptions } from "./wiggle";
 export { pulse, type PulseOptions } from "./pulse";
 export { threshold, type ThresholdOptions } from "./threshold";
+export { morph, type MorphAlign, type MorphOptions } from "./morph";
 export { gaits, type Gait, type GaitName, type GaitPose, type GaitState, type StepOptions } from "./gaits";
 export { only, parallel, sequence, stagger, type StaggerOptions } from "./combinators";
 export { defineDataEffect, defineEffect, type DataEffectSpec, type GeometryEffectSpec } from "./define";

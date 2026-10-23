@@ -50,12 +50,29 @@ export interface DataEffect<D = unknown> {
   readonly clear: (ctx: EffectContext) => void;
 }
 
+/**
+ * A transition run's context. While a transition plays, both views' marks are hidden, so `mark` does
+ * nothing and `onChange` never fires: a resize lands the transition instead.
+ */
+export interface TransitionContext extends EffectContext {
+  /**
+   * Where the run begins, from 0 to 1, in the effect's own progress (morph's is the shapes' eased
+   * progress). 0 plays it all. A switch back mid-way plays the reverse pair from 1 minus the progress
+   * the first had reached, so an effect that honours it retraces; one that ignores it replays from its
+   * beginning.
+   */
+  readonly start: number;
+}
+
 /** Morph and future chart-to-chart transitions: from one geometry to another. */
 export interface TransitionEffect {
   readonly kind: "transition";
-  run(from: MarkGeometry, to: MarkGeometry, ctx: EffectContext): Promise<void>;
-  end(from: MarkGeometry, to: MarkGeometry, ctx: EffectContext): void;
-  clear(ctx: EffectContext): void;
+  /** Resolves when done or cancelled, leaving `to`'s end state drawn until cleared. */
+  run(from: MarkGeometry, to: MarkGeometry, ctx: TransitionContext): Promise<void>;
+  /** Draws the final state immediately, on a fresh context. Used when the effective mode is off. */
+  end(from: MarkGeometry, to: MarkGeometry, ctx: TransitionContext): void;
+  /** Extra cleanup beyond what the player does. */
+  clear(ctx: TransitionContext): void;
 }
 
 /** What combinators accept: any mark effect, whatever rows it reads. */

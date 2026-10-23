@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart, a donut chart and a line chart, the `expressive()` adapter for marks drawn by other code (and `fromVegaView()` for Vega and Vega-Lite), icons, the first effects (`travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-donut-and-line-charts-travel-and-the-adapter)). `morph` is still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart, a donut chart and a line chart, the `expressive()` adapter for marks drawn by other code (and `fromVegaView()` for Vega and Vega-Lite), icons, the first effects (`travel`, `flash`, `wiggle`, `pulse`, the data effect `threshold` and the transition effect `morph`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-donut-and-line-charts-travel-and-the-adapter)). Switching between charts with `morph` (`chartSwitch`) is still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -232,6 +232,17 @@ const pastTarget = threshold({ compareTo: 10, when: "above", color: "series-1-st
 barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { decorate: pastTarget } });
 ```
 
+`morph()` is the first transition effect: it turns one mark's shape into another's, as the lab's donut turns into columns. It plays between two views of a mark rather than on one, so it doesn't go in `on`: the chart switch, still to come in M5, plays it on each pair of marks with the same key. Two areas (bars, slices, points) are sampled at `points` (default 160) and each point moves in a straight line to its partner, in the mark's colour; two lines morph along their strokes, their width too; an area and a line crossfade. It takes 950 ms in Presentation, 200 in Analysis, and none with motion off, and a switch back mid-way retraces from where the shapes are:
+
+```js
+import { morph } from "expressive-charts";
+
+const drop = morph({ align: "drop" });     // a slice's outer arc becomes the column's top: it settles onto the baseline
+const unroll = morph({ align: "unroll" }); // side to side: the slice stands up, its arc becoming the column's side
+```
+
+`"unroll"` is the default for now; the morph demo is where it's chosen.
+
 `motionSwitch()` is the viewer's own control: Presentation, Analysis and Off as buttons with `aria-pressed`, and a note on what the mode does. A click is the viewer's choice, so it overrides the device's reduced-motion setting; until then, Off is pressed and the note says why. It follows the motion whoever changes it, and `persist` (opt-in) keeps the choice in `localStorage`:
 
 ```js
@@ -322,7 +333,7 @@ fromVegaView(view, {
 });
 ```
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar, donut and line charts, [Adapters](docs/architecture.md#adapters) for `expressive()` and `fromVegaView()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, `morph`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar, donut and line charts, [Adapters](docs/architecture.md#adapters) for `expressive()` and `fromVegaView()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
 
 ## Writing effects
 
@@ -354,7 +365,9 @@ import { checkEffect } from "expressive-charts/testing";
 await checkEffect(underline); // throws one Error listing every check that failed, on every kind of mark
 ```
 
-The [effects guide](docs/effects-guide.md) covers the mark contract, drawing, timing, end states, keeping data readable, data effects, composing and testing, with two worked examples and a review checklist. This author API is covered by the 0.x promise in [CHANGELOG.md](CHANGELOG.md): from 0.1.0, it breaks only in a minor release, with a migration note.
+A transition effect, which plays between two views of a mark as `morph` does, has `checkTransition(effect)`: the same checks on pairs of marks, both ways, plus a run from part way and a check that a switch back retraces.
+
+The [effects guide](docs/effects-guide.md) covers the mark contract, drawing, timing, end states, keeping data readable, data effects, composing, testing, and transition effects with `checkTransition`, with two worked examples and a review checklist. This author API is covered by the 0.x promise in [CHANGELOG.md](CHANGELOG.md): from 0.1.0, it breaks only in a minor release, with a migration note.
 
 ## Demo
 

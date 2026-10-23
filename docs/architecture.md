@@ -823,11 +823,16 @@ SVG first, in `src/charts/render/`. Canvas or WebGL rendering is a later option 
 
 ## Build outputs
 
-- `dist/index.js` + `dist/index.d.ts`: ES module for npm and bundlers.
+- `dist/index.js` + `dist/index.d.ts`: ES module for npm and bundlers, under the `import` condition.
+- `dist/index.cjs` + `dist/index.d.cts`: CommonJS, under the `require` condition. The package is `"type": "module"`, so a `.d.ts` file describes an ES module: each entry's `require` condition has its own `.d.cts`, or a CommonJS project resolving with `node16` would be given ES module types for the `.cjs` file.
 - `dist/expressive-charts.global.js`: script-tag bundle exposing `window.ExpressiveCharts`.
 - `dist/expressive-charts.css`: the stylesheet the charts inject, as a file, exported as `expressive-charts/style.css` for pages that use `configure({ injectStyles: false })`. `package.json` lists CSS in `sideEffects`, so bundlers keep `import "expressive-charts/style.css"`, which imports no names; webpack would otherwise drop it. `src/package.test.ts` checks the patterns as bundlers read them, since the repo's own bundlers (Vite 8, esbuild) keep the import either way.
-- `dist/icons/sport.js`, `.cjs` and `.d.ts`: the optional sport icon pack, imported as `expressive-charts/icons/sport`. It's a separate entry, so the core build doesn't carry the ball and cleat. The script-tag bundle doesn't include it.
-- `dist/testing.js`, `.cjs` and `.d.ts`: the conformance suite for effect authors, imported as `expressive-charts/testing`. A separate entry, like the sport pack, and not in the script-tag bundle.
+- `dist/icons/sport.js`, `.cjs`, `.d.ts` and `.d.cts`: the optional sport icon pack, imported as `expressive-charts/icons/sport`. It's a separate entry, so the core build doesn't carry the ball and cleat. The script-tag bundle doesn't include it.
+- `dist/testing.js`, `.cjs`, `.d.ts` and `.d.cts`: the conformance suite for effect authors, imported as `expressive-charts/testing`. A separate entry, like the sport pack, and not in the script-tag bundle.
+- **The package** is `dist/` and `CHANGELOG.md` (`files` in `package.json`), with the README, the licence and `package.json`, which npm always adds. It's about 1.2 MB packed and 4.5 MB unpacked, most of that source maps, which stay because bundlers and debuggers use them. `scripts/pack-check.mjs` installs the packed tarball in a new project and uses it from there: every entry imported in Node as ES modules and as CommonJS with no DOM, and a consumer typechecked under `bundler`, `node16` (ES module) and `node16` (CommonJS), each reading its own declarations. CI runs it after the build.
+- **Types** need TypeScript 5.4 or newer, since they use `NoInfer`. The repository builds with TypeScript 5.9.3, pinned exactly. TypeScript 7 waits until after 0.1.0, since tsup's declaration build uses TypeScript's JS API.
+- **Releases** are published by `.github/workflows/release.yml` when a GitHub release whose tag is `v` and the version is published, with npm's provenance statement (`publishConfig` asks for it, with public access). It runs CI's checks first. CONTRIBUTING.md's Releasing has the steps and the authentication: a token for 0.1.0, then trusted publishing.
+- **The 0.x promise** in CHANGELOG.md names every value and type it covers. `src/promise.test.ts` names them all too, so a rename or a removal fails `typecheck`, and it checks that its list and CHANGELOG's match.
 
 ### Bundle size
 

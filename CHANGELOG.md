@@ -10,9 +10,12 @@ The library follows [semantic versioning](https://semver.org) from 0.1.0, with t
 
 - `defineEffect` and `defineDataEffect`, with `GeometryEffectSpec` and `DataEffectSpec`;
 - `matrix` and `offset`;
-- `describe.bar`, `describe.arc`, `describe.line` and `describe.point`;
-- the effect contracts (`GeometryEffect`, `DataEffect`, `TransitionEffect`, `MarkEffect`, `AnyMarkEffect`, `Combined`), the contexts (`EffectContext`, `TransitionContext`), the mark and its data (`MarkGeometry`, `Outline`, `MarkData`, `Sample`), and the drawing API (`Layer`, `MarkHandle`, `MarkStyle`, `Matrix`, `Paint`, `TextStyle`, the handles, `Color`);
-- `expressive-charts/testing`: `checkEffect`, `checkTransition`, `fixtures`, `fixturePairs`, `testContext` and `play`.
+- `describe.bar`, `describe.arc`, `describe.line` and `describe.point`, with their specs: `BarSpec`, `BarSegmentSpec`, `Baseline`, `ArcSpec`, `LineSpec` and `PointSpec`;
+- the effect contracts (`GeometryEffect`, `DataEffect`, `TransitionEffect`, `MarkEffect`, `AnyMarkEffect`, `Combined`), the contexts (`EffectContext`, `TransitionContext`), the mark and its data (`MarkGeometry`, `Outline`, `Point`, `Rect`, `MarkData`, `Sample`), the drawing API (`Layer`, `MarkHandle`, `MarkStyle`, `Matrix`, `Paint`, `TextStyle`, `Color`, and the handles `IconHandle`, `PathHandle` and `TextHandle`), and icons as an effect gets them (`Icon`, `IconShape`, `IconSource`);
+- the motion types the context uses: `MotionView`, `MotionMode`, `Timing`, `Tween`, `TweenOptions`, `TweenResult` and `Easing`;
+- `expressive-charts/testing`: `checkEffect`, `checkTransition`, `fixtures`, `fixturePairs`, `testContext` and `play`, with their options (`CheckEffectOptions`, `CheckTransitionOptions`, `TestContextOptions`, `PlayOptions`), the fixtures' names (`FixtureName`, `FixturePairName`), the test context (`TestContext`) and what it records (`RecordingLayer`, `RecordingMark`, `Drawn`, `DrawnIcon`, `DrawnPath`, `DrawnText`, `LayerCall`, `MarkCall`, `Picture`), and the motion types they use: `Motion`, `Clock`, `ManualClock`, `ScalingOverrides` and `ScalingRule`.
+
+That's every type these names use, so code written against them needs nothing outside the list. A test imports every name in it, so none can be renamed or removed by accident.
 
 From 0.1.0:
 
@@ -20,7 +23,7 @@ From 0.1.0:
 - **A deprecated name keeps working for one minor release.** It's marked `@deprecated` with its replacement, and removed in the minor release after that.
 - Additions (a new optional field, a new helper) can come in any release.
 
-The rest of the API (charts, adapters, built-in effects, controls) can still change in a minor release while the library is 0.x; those changes are listed here too. [docs/effects-guide.md](docs/effects-guide.md) is the guide to the author API.
+Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](docs/effects-guide.md) is the guide to the author API.
 
 ## Unreleased
 
@@ -45,3 +48,7 @@ The rest of the API (charts, adapters, built-in effects, controls) can still cha
 - `expressive()`'s hovered mark under `dim: true` takes its strong colour as our charts' marks do: its colour stepped a quarter of the way toward `--ec-text` (in OKLab), so lighter in the dark theme rather than mixed with black in both. `emphasis` on host marks mixes toward the same colour.
 - `expressive()` reads a `<rect>` through its parent's coordinates and its own `transform` attribute, no longer through its own screen CTM, so the CSS transform an effect gives a bar is never read back as geometry. A CSS transform a host puts on the rect element itself isn't seen either (on its groups, it still is).
 - `onChange` listeners in the `update` slot get data that keeps the previous values the run was given, so `stagger` and `sequence` no longer drop them when they start an effect on the latest data.
+- **CommonJS gets its own types.** Each entry's `require` condition points at `.d.cts` declarations, so a CommonJS project resolving with `node16` is given CommonJS types for the `.cjs` file it loads. `import` keeps the `.d.ts` files.
+- The package includes this changelog, where the promise is.
+- The types need TypeScript 5.4 or newer, since they use `NoInfer`.
+- The 0.x promise names every type its names use, and says that the motion core is outside it.

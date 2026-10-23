@@ -1886,7 +1886,7 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
    - **Where the plan and the code differ:**
      - **No contained fix.** In a 1,000-bar update, 77% of attribute writes set the value already there, and in a ten-year play 98.8% (every day's hit column and `tabindex`, on every frame). Skipping them in `setAttributes` and the keyboard's `tabindex` was tried, but no gain could be shown above the drift of a shared machine, and one comparison made a bar update slower, so it's in the backlog. The date axis's `Date` per vertex costs 0.09 ms a frame on ten years (1% of the play's script), so it has no cache.
      - Bar charts draw every label, so past about 40 bars they overlap; `a11y.spec.ts`'s text-spacing check skips this page.
-     - The walk with you and the Vega-Lite card's look are still to do.
+     - **The walk** (23 October 2026): you looked at the stress page and at the Vega-Lite card on `demo/line.html` (M4's leftover) in the browser, and both look fine. M4's ✅ still waits for section E's steps 13 and 14.
 7. **The accessibility audit** (decisions 2 and 12). Owns `docs/a11y-audit.md` (new), the Results in `docs/a11y-check.md`, `tests/visual/a11y.spec.ts` (new: `axe-core` on every demo page in both themes, at 320 px, under forced colours and mid-switch), `axe-core` in `package.json` (pinned), Firefox and WebKit in `playwright.config.ts` (decision 8), and the small fixes it finds.
    - **You run** section C and section E's steps 13 and 14 with NVDA + Chrome. When E 13–14 pass, M4 gets its ✅.
    - The stress page joins the axe list once step 6 has landed, whichever lands second.

@@ -74,6 +74,7 @@
   "scripts": {
     "dev": "vite demo",
     "build": "tsup",
+    "size": "node scripts/size.mjs",
     "pack-check": "node scripts/pack-check.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

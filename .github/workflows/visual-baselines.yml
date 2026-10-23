@@ -16,7 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: npm ci
-      - run: npm run test:visual -- --update-snapshots
+      # Only Chromium has baselines: Firefox and WebKit run the DOM checks alone.
+      - run: npm run test:visual -- --update-snapshots --project=chromium
       - uses: actions/upload-artifact@v7
         if: always()
         with:

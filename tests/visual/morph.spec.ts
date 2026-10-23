@@ -231,7 +231,8 @@ test.describe("the screen reader", () => {
   const donutView = ["group: Shot outcomes, share of total", "image: Goal: 58 shots, 14%", "image: Saved: 112 shots, 28%", "image: Off target: 149 shots, 37%", "image: Blocked: 87 shots, 21%", "DisclosureTriangle: Data table"];
   const columnsView = ["group: Shot outcomes, counts", "image: Goal: 58 shots", "image: Saved: 112 shots", "image: Off target: 149 shots", "image: Blocked: 87 shots", "DisclosureTriangle: Data table"];
 
-  test("only the view shown can be read, and the switch announces the new one", async ({ page }) => {
+  test("only the view shown can be read, and the switch announces the new one", async ({ page, browserName }) => {
+    test.skip(browserName !== "chromium", "It reads Chrome's accessibility tree, over CDP.");
     await openDemo(page, morphDemo);
     expect(await readable(page)).toEqual(donutView);
 

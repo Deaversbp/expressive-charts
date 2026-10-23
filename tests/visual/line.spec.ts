@@ -39,13 +39,23 @@ async function openAtRest(page: Page): Promise<void> {
   await page.clock.runFor(REST);
 }
 
-/** Moves the pointer onto a goals line, `share` of the way along it: hover() would aim at its box's middle, off the stroke. */
+/**
+ * Moves the pointer onto a goals line, about `share` of the way along it: hover() would aim at its
+ * box's middle, off the stroke. Firefox's pointer lands on whole pixels, so it aims at the first whole
+ * pixel on or after that point that's on the stroke.
+ */
 async function hoverD3Goals(page: Page, share = 0.3, path: Locator = d3Path(page, "goals")): Promise<void> {
   const point = await path.evaluate((element, along) => {
     const path = element as SVGPathElement;
-    const at = path.getPointAtLength(path.getTotalLength() * along);
-    const screen = new DOMPoint(at.x, at.y).matrixTransform(path.getScreenCTM() ?? undefined);
-    return { x: screen.x, y: screen.y };
+    const length = path.getTotalLength();
+    for (let step = 0; step < 200; step++) {
+      const at = path.getPointAtLength(Math.min(length, length * along + step * 0.5));
+      const screen = new DOMPoint(at.x, at.y).matrixTransform(path.getScreenCTM() ?? undefined);
+      const x = Math.round(screen.x);
+      const y = Math.round(screen.y);
+      if (document.elementFromPoint(x, y) === path) return { x, y };
+    }
+    throw new Error("No whole pixel on the line's stroke.");
   }, share);
   await page.mouse.move(point.x, point.y);
 }

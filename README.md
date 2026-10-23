@@ -408,12 +408,13 @@ The dev server's index links the demos built on the library:
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Serves the `demo/` folder with live reload |
-| `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` and `testing` entries), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
+| `npm run build` | Builds the npm package (ESM + CommonJS, each with its own types, with the `icons/sport` and `testing` entries), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
+| `npm run pack-check` | After a build: packs the package, installs it in a new project and checks every entry as ESM and CommonJS, with its types (see [CONTRIBUTING.md](CONTRIBUTING.md#setup)) |
 | `npm test` | Runs the test suite |
 | `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html`, `demo/donut.html`, `demo/line.html` and `demo/morph.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
 | `npm run typecheck` | Checks types without building |
 
-Requires Node.js 22 or newer (CI tests 22 and 24).
+Requires Node.js 22 or newer (CI tests 22 and 24). A project that uses the package's types needs TypeScript 5.4 or newer, since they use `NoInfer`.
 
 See [docs/architecture.md](docs/architecture.md) for how the layers fit together and [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a chart or an effect.
 

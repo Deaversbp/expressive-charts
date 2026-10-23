@@ -177,6 +177,21 @@ describe("chartHover", () => {
     expect(heard).toEqual(["hover pointer"]);
   });
 
+  it("moves focus with focus(key) as a key press would, after a click too, and only to a live target", () => {
+    const { heard, rings, hover, mark, live } = setup();
+    mark("b").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse" }));
+    hover.focus("b");
+    expect(document.activeElement).toBe(mark("b"));
+    expect(hover.ringKey).toBe("b");
+    expect(hover.key).toBe("b");
+    expect(heard).toEqual(["hover keyboard"]);
+    live.delete("c");
+    hover.focus("c");
+    hover.focus("z");
+    expect(document.activeElement).toBe(mark("b"));
+    expect(rings).toEqual(["b"]);
+  });
+
   it("ends a hover whose mark has left", () => {
     const { live, heard, hover, mark } = setup();
     pointer("pointerover", mark("c"));

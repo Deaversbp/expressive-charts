@@ -5,9 +5,9 @@
  * the sketch builds on the real thing: the motion core, the shared contracts (MarkGeometry,
  * MarkData, the drawing API, EffectContext, the effect kinds, Icon, the effect slots), the geometry
  * (describe.bar, .arc, .line, .point, matrix, offset), the preset and icon registries
- * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
- * options, accessors, colorAssignment), the donut chart's options, the line chart's options and handle
- * (LineChartOptions, LineChart with reveal), the icons (defineIcon, iconFromSvg, icons), the first
+ * (registerPreset, registerIcon, registerIcons), the reference charts (barChart, donutChart and
+ * lineChart, with their options, mark events, accessors, colorAssignment and handles, LineChart's with
+ * reveal), the icons (defineIcon, iconFromSvg, icons), the first
  * effects (travel with its gaits, flash, wiggle, pulse, threshold, sequence, parallel, only, stagger), the
  * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch, playback with its
  * playButton, and the adapters, expressive() with its types (MarkSource, Attachment, ExpressiveOptions) and
@@ -18,14 +18,9 @@
 
 export * from "../../src/index";
 import type {
-  BarChartOptions as BuiltBarChartOptions,
-  Chart as BuiltChart,
   ChartOptions as BuiltChartOptions,
   ColorAssignment,
   describe as builders,
-  DonutChartOptions,
-  LineChart as BuiltLineChart,
-  LineChartOptions,
   MarkEvents,
   MarkGeometry,
   Sample,
@@ -74,7 +69,7 @@ export declare function morph(options?: { readonly points?: number }): Transitio
 // so the `update` slot no longer collides with `chart.update()`. MarkEvent and MarkEvents are built,
 // in src/charts.
 
-/** What reference charts and adapters have in common. focus() comes with keyboard support (M1 step 9). */
+/** What reference charts and adapters have in common. focus() came with keyboard support to the adapter (M1 step 9), and to the charts' handles in M5 step 2. */
 export interface MarkSourceHandle<D> {
   on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void;
   marks(): readonly MarkGeometry[];
@@ -114,31 +109,17 @@ export declare const describe: typeof builders & {
 // ── Reference charts ─────────────────────────────────────────────────────────
 
 // KeyOfType, Accessor, NumericKey, ColorAssignment and colorAssignment are built, in src/charts. So are
-// the chart options (tooltips and the data table too, since M2) and the chart handle; the sketch adds
-// what's still planned to the handle.
+// the three reference charts, barChart (M1 step 5), donutChart (M3 step 4) and lineChart (M4 step 5),
+// with their options (tooltips and the data table too, since M2) and their handles, which have
+// focus(key) and labels() since M5 step 2, so they're no longer declared here. Changed from the sketch:
+// the donut's `category` names each slice (the sketch's `key` is the optional key, as on bars); the
+// line chart's x is a number for now (M4 decision 3; dates come by M6), it has no `pointer` option,
+// since the crosshair is its hover (M4 decision 9), and `labels` words its end labels. NEW in M5:
+// barChart's `colorBy: "category"` colours each bar by its key, so a ColorAssignment shared with a
+// donut keeps each category's colour (M5 decision 8).
 
 /** NEW NoInfer on `on` (built): without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
 export interface ChartOptions<D> extends BuiltChartOptions<D> {}
-
-export interface Chart<D, O> extends BuiltChart<D, O>, MarkSourceHandle<D> {}
-
-export interface BarChartOptions<D> extends BuiltBarChartOptions<D> {}
-
-// LineChartOptions and the LineChart handle (with reveal) are built (M4 step 5, src/charts). Changed from
-// the sketch: x is a number for now (M4 decision 3; dates come by M6), there's no `pointer` option,
-// since the crosshair is the line chart's hover (decision 9), and `labels` words the end labels.
-export interface LineChart<D> extends BuiltLineChart<D>, MarkSourceHandle<D> {}
-
-/** Built in M1 step 5 (src/charts); declared here until its handle has focus(). */
-export declare function barChart<D>(target: string | Element, options: BarChartOptions<D>): Chart<D, BarChartOptions<D>>;
-/** Built in M4 step 5 (src/charts), with its options; declared here until its handle has focus(), like barChart. */
-export declare function lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D>;
-/**
- * Built in M3 step 4 (src/charts), with its options, which are the real DonutChartOptions (`category`
- * names each slice; the sketch's `key` is the optional key, as on bars). Declared here until its
- * handle has focus(), like barChart.
- */
-export declare function donutChart<D>(target: string | Element, options: DonutChartOptions<D>): Chart<D, DonutChartOptions<D>>;
 
 export interface ChartSwitch<V extends string> {
   show(view: V): Promise<void>;

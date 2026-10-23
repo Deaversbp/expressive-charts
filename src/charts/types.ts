@@ -185,6 +185,13 @@ export interface BarChartOptions<D> extends ChartOptions<D> {
   readonly sort?: "value" | "key" | "none" | ((a: D, b: D) => number);
   /** "horizontal": bars, categories along y. "vertical": columns, categories along x. */
   readonly orientation?: "horizontal" | "vertical";
+  /**
+   * Default "series": each segment takes its series' slot through `colors`, and the legend lists the
+   * series. "category": each bar takes its own slot, by its key (its category unless `key` is given),
+   * as a donut's slice does, so one `colors` assignment shared with a donut keeps each category's
+   * colour in both; the legend lists the categories. It needs one series: on a stack it throws.
+   */
+  readonly colorBy?: "series" | "category";
 }
 
 /** What a donut's `markLabel` is given beside the row: the slice as it's heading, as a bar's `MarkSummary` says it, and its share. */
@@ -252,6 +259,21 @@ export interface LineChart<D> extends Chart<D, LineChartOptions<D>> {
   reveal(x: number): void;
 }
 
+/** A mark's label as the chart draws it now: what a chart's `labels()` gives. */
+export interface ChartLabel {
+  /** The mark's key. */
+  readonly key: string;
+  /** "category": the mark's name (a bar's category, a slice's outside label). "value": its value (a bar's total, a slice's share, a line's end label). */
+  readonly role: "category" | "value";
+  readonly text: string;
+  /** Where its baseline's anchor point sits, in the chart's <svg> units (its viewBox), and how it's anchored there. */
+  readonly x: number;
+  readonly y: number;
+  readonly anchor: "start" | "middle" | "end";
+  /** The <text> as drawn, with the chart's classes, so a copy keeps the stylesheet's styling. */
+  readonly element: SVGTextElement;
+}
+
 export interface Chart<D, O> {
   /**
    * Changes options and animates to the new state, by the motion mode. Resolves when the change has
@@ -264,6 +286,19 @@ export interface Chart<D, O> {
   on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void;
   /** The marks now on screen, in visual order (leaving marks excluded): part way there while a change plays. */
   marks(): readonly MarkGeometry[];
+  /**
+   * Moves focus to the mark `key` as a key press would, whatever the last input was: the focus ring
+   * shows and its hover plays. On a line chart it's the x's focus stop: `key` is the x's key, or one
+   * of its points'. A key that isn't on screen (unknown, leaving, or past a line's reveal) does nothing.
+   */
+  focus(key: string): void;
+  /**
+   * Each mark's labels as drawn now, in the marks' visual order (leaving marks excluded): a bar's
+   * category and value, a slice's category and share outside the ring, a line's end label as its value.
+   * Labels that aren't shown (a slice's label dropped for room, a line's with `labels: false`) and empty
+   * ones are left out.
+   */
+  labels(): readonly ChartLabel[];
   readonly element: SVGSVGElement;
   /** Clears every effect and removes the chart. */
   destroy(): void;

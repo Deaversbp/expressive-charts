@@ -326,6 +326,64 @@ describe("donutChart: accessibility", () => {
     (document.activeElement as SVGElement).blur();
     expect(ring.getAttribute("visibility")).toBe("hidden");
   });
+
+  it("moves focus to a slice with focus(key) as a key press would, whatever the last input was", async () => {
+    const { svg, mark, chart, clock } = setup();
+    const events: string[] = [];
+    chart.on("hover", (e) => events.push(`hover ${e.mark.key} ${e.source}`));
+    const ring = svg.querySelector(".ec-overlay .ec-focus-ring")!;
+    pointer("pointerdown", document.body);
+    chart.focus("Off target");
+    expect(document.activeElement).toBe(mark("Off target"));
+    expect(mark("Off target").getAttribute("tabindex")).toBe("0");
+    expect(ring.getAttribute("visibility")).toBeNull();
+    expect(ring.getAttribute("d")).toBe(chart.marks()[2]!.outline.d);
+    expect(events).toEqual(["hover Off target keyboard"]);
+    // Unknown, or on its way out: nothing.
+    chart.focus("Penalty");
+    void chart.update({ data: shots.filter((shot) => shot.outcome !== "Goal") });
+    chart.focus("Goal");
+    expect(document.activeElement).toBe(mark("Off target"));
+    expect(events).toEqual(["hover Off target keyboard"]);
+    clock.advance(1000);
+  });
+});
+
+describe("donutChart: labels()", () => {
+  it("gives each slice's category and share outside the ring by key, as drawn, leaving out the centre and dropped labels", () => {
+    const { chart, mark, svg } = setup({ data: [...shots, { outcome: "Own goal", shots: 4 }] });
+    const labels = chart.labels();
+    expect(labels.map((label) => `${label.key} ${label.role} ${label.text}`)).toEqual([
+      "Goal category Goal",
+      "Goal value 14%",
+      "Saved category Saved",
+      "Saved value 27%",
+      "Off target category Off target",
+      "Off target value 36%",
+      "Blocked category Blocked",
+      "Blocked value 21%"
+    ]);
+    for (const label of labels) {
+      expect(label.element).toBe(mark(label.key).querySelector(label.role === "category" ? ".ec-label" : ".ec-value"));
+      expect([label.element.textContent, label.element.getAttribute("text-anchor")]).toEqual([label.text, label.anchor]);
+      expect(label.x).toBeCloseTo(Number(label.element.getAttribute("x")), 2);
+      expect(label.y).toBeCloseTo(Number(label.element.getAttribute("y")), 2);
+    }
+    // The share sits under its category.
+    expect(labels[1]!.y - labels[0]!.y).toBeCloseTo(15, 9);
+    // "Own goal" is under 15°, so its label isn't shown; the centre's text is no slice's.
+    expect(mark("Own goal").querySelector(".ec-label")!.getAttribute("visibility")).toBe("hidden");
+    const texts = new Set(labels.map((label) => label.element));
+    for (const center of Array.from(svg.querySelectorAll(".ec-center text"))) expect(texts.has(center as SVGTextElement)).toBe(false);
+  });
+
+  it("follows the slices as they're drawn, in their order, and has none for a total of 0", async () => {
+    const { chart, settle } = setup();
+    await settle(chart.update({ sort: "value" }));
+    expect(chart.labels().filter((label) => label.role === "category").map((label) => label.text)).toEqual(["Off target", "Saved", "Blocked", "Goal"]);
+    expect(chart.labels()[0]!.x).toBeGreaterThan(320);
+    expect(setup({ data: shots.map((shot) => ({ ...shot, shots: 0 })) }).chart.labels()).toEqual([]);
+  });
 });
 
 describe("donutChart: hover", () => {

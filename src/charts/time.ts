@@ -57,6 +57,9 @@ const LEVELS: readonly TimeLevel[] = ["year", "month", "day", "hour", "minute", 
 /** The level a step's boundaries are at, at least: a week starts on a day. */
 const UNIT_LEVEL: Readonly<Record<Unit, TimeLevel>> = { second: "second", minute: "minute", hour: "hour", day: "day", week: "day", month: "month", year: "year" };
 
+/** Milliseconds, as a fraction of a second ("1:00:00.100 PM"). ES2021's option, so it isn't in this build's lib. */
+const FRACTION = { fractionalSecondDigits: 3 } as Intl.DateTimeFormatOptions;
+
 /** What a time at each level says: the year on a year, the month on a month ("Feb"), the day on a day ("Feb 8"), the time within a day. */
 const FIELDS: Readonly<Record<TimeLevel, Intl.DateTimeFormatOptions>> = {
   year: { year: "numeric" },
@@ -65,7 +68,7 @@ const FIELDS: Readonly<Record<TimeLevel, Intl.DateTimeFormatOptions>> = {
   hour: { hour: "numeric", minute: "2-digit" },
   minute: { hour: "numeric", minute: "2-digit" },
   second: { hour: "numeric", minute: "2-digit", second: "2-digit" },
-  millisecond: { hour: "numeric", minute: "2-digit", second: "2-digit" }
+  millisecond: { hour: "numeric", minute: "2-digit", second: "2-digit", ...FRACTION }
 };
 
 /** The smallest step that can be `span` ms long, as the number axis rounds its step up. */
@@ -109,14 +112,18 @@ export function boundaries(lo: number, hi: number, step: TimeStep, zone: TimeZon
   const out: number[] = [];
   const start = partsOf(lo, zone);
   if (unit === "second" || unit === "minute" || unit === "hour") {
-    // Whole units by the zone's clock, stepped through elapsed time and kept where the clock's field is
-    // a multiple of `count`: an hour the clocks repeat has a tick each time, and one they skip has none.
-    const size = LONGEST[unit];
-    let t = lo - start.ms - (unit === "second" ? 0 : start.seconds * SECOND) - (unit === "hour" ? start.minutes * MINUTE : 0);
-    for (; t < hi; t += size) {
+    // Whole units by the zone's clock, found by stepping through elapsed time and kept where the clock
+    // shows a whole unit whose field is a multiple of `count`: an hour the clocks repeat has a tick each
+    // time, and one they skip has none. Hours are stepped a quarter of an hour at a time, since clocks
+    // change by whole quarter hours (Lord Howe Island's by half an hour), so a tick after the change is
+    // still on the hour.
+    const grain = unit === "hour" ? 15 * MINUTE : LONGEST[unit];
+    let t = lo - start.ms - (unit === "second" ? 0 : start.seconds * SECOND) - (unit === "hour" ? (start.minutes % 15) * MINUTE : 0);
+    for (; t < hi; t += grain) {
       const parts = partsOf(t, zone);
+      const whole = unit !== "hour" || parts.minutes === 0;
       const field = unit === "second" ? parts.seconds : unit === "minute" ? parts.minutes : parts.hours;
-      if (t > lo && field % count === 0) out.push(t);
+      if (t > lo && whole && field % count === 0) out.push(t);
     }
     return out;
   }
@@ -155,13 +162,21 @@ export function timeLevel(t: number, zone: TimeZone): TimeLevel {
 
 /**
  * How the chart says an x for people: a medium date in the page's locale ("Jan 5, 2026", or "5 Jan
- * 2026" in en-GB), with the time when any of `times` has one ("Jan 5, 2026, 3:00 PM"), and its seconds
- * when any has those.
+ * 2026" in en-GB), with the time when any of `times` has one ("Jan 5, 2026, 3:00 PM"), its seconds
+ * when any has those, and its milliseconds when any has those ("Jan 5, 2026, 3:00:00.100 PM"), so
+ * every x is said differently.
  */
 export function timeName(times: readonly number[], zone: TimeZone): (t: number) => string {
   const finest = times.reduce((max, t) => Math.max(max, LEVELS.indexOf(timeLevel(t, zone))), 0);
+  const timeZone = zoneOption(zone);
   const timeStyle = finest >= LEVELS.indexOf("second") ? "medium" : finest >= LEVELS.indexOf("hour") ? "short" : undefined;
-  const format = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", ...(timeStyle ? { timeStyle } : {}), timeZone: zoneOption(zone) });
+  // Intl's styles can't say a fraction of a second, so a time to the millisecond is said field by
+  // field, as the medium styles say the rest.
+  const options: Intl.DateTimeFormatOptions =
+    finest === LEVELS.indexOf("millisecond")
+      ? { year: "numeric", ...FIELDS.day, ...FIELDS.millisecond, timeZone }
+      : { dateStyle: "medium", ...(timeStyle ? { timeStyle } : {}), timeZone };
+  const format = new Intl.DateTimeFormat(undefined, options);
   return (t) => format.format(t);
 }
 

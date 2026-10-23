@@ -149,6 +149,10 @@ describe("timeTicks in UTC", () => {
     expect(texts("2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z")).toEqual(["2026"]);
   });
 
+  it("says milliseconds at an end that has them, so ends a fraction of a second apart differ", () => {
+    expect(texts("2026-01-01T12:00:00.100Z", "2026-01-01T12:00:00.900Z")).toEqual(["12:00:00.100 PM", "12:00:00.900 PM"]);
+  });
+
   it("words each level in the page's locale", () => {
     useLocale("en-GB");
     expect(texts("2026-02-05T13:00:00Z", "2026-02-09T13:00:00Z")).toEqual(["5 Feb, 13:00", "6 Feb", "7 Feb", "8 Feb", "9 Feb", "9 Feb, 13:00"]);
@@ -215,6 +219,22 @@ describe("timeTicks in local time, across daylight saving in New York", () => {
   });
 });
 
+describe("timeTicks in local time, across Lord Howe Island's half-hour clock change", () => {
+  inZone("Australia/Lord_Howe");
+
+  it("keeps hour ticks on the hour after the clocks go back half an hour", () => {
+    // Midnight to 3:30 AM on 5 April 2026: at 2 AM the clocks go back to 1:30, so it's four hours.
+    // Hourly steps, and the hours after the change are 15:30 and 16:30 in UTC.
+    expect(ticks("2026-04-04T13:00:00Z", "2026-04-04T17:00:00Z", "local")).toEqual([
+      "2026-04-04T13:00:00.000Z Apr 5",
+      "2026-04-04T14:00:00.000Z 1:00 AM",
+      "2026-04-04T15:30:00.000Z 2:00 AM",
+      "2026-04-04T16:30:00.000Z 3:00 AM",
+      "2026-04-04T17:00:00.000Z 3:30 AM"
+    ]);
+  });
+});
+
 describe("timeLevel", () => {
   it("is the coarsest boundary a time falls on, in its zone", () => {
     const levels = ["2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", "2026-02-08T00:00:00Z", "2026-02-08T15:00:00Z", "2026-02-08T15:04:00Z", "2026-02-08T15:04:05Z", "2026-02-08T15:04:05.5Z"].map((t) =>
@@ -236,10 +256,19 @@ describe("timeName", () => {
     expect(name(["2026-01-05T13:00:00Z", "2026-01-05T13:00:30Z"])).toEqual(["Jan 5, 2026, 1:00:00 PM", "Jan 5, 2026, 1:00:30 PM"]);
   });
 
+  it("says milliseconds when any has them, so no two times are said alike", () => {
+    expect(name(["2026-01-05T12:00:00.100Z", "2026-01-05T12:00:00.900Z", "2026-01-05T12:00:01Z"])).toEqual([
+      "Jan 5, 2026, 12:00:00.100 PM",
+      "Jan 5, 2026, 12:00:00.900 PM",
+      "Jan 5, 2026, 12:00:01.000 PM"
+    ]);
+  });
+
   it("says it in the page's locale", () => {
     useLocale("en-GB");
     expect(name(["2026-01-05T00:00:00Z"])).toEqual(["5 Jan 2026"]);
     expect(name(["2026-01-05T13:00:00Z"])).toEqual(["5 Jan 2026, 13:00"]);
+    expect(name(["2026-01-05T13:00:00.1Z"])).toEqual(["5 Jan 2026, 13:00:00.100"]);
   });
 
   describe("in local time", () => {

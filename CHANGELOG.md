@@ -55,3 +55,6 @@ Everything else can still change in a minor release while the library is 0.x: th
 - The package includes this changelog, where the promise is.
 - The types need TypeScript 5.4 or newer, since they use `NoInfer`.
 - The 0.x promise names every type its names use, and says that the motion core is outside it.
+- **Escape dismisses a pointer's hover.** While something is hovered, Escape anywhere on the page ends the hover and hides the tooltip, as `leave()` does, so the tooltip can be dismissed without moving the pointer (WCAG 1.4.13). An Escape the page has already handled is left alone.
+- With `markLabel`, `expressive()` takes an `img`, `graphics-symbol` or `graphics-object` role (and its `aria-roledescription`) off unnamed host elements around the marks it names, as Vega gives the groups round its lines, so each mark is read once, by its name. `destroy()` puts them back.
+- Under forced colours (Windows contrast themes), the motion switch's pressed mode shows in `Highlight` and `HighlightText`.

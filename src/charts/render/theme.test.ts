@@ -200,6 +200,13 @@ describe("the stylesheet", () => {
     expect(all.indexOf(preferred!)).toBeLessThan(all.indexOf(dark!));
   });
 
+  it("gives the pressed motion mode the viewer's selection colours under forced colours", () => {
+    const forced = rules().filter((r) => r.media === "(forced-colors: active)");
+    expect(forced.map((r) => [r.selector, r.style.getPropertyValue("background-color").toLowerCase(), r.style.getPropertyValue("color").toLowerCase()])).toEqual([
+      [':where(.ec-motion-modes button[aria-pressed="true"])', "highlight", "highlighttext"]
+    ]);
+  });
+
   it("is injected once per document, with the page's nonce if there is one", () => {
     styleOptions.nonce = "r4nd0m";
     const doc = document.implementation.createHTMLDocument();

@@ -28,8 +28,9 @@ jobs:
       - run: npm run pack-check
 
   visual:
-    # Screenshots of the demo pages in Chromium (playwright.config.ts). The job runs in the official
-    # Playwright image, which comes with Chromium and its fonts, so nothing is downloaded per run and
+    # Screenshots of the demo pages in Chromium, and the DOM checks beside them (axe among them) in
+    # Chromium, Firefox and WebKit (playwright.config.ts). The job runs in the official Playwright
+    # image, which comes with the three browsers and their fonts, so nothing is downloaded per run and
     # the pictures match baselines made locally with `npm run test:visual:update` in the same image.
     # The tag must match @playwright/test in package.json (Playwright says so if they differ).
     runs-on: ubuntu-latest

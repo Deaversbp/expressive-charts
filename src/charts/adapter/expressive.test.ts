@@ -1593,6 +1593,51 @@ describe("expressive: markLabel", () => {
     expect(events).toEqual(["hover Lindqvist keyboard"]);
   });
 
+  it("takes unnamed image and graphics-object roles off the host's elements around named marks, on every read, and puts them back", () => {
+    const host = d3Stack();
+    const roles = (): string[] =>
+      [...host.groups, host.plot].map((g) => `${g.getAttribute("role") ?? "-"} ${g.getAttribute("aria-roledescription") ?? "-"}`);
+    // As Vega draws its marks: an image with no name around each series, in a graphics-object.
+    for (const g of host.groups) {
+      g.setAttribute("role", "graphics-symbol");
+      g.setAttribute("aria-roledescription", "rect mark container");
+    }
+    host.plot.setAttribute("role", "graphics-object");
+    const before = host.svg.outerHTML;
+
+    const plain = setup(host.selection(), { ...stacked, keyboard: true });
+    expect(roles()).toEqual(["graphics-symbol rect mark container", "graphics-symbol rect mark container", "graphics-object -"]);
+    plain.fx.destroy();
+
+    const { fx } = setup(host.selection(), { ...stacked, markLabel: label });
+    // The goals group holds the named parts, the assists group the hidden ones: neither keeps its role.
+    expect(roles()).toEqual(["- -", "- -", "- -"]);
+    // A redraw writes the role again, as Vega does, and the next read takes it off.
+    host.groups[0]!.setAttribute("role", "graphics-symbol");
+    fx.refresh(host.selection());
+    expect(roles()).toEqual(["- -", "- -", "- -"]);
+
+    // The assists rects go: their group holds no mark now, and gets its role back.
+    const assists = host.groups[1]!.querySelectorAll("rect");
+    assists.forEach((rect) => rect.remove());
+    fx.refresh(host.selection());
+    expect(roles()).toEqual(["- -", "graphics-symbol rect mark container", "- -"]);
+    host.groups[1]!.append(...assists);
+    fx.destroy();
+    expect(host.svg.outerHTML).toBe(before);
+  });
+
+  it("leaves a named wrapper's role, and the host's other roles, as they are", () => {
+    const host = d3Stack();
+    host.groups[0]!.setAttribute("role", "group");
+    host.groups[1]!.setAttribute("role", "img");
+    host.groups[1]!.setAttribute("aria-label", "Assists");
+    host.plot.setAttribute("role", "graphics-object");
+    host.plot.setAttribute("aria-labelledby", "title");
+    setup(host.selection(), { ...stacked, markLabel: label });
+    expect([...host.groups, host.plot].map((g) => g.getAttribute("role"))).toEqual(["group", "img", "graphics-object"]);
+  });
+
   it('warns once when the <svg> is role="img", which hides the marks keyboard focus reaches', () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const host = d3Stack();

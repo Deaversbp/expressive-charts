@@ -189,6 +189,10 @@ ${TOKEN_RULES}
 :where(.ec-motion-modes button:hover, .ec-motion-modes button[aria-pressed="true"]) { background: color-mix(in srgb, var(--ec-focus, ${TOKENS.focus}) 12%, transparent); }
 :where(.ec-motion-modes button[aria-pressed="true"]) { font-weight: 600; }
 :where(.ec-motion-modes button:focus-visible) { outline: 2px solid var(--ec-focus, ${TOKENS.focus}); outline-offset: 2px; }
+@media (forced-colors: active) {
+  /* Forced colours drop the pressed mode's tint, which leaves only its weight: it takes the viewer's selection colours. */
+  :where(.ec-motion-modes button[aria-pressed="true"]) { background: Highlight; color: HighlightText; }
+}
 :where(.ec-motion-hint) { flex: 1 1 220px; min-width: 0; color: var(--ec-text-muted, ${TOKENS["text-muted"]}); }
 :where(.ec-play) { font: inherit; font-size: 13px; font-weight: 600; color: var(--ec-text, ${TOKENS.text}); border: 1px solid var(--ec-ring, color-mix(in srgb, currentColor 12%, transparent)); background: var(--ec-surface, ${TOKENS.surface}); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
 :where(.ec-play:hover) { background: color-mix(in srgb, var(--ec-focus, ${TOKENS.focus}) 12%, var(--ec-surface, ${TOKENS.surface})); }

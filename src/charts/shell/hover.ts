@@ -73,6 +73,12 @@ export interface ChartHover {
   sync(): void;
   /** Moves focus to the live target `key` as a key press would: the ring shows and its hover plays. Does nothing for a key that isn't live. */
   focus(key: string): void;
+  /**
+   * Ends the hover, the pointer's or focus's, as the viewer moving away would: the emphasis, the
+   * dimming, the tooltip and the hover runs end, with their leave events. Focus stays where it is,
+   * with its ring, as after Escape; the pointer hovers again when it next moves onto a mark.
+   */
+  leave(): void;
   destroy(): void;
 }
 
@@ -234,6 +240,11 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     sync: () => keyboard.sync(),
     focus(key) {
       if (options.live(key)) keyboard.focus(key);
+    },
+    leave() {
+      // The pointer lets go first, so it hovers again when it next moves onto a mark.
+      interaction.clear();
+      if (hovered !== undefined) endHover();
     },
     destroy() {
       interaction.destroy();

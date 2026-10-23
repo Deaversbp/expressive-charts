@@ -600,6 +600,20 @@ describe("chartSwitch: hover and focus", () => {
     expect(donut.element.classList.contains("ec-hovering")).toBe(false);
   });
 
+  it("ends the old view's hover with its leave(), and only the old view's", () => {
+    const { switcher, donut, columns, clock } = setup();
+    const leaveDonut = vi.spyOn(donut, "leave");
+    const leaveColumns = vi.spyOn(columns, "leave");
+    void switcher.show("columns");
+    expect(leaveDonut).toHaveBeenCalledTimes(1);
+    expect(leaveColumns).not.toHaveBeenCalled();
+    // Back mid-way: a reverse plays on, with no hover to end.
+    clock.advance(300);
+    void switcher.show("donut");
+    expect(leaveDonut).toHaveBeenCalledTimes(1);
+    expect(leaveColumns).not.toHaveBeenCalled();
+  });
+
   it("moves focus on a mark to the same key in the new view once the switch lands", async () => {
     const { switcher, donut, columns, clock } = setup();
     donut.focus("Saved");
@@ -607,9 +621,10 @@ describe("chartSwitch: hover and focus", () => {
     const leave = vi.fn();
     donut.on("leave", leave);
     void switcher.show("columns");
-    // Read before anything was hidden, then the keyboard hover ended.
+    // Read before anything was hidden, then the keyboard hover ended. Focus stays put: a browser takes
+    // it off the view once it's inert (jsdom doesn't).
     expect(leave).toHaveBeenCalledTimes(1);
-    expect(donut.element.contains(document.activeElement)).toBe(false);
+    expect(document.activeElement?.getAttribute("data-key")).toBe("Saved");
     clock.advance(950);
     await flush();
     expect(columns.element.contains(document.activeElement)).toBe(true);
@@ -782,8 +797,11 @@ describe("chartSwitch: checks", () => {
     let drawn: ReturnType<typeof draw> | undefined;
     const first = (container: HTMLElement) => (drawn = draw(container));
     const make = (other: unknown) => () => chartSwitch(target, { views: { a: first, b: other as typeof first }, initial: "a", transition: recorder().effect }, env());
-    expect(make(() => ({}))).toThrow(/views\.b must return the chart it draws in the container it's given/);
+    expect(make(() => ({}))).toThrow(/views\.b must return the chart it draws in the container it's given \(with element, marks\(\), labels\(\), focus\(\), leave\(\) and destroy\(\)\)/);
     expect(drawn!.element.isConnected).toBe(false);
+    // A view needs leave(), to end its hover.
+    expect(make((container: HTMLElement) => ({ ...draw(container), leave: undefined }))).toThrow(/views\.b must return/);
+    expect(target.children).toHaveLength(0);
     // A chart drawn somewhere else isn't the view's.
     expect(make(() => draw(place()))).toThrow(/views\.b must return/);
     expect(target.children).toHaveLength(0);

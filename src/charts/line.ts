@@ -56,7 +56,7 @@ import { chartHover } from "./shell/hover";
 import { chartLabel } from "./shell/labels";
 import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
-import { checkChartOptions, checkNeeds, containerWidth, describeChart, resolveTarget, type ChartEnv } from "./shell/setup";
+import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
 import { chartTable, tableModel, type TableModel } from "./table";
@@ -173,7 +173,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   checkChartOptions(options, "lineChart");
   let current = options;
   const motion = chartMotion(options.motion, env.motion);
-  const effects = resolveEffects(options.on, env.presets);
+  let effects = resolveEffects(options.on, env.presets);
   let colors = toColorAssignment(options.colors);
   const clock = env.clock ?? defaultClock;
   const doc = container.ownerDocument;
@@ -279,10 +279,10 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
   // ── Layout ─────────────────────────────────────────────────────────────────
 
-  function layout(opts: LineChartOptions<D>): LineLayout<D> {
+  function layout(opts: LineChartOptions<D>, using = effects): LineLayout<D> {
     const encoding = lineEncoding(opts);
     const series = encoding.series.map((s) => s.series);
-    checkNeeds(effects, series, "lineChart");
+    checkNeeds(using, series, "lineChart");
     const next = layoutLines({ data: opts.data, encoding, width: opts.width ?? measuredWidth, height: opts.height, format: format(opts), measure, label: labeler(opts, true) });
     // A series named "a@b" and a key "c" make the same point key as "a" and "b@c".
     const keys = new Set(next.series);
@@ -1082,21 +1082,23 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     for (const line of lineOrder) lines.set(line.series, line);
     land();
   }
+  /** The live marks as they're heading, in the runner's order: the lines, then each x's points. */
+  const liveMarks = (): MarkRecord<D>[] => [...lineOrder, ...rowOrder.flatMap(livePoints)];
   hover.sync();
-  runner.enter([...lineOrder, ...rowOrder.flatMap(livePoints)].map(input));
+  runner.enter(liveMarks().map(input));
 
   return {
     element: svg,
 
     async update(next) {
       if (destroyed) return;
-      if (next.on !== undefined && next.on !== current.on) throw new TypeError("lineChart: `on` can't be changed by update() yet.");
       if (next.motion !== undefined && next.motion !== current.motion) throw new TypeError("lineChart: `motion` can't be changed by update() yet.");
       const merged: LineChartOptions<D> = { ...current, ...next };
       checkChartOptions(merged, "lineChart");
-      // Throws on data it can't draw, a table column it can't read, or a `format` that throws, before
-      // anything changes.
-      const nextLayout = layout(merged);
+      // Throws on an effect it can't resolve, data it can't draw, a table column it can't read, or a
+      // `format` that throws, before anything changes.
+      const swapped = "on" in next ? nextEffects(effects, current.on, merged.on, env.presets) : effects;
+      const nextLayout = layout(merged, swapped);
       const nextTable = tableFor(merged, nextLayout);
       const nextNames = namesFor(merged, nextLayout);
       if ("colors" in next) colors = toColorAssignment(merged.colors);
@@ -1114,10 +1116,29 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
         announcer = undefined;
       }
       transitions.supersede();
+      const swapping = swapped !== effects;
+      effects = swapped;
 
-      // The runner hears exit / update / enter now, then change() on every frame, then settle().
+      // The runner hears exit / update / enter now, then change() on every frame, then settle(). New
+      // effects start where the old ones were, on the marks staying, as this update leaves them; a
+      // held hover replays with them once the change settles.
       const leaves = playUpdate(
-        { runner, events, hover, leaving, input, onScreen },
+        {
+          runner,
+          events,
+          hover,
+          leaving,
+          input,
+          onScreen,
+          ...(swapping
+            ? {
+                swap: (diff: Diff<D>) => {
+                  const entering = new Set(diff.entering);
+                  runner.swap(swapped, liveMarks().filter((record) => !entering.has(record)).map(input));
+                }
+              }
+            : {})
+        },
         () => arrange(nextLayout),
         () => {
           if (announcing) announceChange(previous, seriesBefore);
@@ -1153,6 +1174,10 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       // An x takes focus, for its own key or one of its points'.
       const record = rows.get(key) ?? points.get(key)?.row;
       if (record) hover.focus(record.key);
+    },
+
+    leave() {
+      if (!destroyed) hover.leave();
     },
 
     // A line's end label is its value; points have none.

@@ -31,7 +31,7 @@ import { chartHover } from "./shell/hover";
 import { chartLabel } from "./shell/labels";
 import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
-import { checkChartOptions, checkNeeds, containerWidth, describeChart, resolveTarget, type ChartEnv } from "./shell/setup";
+import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
 import { chartTable, tableModel, type TableModel } from "./table";
@@ -98,7 +98,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   checkOptions(options);
   let current = options;
   const motion = chartMotion(options.motion, env.motion);
-  const effects = resolveEffects(options.on, env.presets);
+  let effects = resolveEffects(options.on, env.presets);
   let colors = toColorAssignment(options.colors);
   const clock = env.clock ?? defaultClock;
   const doc = container.ownerDocument;
@@ -179,9 +179,9 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
   // ── Drawing ────────────────────────────────────────────────────────────────
 
-  function layout(opts: BarChartOptions<D>): BarLayout<D> {
+  function layout(opts: BarChartOptions<D>, using = effects): BarLayout<D> {
     const encoding = barEncoding(opts);
-    checkNeeds(effects, encoding.series.map((s) => s.series), "barChart");
+    checkNeeds(using, encoding.series.map((s) => s.series), "barChart");
     return layoutBars({
       data: opts.data,
       encoding,
@@ -640,12 +640,13 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
     async update(next) {
       if (destroyed) return;
-      if (next.on !== undefined && next.on !== current.on) throw new TypeError("barChart: `on` can't be changed by update() yet.");
       if (next.motion !== undefined && next.motion !== current.motion) throw new TypeError("barChart: `motion` can't be changed by update() yet.");
       const merged: BarChartOptions<D> = { ...current, ...next };
       checkOptions(merged);
-      // Throws on data it can't draw, or a table column it can't read, before anything changes.
-      const nextLayout = layout(merged);
+      // Throws on an effect it can't resolve, data it can't draw, or a table column it can't read,
+      // before anything changes.
+      const swapped = "on" in next ? nextEffects(effects, current.on, merged.on, env.presets) : effects;
+      const nextLayout = layout(merged, swapped);
       const nextTable = tableFor(merged, nextLayout);
       if ("colors" in next) colors = toColorAssignment(merged.colors);
       const previous = current;
@@ -662,10 +663,29 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       }
       hover.syncDim();
       transitions.supersede();
+      const swapping = swapped !== effects;
+      effects = swapped;
 
-      // The runner hears exit / update / enter now, then change() on every frame, then settle().
+      // The runner hears exit / update / enter now, then change() on every frame, then settle(). New
+      // effects start where the old ones were, on the bars staying, as this update leaves them; a held
+      // hover replays with them once the change settles.
       const leaves = playUpdate(
-        { runner, events, hover, leaving, input, onScreen },
+        {
+          runner,
+          events,
+          hover,
+          leaving,
+          input,
+          onScreen,
+          ...(swapping
+            ? {
+                swap: (diff: Diff<D>) => {
+                  const entering = new Set(diff.entering);
+                  runner.swap(swapped, order.filter((record) => !entering.has(record)).map(input));
+                }
+              }
+            : {})
+        },
         () => arrange(nextLayout),
         (diff) => {
           if (announcing) announceChange(previous, diff);
@@ -683,6 +703,10 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
     focus(key) {
       if (!destroyed) hover.focus(key);
+    },
+
+    leave() {
+      if (!destroyed) hover.leave();
     },
 
     labels: () =>

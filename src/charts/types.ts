@@ -127,6 +127,12 @@ export interface TableOptions<D> {
   readonly total?: string;
   /** A donut's share column's header. Default "Share". */
   readonly share?: string;
+  /**
+   * Each series' column header, by series (its field, or "value" for a value read by a function):
+   * { shots: "Shots" }. Default: its `seriesLabels` name, or the series itself. Only the table's
+   * headers change; the legend, names and tooltip keep `seriesLabels`.
+   */
+  readonly series?: Readonly<Record<string, string>>;
   /** The text of the <summary> that opens the table. Default "Data table". */
   readonly summary?: string;
 }
@@ -295,8 +301,14 @@ export interface Chart<D, O> {
   /**
    * Changes options and animates to the new state, by the motion mode. Resolves when the change has
    * settled and the marks it removed are gone (their exit effects done), or as soon as another
-   * update() supersedes it. Rejects, changing nothing, on options it can't draw. `on` and `motion`
-   * can't change yet.
+   * update() supersedes it. Rejects, changing nothing, on options it can't draw, or an `on` it can't
+   * resolve (an unknown preset name). `motion` can't change yet.
+   *
+   * A new `on` swaps the effects of the slots it changes; a slot given the same effect or preset name
+   * keeps its runs. A changed slot's runs are cleared and the new effect starts where they were:
+   * `decorate` again on every mark, and a held hover replays with the new hover effect once the
+   * change settles. `enter`, `update` and `exit` draw the new effect's end state where theirs were,
+   * so nothing enters again. Focus stays on its mark.
    */
   update(next: Partial<O>): Promise<void>;
   /** Listens for mark events; returns the unsubscribe. */
@@ -309,6 +321,12 @@ export interface Chart<D, O> {
    * of its points'. A key that isn't on screen (unknown, leaving, or past a line's reveal) does nothing.
    */
   focus(key: string): void;
+  /**
+   * Ends the hover, pointer or keyboard, as the viewer moving away would: the emphasis, the dimming,
+   * the tooltip and the hover effects end, and `leave` fires for each mark that was hovered. Focus
+   * stays where it is, with its ring, as after Escape. Does nothing when nothing is hovered.
+   */
+  leave(): void;
   /**
    * Each mark's labels as drawn now, in the marks' visual order (leaving marks excluded): a bar's
    * category and value, a slice's category and share outside the ring, a line's end label as its value.

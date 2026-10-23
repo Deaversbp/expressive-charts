@@ -106,11 +106,18 @@ export interface PlayUpdateOptions<D, R extends LeavingMark> {
   input(record: R): RunInput<D>;
   /** The mark as it is on screen: what exit reports, so it matches what's on its way out. */
   onScreen(record: R): RunInput<D>;
+  /**
+   * With a new `on`: swaps the runner's effects once `arrange` has matched the new layout to the
+   * marks, before the runner hears the change, so the new effects start on the marks as the update
+   * leaves them and play its exit, update and enter. Given what changed, so it can leave out the
+   * marks entering, which enter() starts.
+   */
+  swap?(diff: ChartDiff<R>): void;
 }
 
 /**
  * Plays an update's change through the runner, in the order it expects: interrupt; `arrange` matches
- * the new layout to the marks; a hover whose mark has left ends; then exit, update and enter, each
+ * the new layout to the marks; new effects, if any, are swapped in; a hover whose mark has left ends; then exit, update and enter, each
  * followed by its events; `announce`; and the tab stop follows its key. The runner then hears change()
  * on every frame, and settle() once the transition settles. Returns the leaves to wait for.
  */
@@ -122,6 +129,7 @@ export function playUpdate<D, R extends LeavingMark>(
   const { runner, events, input, onScreen } = options;
   runner.interrupt();
   const diff = arrange();
+  options.swap?.(diff);
   options.hover.dropGone();
   const leaves = diff.exiting.map((record) => record.leave!);
   const exited = runner.exit(diff.exiting.map(onScreen));

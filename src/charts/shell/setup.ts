@@ -1,8 +1,9 @@
 // What a reference chart needs before it draws: the environment the composition root hands it, its
 // container and width, its accessible name, and a check that data effects find the series they read.
+// And its effects when update() gives it a new `on`.
 
-import type { Clock, IconSource, Motion } from "../../core";
-import { EFFECT_SLOTS, type PresetFactory, type Registry } from "../../core/registry";
+import type { Clock, EffectSlot, EffectSlots, IconSource, Motion } from "../../core";
+import { EFFECT_SLOTS, resolveEffects, type PresetFactory, type Registry } from "../../core/registry";
 import type { SlotEffects } from "../../core/runner";
 import { checkLegendOption } from "../legend";
 import { svgElement } from "../render/svg";
@@ -68,6 +69,24 @@ export function checkNeeds<D>(effects: SlotEffects<D>, series: readonly string[]
       throw new RangeError(`${chart}: on.${slot} needs the series "${name}", but the chart's series are ${series.map((s) => `"${s}"`).join(", ")}.`);
     }
   }
+}
+
+/**
+ * The effects for a new `on` (update({ on })), resolved as a chart resolves them when it's made, so an
+ * unknown preset name or slot throws before anything changes. A slot given the same preset name or
+ * effect as before keeps the effect it has, so its runs go on; a preset name makes a fresh effect only
+ * when it's new to the slot.
+ */
+export function nextEffects<D>(effects: SlotEffects<D>, from: EffectSlots<D> | undefined, to: EffectSlots<D> | undefined, presets: ChartEnv["presets"]): SlotEffects<D> {
+  const kept = (slot: string): boolean => (EFFECT_SLOTS as readonly string[]).includes(slot) && to?.[slot as EffectSlot] !== undefined && to[slot as EffectSlot] === from?.[slot as EffectSlot];
+  // Everything else is resolved, unknown slots included, so they throw.
+  const resolved = resolveEffects(Object.fromEntries(Object.entries(to ?? {}).filter(([slot]) => !kept(slot))) as EffectSlots<D>, presets);
+  const next: { -readonly [S in EffectSlot]?: SlotEffects<D>[S] } = {};
+  for (const slot of EFFECT_SLOTS) {
+    const effect = kept(slot) ? effects[slot] : resolved[slot];
+    if (effect) next[slot] = effect;
+  }
+  return next;
 }
 
 /** The options every chart takes, as checkChartOptions reads them. */

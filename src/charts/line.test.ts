@@ -772,7 +772,7 @@ describe("lineChart: update", () => {
     const before = keys();
     await expect(chart.update({ data: [...weeks, weeks[0]!] })).rejects.toThrow(/two rows have the key "1"/);
     await expect(chart.update({ labels: 1 as unknown as false })).rejects.toThrow(/labels must be false or a function/);
-    await expect(chart.update({ on: {} })).rejects.toThrow(/`on` can't be changed/);
+    await expect(chart.update({ on: { hover: "no-such-preset" } })).rejects.toThrow(/Unknown preset "no-such-preset"/);
     expect(keys()).toEqual(before);
   });
 
@@ -824,3 +824,89 @@ describe("lineChart: size and destroy", () => {
 });
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+describe("lineChart: update({ on })", () => {
+  const runs = (log: readonly string[]) => log.filter((entry) => !entry.startsWith("change"));
+
+  it("swaps the effects: decorate starts again on every mark, a held hover replays with the new effect, focus stays and nothing enters", async () => {
+    const decorate = recorder();
+    const hover = recorder();
+    const enter = recorder();
+    const { chart, svg, settle } = setup({ data: weeks.slice(0, 2), on: { decorate: decorate.effect, hover: hover.effect, enter: enter.effect } });
+    chart.focus("2");
+    const events = listen(chart);
+    for (const each of [decorate, hover, enter]) each.log.length = 0;
+    const nextDecorate = recorder();
+    const nextHover = recorder();
+    await settle(chart.update({ on: { decorate: nextDecorate.effect, hover: nextHover.effect, enter: enter.effect } }));
+    expect(runs(decorate.log)).toEqual(["clear", "clear", "clear", "clear", "clear", "clear"]);
+    expect(runs(nextDecorate.log)).toEqual(["run goals", "run xg", "run goals@1", "run xg@1", "run goals@2", "run xg@2"]);
+    expect(runs(hover.log)).toEqual(["clear", "clear"]);
+    expect(runs(nextHover.log)).toEqual(["run goals@2", "run xg@2"]);
+    expect(runs(enter.log)).toEqual([]);
+    expect(events).toEqual([]);
+    expect(document.activeElement?.getAttribute("data-key")).toBe("2");
+    expect(svg.querySelector(".ec-focus")!.getAttribute("visibility")).toBeNull();
+  });
+
+  it("checks a new data effect's series, and rejects before anything changes", async () => {
+    const decorate = recorder();
+    const { chart } = setup({ on: { decorate: decorate.effect } });
+    const needy: DataEffect<Week> = { kind: "data", needs: { related: ["shots"] }, run: () => Promise.resolve(), end: () => {}, clear: () => {} };
+    await expect(chart.update({ on: { decorate: needy } })).rejects.toThrow(/needs the series "shots"/);
+    await expect(chart.update({ on: { hover: "nope" } })).rejects.toThrow(/Unknown preset "nope"/);
+    expect(runs(decorate.log).every((entry) => entry.startsWith("run"))).toBe(true);
+  });
+});
+
+describe("lineChart: update({ on }) with other options", () => {
+  it("starts a new data effect on the marks as the update leaves them, so the goals find the xg the same update adds", async () => {
+    const seen: string[] = [];
+    const needy: DataEffect<Week> = {
+      kind: "data",
+      needs: { related: ["xg"] },
+      run(mark, data) {
+        if (mark.series === "goals" && !data.related("xg")) throw new Error(`${mark.key} has no xg`);
+        seen.push(mark.key);
+        return Promise.resolve();
+      },
+      end() {},
+      clear() {}
+    };
+    const { chart, settle } = setup({ data: weeks.slice(0, 2), series: ["goals"] });
+    await settle(chart.update({ series: ["goals", "xg"], on: { decorate: needy } }));
+    // The marks staying start first; the xg marks start as they enter.
+    expect(seen).toEqual(["goals", "goals@1", "goals@2", "xg", "xg@1", "xg@2"]);
+  });
+});
+
+describe("lineChart: leave()", () => {
+  it("ends the hover of an x's points, pointer or keyboard, and leaves focus where it is", () => {
+    const hover = recorder();
+    const { chart, svg, column } = setup({ on: { hover: hover.effect } });
+    const events = listen(chart);
+    pointer("pointerover", column("3"));
+    chart.leave();
+    expect(events).toEqual(["hover goals@3 pointer 1/2", "hover xg@3 pointer 2/2", "leave goals@3", "leave xg@3"]);
+    expect(svg.querySelector(".ec-crosshair")!.getAttribute("visibility")).toBe("hidden");
+
+    chart.focus("2");
+    events.length = 0;
+    chart.leave();
+    expect(events).toEqual(["leave goals@2", "leave xg@2"]);
+    expect(document.activeElement?.getAttribute("data-key")).toBe("2");
+    expect(svg.querySelector(".ec-focus")!.getAttribute("visibility")).toBeNull();
+    chart.leave();
+    expect(events).toHaveLength(2);
+  });
+});
+
+describe("lineChart: table.series", () => {
+  const headers = (container: Element) => Array.from(container.querySelectorAll(".ec-table thead th"), (th) => th.textContent);
+
+  it("heads the columns as the lab does, leaving the end labels to seriesLabels", () => {
+    const { container, chart } = setup({ table: { series: { goals: "Goals", xg: "xG" } } });
+    expect(headers(container)).toEqual(["week", "Goals", "xG"]);
+    expect(chart.labels().map((label) => label.text)).toEqual(["5 goals", "4.4 xg"]);
+  });
+});

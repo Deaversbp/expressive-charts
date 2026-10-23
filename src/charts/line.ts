@@ -1083,9 +1083,9 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     land();
   }
   /** The live marks as they're heading, in the runner's order: the lines, then each x's points. */
-  const liveMarks = (): RunInput<D>[] => [...lineOrder, ...rowOrder.flatMap(livePoints)].map(input);
+  const liveMarks = (): MarkRecord<D>[] => [...lineOrder, ...rowOrder.flatMap(livePoints)];
   hover.sync();
-  runner.enter(liveMarks());
+  runner.enter(liveMarks().map(input));
 
   return {
     element: svg,
@@ -1116,17 +1116,29 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
         announcer = undefined;
       }
       transitions.supersede();
-      if (swapped !== effects) {
-        // New effects start where the old ones were, on the marks as they are now; a held hover
-        // replays with them once the change settles.
-        runner.interrupt();
-        runner.swap(swapped, liveMarks());
-        effects = swapped;
-      }
+      const swapping = swapped !== effects;
+      effects = swapped;
 
-      // The runner hears exit / update / enter now, then change() on every frame, then settle().
+      // The runner hears exit / update / enter now, then change() on every frame, then settle(). New
+      // effects start where the old ones were, on the marks staying, as this update leaves them; a
+      // held hover replays with them once the change settles.
       const leaves = playUpdate(
-        { runner, events, hover, leaving, input, onScreen },
+        {
+          runner,
+          events,
+          hover,
+          leaving,
+          input,
+          onScreen,
+          ...(swapping
+            ? {
+                swap: (diff: Diff<D>) => {
+                  const entering = new Set(diff.entering);
+                  runner.swap(swapped, liveMarks().filter((record) => !entering.has(record)).map(input));
+                }
+              }
+            : {})
+        },
         () => arrange(nextLayout),
         () => {
           if (announcing) announceChange(previous, seriesBefore);

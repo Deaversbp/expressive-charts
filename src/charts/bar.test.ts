@@ -1715,6 +1715,44 @@ describe("barChart: update({ on })", () => {
   });
 });
 
+describe("barChart: update({ on }) with other options", () => {
+  it("starts a new data effect on the bars as the update leaves them, so it finds a series the same update adds", async () => {
+    const seen: string[] = [];
+    const needy: DataEffect<Player> = {
+      kind: "data",
+      needs: { related: ["assists"] },
+      run(mark, data) {
+        if (!data.related("assists")) throw new Error(`${mark.key} has no assists`);
+        seen.push(mark.key);
+        return Promise.resolve();
+      },
+      end() {},
+      clear() {}
+    };
+    const { chart, settle } = setup();
+    await settle(chart.update({ x: undefined, stack: ["goals", "assists"], on: { decorate: needy } }));
+    expect(seen).toEqual(["Okafor", "Tanaka", "Lindqvist"]);
+  });
+
+  it("gives a new update effect the values before the change, with a new decoration beside it", async () => {
+    const changes: string[] = [];
+    const update: DataEffect<Player> = {
+      kind: "data",
+      run(mark, data) {
+        changes.push(`${mark.key} ${data.previous?.datum.goals} to ${data.datum.goals}`);
+        return Promise.resolve();
+      },
+      end() {},
+      clear() {}
+    };
+    const decorate = recorder();
+    const { chart, settle } = setup();
+    await settle(chart.update({ on: { update, decorate: decorate.effect }, data: players.map((p) => (p.name === "Tanaka" ? { ...p, goals: 9 } : p)) }));
+    expect(changes).toEqual(["Tanaka 6 to 9"]);
+    expect(decorate.log.filter((entry) => entry.startsWith("run"))).toEqual(["run Okafor", "run Tanaka", "run Lindqvist"]);
+  });
+});
+
 describe("barChart: leave()", () => {
   const tooltipShown = () => document.querySelector(".ec-tooltip")?.classList.contains("ec-tooltip-shown") ?? false;
 

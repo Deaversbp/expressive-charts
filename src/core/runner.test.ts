@@ -785,6 +785,33 @@ describe("createRunner", () => {
       expect(gone).toEqual(["a", "b", "c"]);
     });
 
+    it("starts decorate on the geometry and data it's given, leaving the marks' own to the update that follows", () => {
+      const seen: string[] = [];
+      const previous: (number | undefined)[] = [];
+      const decorate: DataEffect<Row> = {
+        kind: "data",
+        run: async (mark, data) => {
+          seen.push(`${mark.key} ${mark.bounds.width} ${data.datum.value}`);
+        },
+        end: () => {},
+        clear: () => {}
+      };
+      const update: DataEffect<Row> = {
+        kind: "data",
+        run: async (_mark, data) => {
+          previous.push(data.previous?.datum.value);
+        },
+        end: () => {},
+        clear: () => {}
+      };
+      const { runner } = setup<Row>({ update });
+      runner.enter([{ mark: bar("a"), data: dataOf(100) }]);
+      runner.swap({ decorate, update }, [{ mark: bar("a", 60), data: dataOf(60) }]);
+      expect(seen).toEqual(["a 60 60"]);
+      runner.update([{ mark: bar("a", 60), data: dataOf(60) }]);
+      expect(previous).toEqual([100]);
+    });
+
     it("draws end states with motion off, and does nothing for the same effects or after destroy", () => {
       const decorate = probe();
       const next = probe();

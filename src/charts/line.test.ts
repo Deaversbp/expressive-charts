@@ -859,6 +859,27 @@ describe("lineChart: update({ on })", () => {
   });
 });
 
+describe("lineChart: update({ on }) with other options", () => {
+  it("starts a new data effect on the marks as the update leaves them, so the goals find the xg the same update adds", async () => {
+    const seen: string[] = [];
+    const needy: DataEffect<Week> = {
+      kind: "data",
+      needs: { related: ["xg"] },
+      run(mark, data) {
+        if (mark.series === "goals" && !data.related("xg")) throw new Error(`${mark.key} has no xg`);
+        seen.push(mark.key);
+        return Promise.resolve();
+      },
+      end() {},
+      clear() {}
+    };
+    const { chart, settle } = setup({ data: weeks.slice(0, 2), series: ["goals"] });
+    await settle(chart.update({ series: ["goals", "xg"], on: { decorate: needy } }));
+    // The marks staying start first; the xg marks start as they enter.
+    expect(seen).toEqual(["goals", "goals@1", "goals@2", "xg", "xg@1", "xg@2"]);
+  });
+});
+
 describe("lineChart: leave()", () => {
   it("ends the hover of an x's points, pointer or keyboard, and leaves focus where it is", () => {
     const hover = recorder();

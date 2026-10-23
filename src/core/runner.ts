@@ -159,11 +159,14 @@ export interface Runner<D = unknown> {
   /**
    * New effects, as a chart's update({ on }) gives them. A slot whose effect is the same object keeps
    * its runs. A changed slot's runs are cleared and the new effect starts where they were: `decorate`
-   * on every mark in `marks` (the live marks as they're heading, in visual order, as enter() takes
-   * them), and `hover` on the marks still hovered (from settle() while a transition is in flight).
-   * `enter`, `update` and `exit` draw the new effect's end state on the marks whose runs they replace,
-   * in their place, so nothing enters again, an update keeps showing what it explains, and an exit
-   * still ends. A slot left empty clears its runs.
+   * on every mark in `marks`, and `hover` on the marks still hovered (from settle() while a transition
+   * is in flight). `enter`, `update` and `exit` draw the new effect's end state on the marks whose runs
+   * they replace, in their place, so nothing enters again, an update keeps showing what it explains,
+   * and an exit still ends. A slot left empty clears its runs.
+   *
+   * `marks` are the marks staying through the chart's update, as they're heading, in visual order:
+   * the marks entering start theirs with enter(). Their geometry and data start the new runs but
+   * aren't taken as the marks' own, so an update() that follows still gets the values before it.
    */
   swap(effects: SlotEffects<D>, marks: readonly RunInput<D>[]): void;
   /** Clears every run and stops following the motion mode. */
@@ -211,6 +214,8 @@ interface StartOptions {
   readonly order?: number | undefined;
   /** Draws the effect's end state, whatever the motion mode. */
   readonly end?: boolean;
+  /** The geometry to start on. Default: the latest the runner saw for the key. */
+  readonly mark?: MarkGeometry;
 }
 
 const SLOTS: readonly EffectSlot[] = ["decorate", "enter", "update", "exit", "hover"];
@@ -285,7 +290,7 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
     };
     entry.runs.set(slot, run);
 
-    const { mark } = entry;
+    const mark = more.mark ?? entry.mark;
     const ctx = run.scope.context;
     try {
       if (more.end || motion.mode === "off") {
@@ -558,8 +563,8 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
         if (slot === "decorate") {
           const orders = clearSlot(slot);
           marks.forEach((input, index) => {
-            const entry = track(input);
-            if (!entry.exiting) start(entry, slot, input.data, { index, count: marks.length }, { order: orders.get(entry) });
+            const entry = entries.get(input.mark.key) ?? track(input);
+            if (!entry.exiting) start(entry, slot, input.data, { index, count: marks.length }, { mark: input.mark, order: orders.get(entry) });
           });
         } else if (slot === "hover") {
           clearSlot(slot);

@@ -22,6 +22,7 @@ export type {
   EffectContext,
   GeometryEffect,
   MarkEffect,
+  TransitionContext,
   TransitionEffect
 } from "./effect";
 export type { EffectOption, EffectSlot, EffectSlots, PresetName } from "./slots";

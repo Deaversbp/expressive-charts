@@ -13,6 +13,7 @@ The motion clock, tweens, easing, cancellation and motion modes (`presentation`,
 | `contracts/` | Types only, shared by charts, adapters and effects: `MarkGeometry`, `MarkData`, the drawing API, `EffectContext`, the effect kinds, `Icon`, the effect slots |
 | `geometry/` | Pure math: line and arc segments, walks by distance, outlines, path data, `matrix`, `offset`, and the public `describe` builders |
 | `runner.ts` | Internal: `createRunner`, which connects a chart's mark events to its effects and owns every run's lifecycle |
+| `transition.ts` | Internal: `playTransition`, which plays a transition effect on pairs of marks with the runner's rules, each run from `start` |
 | `registry.ts` | Internal: `createRegistry` for presets and icons, and `resolveEffects` for a chart's `on` option |
 | `testing/` | Internal test helpers: the recording layer, mark and surface, `testContext`, `measurePath`, `play` |
 | `merge.ts` | Internal: the field merge behind `mark.set()` and the handles' `update()` |

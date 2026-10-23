@@ -2,7 +2,7 @@
 
 An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `threshold`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: our bar chart, the donut, and SVG charts drawn by D3 or Observable Plot through `expressive()`.
 
-This guide covers the contract an effect reads, the drawing API it writes through, how it keeps time, the rules that keep charts readable, data effects, composing, and testing with `checkEffect`. It ends with two worked examples and a review checklist.
+This guide covers the contract an effect reads, the drawing API it writes through, how it keeps time, the rules that keep charts readable, data effects, composing, testing with `checkEffect`, and transition effects, which play between two views of a mark, with `checkTransition`. It ends with two worked examples and a review checklist.
 
 **Stability.** The author API is public, under the 0.x promise in [CHANGELOG.md](../CHANGELOG.md): from 0.1.0, a breaking change to it comes only in a minor release (0.1 → 0.2), with a migration note, and a deprecated name keeps working for one minor release. The API is `defineEffect`, `defineDataEffect`, `matrix`, `offset`, `describe.*`, the effect, context and drawing contracts described here, and `expressive-charts/testing`.
 
@@ -316,6 +316,66 @@ await play(ctx.clock, trace().run(fixtures.bar, ctx));
 expect(ctx.layer.picture()).toEqual([{ kind: "path", d: fixtures.bar.slice(0, 1), paint: { stroke: "mark", width: 3, opacity: 0.5, linecap: "round" } }]);
 ```
 
+## Transition effects and `checkTransition`
+
+A transition effect plays between two views of one mark, as `morph` turns a donut slice into a column. Where a mark effect gets one geometry, it gets two: `run(from, to, ctx)` turns `from` into `to`, `end(from, to, ctx)` draws the final state at once, and `clear(ctx)` cleans up. It never goes in a chart's `on`; M5's chart switch plays it on each pair of marks with the same key, in an overlay above both views. There's no definer: it's a plain object of kind `"transition"`.
+
+```ts
+import { linear, type Point, type TransitionEffect } from "expressive-charts";
+
+/** a moved toward b by p, weighted on both sides so a run back lands on the same numbers. */
+const between = (a: Point, b: Point, p: number): Point => ({ x: a.x * (1 - p) + b.x * p, y: a.y * (1 - p) + b.y * p });
+
+/** A dot that slides from one mark's centre to the other's. */
+const slide: TransitionEffect = {
+  kind: "transition",
+  async run(from, to, ctx) {
+    const dot = ctx.layer.text("•", { at: between(from.center, to.center, ctx.start) });
+    const progress = (k: number): number => ctx.start + (1 - ctx.start) * k;
+    await ctx.tween({ duration: 600 * (1 - ctx.start), ease: linear, update: (k) => dot.update({ at: between(from.center, to.center, progress(k)) }) }).finished;
+  },
+  end(_from, to, ctx) {
+    ctx.layer.text("•", { at: to.center });
+  },
+  clear() {}
+};
+```
+
+Its context is a `TransitionContext`: the `EffectContext` above, with `start`.
+
+- **`start`**, from 0 to 1, is where the run begins in the effect's own progress. A switch back mid-way plays the reverse pair from `1 − p`, where p is the progress the switch had reached, so begin with the shapes there and take the rest of the time. An effect that ignores `start` replays from its beginning, and the switch back jumps.
+- **Retrace.** A run from b to a at `1 − p` should draw exactly what the run from a to b drew at p. So pair the two shapes by their geometry, never by which one is `from` (morph's `"drop"` turns from the mark that goes round its pivot, whichever it is); draw items in an order that doesn't depend on it either (morph's crossfade always puts the area below the stroke); and weight both sides, `a·(1 − p) + b·p`, so the numbers round alike both ways.
+- **`mark` does nothing, and `onChange` never fires.** Both views' marks are hidden while a transition plays, and a resize lands it at once rather than moving its shapes. Draw only in `ctx.layer`.
+- **The end state is `to`.** Draw it as the real mark looks, since the switch clears the overlay and shows the real mark when the run ends.
+- **Timing.** A switch is a data transition, not a decoration, so use `"transition"` timing (the default): ×1 in Presentation, at most 200 ms in Analysis, a jump in Off. `morph` takes 950 ms base, the lab's.
+
+`checkTransition` checks one on pairs of marks, from a to b and from b to a:
+
+```ts
+import { checkTransition } from "expressive-charts/testing";
+
+test("slide is a good transition", async () => {
+  await checkTransition(slide);
+});
+```
+
+On every pair, both ways, it runs checks 1 to 4 of `checkEffect` (check 5 doesn't apply, since `onChange` never fires) and a run from `start: 0.5`, which should end as `end()` draws. Then it checks that the effect retraces: at p = 0.25, 0.5 and 0.75, a run from b to a from `start: 1 − p` must begin, before its first frame, with the picture a run from a to b begins with from `start: p`. An effect that ignores `start` fails it:
+
+```
+checkTransition found 5 problems with replay:
+- on the slice and column, a run back should retrace the run forward: the run from b to a from start: 0.75 begins with item 1 unlike the run from a to b from start: 0.25: its style is {"at":{"x":10,"y":75}}, not {"at":{"x":240.742,"y":129.632}}
+- on the bar and column, …
+```
+
+| Option | What it does | Default |
+| --- | --- | --- |
+| `pairs` | the pairs to check on, each `[a, b]`: named (`{ "slice and column": [slice, column] }`), or a list, named by the marks' keys | `fixturePairs` |
+| `icons` | icons the effect looks up by name through `ctx.icons` | none |
+| `name` | what the report calls the effect | "the effect" |
+
+- `fixturePairs` are a slice and a column (a mark that goes round its pivot and one that doesn't), a bar and a column, two slices, two lines and two points. The second of two alike is the first's moved twin.
+- For your own tests, a transition's context is a test context with `start`: `const ctx = { ...testContext(), start: 0.5 }`.
+
 ## Worked examples
 
 Both are in [docs/sketches/examples/effects](sketches/examples/effects/), where `npm run typecheck` checks them against the real API, and both pass `checkEffect` in the library's own tests. [Sketch 06](sketches/examples/06-custom-effects.ts) uses them on a bar chart and on another library's bars.
@@ -445,3 +505,4 @@ Before you publish an effect, or review one:
 - [ ] Text is in theme text colours.
 - [ ] A data effect has the row type it reads and lists its related series in `needs`.
 - [ ] `checkEffect` passes on the fixtures and on real marks from the charts it's meant for.
+- [ ] A transition effect honours `ctx.start`, pairs by geometry rather than by which mark is `from`, and passes `checkTransition`.

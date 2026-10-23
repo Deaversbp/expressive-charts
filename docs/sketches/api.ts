@@ -8,7 +8,7 @@
  * (registerPreset, registerIcon, registerIcons), the thin bar chart's types (mark events, chart
  * options, accessors, colorAssignment), the donut chart's options, the line chart's options and handle
  * (LineChartOptions, LineChart with reveal), the icons (defineIcon, iconFromSvg, icons), the first
- * effects (travel with its gaits, flash, wiggle, pulse, threshold, sequence, parallel, only, stagger), the
+ * effects (travel with its gaits, flash, wiggle, pulse, threshold, morph, sequence, parallel, only, stagger), the
  * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch, playback with its
  * playButton, and the adapters, expressive() with its types (MarkSource, Attachment, ExpressiveOptions) and
  * fromVegaView() with its own (VegaOptions, VegaViewLike, VegaAttachment). The conformance suite is ./testing.ts.
@@ -35,7 +35,7 @@ import type {
 // ── Shared contracts and drawing API: built, in src/core/contracts ───────────
 // MarkGeometry, Outline, Sample, MarkData (with previous), Paint, MarkStyle, MarkHandle, IconHandle,
 // PathHandle, TextStyle, TextHandle, Layer, EffectContext (with previous), GeometryEffect,
-// DataEffect, TransitionEffect, MarkEffect, AnyMarkEffect, Combined; and the effect slots
+// DataEffect, TransitionEffect, TransitionContext (with start), MarkEffect, AnyMarkEffect, Combined; and the effect slots
 // (EffectSlot, EffectSlots, EffectOption, PresetName). The runner that plays slots is internal.
 
 // ── Effects ──────────────────────────────────────────────────────────────────
@@ -47,8 +47,10 @@ import type {
 // units plus its rolling radius (instead of its size), so a gait looks the same at any size. flash
 // takes a width and opacity too, pulse a width; stagger's delay is optional (default 50 ms, the
 // spread capped at 500 ms), and it returns an effect of the same kind rather than the same type.
-// threshold (with ThresholdOptions) is built too, as sketched (M4 decision 11).
-export declare function morph(options?: { readonly points?: number }): TransitionEffect;
+// threshold (with ThresholdOptions) is built too, as sketched (M4 decision 11). So is morph (with
+// MorphOptions and MorphAlign, M5 step 1). Changed from the sketch: it takes `align`, "unroll" or
+// "drop" (M5 decision 1), and a transition's run and end take a TransitionContext, an EffectContext
+// with `start`, so a switch back mid-way retraces (decision 6).
 
 // NEW: helpers for effect authors. Built in M3 (src/effects/define.ts) and public, with
 // GeometryEffectSpec and DataEffectSpec<D>, as are matrix (translate, rotate, scale, multiply, apply)

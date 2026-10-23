@@ -73,7 +73,7 @@ describe("package.json", () => {
     expect(pkg.exports["./testing"]).toEqual({ types: "./dist/testing.d.ts", import: "./dist/testing.js", require: "./dist/testing.cjs" });
     for (const file of entryFiles(pkg).filter((file) => file.startsWith("./dist/testing."))) expect(hasSideEffects(pkg.sideEffects, file), file).toBe(false);
     const testing = await import("./testing");
-    expect(Object.keys(testing).sort()).toEqual(["checkEffect", "fixtures", "play", "testContext"]);
+    expect(Object.keys(testing).sort()).toEqual(["checkEffect", "checkTransition", "fixturePairs", "fixtures", "play", "testContext"]);
   });
 
   it("has no runtime dependencies: D3 and the other libraries the tests use are dev dependencies", async () => {

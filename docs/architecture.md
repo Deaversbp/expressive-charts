@@ -161,13 +161,13 @@ barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("so
 
 ## Effects
 
-The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The effects [`travel`](#travel), [`flash`](#flash), [`wiggle`](#wiggle) and [`pulse`](#pulse), the data effect [`threshold`](#threshold), and the combinators `sequence`, `parallel`, `only` and [`stagger`](#stagger), are in `src/effects/`.
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The effects [`travel`](#travel), [`flash`](#flash), [`wiggle`](#wiggle) and [`pulse`](#pulse), the data effect [`threshold`](#threshold), the transition effect [`morph`](#morph), and the combinators `sequence`, `parallel`, `only` and [`stagger`](#stagger), are in `src/effects/`.
 
 There are three kinds, distinguished by a `kind` field:
 
 - **Geometry effects** (`GeometryEffect`) receive a `MarkGeometry`.
 - **Data effects** (`DataEffect<D>`) also receive the mark's `MarkData<D>`: values along the walk, related series and the previous values. Their `run`, `end` and `clear` are function-typed properties rather than methods, so TypeScript checks the row type strictly and an effect that needs fields a chart's rows don't have is a type error.
-- **Transition effects** (`TransitionEffect`) receive two geometries (`morph`). They can't be used where a mark effect is expected.
+- **Transition effects** (`TransitionEffect`) receive two geometries, `run(from, to, ctx)` and `end(from, to, ctx)`, on a [`TransitionContext`](#transition-effects) (`morph`). They can't be used where a mark effect is expected.
 
 Each one has `run`, `end` (the final state, used for reduced motion) and `clear`. Effects are stateless: one effect object can run on many marks at once, and per-run state lives on the `EffectContext`:
 
@@ -182,11 +182,18 @@ Each one has `run`, `end` (the final state, used for reduced motion) and `clear`
 | `onChange()` | Called when the geometry moves |
 | `previous` | The geometry before this update, on update events |
 
-Planned: `morph()`.
+### Transition effects
+
+A transition effect plays between two views of the same mark: `run(from, to, ctx)` turns `from` into `to`, `end(from, to, ctx)` draws the final state at once (motion off), and `clear(ctx)` does any extra cleanup. A run resolves when it's done or aborted, leaving its end state drawn until it's cleared. Its context, `TransitionContext`, is an `EffectContext` with one more field:
+
+- **`start`**, from 0 to 1: where the run begins, in the effect's own progress (morph's is the shapes' eased progress). 0 plays it all. A switch back mid-way plays the reverse pair from 1 minus the progress the first had reached (M5 decision 6), so an effect that honours `start` retraces; one that ignores it replays from its beginning.
+- **`mark` does nothing and `onChange` never fires.** Both views' marks are hidden while a transition plays, so there's nothing to restyle, and a resize mid-switch lands it rather than moving its shapes. `previous` isn't set: `from` is the previous geometry.
+
+The [transition player](#playing-transitions) plays them with the runner's rules. `checkTransition` in `expressive-charts/testing` checks one (see [below](#testing-effects-without-a-dom)). `TransitionEffect` and `TransitionContext` are under the 0.x promise, with the other contracts.
 
 ### Writing effects
 
-Effects written outside the library are made with `defineEffect(spec)` and `defineDataEffect<D>(spec)` (`src/effects/define.ts`). A spec is the effect without its `kind`, with `clear` optional. Each fills in the kind and a `clear()` that does nothing, throws a `TypeError` unless `run` and `end` are functions (every effect needs an end state, for reduced motion), and freezes the result, keeping only `run`, `end`, `clear` and, for data effects, a frozen copy of `needs`. `DataEffectSpec<D>`'s functions are properties, as on `DataEffect`, so a spec that reads fields `D` doesn't have is a type error. The [effects guide](effects-guide.md) is the author's documentation: the contract, the context and drawing API, timing, end states, the data guardrails, data effects, composing, testing with `checkEffect`, worked examples and a review checklist. This API, with `matrix`, `offset`, `describe.*`, the contracts and `expressive-charts/testing`, is under the 0.x promise in [CHANGELOG.md](../CHANGELOG.md).
+Effects written outside the library are made with `defineEffect(spec)` and `defineDataEffect<D>(spec)` (`src/effects/define.ts`). A spec is the effect without its `kind`, with `clear` optional. Each fills in the kind and a `clear()` that does nothing, throws a `TypeError` unless `run` and `end` are functions (every effect needs an end state, for reduced motion), and freezes the result, keeping only `run`, `end`, `clear` and, for data effects, a frozen copy of `needs`. `DataEffectSpec<D>`'s functions are properties, as on `DataEffect`, so a spec that reads fields `D` doesn't have is a type error. The [effects guide](effects-guide.md) is the author's documentation: the contract, the context and drawing API, timing, end states, the data guardrails, data effects, composing, testing with `checkEffect`, transition effects and `checkTransition`, worked examples and a review checklist. A transition effect is written as a plain object of kind `"transition"`: there's no definer for it. This API, with `matrix`, `offset`, `describe.*`, the contracts and `expressive-charts/testing`, is under the 0.x promise in [CHANGELOG.md](../CHANGELOG.md).
 
 ### travel
 
@@ -266,6 +273,24 @@ threshold({ compareTo, when?, color? })   // on: { decorate: only("goals", thres
 - **No animation.** It's an encoding, so it draws at once, with no tween; a fade would flicker as a line extends. It redraws on every `onChange` with the latest data, after a run and after `end()`, reusing its paths, so it follows a transition, a resize or a line being revealed. `end()` draws the same picture, so the colour shows with motion off. It belongs in `on.decorate`.
 - `compareTo` must be a finite number or a non-empty string, `when` `"below"` or `"above"`, and `color` a non-empty string, or it throws a `RangeError` when it's made. It reads no row fields, so its type is `DataEffect` (rows `unknown`), which fits any chart.
 
+### morph
+
+```ts
+morph({ points?, align? })   // chartSwitch's transition (M5 step 3)
+```
+
+`morph` is the first transition effect: it turns one mark's shape into another's, as the lab's donut turns into columns. It reads only the two geometries' outlines, walks and pivots, so it morphs any mark into any other.
+
+- **Two closed outlines** (bars, slices, points). Both are sampled with `outline.sample(points)` (default 160, 40 a side, the lab's), and each point moves in a straight line to its partner, drawn as one filled path in `"mark"`, the key's colour. At progress 0 the path is `from`'s own `outline.d`, at 1 `to`'s; in between it's the polygon through the moving points.
+- **Which point is whose partner** (`align`, M5 decisions 1 and 10). `"unroll"` pairs point i with point i, so each side meets the same side: a slice's walk becomes a column's, and it stands up, its outer arc becoming the column's left side. `"drop"` turns the pairing by a quarter of the points, as the lab does: a slice's outer arc meets a column's top, so it settles onto the baseline. The turn goes from a mark that goes round its pivot to one that doesn't, whichever is `from`: a mark goes round its pivot when its `start`, `center` and `end` are the same distance from it, give or take 0.5 px, and more than 0.5 px away, the test the adapter's ring order uses. A slice does, a bar or a point doesn't. Between two marks that both go round their pivots, or neither does, `"drop"` pairs as `"unroll"` does. The polygon starts at the round mark's first point either way, and each coordinate is weighted on both sides (`x·(1 − p) + y·p`), so a run back from `1 − p` draws exactly the picture the run forward drew at p, to the last rounded digit.
+- **The default `align` is `"unroll"`, for now.** You choose it in the morph demo (M5 step 4), and the other stays an option.
+- **Two open outlines** (lines). Both strokes are sampled at `points` along their length, point i to point i, and drawn as one stroked path whose width moves from `from`'s thickness to `to`'s.
+- **A closed and an open outline** crossfade: `from`'s own outline fades out as `to`'s fades in, the area always below the stroke, so a switch back draws the same picture. The end state is `to` alone, with no opacity.
+- **Timing.** 950 ms base with `transition` timing (the lab's `dur(950)`: at most 200 ms in Analysis, a jump in Off), eased with `easeInOutCubic`. A run from `ctx.start` begins with the shapes at that eased progress, and takes the rest of the time a full run would: it starts at the linear time where the ease reaches `start` and ends when a full run would, so it takes its share of the *scaled* duration, as `playback()` does, and keeps a full run's speed in Analysis too (half a switch takes 100 ms there). It plays through one `ctx.tween()` of the whole 950 ms, finished early.
+- **End state:** `to`'s own outline, filled or stroked as the mark is. `chartSwitch` then clears it and shows the real mark.
+- **Motion off.** A run draws the end at once and asks for no frames; motion turning off mid-run jumps there on the next frame. An abort stops it where it is, and clearing removes its path.
+- `points` must be a whole multiple of 4, at least 4, and `align` `"unroll"` or `"drop"`, or it throws a `RangeError` when it's made.
+
 ### Combinators
 
 - `sequence(...effects)` runs the parts in order, each on the geometry and data as they are when it starts: the combination follows `onChange` from the start, so a part that starts after the mark moved (a transition, a line being revealed) doesn't start where the mark was. An abort stops the chain. `end()` draws every part's end state in order, and `clear()` clears every part, passing on the first error after all have run. A part with nothing to do finishes at once, so `sequence(travel(ball, { along: "goals" }), travel(cleat, { along: "assists" }))` tells the right story whether the bar shows goals, assists or both.
@@ -327,7 +352,13 @@ It imports no test runner: it resolves when everything passes, and otherwise rej
 - **Batch.** `batch` places the mark in its event's batch, so a staggered effect waits its turn first.
 - Also a failure: `run()` not returning a promise, a run that hasn't settled after 10 s, and anything that throws.
 
-`src/effects/conformance.test.ts` runs `checkEffect` for every built-in effect (`travel` with each gait and option, and by icon name; `flash`; `wiggle`; `pulse`; a staggered `flash` on the third mark of five; `threshold` against a constant, above in a colour, against a related series, and with a riding ball; and combinations) on the fixtures. `src/conformance.test.ts` runs it for the same effects on real marks: bars from `barChart` and `expressive()`, and slices from `donutChart` and a D3 pie through `expressive()`, each drawn again at another size for check 5, with no change to the effects. `src/effects-guide.test.ts` runs it on the guide's worked examples.
+**Transition effects** have `checkTransition(effect, { pairs, icons, name })` (M5 decisions 5 and 14). On every pair, from a to b and from b to a, it runs checks 1 to 4 above, on contexts with `start: 0`, and a run from `start: 0.5`, which must end as `end()` draws. Then it checks that the effect **retraces**: at p = 0.25, 0.5 and 0.75, a run from b to a from `start: 1 − p` must begin, before its first frame, with the picture a run from a to b begins with from `start: p`, which is where a full run is at p. So a switch back mid-way doesn't jump, and a pairing that depends on which mark is `from` fails. Check 5 doesn't apply: a transition's `onChange` never fires.
+
+- **Pairs.** `fixturePairs` by default: a slice and a column (a mark that goes round its pivot and one that doesn't), a bar and a column, two slices, two lines and two points, the second of two alike being the first's moved twin. `pairs` takes named pairs `[a, b]`, or a list, each named by its marks' keys.
+- **Contexts** are `testContext()`s with `start`, so a page's own transition tests can make one the same way: `{ ...testContext(), start: 0.5 }`.
+- The report names the pair, which way, the check and what differed; for long path data, the place where the two parted.
+
+`src/effects/conformance.test.ts` runs `checkEffect` for every built-in effect (`travel` with each gait and option, and by icon name; `flash`; `wiggle`; `pulse`; a staggered `flash` on the third mark of five; `threshold` against a constant, above in a colour, against a related series, and with a riding ball; and combinations) on the fixtures, and `checkTransition` for `morph` with each `align`, and with 8 points, on the fixture pairs. `src/conformance.test.ts` runs it for the same effects on real marks: bars from `barChart` and `expressive()`, and slices from `donutChart` and a D3 pie through `expressive()`, each drawn again at another size for check 5, with no change to the effects. `src/effects-guide.test.ts` runs it on the guide's worked examples.
 
 ## Runner
 
@@ -357,6 +388,24 @@ runner.hover([mark]); runner.leave(); runner.destroy();
 Each run's `EffectContext` has its own `signal`; the motion view; `tween()` bound to the clock, the motion and the signal (a tween given its own signal is still cancelled with the run); its own `layer` group and `mark` handle; the icon source; `batch`, the mark's position among the marks in that call; and `previous` on update runs. Data effects also get the mark's `MarkData`. On update, `previous` (geometry) and `data.previous` (values) come from the chart, or else from the last geometry and data the runner saw for that key.
 
 The renderer implements `RunnerSurface`: `group(key, slot, order)` returns a new overlay group for one run, asked for on the run's first draw and cleared once when the run is. Groups stack by `order`, the run's start order, rather than by when they were asked for, since a decoration may first draw long after it started. `mark(key)` returns the mark's style handle. `svgSurface()` in `src/charts/render/` is the SVG one, and can also hide a key's groups, as the line chart does for points past its reveal; `recordingSurface()` in `src/core/testing` is an in-memory one.
+
+### Playing transitions
+
+`src/core/transition.ts` plays a [transition effect](#transition-effects) on pairs of marks (M5 decision 9). It's internal, beside the runner: `chartSwitch` (M5 step 3) uses it.
+
+```ts
+const transition = playTransition(pairs, { effect: morph(), surface, start: 0, motion, clock, icons });
+await transition.finished;   // every pair finished (its end state stays drawn) or was cleared
+transition.clear();          // abort, effect.clear(ctx), empty every group
+```
+
+- **One run per pair**, on a context of its own built on the runner's `runScope`: `signal`, `motion`, `tween()`, a `layer` group, `icons`, `batch` (the pair's place among the pairs) and `start`. Its `mark` handle does nothing and `onChange` never fires.
+- **Off.** With motion off, `end()` draws on the context instead of `run()`. If the mode turns off mid-run, runs still going are cleared and replaced by `end()` on a fresh context, in the same group order; finished runs keep what they drew. The player follows the mode only until every run has settled.
+- **Clearing** aborts every run, calls `effect.clear(ctx)` and empties its group, even if the effect forgets; draws after that are ignored. `finished` resolves then too, and it never rejects.
+- **Errors.** An effect that throws or rejects on one pair, in `run` or `end`, is reported and that pair cleared; the others carry on. An error in `clear()` is reported and the cleanup continues. A rejection caused by the run's own abort isn't reported.
+- An effect that isn't a transition throws a `TypeError`, and a `start` outside 0–1 a `RangeError`.
+
+The overlay implements `TransitionSurface`: `group(key, order)` returns a new group for one pair, in overlay coordinates, asked for on the run's first draw with the pair's key (`to.key`), so `"mark"` is that key's colour. Groups stack by `order`, the pair's index.
 
 ## Presets and icons by name
 

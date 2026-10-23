@@ -1,7 +1,7 @@
-import type { DataEffect, EffectContext, GeometryEffect, Icon, MarkData, MarkGeometry } from "../core";
+import type { DataEffect, EffectContext, GeometryEffect, Icon, MarkData, MarkGeometry, Point, TransitionContext, TransitionEffect } from "../core";
 import { describe as build, linear } from "../core";
 import { movedFixtures } from "./fixtures";
-import { checkEffect, fixtures } from "./index";
+import { checkEffect, checkTransition, fixturePairs, fixtures } from "./index";
 
 /** Draws a stroke along the walk up to progress p, following the mark when it moves. */
 function stroke(mark: MarkGeometry, ctx: EffectContext): (p: number) => void {
@@ -42,6 +42,28 @@ const stuck: GeometryEffect = {
   },
   clear() {}
 };
+
+/** Where a dot is p of the way from one point to another, weighted on both sides so a run back lands on the same numbers. */
+const between = (a: Point, b: Point, p: number): Point => ({ x: a.x * (1 - p) + b.x * p, y: a.y * (1 - p) + b.y * p });
+
+/** A dot sliding from `from` to `to` along `route`, from ctx.start. */
+function sliding(route: (from: MarkGeometry, to: MarkGeometry) => [Point, Point]): TransitionEffect {
+  return {
+    kind: "transition",
+    async run(from, to, ctx) {
+      const [a, b] = route(from, to);
+      const dot = ctx.layer.text("•", { at: between(a, b, ctx.start) });
+      await ctx.tween({ duration: 300, ease: linear, update: (k) => dot.update({ at: between(a, b, ctx.start + (1 - ctx.start) * k) }) }).finished;
+    },
+    end(from, to, ctx) {
+      ctx.layer.text("•", { at: route(from, to)[1] });
+    },
+    clear() {}
+  };
+}
+
+/** A dot from one mark's centre to the other's: a well-behaved transition. */
+const slide = sliding((from, to) => [from.center, to.center]);
 
 /** The reason checkEffect rejected, or "passed". */
 const outcome = (checking: Promise<void>): Promise<string> =>
@@ -232,6 +254,7 @@ describe("checkEffect", () => {
 
   it("rejects what isn't a mark effect, and an empty list of marks", async () => {
     await expect(checkEffect({ kind: "transition" } as never)).rejects.toThrow(/checkEffect needs a mark effect.*transition effect/);
+    await expect(checkEffect(slide as never)).rejects.toThrow(/transition effect, .*; check it with checkTransition\.$/);
     await expect(checkEffect(trace, { marks: [] })).rejects.toThrow("checkEffect: there are no marks to check on.");
   });
 
@@ -343,7 +366,110 @@ describe("checkEffect on data effects", () => {
   });
 });
 
+describe("checkTransition", () => {
+  const column = fixtures.column;
+  const dot: Icon = { name: "dot", shapes: [], box: { x: -2, y: -2, width: 4, height: 4 }, size: 4, anchor: { x: 0, y: 0 }, pivot: { x: 0, y: 0 }, footprint: [2, 2] };
+  /** As pictures round. */
+  const round = (value: number): number => Math.round(value * 1000) / 1000;
+
+  it("passes a well-behaved transition on every fixture pair, both ways", async () => {
+    await expect(checkTransition(slide)).resolves.toBeUndefined();
+  });
+
+  it("gives runs start: 0, start: 0.5 and the retrace check's starts, with icons", async () => {
+    const starts = new Set<number>();
+    const seen = new Set<string>();
+    const looking: TransitionEffect = {
+      ...slide,
+      run: (from, to, ctx) => {
+        starts.add(ctx.start);
+        seen.add(`${ctx.icons.get("dot")?.name} ${ctx.batch.index}/${ctx.batch.count}`);
+        return slide.run(from, to, ctx);
+      }
+    };
+    await checkTransition(looking, { pairs: { mine: [fixtures.bar, column] }, icons: [dot] });
+    expect([...starts].sort()).toEqual([0, 0.25, 0.5, 0.75]);
+    expect([...seen]).toEqual(["dot 0/1"]);
+  });
+
+  it("fails a transition that ignores start: a switch back would jump", async () => {
+    const replaying: TransitionEffect = { ...slide, run: (from, to, ctx) => slide.run(from, to, { ...ctx, start: 0 } as TransitionContext) };
+    const message = await outcome(checkTransition(replaying, { name: "replay" }));
+    const lines = message.split("\n");
+    expect(lines[0]).toBe("checkTransition found 5 problems with replay:");
+    expect(lines[1]).toBe(
+      `- on the slice and column, a run back should retrace the run forward: the run from b to a from start: 0.75 begins with item 1 unlike the run from a to b ` +
+        `from start: 0.25: its style is {"at":{"x":10,"y":75}}, not {"at":{"x":${round(fixtures.slice.center.x)},"y":${round(fixtures.slice.center.y)}}}`
+    );
+  });
+
+  it("fails a pairing that depends on which mark is from", async () => {
+    // From's start to to's end: the run back pairs the other ends, so it twists.
+    const crossed = sliding((from, to) => [from.start, to.end]);
+    const message = await outcome(checkTransition(crossed));
+    // Every pair but the two points, whose walks start where they end.
+    expect(message.split("\n")[0]).toBe("checkTransition found 4 problems with the effect:");
+    expect(message).not.toContain("the two points");
+    expect(message).toContain("- on the two lines, a run back should retrace the run forward: the run from b to a from start: 0.75 begins with item 1 unlike");
+  });
+
+  it("runs checkEffect's four checks each way, and a run from start: 0.5", async () => {
+    // Stops short of the end, from wherever it starts.
+    const short: TransitionEffect = {
+      ...slide,
+      async run(from, to, ctx) {
+        const dot = ctx.layer.text("•", { at: between(from.center, to.center, ctx.start) });
+        await ctx.tween({ duration: 300, ease: linear, update: (k) => dot.update({ at: between(from.center, to.center, ctx.start + (0.9 - ctx.start) * k) }) }).finished;
+      }
+    };
+    const message = await outcome(checkTransition(short, { pairs: [[fixtures.bar, column]] }));
+    expect(message.split("\n").map((line) => line.replace(/: item 1 .*$/, ""))).toEqual([
+      "checkTransition found 6 problems with the effect:",
+      `- on pair 1 ("Okafor" and "c"), a to b, a full run should end with the same picture and mark style as end()`,
+      `- on pair 1 ("Okafor" and "c"), a to b, with motion off, no frames should run and the end state should be drawn`,
+      `- on pair 1 ("Okafor" and "c"), a to b, a run from start: 0.5 should end with the same picture as end()`,
+      `- on pair 1 ("Okafor" and "c"), b to a, a full run should end with the same picture and mark style as end()`,
+      `- on pair 1 ("Okafor" and "c"), b to a, with motion off, no frames should run and the end state should be drawn`,
+      `- on pair 1 ("Okafor" and "c"), b to a, a run from start: 0.5 should end with the same picture as end()`
+    ]);
+    // A pair of one mark is named once.
+    expect(await outcome(checkTransition(short, { pairs: [[column, movedFixtures.column]] }))).toContain(`- on pair 1 ("c"), a to b, a full run`);
+  });
+
+  it("reports a run that throws, and a run that doesn't return a promise", async () => {
+    const throwing: TransitionEffect = {
+      ...slide,
+      run() {
+        throw new Error("no shape");
+      }
+    };
+    const message = await outcome(checkTransition(throwing, { pairs: { mine: [fixtures.bar, column] } }));
+    expect(message.split("\n")).toHaveLength(12);
+    expect(message).toContain("- on the mine, a to b, clearing should leave nothing behind: it threw Error: no shape");
+    expect(message).toContain("- on the mine, a run back should retrace the run forward: it threw Error: no shape");
+    const sync = { ...slide, run: () => undefined } as unknown as TransitionEffect;
+    expect(await outcome(checkTransition(sync, { pairs: { mine: [fixtures.bar, column] } }))).toContain("it threw TypeError: run() must return a promise, got undefined.");
+  });
+
+  it("rejects what isn't a transition effect, and an empty list of pairs", async () => {
+    await expect(checkTransition(trace as never)).rejects.toThrow(
+      'checkTransition needs a transition effect (kind "transition" with run, end and clear), got a geometry effect, which plays on one mark; check it with checkEffect.'
+    );
+    await expect(checkTransition({ kind: "transition" } as never)).rejects.toThrow(/got a transition effect without run\(\), end\(\) and clear\(\)\.$/);
+    await expect(checkTransition(slide, { pairs: [] })).rejects.toThrow("checkTransition: there are no pairs to check on.");
+    await expect(checkTransition(slide, { pairs: {} })).rejects.toThrow("checkTransition: there are no pairs to check on.");
+  });
+});
+
 describe("fixtures", () => {
+  it("has the pairs checkTransition runs on, made of fixtures and their moved twins, frozen", () => {
+    expect(Object.keys(fixturePairs)).toEqual(["slice and column", "bar and column", "two slices", "two lines", "two points"]);
+    expect(Object.isFrozen(fixturePairs)).toBe(true);
+    expect(fixturePairs["slice and column"]).toEqual([fixtures.slice, fixtures.column]);
+    expect(fixturePairs["two slices"]).toEqual([fixtures.slice, movedFixtures.slice]);
+    expect(fixturePairs["two points"][1]).toBe(movedFixtures.point);
+  });
+
   it("has one of each kind of mark, frozen", () => {
     expect(Object.keys(fixtures)).toEqual(["bar", "negative bar", "column", "stacked", "short bar", "slice", "line", "point"]);
     expect(Object.isFrozen(fixtures)).toBe(true);

@@ -2,6 +2,7 @@
 // describe, plus the awkward cases (a bar growing the other way, a stack with a gap, a bar shorter
 // than most icons, a point whose walk has no length). Each has a moved twin: the same mark somewhere
 // else, as a resize or a transition's next frame leaves it, for the check that effects follow onChange.
+// checkTransition's pairs are made of the same marks.
 
 import { describe as build, type MarkGeometry } from "../core";
 
@@ -16,6 +17,21 @@ export const fixtures: Readonly<Record<FixtureName, MarkGeometry>> = /* @__PURE_
  * the line further revealed and rescaled, and the point moved.
  */
 export const movedFixtures: Readonly<Record<FixtureName, MarkGeometry>> = /* @__PURE__ */ makeFixtures(true);
+
+export type FixturePairName = "slice and column" | "bar and column" | "two slices" | "two lines" | "two points";
+
+/**
+ * The pairs checkTransition runs a transition effect between by default, each both ways: a slice and
+ * a column (a mark that goes round its pivot and one that doesn't), a bar and a column, two slices,
+ * two lines and two points. The second of two alike is the first's moved twin.
+ */
+export const fixturePairs: Readonly<Record<FixturePairName, readonly [MarkGeometry, MarkGeometry]>> = /* @__PURE__ */ Object.freeze({
+  "slice and column": [fixtures.slice, fixtures.column],
+  "bar and column": [fixtures.bar, fixtures.column],
+  "two slices": [fixtures.slice, movedFixtures.slice],
+  "two lines": [fixtures.line, movedFixtures.line],
+  "two points": [fixtures.point, movedFixtures.point]
+} as const);
 
 function makeFixtures(moved: boolean): Readonly<Record<FixtureName, MarkGeometry>> {
   const y = moved ? 30 : 0;

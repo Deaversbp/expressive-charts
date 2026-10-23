@@ -155,6 +155,37 @@ describe("chartHover", () => {
     expect(document.activeElement).toBe(mark("a"));
   });
 
+  it("ends a pointer's hover on Escape anywhere, without the pointer moving, until it next moves onto a mark", () => {
+    const { svg, heard, tips, hover, mark } = setup();
+    pointer("pointerover", mark("b"));
+    tips.length = 0;
+    press(document.body, "Escape");
+    expect(hover.key).toBeUndefined();
+    expect(tips).toEqual(["hidden"]);
+    expect(svg.classList.contains("ec-hovering")).toBe(false);
+    expect(mark("b").classList.contains("ec-hot")).toBe(false);
+    expect(heard).toEqual(["hover pointer", "leave"]);
+    // Nothing is hovered now, so another Escape does nothing.
+    press(document.body, "Escape");
+    expect(heard).toEqual(["hover pointer", "leave"]);
+    // The pointer moving on the same mark hovers it again.
+    pointer("pointerover", mark("b"));
+    expect(hover.key).toBe("b");
+  });
+
+  it("leaves the hover to an Escape the page has handled, and stops listening once destroyed", () => {
+    const { heard, hover, mark } = setup();
+    const handled = (event: KeyboardEvent): void => event.preventDefault();
+    document.body.addEventListener("keydown", handled);
+    pointer("pointerover", mark("a"));
+    press(document.body, "Escape");
+    expect(hover.key).toBe("a");
+    document.body.removeEventListener("keydown", handled);
+    hover.destroy();
+    press(document.body, "Escape");
+    expect(heard).toEqual(["hover pointer"]);
+  });
+
   it("hands the hover back to the pointer on blur while it's still over the mark", () => {
     const { heard, hover, mark } = setup();
     pointer("pointerover", mark("a"));

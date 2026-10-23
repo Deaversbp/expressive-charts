@@ -140,10 +140,16 @@ test.describe("staged metric switch", () => {
     const top = async (): Promise<number> => (await tanaka.boundingBox())?.y ?? NaN;
     // The bar's length: its segments (goals shrinking out, assists growing in), not the whole body,
     // where the flash draws its halo.
+    // From each segment's fill box: Firefox's getBoundingClientRect() takes in the flash's halo, a stroke.
     const width = (): Promise<number> =>
       tanaka.locator(".ec-segment").evaluateAll((segments) => {
-        const boxes = segments.map((segment) => segment.getBoundingClientRect());
-        return Math.max(...boxes.map((box) => box.right)) - Math.min(...boxes.map((box) => box.left));
+        const xs = segments.flatMap((segment) => {
+          const shape = segment as SVGGraphicsElement;
+          const box = shape.getBBox();
+          const screen = shape.getScreenCTM()!;
+          return [box.x, box.x + box.width].map((x) => new DOMPoint(x, box.y).matrixTransform(screen).x);
+        });
+        return Math.max(...xs) - Math.min(...xs);
       });
     const before = { top: await top(), width: await width() };
 

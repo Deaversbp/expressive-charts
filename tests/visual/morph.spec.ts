@@ -5,7 +5,7 @@
 // "morph-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { FRAME, openDemo, pickMode, pointerAway, REST, tabInto, type Demo } from "./demo";
+import { FRAME, morphDemo, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
 
 type View = "donut" | "columns";
 type Align = "Drop" | "Unroll";
@@ -24,14 +24,6 @@ const mark = (page: Page, name: View, outcome: string): Locator => view(page, na
 
 /** A switch at 950 ms base: 950 in Presentation, 200 in Analysis. */
 const SWITCH = { Presentation: 950, Analysis: 200 } as const;
-
-const morphDemo: Demo = {
-  path: "/morph.html",
-  async ready(page) {
-    await expect(view(page, "donut").locator(".ec-mark")).toHaveCount(4);
-    await expect(view(page, "columns").locator(".ec-mark")).toHaveCount(4);
-  }
-};
 
 /** The view shown, with the other inactive and nothing in the overlay: the switch has landed there. */
 async function expectLanded(page: Page, name: View): Promise<void> {
@@ -239,7 +231,8 @@ test.describe("the screen reader", () => {
   const donutView = ["group: Shot outcomes, share of total", "image: Goal: 58 shots, 14%", "image: Saved: 112 shots, 28%", "image: Off target: 149 shots, 37%", "image: Blocked: 87 shots, 21%", "DisclosureTriangle: Data table"];
   const columnsView = ["group: Shot outcomes, counts", "image: Goal: 58 shots", "image: Saved: 112 shots", "image: Off target: 149 shots", "image: Blocked: 87 shots", "DisclosureTriangle: Data table"];
 
-  test("only the view shown can be read, and the switch announces the new one", async ({ page }) => {
+  test("only the view shown can be read, and the switch announces the new one", async ({ page, browserName }) => {
+    test.skip(browserName !== "chromium", "It reads Chrome's accessibility tree, over CDP.");
     await openDemo(page, morphDemo);
     expect(await readable(page)).toEqual(donutView);
 

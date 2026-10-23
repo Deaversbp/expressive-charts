@@ -427,7 +427,7 @@ The dev server's index links the demos built on the library:
 | `npm run size` | Measures the built package and fails when a size is over its budget in `scripts/size-budget.json` (see [CONTRIBUTING.md](CONTRIBUTING.md#bundle-size)) |
 | `npm run pack-check` | After a build: packs the package, installs it in a new project and checks every entry as ESM and CommonJS, with its types (see [CONTRIBUTING.md](CONTRIBUTING.md#setup)) |
 | `npm test` | Runs the test suite |
-| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html`, `demo/donut.html`, `demo/line.html` and `demo/morph.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
+| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html`, `demo/donut.html`, `demo/line.html` and `demo/morph.html` in Chromium, and their DOM checks and the accessibility checks (axe) in Chromium, Firefox and WebKit, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
 | `npm run typecheck` | Checks types without building |
 
 Requires Node.js 22 or newer (CI tests 22 and 24). A project that uses the package's types needs TypeScript 5.4 or newer, since they use `NoInfer`.

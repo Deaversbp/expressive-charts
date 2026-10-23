@@ -20,12 +20,13 @@ Node.js 22 or newer is required (CI tests 22 and 24).
 
 ## Visual tests
 
-`tests/visual/` takes screenshots of the demo pages in Chromium with [Playwright](https://playwright.dev), with DOM checks beside them:
+`tests/visual/` takes screenshots of the demo pages in Chromium with [Playwright](https://playwright.dev), with DOM checks beside them. Firefox and WebKit run every DOM check too, without the screenshots, so a test that takes a picture should check what it can in the DOM as well:
 
 - `demo/bars.html` (`bars.spec.ts`, `reduced-motion.spec.ts`): light and dark, the ball-and-cleat story mid-travel and at rest, each motion mode, keyboard focus, the tooltip and legend, a staged metric switch, and reduced motion.
 - `demo/donut.html` (`donut.spec.ts`): light and dark, the ball rolling round a slice and at rest on the library's donut and on the D3 pie, a wiggle at its peak and a pulse half-way, the focus ring on both donuts in both themes, and the tooltip. The DOM checks cover reduced motion, the effect picker and "Next match".
 - `demo/line.html` (`line.spec.ts`): light and dark at rest, both charts mid-play at week 20, the crosshair with its tooltip, the focus ring on the line chart and on the D3 line in both themes, the D3 line hovered, and the Vega-Lite line at rest, focused (both themes) and hovered. The DOM checks cover how long Play takes in Presentation and Analysis, Pause, the scrubber, the names, legend and table, the Vega-Lite line following a resize, and reduced motion, where Play ends at once.
-- `demo/morph.html` (`morph.spec.ts`): the donut and the columns in light and dark, a switch half way with each mapping (`"drop"` and `"unroll"`), and the focus ring after a switch. The DOM checks cover how long a switch takes in Presentation, Analysis and Off, reduced motion, a switch back mid-way reversing, the labels swapping their text, focus following its key, the announcement, the mapping control, and only the view shown being in Chrome's accessibility tree.
+- `demo/morph.html` (`morph.spec.ts`): the donut and the columns in light and dark, a switch half way with each mapping (`"drop"` and `"unroll"`), and the focus ring after a switch. The DOM checks cover how long a switch takes in Presentation, Analysis and Off, reduced motion, a switch back mid-way reversing, the labels swapping their text, focus following its key, the announcement, the mapping control, and only the view shown being in Chrome's accessibility tree (in Chromium only, since it's read over CDP).
+- Every page (`a11y.spec.ts`, no screenshots): `axe-core`'s WCAG 2.2 A and AA rules in light and dark, at 320 px and under forced colours, and on `morph.html` mid-switch; the tab order with a visible focus at every stop; the tooltip clear of the focus ring, and dismissed by Escape; text spacing; nothing moving by itself after 5 s; and legends and pressed toggles under forced colours. Only Chromium applies forced colours when they're emulated, so those checks run there. [docs/a11y-audit.md](docs/a11y-audit.md) has what they found.
 
 Time is stopped with Playwright's fake clock, and a test moves it with `page.clock.runFor(ms)`, so every screenshot shows the same frame. `openDemo(page, demo)` in `tests/visual/demo.ts` opens a page with the clock stopped and waits for its charts. Screenshot names are shared across spec files, so a new page's names start with the page's name (`donut-…`). The page must fit the 1000 × 2000 viewport, or `openDemo` throws: a test that scrolled would move the page under a resting pointer.
 
@@ -41,7 +42,7 @@ After `test:visual:update`, look at the changed images in `tests/visual/__screen
 
 Without Docker, run **Update visual baselines** from the repository's Actions tab on your branch: it writes the changed screenshots in the same image and uploads them as the `visual-baselines` artifact, to unzip over `tests/visual/__screenshots__/` and commit.
 
-`npm run test:visual` runs Playwright directly. On Windows and macOS it skips the screenshot comparisons and runs only the DOM checks; it needs Chromium once (`npx playwright install chromium`).
+`npm run test:visual` runs Playwright directly. On Windows and macOS it skips the screenshot comparisons and runs only the DOM checks; it needs the browsers once (`npx playwright install chromium firefox webkit`), or `-- --project=chromium` for Chromium alone. `test:visual:update` writes Chromium's baselines only, since they're the only ones.
 
 The Docker image's tag follows `@playwright/test` in `package.json`. When you upgrade Playwright, pin the exact version, change the image tag in `.github/workflows/ci.yml` and `visual-baselines.yml` to match, and regenerate the baselines.
 

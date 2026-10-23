@@ -129,15 +129,39 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     for (const { key: mark } of marks) markElement(mark)?.classList.add("ec-hot");
     if (options.dim()) svg.classList.add("ec-hovering");
     options.tooltip.show(key);
+    listenForEscape(true);
     hoverMarks(marks, source, segment);
   }
 
   function endHover(): void {
     const marks = hovered?.marks ?? [];
     hovered = undefined;
+    listenForEscape(false);
     svg.classList.remove("ec-hovering");
     options.tooltip.hide();
     leaveMarks(marks);
+  }
+
+  /** The document listening for Escape while something is hovered. */
+  let escapeDoc: Document | undefined;
+  /**
+   * Escape anywhere ends the hover, the pointer's too, as leave() does: its tooltip covers other marks,
+   * so it can be dismissed without moving the pointer (WCAG 1.4.13). With focus on a mark, the
+   * keyboard's own Escape has ended it first.
+   */
+  const dismiss = (event: KeyboardEvent): void => {
+    if (event.key === "Escape" && !event.defaultPrevented && hovered !== undefined) leave();
+  };
+  function listenForEscape(on: boolean): void {
+    escapeDoc?.removeEventListener("keydown", dismiss);
+    escapeDoc = on ? svg.ownerDocument : undefined;
+    escapeDoc?.addEventListener("keydown", dismiss);
+  }
+
+  function leave(): void {
+    // The pointer lets go first, so it hovers again when it next moves onto a mark.
+    interaction.clear();
+    if (hovered !== undefined) endHover();
   }
 
   /** Whether the mark `key` is, or belongs to, the target `target`. */
@@ -241,12 +265,9 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     focus(key) {
       if (options.live(key)) keyboard.focus(key);
     },
-    leave() {
-      // The pointer lets go first, so it hovers again when it next moves onto a mark.
-      interaction.clear();
-      if (hovered !== undefined) endHover();
-    },
+    leave,
     destroy() {
+      listenForEscape(false);
       interaction.destroy();
       keyboard.destroy();
     }

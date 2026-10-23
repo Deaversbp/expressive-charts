@@ -5,7 +5,7 @@
 // "line-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { FRAME, iconTransforms, openDemo, pickMode, REST, tabInto, type Demo } from "./demo";
+import { FRAME, iconTransforms, lineDemo, openDemo, pickMode, REST, tabInto } from "./demo";
 
 /** The library's line chart, the D3 line that expressive() drives, and the scrubber with both charts. */
 const line = (page: Page): Locator => page.locator("#line");
@@ -33,31 +33,29 @@ async function redRuns(chart: Locator): Promise<number> {
   return chart.locator('.ec-overlay .ec-run[data-key="goals"] path').evaluateAll((paths) => paths.filter((path) => !path.closest(".ec-icon")).length);
 }
 
-const lineDemo: Demo = {
-  path: "/line.html",
-  async ready(page) {
-    await expect(line(page).locator(".ec-line")).toHaveCount(2);
-    await expect(line(page).locator(".ec-column")).toHaveCount(38);
-    // expressive() has named the D3 line's paths, so it's attached.
-    await expect(d3Line(page).locator('path.line[role="img"]')).toHaveCount(2);
-    // And fromVegaView() the Vega-Lite line's, once Vega has drawn it.
-    await expect(vegaLine(page).locator('.mark-line path[role="img"]')).toHaveCount(2);
-  }
-};
-
 /** Opens the page and lets the decoration's first trip, the ball rolling the whole season, finish. */
 async function openAtRest(page: Page): Promise<void> {
   await openDemo(page, lineDemo);
   await page.clock.runFor(REST);
 }
 
-/** Moves the pointer onto a goals line, `share` of the way along it: hover() would aim at its box's middle, off the stroke. */
+/**
+ * Moves the pointer onto a goals line, about `share` of the way along it: hover() would aim at its
+ * box's middle, off the stroke. Firefox's pointer lands on whole pixels, so it aims at the first whole
+ * pixel on or after that point that's on the stroke.
+ */
 async function hoverD3Goals(page: Page, share = 0.3, path: Locator = d3Path(page, "goals")): Promise<void> {
   const point = await path.evaluate((element, along) => {
     const path = element as SVGPathElement;
-    const at = path.getPointAtLength(path.getTotalLength() * along);
-    const screen = new DOMPoint(at.x, at.y).matrixTransform(path.getScreenCTM() ?? undefined);
-    return { x: screen.x, y: screen.y };
+    const length = path.getTotalLength();
+    for (let step = 0; step < 200; step++) {
+      const at = path.getPointAtLength(Math.min(length, length * along + step * 0.5));
+      const screen = new DOMPoint(at.x, at.y).matrixTransform(path.getScreenCTM() ?? undefined);
+      const x = Math.round(screen.x);
+      const y = Math.round(screen.y);
+      if (document.elementFromPoint(x, y) === path) return { x, y };
+    }
+    throw new Error("No whole pixel on the line's stroke.");
   }, share);
   await page.mouse.move(point.x, point.y);
 }

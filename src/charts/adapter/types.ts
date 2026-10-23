@@ -76,10 +76,12 @@ export interface ExpressiveOptions<D> {
   /**
    * Names each mark for screen readers, as one item: "Okafor: 16 goals, 4 assists". The element that
    * takes the mark's focus (its first part) becomes `role="img"` with this as its aria-label, and the
-   * mark's other parts are hidden (`aria-hidden`), so a stack isn't read in pieces. Given the mark's row
-   * (its first part's) and the mark. Called for every mark on each read, never per frame. An empty
-   * result, or a throw (reported), leaves that mark's ARIA as the host drew it. Default: the adapter
-   * writes no ARIA, and the host names its own marks.
+   * mark's other parts are hidden (`aria-hidden`), so a stack isn't read in pieces. Unnamed host groups
+   * around them lose a role that would be read in their place (`img`, `graphics-symbol` or
+   * `graphics-object`, as Vega gives them). Given the mark's row (its first part's) and the mark.
+   * Called for every mark on each read, never per frame. An empty result, or a throw (reported), leaves
+   * that mark's ARIA as the host drew it. Default: the adapter writes no ARIA, and the host names its
+   * own marks.
    */
   readonly markLabel?: (datum: D, mark: HostMark<D>) => string;
   /**

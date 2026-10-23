@@ -213,6 +213,25 @@ describe("fromVegaView: a Vega-Lite line", () => {
     expect(visits).toEqual(["xg", "xg", "goals", "xg", "goals"]);
   });
 
+  it("takes the unnamed image role Vega gives each line's group off it, after Vega's own renders too", async () => {
+    // As demo/line.html draws it: with Vega-Lite's descriptions off, the group around each line is a
+    // graphics-symbol with no name, which screen readers may read as one picture, and axe flags.
+    const { view, svg } = await render({ ...lineSpec(), config: { aria: false } });
+    const groups = (): (string | null)[] => linePaths(svg).map((path) => path.parentElement!.getAttribute("role"));
+    expect(groups()).toEqual(["graphics-symbol", "graphics-symbol"]);
+    const e = env("off");
+    const fx = fromVegaView(view, lineOptions, e);
+    expect(groups()).toEqual([null, null]);
+    expect(linePaths(svg).map((path) => path.parentElement!.hasAttribute("aria-roledescription"))).toEqual([false, false]);
+
+    await view.data("season", rowsUpTo(5)).runAsync();
+    await delivered();
+    e.clock.advance(16);
+    expect(groups()).toEqual([null, null]);
+    fx.destroy();
+    expect(groups()).toEqual(["graphics-symbol", "graphics-symbol"]);
+  });
+
   it("follows the View's own renders, new data and a resize, with no refresh() and the elements Vega makes", async () => {
     const { view, svg } = await render(lineSpec());
     const e = env("off");

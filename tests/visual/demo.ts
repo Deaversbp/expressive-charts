@@ -34,6 +34,39 @@ export const barsDemo: Demo = {
   }
 };
 
+/** demo/donut.html: the library's donut and columns, and the D3 pie that expressive() drives. */
+export const donutDemo: Demo = {
+  path: "/donut.html",
+  async ready(page) {
+    await expect(page.locator("#donut .ec-mark")).toHaveCount(4);
+    await expect(page.locator("#columns .ec-mark")).toHaveCount(4);
+    // expressive() has named the pie's slices, so it's attached.
+    await expect(page.locator('#d3-pie path.slice[role="img"]')).toHaveCount(4);
+  }
+};
+
+/** demo/line.html: the library's line chart, the D3 line and the Vega-Lite line. */
+export const lineDemo: Demo = {
+  path: "/line.html",
+  async ready(page) {
+    await expect(page.locator("#line .ec-line")).toHaveCount(2);
+    await expect(page.locator("#line .ec-column")).toHaveCount(38);
+    // expressive() has named the D3 line's paths, so it's attached.
+    await expect(page.locator('#d3-line path.line[role="img"]')).toHaveCount(2);
+    // And fromVegaView() the Vega-Lite line's, once Vega has drawn it.
+    await expect(page.locator('#vega-line .mark-line path[role="img"]')).toHaveCount(2);
+  }
+};
+
+/** demo/morph.html: the donut and the columns in one chartSwitch. */
+export const morphDemo: Demo = {
+  path: "/morph.html",
+  async ready(page) {
+    await expect(page.locator('#shots .ec-switch-view[data-view="donut"] .ec-mark')).toHaveCount(4);
+    await expect(page.locator('#shots .ec-switch-view[data-view="columns"] .ec-mark')).toHaveCount(4);
+  }
+};
+
 /** Opens a demo, bars.html unless another is given, with time stopped at START. */
 export async function openDemo(page: Page, demo: Demo = barsDemo): Promise<void> {
   await page.clock.install({ time: 0 });
@@ -85,6 +118,34 @@ export async function pickMetric(page: Page, metric: Metric, { settle = true } =
 /** Moves the pointer off both charts and the controls, so nothing is hovered. */
 export async function pointerAway(page: Page): Promise<void> {
   await page.mouse.move(2, 2);
+}
+
+/**
+ * Moves the pointer into an SVG shape (a path, a rect), at the point inside it farthest from its edge,
+ * and says where that is. hover() aims at the middle of the bounding box, which for a large slice is in
+ * the hole.
+ */
+export async function hoverShape(page: Page, shape: Locator): Promise<{ x: number; y: number }> {
+  const point = await shape.evaluate((element) => {
+    const geometry = element as SVGGeometryElement;
+    const box = geometry.getBBox();
+    const length = geometry.getTotalLength();
+    const edge = Array.from({ length: 128 }, (_, i) => geometry.getPointAtLength((i / 128) * length));
+    let best = { x: box.x + box.width / 2, y: box.y + box.height / 2, room: -1 };
+    for (let i = 1; i < 32; i++) {
+      for (let j = 1; j < 32; j++) {
+        const x = box.x + (box.width * i) / 32;
+        const y = box.y + (box.height * j) / 32;
+        if (!geometry.isPointInFill(new DOMPoint(x, y))) continue;
+        const room = Math.min(...edge.map((p) => Math.hypot(p.x - x, p.y - y)));
+        if (room > best.room) best = { x, y, room };
+      }
+    }
+    const screen = new DOMPoint(best.x, best.y).matrixTransform(geometry.getScreenCTM() ?? undefined);
+    return { x: screen.x, y: screen.y };
+  });
+  await page.mouse.move(point.x, point.y);
+  return point;
 }
 
 /** Presses Tab, as a keyboard user would, until focus is inside `container`. */

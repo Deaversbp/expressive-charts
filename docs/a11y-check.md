@@ -2,7 +2,7 @@
 
 This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3), [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html` (M4), and [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html` (M5). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
 
-**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).**
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C and section E's steps 13 and 14 are pending. M6's WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
 
 A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to send back.
 
@@ -206,7 +206,7 @@ If the total isn't heard in steps 1 and 5, it's still in the table's total row, 
 
 If the chart's description isn't heard in step 1, it's also in the card's note, but say so: it may need to move.
 
-**Added with M4 step 8: the Vega-Lite line.** Below the two charts, the page draws the season a third time as a Vega-Lite line, which `fromVegaView()` names. It doesn't play: it shows the whole season. Its `<svg>` is `role="group"`, named "Goals and expected goals on a Vega-Lite line"; Vega hides its axes (`aria-hidden`), and `markLabel` names each line as on the D3 line. Vega still gives the groups around its lines roles of its own (`graphics-object`, `graphics-symbol`), with no names. It's one tab stop, after the D3 line. Steps 13 and 14 haven't been run yet. Listen for:
+**Added with M4 step 8: the Vega-Lite line.** Below the two charts, the page draws the season a third time as a Vega-Lite line, which `fromVegaView()` names. It doesn't play: it shows the whole season. Its `<svg>` is `role="group"`, named "Goals and expected goals on a Vega-Lite line"; Vega hides its axes (`aria-hidden`), and `markLabel` names each line as on the D3 line. Vega gives the groups around its lines roles of its own (`graphics-object`, `graphics-symbol`) with no names; since M6's audit, `fromVegaView()` takes those off, so Chrome's tree for this chart is the D3 line's: the group, then one image per line. It's one tab stop, after the D3 line. Listen for:
 
 8. Each Vega-Lite line is read once, by name, and nothing unnamed (a "graphic" or "group" with no name) is read before it.
 
@@ -278,13 +278,13 @@ If a description isn't read at all, that's acceptable: the position is also in t
 
 **M2 step 7's descriptions, NVDA + Chrome on Windows, 22 October 2026: passed.** In [the re-check](#re-check-after-m2-step-7) (section A, steps 1 and 3), each bar's position was read after its name, and neither the name nor the numbers were read twice. So `markDescription` works as intended, and the descriptions stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on the descriptions.
 
-**VoiceOver + Safari:** the full script hasn't been run yet. It was used to hear the "1 goal" wording above.
+**VoiceOver + Safari:** the full script hasn't been run yet. It was used to hear the "1 goal" wording above. **Not run for 0.1** (M6 decision 2): every section with VoiceOver + Safari is in the plan's backlog.
 
-**The second chart (section C):** not run yet, with either screen reader.
+**The second chart (section C):** not run yet, with either screen reader. **Pending (23 October 2026):** M6 step 7 asked for it with NVDA + Chrome, and it couldn't be run that day. Until it is, the evidence is what M6's audit checked without a screen reader ([a11y-audit.md](a11y-audit.md)): axe finds nothing on the page, Chrome's tree for the chart is its group and then one image per player, named with what the bar shows ("Okafor: 16 goals" … "Castillo: 1 goal"), and the tab order is pinned by the visual suite.
 
 **The donut page (section D), NVDA + Chrome on Windows, 22 October 2026: passed.** All 13 steps read as expected, so every "Listen for" item passed: each slice was read once as one item with its share, the donut's name and total were heard on the way in, the arrow keys went clockwise from 12 o'clock and stopped at the ends, the table's Share column and total row were read with their headers, each match was announced once, and the D3 pie read like the donut with its labels silent. The names and roles stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
 
-**The Vega-Lite line on the line page (section E, steps 13 and 14, added with M4 step 8):** not run yet.
+**The Vega-Lite line on the line page (section E, steps 13 and 14, added with M4 step 8):** not run yet. **Pending (23 October 2026):** M6 step 7 asked for them with NVDA + Chrome, and they couldn't be run that day. Before asking, the audit found and fixed what step 13 listens for: Vega's unnamed `graphics-symbol` around each line, which axe flagged, and its `graphics-object`s, which Chrome named from the lines' names. Chrome's tree for the Vega-Lite line is now the D3 line's, which passed steps 11 and 12.
 
 **The line page (section E), NVDA + Chrome on Windows, 22 October 2026: passed.** All 12 steps read as expected, so every "Listen for" item passed:
 - each matchweek was read once, as one item, with both values and then its gap;

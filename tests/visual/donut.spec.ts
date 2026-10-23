@@ -4,7 +4,7 @@
 // Names start with "donut-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { iconTransforms, openDemo, pickMode, pointerAway, REST, tabInto, type Demo } from "./demo";
+import { donutDemo, hoverShape, iconTransforms, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
 
 type Outcome = "Goal" | "Saved" | "Off target" | "Blocked";
 type HoverEffect = "Ball" | "Wiggle" | "Pulse";
@@ -19,44 +19,9 @@ const slice = (page: Page, outcome: Outcome): Locator => donut(page).locator(`.e
 /** An outcome's slice on the D3 pie, by the class the page's D3 code gives it. */
 const pieSlice = (page: Page, outcome: Outcome): Locator => pie(page).locator(`path.slice-${outcome.toLowerCase().replace(" ", "-")}`);
 
-/**
- * Moves the pointer into a slice's path, at the point inside it farthest from its edge. hover() aims
- * at the middle of the bounding box, which for a large slice is in the hole.
- */
-async function hoverPath(page: Page, path: Locator): Promise<void> {
-  const point = await path.evaluate((element) => {
-    const shape = element as SVGPathElement;
-    const box = shape.getBBox();
-    const length = shape.getTotalLength();
-    const edge = Array.from({ length: 128 }, (_, i) => shape.getPointAtLength((i / 128) * length));
-    let best = { x: box.x + box.width / 2, y: box.y + box.height / 2, room: -1 };
-    for (let i = 1; i < 32; i++) {
-      for (let j = 1; j < 32; j++) {
-        const x = box.x + (box.width * i) / 32;
-        const y = box.y + (box.height * j) / 32;
-        if (!shape.isPointInFill(new DOMPoint(x, y))) continue;
-        const room = Math.min(...edge.map((p) => Math.hypot(p.x - x, p.y - y)));
-        if (room > best.room) best = { x, y, room };
-      }
-    }
-    const screen = new DOMPoint(best.x, best.y).matrixTransform(shape.getScreenCTM() ?? undefined);
-    return { x: screen.x, y: screen.y };
-  });
-  await page.mouse.move(point.x, point.y);
-}
-
-const hoverSlice = (page: Page, outcome: Outcome): Promise<void> => hoverPath(page, slice(page, outcome).locator(".ec-slice"));
-const hoverPieSlice = (page: Page, outcome: Outcome): Promise<void> => hoverPath(page, pieSlice(page, outcome));
-
-const donutDemo: Demo = {
-  path: "/donut.html",
-  async ready(page) {
-    await expect(donut(page).locator(".ec-mark")).toHaveCount(4);
-    await expect(columns(page).locator(".ec-mark")).toHaveCount(4);
-    // expressive() has named the pie's slices, so it's attached.
-    await expect(pie(page).locator('path.slice[role="img"]')).toHaveCount(4);
-  }
-};
+/** The pointer into a slice, well inside it: hover() aims at the middle of the bounding box, which for a large slice is in the hole. */
+const hoverSlice = (page: Page, outcome: Outcome): Promise<unknown> => hoverShape(page, slice(page, outcome).locator(".ec-slice"));
+const hoverPieSlice = (page: Page, outcome: Outcome): Promise<unknown> => hoverShape(page, pieSlice(page, outcome));
 
 const effectButton = (page: Page, effect: HoverEffect): Locator =>
   page.getByRole("group", { name: "Hover effect" }).getByRole("button", { name: effect, exact: true });

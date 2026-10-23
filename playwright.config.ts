@@ -1,4 +1,5 @@
-// The visual suite: screenshots of the demo pages in Chromium, on a stopped clock (tests/visual/demo.ts).
+// The visual suite: screenshots of the demo pages in Chromium, on a stopped clock (tests/visual/demo.ts),
+// with DOM checks beside them, which Firefox and WebKit run too, without the screenshots.
 // Baselines come from Linux in the official Playwright image, the one CI runs in, because fonts
 // render differently on each OS. CONTRIBUTING.md has the commands.
 import { defineConfig } from "@playwright/test";
@@ -31,9 +32,15 @@ export default defineConfig({
       maxDiffPixels: 10
     }
   },
+  // One set of baselines, Chromium's. Firefox and WebKit run every DOM check, so README can name the
+  // browsers the library works in; their pictures would each need a set of their own.
+  projects: [
+    { name: "chromium", use: { browserName: "chromium" } },
+    { name: "firefox", use: { browserName: "firefox" }, ignoreSnapshots: true },
+    { name: "webkit", use: { browserName: "webkit" }, ignoreSnapshots: true }
+  ],
   use: {
     baseURL: `http://localhost:${PORT}`,
-    browserName: "chromium",
     // Taller than the page, so it never scrolls: a screenshot that scrolled an element into view would
     // move the page under a resting pointer and hover a different bar.
     viewport: { width: 1000, height: 2000 },

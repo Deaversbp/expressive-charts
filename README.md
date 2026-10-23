@@ -304,7 +304,7 @@ const fx = expressive(svg.selectAll("rect"), {
 fx.refresh(svg.selectAll("rect"));                   // after the page redraws: enter, update and exit by key
 ```
 
-For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Without `value`, the adapter compares lengths, so a resize or a new axis maximum counts as an update for every bar (and `update: "flash"` flashes them all); with it, only bars whose values changed get one, as on `barChart`.
+For Observable Plot, which binds each rect to its row's index, pass `datum: (el) => rows[el.__data__]`. Plot draws a new `<svg>` each time, so pass `refresh()` its rects: `fx.refresh(newPlot.querySelectorAll('g[aria-label="bar"] > rect'))`. After a transform that derives new data (`groupY`, `binX`), the index is into Plot's derived rows, not yours, so read them through the mark's `render` option instead. Without `value`, the adapter compares lengths, so a resize or a new axis maximum counts as an update for every bar (and `update: "flash"` flashes them all); with it, only bars whose values changed get one, as on `barChart`.
 
 Other shapes take a `geometry` callback built with `describe`. A D3 donut, for example, drawn with `d3.pie()` and `d3.arc().innerRadius(70).outerRadius(116)` in a `<g>` centred on the donut:
 
@@ -338,6 +338,8 @@ const fx = expressive(svg.selectAll("path.line"), {
   on: { decorate: only("goals", threshold({ compareTo: "xg" })) } // red wherever goals are below xG
 });
 ```
+
+A Plot line takes one more accessor: each path is bound to its series' row indices, with `-1` where Plot breaks the line at a missing value, so pass `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, and take the points from Plot's own scales, `x: plot.scale("x").apply(r.week)`. Where Plot leaves a gap, the described line goes straight across it. The Plot accessors are tested against Plot 0.6.17.
 
 To follow the host's own transitions frame by frame, pass `watch: true`. The adapter watches the marks' geometry attributes, and `transform` and `style` on the groups above them, and once a frame reads again only the marks that moved, so the red runs and a ball riding the goals line (`travel("soccer-ball", { ride: "on" })`) keep up with a D3 transition, or with a reveal the page draws itself, without firing events. Call `refresh()` when the host joins new data, before its transition starts: that's when `enter`, `update` and `exit` fire. A `geometry` callback should read the element, or a row the host updates each frame; one that reads the transition's target row sees only the end. It's opt-in, since its cost grows with the marks that move: measured in Chromium on a desktop, it adds about half a millisecond a frame to 20 bars in a D3 transition or to a two-line reveal, and 2.7 ms to 200 moving bars.
 

@@ -20,7 +20,7 @@ export interface MorphOptions {
    * - "drop" turns the matching by one side, as the lab does: a slice's outer arc becomes a column's
    *   top, so it settles onto the baseline.
    *
-   * Default "unroll", for now: the default is chosen in the morph demo (M5 step 4).
+   * Default "unroll", picked over "drop" by comparing the two in the morph demo (demo/morph.html).
    */
   readonly align?: MorphAlign;
 }

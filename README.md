@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart, a donut chart and a line chart, the `expressive()` adapter for marks drawn by other code (and `fromVegaView()` for Vega and Vega-Lite), icons, the first effects (`travel`, `flash`, `wiggle`, `pulse`, the data effect `threshold` and the transition effect `morph`, with `sequence`, `parallel`, `only` and `stagger`), switching between charts with `chartSwitch`, the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-donut-and-line-charts-travel-and-the-adapter)). The morph demo is still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart, a donut chart and a line chart, the `expressive()` adapter for marks drawn by other code (and `fromVegaView()` for Vega and Vega-Lite), icons, the first effects (`travel`, `flash`, `wiggle`, `pulse`, the data effect `threshold` and the transition effect `morph`, with `sequence`, `parallel`, `only` and `stagger`), switching between charts with `chartSwitch`, the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-donut-and-line-charts-travel-and-the-adapter)). So are the demos of every card in the prototype, the morph included. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -241,7 +241,7 @@ const drop = morph({ align: "drop" });     // a slice's outer arc becomes the co
 const unroll = morph({ align: "unroll" }); // side to side: the slice stands up, its arc becoming the column's side
 ```
 
-`"unroll"` is the default for now; the morph demo is where it's chosen.
+`"unroll"` is the default, picked by comparing the two in the morph demo; `"drop"` stays an option.
 
 `chartSwitch()` shows views of the same data in one place, one at a time, and morphs each mark into the mark with its key in the next: the lab's donut turning into columns. Each view is a function that draws its chart in the container it's given, with the switch's colours, so each outcome keeps its colour from slice to column. Labels move with their shapes and swap their text half way ("14%" becomes "58"), a key in only one view fades, and the old view's axes, centre text, legend and table fade out as the new one's fade in. Only the shown view can be seen, reached or read; focus on a mark moves to the same key in the new view; and a switch back mid-way reverses from where the shapes are. It takes 950 ms in Presentation, 200 in Analysis, and none with motion off:
 

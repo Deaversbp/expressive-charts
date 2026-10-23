@@ -112,6 +112,12 @@ type Listeners<D> = { [K in keyof MarkEvents<D>]: Set<(event: MarkEvents<D>[K]) 
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ONE = { index: 0, count: 1 } as const;
+/**
+ * Host roles around named marks that unwrapNames takes off when they have no name: images, read as
+ * one picture whose children screen readers may skip (`image` is ARIA 1.3's name for `img`), and
+ * `graphics-object`, which takes its name from its contents, so the marks' names would be read twice.
+ */
+const WRAPPING_ROLES = new Set(["img", "image", "graphics-symbol", "graphics-object"]);
 
 export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<D>, env: ChartEnv): Attachment<D> {
   checkOptions(options);
@@ -311,6 +317,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   const leaving = new Map<string, MarkRecord<D>>();
   /** Every live mark's elements. Events find their mark through it. */
   let owners = new Map<Element, Owner<D>>();
+  /** The host's elements around named marks whose role we took off (unwrapNames). */
+  let unwrapped = new Set<Element>();
   const listeners: Listeners<D> = { enter: new Set(), update: new Set(), exit: new Set(), hover: new Set(), leave: new Set() };
   let hovered: { readonly key: string; readonly source: HoverSource } | undefined;
   /** The mark showing the focus ring. */
@@ -403,6 +411,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     // Elements that left their mark, or moved to another one, get back what the host had.
     for (const [el, owner] of before) if (owners.get(el)?.record !== owner.record) edits.restore(el);
     for (const record of order) nameMark(record);
+    unwrapNames();
 
     placeOverlay();
     applyDim();
@@ -427,6 +436,39 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       if (named) edits.remove(part.element, "aria-hidden");
       else edits.attribute(part.element, "aria-hidden", label === undefined ? null : "true");
     });
+  }
+
+  /**
+   * With `markLabel`, the host's unnamed elements around a named mark's parts lose a wrapping role
+   * (WRAPPING_ROLES) and its `aria-roledescription`, so the marks are read as the host's own `<g>`s
+   * would leave them: once each, by name. Vega gives the group around each line `graphics-symbol`, an
+   * image with no name (which fails WCAG 1.1.1), and the groups above it `graphics-object`. It writes
+   * them again when it redraws, so they're taken off on every read, and an element with no named mark
+   * inside any more gets its role back.
+   */
+  function unwrapNames(): void {
+    const svg = root;
+    const next = new Set<Element>();
+    for (const record of options.markLabel && svg ? order : []) {
+      if (record.mark.label === undefined) continue;
+      for (const part of record.mark.parts) {
+        for (let element: Element | null = part.element.parentElement; element && element !== svg && svg?.contains(element); element = element.parentElement) {
+          if (next.has(element) || element.hasAttribute("aria-label") || element.hasAttribute("aria-labelledby")) continue;
+          const role = element.getAttribute("role")?.trim().split(/\s+/)[0];
+          if ((role !== undefined && WRAPPING_ROLES.has(role)) || (role === undefined && unwrapped.has(element))) next.add(element);
+        }
+      }
+    }
+    for (const element of unwrapped) {
+      if (next.has(element)) continue;
+      edits.attribute(element, "role", null);
+      edits.attribute(element, "aria-roledescription", null);
+    }
+    for (const element of next) {
+      edits.remove(element, "role");
+      edits.remove(element, "aria-roledescription");
+    }
+    unwrapped = next;
   }
 
   /** The overlay is the root's last child, in the common ancestor's coordinates. */

@@ -13,7 +13,7 @@
 
 import type { Baseline, MarkData, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
 import { defaultClock, matrix } from "../../core";
-import { invert } from "../../core/geometry";
+import { goesRound, invert } from "../../core/geometry";
 import { EFFECT_SLOTS, resolveEffects } from "../../core/registry";
 import { report } from "../../core/report";
 import { createRunner, type RunInput } from "../../core/runner";
@@ -894,16 +894,6 @@ function ringOrder<T>(marks: readonly T[], geometryOf: (mark: T) => MarkGeometry
     .map((mark) => ({ mark, angle: clockwise(mark) }))
     .sort((a, b) => a.angle - b.angle)
     .map(({ mark }) => mark);
-}
-
-/**
- * Whether the mark's walk goes round its pivot: its start, centre and end all the same distance from
- * the pivot, give or take 0.5 px, and more than 0.5 px away. An arc's pivot is the donut's centre; a
- * line's, a bar's and a point's is on its own walk, so lines that start at one point aren't a ring.
- */
-function goesRound(mark: MarkGeometry): boolean {
-  const radius = distance(mark.start, mark.pivot);
-  return radius > 0.5 && Math.abs(distance(mark.center, mark.pivot) - radius) <= 0.5 && Math.abs(distance(mark.end, mark.pivot) - radius) <= 0.5;
 }
 
 function distance(a: Point, b: Point): number {

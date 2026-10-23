@@ -1,4 +1,4 @@
-import { matrix } from "../core";
+import { matrix } from "./matrix";
 import { formatPath, parsePath, transformPath } from "./path";
 
 const round = (d: string): string => formatPath(parsePath(d));

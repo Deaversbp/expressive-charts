@@ -1,4 +1,4 @@
-import { easeInOutCubic, easeOutCubic, linear, type Easing } from "./easing";
+import { easeInOutCubic, easeOutCubic, linear, unease, type Easing } from "./easing";
 
 describe.each([
   ["linear", linear],
@@ -29,5 +29,14 @@ describe("easing shapes", () => {
 
   it("easeOutCubic covers most of the distance early", () => {
     expect(easeOutCubic(0.5)).toBeCloseTo(0.875);
+  });
+});
+
+describe("unease", () => {
+  it("is easeInOutCubic's inverse", () => {
+    expect(unease(0)).toBe(0);
+    expect(unease(0.5)).toBe(0.5);
+    expect(unease(1)).toBe(1);
+    for (let i = 0; i <= 100; i++) expect(easeInOutCubic(unease(i / 100))).toBeCloseTo(i / 100, 12);
   });
 });

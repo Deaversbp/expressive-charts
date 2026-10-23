@@ -2,7 +2,7 @@
 // ways and with each align. Beside src/index.ts because it brings charts and an effect together, as
 // only the composition root may.
 
-import { createMotion, manualClock, type MarkGeometry, type Point } from "./core";
+import { createClock, createMotion, manualClock, type Clock, type MarkGeometry, type Point } from "./core";
 import { createRegistry, type PresetFactory } from "./core/registry";
 import { flush } from "./core/testing";
 import { barChart, chartSwitch as buildChartSwitch, colorAssignment, donutChart, type ChartEnv, type ChartLabel } from "./charts";
@@ -19,8 +19,7 @@ const KEYS = outcomes.map((row) => row.outcome);
 const POINTS = 160;
 const QUARTER = POINTS / 4;
 
-function setup(align?: MorphAlign) {
-  const clock = manualClock();
+function setup<C extends Clock = ReturnType<typeof manualClock>>(align?: MorphAlign, clock: C = manualClock() as unknown as C) {
   const motion = createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
   const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion, clock };
   const target = document.body.appendChild(document.createElement("div"));
@@ -43,9 +42,50 @@ function setup(align?: MorphAlign) {
   return { switcher, overlay, donut, columns, clock };
 }
 
+/**
+ * A clock whose time moves every time it's read, as performance.now() does while a switch samples its
+ * pairs' outlines and draws their first frame (about 0.2 ms in Chromium). Frames come when advanced.
+ */
+function liveClock(perRead = 0.25) {
+  let time = 0;
+  let pending: ((now: number) => void) | undefined;
+  const clock = createClock({
+    now: () => (time += perRead),
+    request(callback) {
+      pending = callback;
+      return () => {
+        if (pending === callback) pending = undefined;
+      };
+    }
+  });
+  return {
+    now: clock.now,
+    onFrame: clock.onFrame,
+    advance(ms: number) {
+      time += ms;
+      const callback = pending;
+      pending = undefined;
+      callback?.(time);
+    }
+  };
+}
+
 /** Each pair's morph as drawn now, by key. */
 function shapes(overlay: SVGSVGElement): Map<string, string> {
   return new Map(Array.from(overlay.querySelectorAll(".ec-switch-runs > .ec-run"), (group) => [group.getAttribute("data-key")!, group.querySelector("path")!.getAttribute("d")!]));
+}
+
+/** The furthest any point of the pairs' shapes moved between two pictures, px. */
+function jump(before: Map<string, string>, after: Map<string, string>): number {
+  expect([...after.keys()]).toEqual([...before.keys()]);
+  let most = 0;
+  for (const [key, d] of before) {
+    const a = points(d);
+    const b = points(after.get(key)!);
+    expect(b).toHaveLength(a.length);
+    a.forEach((p, i) => (most = Math.max(most, Math.hypot(p.x - b[i]!.x, p.y - b[i]!.y))));
+  }
+  return most;
 }
 
 /** The points of a sampled polygon's path data. */
@@ -176,6 +216,25 @@ describe("chartSwitch with morph(): a donut and its columns", () => {
       expect(labelsShown(overlay)).toEqual(labels);
       clock.advance(100);
       expect(shapes(overlay)).not.toEqual(before);
+      document.body.textContent = "";
+    }
+  });
+
+  it("reverses with no jump on a clock that moves while it's read: the labels' tween and the pairs' runs start at one time", () => {
+    for (const align of ["unroll", "drop"] as const) {
+      const { switcher, overlay, clock } = setup(align, liveClock());
+      void switcher.show("columns");
+      clock.advance(300);
+      const before = shapes(overlay);
+      const labels = labelsShown(overlay);
+      void switcher.show("donut");
+      expect(jump(before, shapes(overlay))).toBe(0);
+      expect(labelsShown(overlay)).toEqual(labels);
+      // And again, on the way back.
+      clock.advance(200);
+      const again = shapes(overlay);
+      void switcher.show("columns");
+      expect(jump(again, shapes(overlay))).toBe(0);
       document.body.textContent = "";
     }
   });

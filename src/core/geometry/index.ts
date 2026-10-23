@@ -5,7 +5,9 @@ export { describe } from "./describe";
 export type { ArcSpec, BarSegmentSpec, BarSpec, Baseline, LineSpec, PointSpec } from "./describe";
 export { invert, matrix, offset, parseTransform } from "./matrix";
 export { closedOutline, openOutline, type Sides } from "./outline";
+export { formatPath, parsePath, transformPath, type PathCommand } from "./path";
 export { drawTo, formatNumber, moveTo, pathData } from "./path-data";
+export { goesRound } from "./ring";
 export { samplesAlong, type SamplePoint } from "./samples";
 export {
   angleOn,

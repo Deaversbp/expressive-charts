@@ -5,7 +5,8 @@
 
 import { easeInOutCubic, linear } from "../core";
 import type { Layer, MarkGeometry, Paint, PathHandle, Point, TransitionEffect, Tween } from "../core";
-import { formatNumber } from "../core/geometry";
+import { unease } from "../core/easing";
+import { formatNumber, goesRound } from "../core/geometry";
 
 /** How two closed outlines' sides are matched. */
 export type MorphAlign = "unroll" | "drop";
@@ -29,8 +30,6 @@ export interface MorphOptions {
 const DURATION = 950;
 const POINTS = 160;
 const ALIGNS: readonly string[] = ["unroll", "drop"];
-/** The adapter's ring-order tolerance, px. */
-const ROUND = 0.5;
 
 /** Draws the morph at eased progress p, from 0 (`from`) to 1 (`to`), creating or updating its paths. */
 type Draw = (p: number) => void;
@@ -169,7 +168,8 @@ const mix = (x: number, y: number, p: number): number => x * (1 - p) + y * p;
 /**
  * "drop"'s quarter turn, as [shift into from's samples, shift into to's]: the round mark's point i
  * pairs with the other's point i + n/4, so its first side (a slice's outer arc) meets the other's
- * end side (a column's top). Fixed by the marks' geometry, never by which one is `from`.
+ * end side (a column's top). Fixed by the marks' geometry, never by which one is `from`: whether a
+ * walk goes round its pivot (a slice's does, a bar's doesn't), the test the adapter orders a ring by.
  */
 function turn(from: MarkGeometry, to: MarkGeometry, points: number): [number, number] {
   const quarter = points / 4;
@@ -178,26 +178,9 @@ function turn(from: MarkGeometry, to: MarkGeometry, points: number): [number, nu
   return roundFrom ? [0, quarter] : [quarter, 0];
 }
 
-/**
- * Whether the mark's walk goes round its pivot (a slice does, a bar doesn't): its start, centre and
- * end the same distance from the pivot, give or take 0.5 px, and more than 0.5 px away. The adapter
- * orders a ring of marks with the same test; it reads geometry, not a chart type.
- */
-function goesRound(mark: MarkGeometry): boolean {
-  const radius = distance(mark.start, mark.pivot);
-  return radius > ROUND && Math.abs(distance(mark.center, mark.pivot) - radius) <= ROUND && Math.abs(distance(mark.end, mark.pivot) - radius) <= ROUND;
-}
-
-const distance = (a: Point, b: Point): number => Math.hypot(b.x - a.x, b.y - a.y);
-
 /** `ctx.start` clamped to 0–1; anything else is 0, so a context without one plays it all. */
 function startOf(start: unknown): number {
   return typeof start === "number" && start > 0 ? Math.min(1, start) : 0;
-}
-
-/** The linear progress at which easeInOutCubic reaches s. */
-function unease(s: number): number {
-  return s < 0.5 ? Math.cbrt(s / 4) : 1 - Math.cbrt(2 * (1 - s)) / 2;
 }
 
 function checkOptions(options: MorphOptions): void {

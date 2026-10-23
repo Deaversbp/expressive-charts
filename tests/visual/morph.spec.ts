@@ -5,7 +5,7 @@
 // "morph-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { FRAME, openDemo, pickMode, pointerAway, REST, tabInto, type Demo } from "./demo";
+import { FRAME, morphDemo, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
 
 type View = "donut" | "columns";
 type Align = "Drop" | "Unroll";
@@ -24,14 +24,6 @@ const mark = (page: Page, name: View, outcome: string): Locator => view(page, na
 
 /** A switch at 950 ms base: 950 in Presentation, 200 in Analysis. */
 const SWITCH = { Presentation: 950, Analysis: 200 } as const;
-
-const morphDemo: Demo = {
-  path: "/morph.html",
-  async ready(page) {
-    await expect(view(page, "donut").locator(".ec-mark")).toHaveCount(4);
-    await expect(view(page, "columns").locator(".ec-mark")).toHaveCount(4);
-  }
-};
 
 /** The view shown, with the other inactive and nothing in the overlay: the switch has landed there. */
 async function expectLanded(page: Page, name: View): Promise<void> {

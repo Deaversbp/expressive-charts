@@ -4,7 +4,7 @@
 // Names start with "donut-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { iconTransforms, openDemo, pickMode, pointerAway, REST, tabInto, type Demo } from "./demo";
+import { donutDemo, iconTransforms, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
 
 type Outcome = "Goal" | "Saved" | "Off target" | "Blocked";
 type HoverEffect = "Ball" | "Wiggle" | "Pulse";
@@ -47,16 +47,6 @@ async function hoverPath(page: Page, path: Locator): Promise<void> {
 
 const hoverSlice = (page: Page, outcome: Outcome): Promise<void> => hoverPath(page, slice(page, outcome).locator(".ec-slice"));
 const hoverPieSlice = (page: Page, outcome: Outcome): Promise<void> => hoverPath(page, pieSlice(page, outcome));
-
-const donutDemo: Demo = {
-  path: "/donut.html",
-  async ready(page) {
-    await expect(donut(page).locator(".ec-mark")).toHaveCount(4);
-    await expect(columns(page).locator(".ec-mark")).toHaveCount(4);
-    // expressive() has named the pie's slices, so it's attached.
-    await expect(pie(page).locator('path.slice[role="img"]')).toHaveCount(4);
-  }
-};
 
 const effectButton = (page: Page, effect: HoverEffect): Locator =>
   page.getByRole("group", { name: "Hover effect" }).getByRole("button", { name: effect, exact: true });

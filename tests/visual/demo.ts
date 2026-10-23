@@ -34,6 +34,39 @@ export const barsDemo: Demo = {
   }
 };
 
+/** demo/donut.html: the library's donut and columns, and the D3 pie that expressive() drives. */
+export const donutDemo: Demo = {
+  path: "/donut.html",
+  async ready(page) {
+    await expect(page.locator("#donut .ec-mark")).toHaveCount(4);
+    await expect(page.locator("#columns .ec-mark")).toHaveCount(4);
+    // expressive() has named the pie's slices, so it's attached.
+    await expect(page.locator('#d3-pie path.slice[role="img"]')).toHaveCount(4);
+  }
+};
+
+/** demo/line.html: the library's line chart, the D3 line and the Vega-Lite line. */
+export const lineDemo: Demo = {
+  path: "/line.html",
+  async ready(page) {
+    await expect(page.locator("#line .ec-line")).toHaveCount(2);
+    await expect(page.locator("#line .ec-column")).toHaveCount(38);
+    // expressive() has named the D3 line's paths, so it's attached.
+    await expect(page.locator('#d3-line path.line[role="img"]')).toHaveCount(2);
+    // And fromVegaView() the Vega-Lite line's, once Vega has drawn it.
+    await expect(page.locator('#vega-line .mark-line path[role="img"]')).toHaveCount(2);
+  }
+};
+
+/** demo/morph.html: the donut and the columns in one chartSwitch. */
+export const morphDemo: Demo = {
+  path: "/morph.html",
+  async ready(page) {
+    await expect(page.locator('#shots .ec-switch-view[data-view="donut"] .ec-mark')).toHaveCount(4);
+    await expect(page.locator('#shots .ec-switch-view[data-view="columns"] .ec-mark')).toHaveCount(4);
+  }
+};
+
 /** Opens a demo, bars.html unless another is given, with time stopped at START. */
 export async function openDemo(page: Page, demo: Demo = barsDemo): Promise<void> {
   await page.clock.install({ time: 0 });

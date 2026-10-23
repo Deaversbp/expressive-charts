@@ -5,7 +5,7 @@
 // "line-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { FRAME, iconTransforms, openDemo, pickMode, REST, tabInto, type Demo } from "./demo";
+import { FRAME, iconTransforms, lineDemo, openDemo, pickMode, REST, tabInto } from "./demo";
 
 /** The library's line chart, the D3 line that expressive() drives, and the scrubber with both charts. */
 const line = (page: Page): Locator => page.locator("#line");
@@ -32,18 +32,6 @@ const d3Path = (page: Page, series: "goals" | "xg"): Locator => d3Line(page).loc
 async function redRuns(chart: Locator): Promise<number> {
   return chart.locator('.ec-overlay .ec-run[data-key="goals"] path').evaluateAll((paths) => paths.filter((path) => !path.closest(".ec-icon")).length);
 }
-
-const lineDemo: Demo = {
-  path: "/line.html",
-  async ready(page) {
-    await expect(line(page).locator(".ec-line")).toHaveCount(2);
-    await expect(line(page).locator(".ec-column")).toHaveCount(38);
-    // expressive() has named the D3 line's paths, so it's attached.
-    await expect(d3Line(page).locator('path.line[role="img"]')).toHaveCount(2);
-    // And fromVegaView() the Vega-Lite line's, once Vega has drawn it.
-    await expect(vegaLine(page).locator('.mark-line path[role="img"]')).toHaveCount(2);
-  }
-};
 
 /** Opens the page and lets the decoration's first trip, the ball rolling the whole season, finish. */
 async function openAtRest(page: Page): Promise<void> {

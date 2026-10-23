@@ -1883,6 +1883,7 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
      - **Forced colours in Chromium only.** Firefox's and WebKit's emulation only matches the media query and forces no colours, so the checks there would test nothing (and axe then measured the unforced `Highlight` pair).
      - **The fixes are in the demo pages where the library's defaults pass.** `--ec-text-muted` is 4.62:1 on `--ec-surface`; the motion switch's hint failed only on the pages' darker background. Changing the token would change every tick in every screenshot, so architecture.md says a page sets it darker on a darker background, as the demos now do.
      - **Firefox and WebKit found test problems, not library ones**: Firefox's `getBoundingClientRect()` includes a stroke (a flash's halo, the ring's miter allowance), its pointer lands on whole pixels, and past the last tab stop it keeps focus where Chromium leaves the page. The checks now measure fill boxes plus half the stroke, aim at whole pixels, and stop at a repeated stop. No browser needed a library change.
+   - **Left: your NVDA runs.** Section C and section E's steps 13 and 14 couldn't be run on 23 October 2026, so they're recorded as pending in [a11y-check.md](a11y-check.md#results), and the step's ✅ waits for them. The audit's rows that cite them rest on axe and Chrome's tree meanwhile. When E 13–14 pass, M4 gets its ✅ too, along with step 6's look at the Vega-Lite card.
 
 **Wave 3** (after wave 2 lands):
 

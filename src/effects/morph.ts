@@ -6,7 +6,8 @@
 import { easeInOutCubic, linear } from "../core";
 import type { Layer, MarkGeometry, Paint, PathHandle, Point, TransitionEffect, Tween } from "../core";
 import { unease } from "../core/easing";
-import { formatNumber, goesRound } from "../core/geometry";
+import { formatNumber } from "../core/geometry";
+import { goesRound } from "../core/geometry/ring";
 
 /** How two closed outlines' sides are matched. */
 export type MorphAlign = "unroll" | "drop";

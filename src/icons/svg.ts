@@ -3,7 +3,8 @@
 
 import type { Icon, IconShape, Matrix, Point, Rect } from "../core";
 import { matrix } from "../core";
-import { formatPath, parsePath, parseTransform, transformPath, type PathCommand } from "../core/geometry";
+import { parseTransform } from "../core/geometry";
+import { formatPath, parsePath, transformPath, type PathCommand } from "../core/geometry/path";
 import { defineIcon, type IconSpec } from "./define";
 
 /**

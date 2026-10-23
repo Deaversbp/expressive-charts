@@ -21,6 +21,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # The bundle-size check (scripts/size.mjs), once: sizes don't depend on Node's version.
+      - run: npm run size
+        if: matrix.node == 24
+      # Installs the packed tarball in a new project and uses it as ES modules and as CommonJS, with types.
+      - run: npm run pack-check
 
   visual:
     # Screenshots of the demo pages in Chromium (playwright.config.ts). The job runs in the official

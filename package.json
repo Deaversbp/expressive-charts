@@ -8,6 +8,10 @@
     "type": "git",
     "url": "git+https://github.com/Deaversbp/expressive-charts.git"
   },
+  "homepage": "https://github.com/Deaversbp/expressive-charts#readme",
+  "bugs": {
+    "url": "https://github.com/Deaversbp/expressive-charts/issues"
+  },
   "keywords": [
     "charts",
     "data-visualization",
@@ -22,24 +26,40 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./icons/sport": {
-      "types": "./dist/icons/sport.d.ts",
-      "import": "./dist/icons/sport.js",
-      "require": "./dist/icons/sport.cjs"
+      "import": {
+        "types": "./dist/icons/sport.d.ts",
+        "default": "./dist/icons/sport.js"
+      },
+      "require": {
+        "types": "./dist/icons/sport.d.cts",
+        "default": "./dist/icons/sport.cjs"
+      }
     },
     "./testing": {
-      "types": "./dist/testing.d.ts",
-      "import": "./dist/testing.js",
-      "require": "./dist/testing.cjs"
+      "import": {
+        "types": "./dist/testing.d.ts",
+        "default": "./dist/testing.js"
+      },
+      "require": {
+        "types": "./dist/testing.d.cts",
+        "default": "./dist/testing.cjs"
+      }
     },
     "./style.css": "./dist/expressive-charts.css"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "sideEffects": [
     "**/*.css"
@@ -47,9 +67,15 @@
   "engines": {
     "node": ">=22"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "dev": "vite demo",
     "build": "tsup",
+    "size": "node scripts/size.mjs",
+    "pack-check": "node scripts/pack-check.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p docs/sketches && tsc -p tests/visual",
@@ -66,7 +92,7 @@
     "d3-shape": "3.2.0",
     "jsdom": "^29.1.1",
     "tsup": "^9.0.0",
-    "typescript": "^5.6.3",
+    "typescript": "5.9.3",
     "vega": "6.4.0",
     "vega-lite": "6.5.0",
     "vite": "^8.3.4",

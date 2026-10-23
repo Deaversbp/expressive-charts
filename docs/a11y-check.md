@@ -206,7 +206,7 @@ If the total isn't heard in steps 1 and 5, it's still in the table's total row, 
 
 If the chart's description isn't heard in step 1, it's also in the card's note, but say so: it may need to move.
 
-**Added with M4 step 8: the Vega-Lite line.** Below the two charts, the page draws the season a third time as a Vega-Lite line, which `fromVegaView()` names. It doesn't play: it shows the whole season. Its `<svg>` is `role="group"`, named "Goals and expected goals on a Vega-Lite line"; Vega hides its axes (`aria-hidden`), and `markLabel` names each line as on the D3 line. Vega still gives the groups around its lines roles of its own (`graphics-object`, `graphics-symbol`), with no names. It's one tab stop, after the D3 line. Steps 13 and 14 haven't been run yet. Listen for:
+**Added with M4 step 8: the Vega-Lite line.** Below the two charts, the page draws the season a third time as a Vega-Lite line, which `fromVegaView()` names. It doesn't play: it shows the whole season. Its `<svg>` is `role="group"`, named "Goals and expected goals on a Vega-Lite line"; Vega hides its axes (`aria-hidden`), and `markLabel` names each line as on the D3 line. Vega gives the groups around its lines roles of its own (`graphics-object`, `graphics-symbol`) with no names; since M6's audit, `fromVegaView()` takes those off, so Chrome's tree for this chart is the D3 line's: the group, then one image per line. It's one tab stop, after the D3 line. Listen for:
 
 8. Each Vega-Lite line is read once, by name, and nothing unnamed (a "graphic" or "group" with no name) is read before it.
 

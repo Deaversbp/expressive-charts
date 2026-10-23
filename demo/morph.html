@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shot outcomes, morphing · expressive-charts</title>
+<style>
+  /* Page chrome only, as on bars.html. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #7d7b75;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+  .pair { display: grid; gap: 20px; min-width: 0; }
+  @media (min-width: 860px) { .pair { grid-template-columns: 1fr 1fr; } }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 20px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
+  .note { font-size: 14px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .label { font-size: 13px; color: var(--muted); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
+  .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+  .seg button:hover { background: var(--wash); }
+  /* Wide enough for either name, so the bar doesn't shift when it changes. */
+  .btn { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); padding: 6px 12px; border-radius: 8px; cursor: pointer; min-width: 15ch; }
+  .btn:hover { background: var(--wash); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+  #shots { min-width: 0; }
+  .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  kbd { font: inherit; font-size: 12px; font-weight: 600; padding: 0 5px; border: 1px solid var(--ring); border-radius: 4px; background: var(--page); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Milestone 5 · morph</p>
+    <h1>Shot outcomes, as a donut and as columns</h1>
+    <p class="lede">The prototype's third card with its morph, on the library: the season's shots as a <code>donutChart</code> and as columns on <code>barChart</code>, in one <code>chartSwitch</code>. Each slice turns into its own column and back with <code>morph()</code>, and its labels move with it.</p>
+  </header>
+
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
+
+  <section class="card" aria-labelledby="shots-title">
+    <h2 id="shots-title">Shot outcomes</h2>
+    <p class="note">Switch between share of total and side-by-side counts. The same four shapes morph into each other, so you never lose which slice became which column. Click again mid-way and they go back from where they are. With a slice or column focused, <kbd>V</kbd> switches too, and focus follows its outcome.</p>
+    <div class="bar">
+      <!-- Its name is the view a click goes to; the switch announces the new view when it lands (announce). -->
+      <button type="button" class="btn" id="toggle">Show as columns</button>
+      <span class="label" id="align-label">Morph</span>
+      <div class="seg" id="align" role="group" aria-labelledby="align-label">
+        <button type="button" data-value="drop" aria-pressed="false">Drop</button>
+        <button type="button" data-value="unroll" aria-pressed="false">Unroll</button>
+      </div>
+    </div>
+    <!-- chartSwitch() builds both views here, one shown at a time. -->
+    <div id="shots"></div>
+  </section>
+
+  <div class="pair">
+    <section class="card" aria-labelledby="align-title">
+      <h2 id="align-title">Two ways to morph</h2>
+      <ul class="checklist">
+        <li><b>Drop</b> is the lab's. Each slice's outer arc becomes its column's top, so the slice settles onto the baseline.</li>
+        <li><b>Unroll</b> matches each side with the same side. The slice stands up: its outer arc becomes the column's left side, and the angle it spans becomes its height.</li>
+        <li>Either way, a switch back retraces the same path, from wherever the shapes are.</li>
+      </ul>
+    </section>
+
+    <section class="card" aria-labelledby="differences-title">
+      <h2 id="differences-title">Differences from the lab's card</h2>
+      <ul class="checklist">
+        <li>Each view is a whole chart, with its own legend, tooltip, keyboard order and data table, and only the one showing can be reached or read. The lab's card is one picture.</li>
+        <li>The button says "Show as columns", where the lab's says "Show as bars".</li>
+        <li>The old view's legend and table fade out by 40% of the way and the new view's fade in from half way, so for a moment neither shows.</li>
+        <li><kbd>V</kbd> on a focused slice or column is new: it's how a keyboard user switches and keeps their place.</li>
+      </ul>
+    </section>
+  </div>
+
+  <section class="card" aria-labelledby="check-title">
+    <h2 id="check-title">Milestone 5: done when</h2>
+    <ul class="checklist">
+      <li>This page reproduces the lab's card 3 on the library: the shot outcomes as a donut and as columns, each outcome in the same colour in both; a toggle that morphs every slice into its column and back, the labels moving with their shapes and swapping their text half way; the centre total fading out and the axes fading in; a legend, a table and the motion switch; and light and dark from the library's defaults.</li>
+      <li>A switch takes about 950 ms in Presentation, 200 ms in Analysis, and none in Off or under reduced motion, and a switch back mid-way reverses from where the shapes are.</li>
+      <li><code>morph()</code> passes <code>checkTransition</code> on every fixture pair, both ways and with each mapping. <code>checkTransition</code> is exported from <code>expressive-charts/testing</code>, and <code>CHANGELOG.md</code> lists <code>TransitionEffect</code> in the 0.x promise.</li>
+      <li>Keyboard focus follows its key across a switch, and only the view showing can be reached or read.</li>
+      <li><code>barChart</code> takes <code>colorBy: "category"</code>, and every chart handle has <code>focus(key)</code> and <code>labels()</code>. No existing screenshot baseline has changed.</li>
+      <li>You've picked <code>morph()</code>'s default mapping on this page, and the morph screen-reader check in <code>docs/a11y-check.md</code> passes.</li>
+      <li>The package still has no runtime dependencies, and <code>typecheck</code>, <code>test</code> and <code>build</code> are green.</li>
+    </ul>
+  </section>
+</main>
+<script type="module" src="./morph.ts"></script>
+</body>
+</html>

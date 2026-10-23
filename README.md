@@ -401,6 +401,7 @@ The dev server's index links the demos built on the library:
 - `demo/bars.html`: the lab's first card on `barChart`, with the ball and cleat, staged sorting, "Play next matchweek", and the same story on a hand-written SVG chart through `expressive()`.
 - `demo/donut.html`: the lab's third card without its morph. The shot outcomes on `donutChart`, as columns on `barChart`, and on a D3 pie through `expressive()`, with one picker for the hover effect (the ball, `"wiggle"` or `"pulse"`) and "Next match" flashing the slices that changed (`stagger(flash())`).
 - `demo/line.html`: the lab's second card. Goals against expected goals over a season on `lineChart` and on a D3 line through `expressive()` (with `samplesAlong` and `watch`), each with the goals line red below xG (`threshold`) and a ball riding its leading edge, and one "Play season" button (`playButton()`), scrubber and motion switch driving both through `playback()`. A Vega-Lite line through `fromVegaView()` shows the whole season with the same decoration.
+- `demo/morph.html`: the lab's third card with its morph. The shot outcomes as a `donutChart` and as category columns on `barChart` in one `chartSwitch`, each slice turning into its own column and back with `morph()`, its labels moving with it. A button switches (a click mid-way goes back), V on a focused slice or column switches with focus following it, and a control compares `morph()`'s two mappings, `"drop"` and `"unroll"`.
 
 ## Development
 
@@ -409,7 +410,7 @@ The dev server's index links the demos built on the library:
 | `npm run dev` | Serves the `demo/` folder with live reload |
 | `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` and `testing` entries), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
 | `npm test` | Runs the test suite |
-| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html`, `demo/donut.html` and `demo/line.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
+| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html`, `demo/donut.html`, `demo/line.html` and `demo/morph.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
 | `npm run typecheck` | Checks types without building |
 
 Requires Node.js 22 or newer (CI tests 22 and 24).

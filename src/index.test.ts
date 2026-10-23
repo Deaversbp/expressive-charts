@@ -1,10 +1,7 @@
-import { barChart, colorAssignment, donutChart, expressive, motion, motionSwitch, playback, playButton, registerPreset, travel, VERSION } from "./index";
+import { barChart, colorAssignment, donutChart, expressive, motion, motionSwitch, playback, playButton, registerPreset, travel } from "./index";
 
+// VERSION is checked against package.json's version in package.test.ts.
 describe("expressive-charts", () => {
-  it("exposes a version", () => {
-    expect(VERSION).toMatch(/^\d+\.\d+\.\d+$/);
-  });
-
   it("runs tests in a DOM environment", () => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     expect(svg.namespaceURI).toBe("http://www.w3.org/2000/svg");

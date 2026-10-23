@@ -1,0 +1,58 @@
+name: Release
+
+# Publishes the package to npm when a GitHub release is published, and at no other time. The release's
+# tag must be "v" and package.json's version (v0.1.0 for 0.1.0), or nothing is published. It runs the
+# same checks as CI, then `npm publish` with provenance. See CONTRIBUTING.md#releasing.
+#
+# Authentication: npm tries trusted publishing (OIDC, through `id-token: write`) first, and falls back
+# to the NPM_TOKEN secret. 0.1.0 needs the token, since trusted publishing can only be set up for a
+# package that exists. Once it's set up, the secret is deleted and the token step's value is empty,
+# which npm ignores.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # npm's provenance statement, and trusted publishing once it's set up.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # npm 11.5.1 or newer, which trusted publishing needs, comes with Node 24.
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Check the tag is v and the package's version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          expected="v$(node -p 'require("./package.json").version')"
+          if [ "$TAG" != "$expected" ]; then
+            echo "::error::The release's tag is $TAG, but package.json's version needs $expected. Nothing was published."
+            exit 1
+          fi
+      - name: Check npm is new enough for trusted publishing
+        run: |
+          node -e '
+            const [major, minor, patch] = process.argv[1].split(".").map(Number);
+            if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) {
+              console.error(`::error::npm ${process.argv[1]} is older than 11.5.1, which trusted publishing needs.`);
+              process.exit(1);
+            }' "$(npm --version)"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run size
+      - run: npm run pack-check
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

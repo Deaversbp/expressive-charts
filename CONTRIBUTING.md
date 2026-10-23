@@ -10,7 +10,11 @@ npm run dev        # demo pages with live reload
 npm test           # tests
 npm run typecheck  # types
 npm run build      # package output in dist/
+npm run size       # bundle sizes against their budgets, after a build
+npm run pack-check # after a build: the packed tarball, installed and used as a consumer would
 ```
+
+`pack-check` (`scripts/pack-check.mjs`) packs the package, installs the tarball in a new project in the system's temporary folder, imports every entry in Node as ES modules and as CommonJS with no DOM, and typechecks a small consumer against it with the repository's TypeScript under `bundler`, `node16` (ES module) and `node16` (CommonJS) resolution. Each must read its own declarations: `.d.ts` for `import`, `.d.cts` for `require`. CI runs it after the build. `-- --keep` keeps the temporary project.
 
 Node.js 22 or newer is required (CI tests 22 and 24).
 
@@ -41,6 +45,25 @@ Without Docker, run **Update visual baselines** from the repository's Actions ta
 
 The Docker image's tag follows `@playwright/test` in `package.json`. When you upgrade Playwright, pin the exact version, change the image tag in `.github/workflows/ci.yml` and `visual-baselines.yml` to match, and regenerate the baselines.
 
+## Bundle size
+
+`npm run size` measures the build (run `npm run build` first) and fails when a size is over its budget in `scripts/size-budget.json`. CI runs it on Node 24 and puts its tables in the job's summary. It measures:
+
+- each published JS file and the stylesheet, raw, gzip and brotli. An ES module entry counts the chunks it imports;
+- import sets: what a page that imports a few names pays, bundled from `dist/index.js` with Vite and minified. When a small set grows and you didn't change what it imports, something has broken tree-shaking, such as code that runs on import.
+
+Budgets are gzip sizes in KB (1,024 bytes). [architecture.md](docs/architecture.md#bundle-size) has today's sizes.
+
+When the check fails:
+
+1. Find out what grew. The table shows every size; compare it with the one in the summary of main's last CI run.
+2. If the growth isn't meant (tree-shaking broken, or a module pulled in that the page doesn't use), fix it.
+3. If it's meant, because a feature costs what it costs, raise that budget in the same PR: to the new size plus about 10%, rounded up to 0.5 KB. The failure message gives that number. Say in the PR which budget you raised, by how much, and why.
+
+Raise a budget only when it fails, so the room left in the others still catches surprises. After a change that makes something much smaller, you can lower its budget the same way, so the room isn't spent by accident.
+
+A new import set goes in `importSets` in `scripts/size.mjs`, with its budget in `scripts/size-budget.json` under the same name. The check fails when something it measures has no budget, or a budget names something it doesn't measure.
+
 ## Adding an effect
 
 1. Create `src/effects/<name>.ts` that implements `GeometryEffect` or, if it reads values, `DataEffect` (`src/core/contracts/effect.ts`).
@@ -60,6 +83,20 @@ The Docker image's tag follows `@playwright/test` in `package.json`. When you up
 ## Pull requests
 
 - Keep each pull request focused on one change.
-- Run `npm run typecheck && npm test && npm run build` before opening it. CI runs the same checks.
+- Run `npm run typecheck && npm test && npm run build` before opening it, and `npm run size` after the build. CI runs the same checks, then `npm run pack-check`.
 - If the change affects how the demo looks or moves, run `npm run test:visual:docker` too, and commit updated baselines if the change is intended. CI runs the visual suite as a separate job.
 - Update `README.md` and `docs/architecture.md` when the public API changes.
+- A name in the 0.x promise (in `CHANGELOG.md`) changes only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. `src/promise.test.ts` names every promised value and type, so renaming or removing one fails `typecheck`; a name added to the promise goes in both lists, and a test checks they match.
+
+## Releasing
+
+Releases go to npm from CI: `.github/workflows/release.yml` publishes when a GitHub release is published, and at no other time. Don't publish from a terminal. The workflow publishes with npm's provenance statement (`publishConfig` in `package.json` asks for it), which needs GitHub's OIDC token and a public repository: npm refuses a publish with provenance from a private one.
+
+1. **In a pull request,** set the version in `package.json` and `VERSION` in `src/index.ts` (a test checks they match), and move CHANGELOG's Unreleased entries under the new version and its date.
+2. **After it merges,** create a GitHub release from `main` whose tag is `v` and the version (`v0.1.0`), and publish it.
+3. **The workflow** checks that the tag matches `package.json` and that npm is 11.5.1 or newer, runs `typecheck`, `test`, `build`, the size check and `pack-check`, then `npm publish --provenance --access public` on Node 24. If the tag doesn't match, nothing is published: fix the release's tag, or the version in a new pull request.
+
+**Authentication.** npm tries trusted publishing first (OIDC, through the job's `id-token: write`), then the token in the repository secret `NPM_TOKEN`.
+
+- **0.1.0 needs the token,** since npm only sets up trusted publishing for a package that exists. Create a granular access token on npmjs.com with **Read and write** permission, **All packages** (a package that doesn't exist yet can't be selected), the shortest expiry that covers the release, and **Bypass two-factor authentication** if the account needs 2FA to publish. Add it as `NPM_TOKEN` under the repository's Settings → Secrets and variables → Actions. Once 0.1.0 is out, delete the token on npmjs.com and the secret.
+- **Later releases use trusted publishing.** In the package's settings on npmjs.com, add a trusted publisher: GitHub Actions, user `Deaversbp`, repository `expressive-charts`, workflow `release.yml`, with direct `npm publish` among its allowed actions (a configuration made since 3 September 2026 allows only `npm stage publish` unless it's ticked). A new configuration expires unless a publish uses it within 2 days, so add it just before the release that will use it. Then set the package's publishing access to require 2FA and disallow tokens. The workflow needs no change: with the secret gone, `NODE_AUTH_TOKEN` is empty, and npm ignores an empty token.

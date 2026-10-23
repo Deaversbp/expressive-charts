@@ -62,7 +62,8 @@
      series take the line chart's palette slots, and its legend copies the line chart's. */
   .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
-  .legend i { flex: none; width: 16px; height: 0; border-top: 3px solid; }
+  /* Under forced colours (Windows contrast themes), keep the swatches' colours, as the library's legend does: the lines keep theirs. */
+  .legend i { flex: none; width: 16px; height: 0; border-top: 3px solid; forced-color-adjust: none; }
   .legend .swatch-goals { border-top-color: var(--ec-series-1, #2a78d6); }
   .legend .swatch-xg { border-top: 3px dashed var(--ec-series-2); }
   .legend .swatch-below { border-top-color: var(--ec-negative, #d03b3b); }

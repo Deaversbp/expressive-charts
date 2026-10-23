@@ -96,7 +96,7 @@ registerPreset("nudge", () => myEffect); // then on: { hover: "nudge" } in any c
 registerIcons(myIcons);                  // then travel("my-icon")
 ```
 
-A first, thin bar chart draws horizontal bars or columns, plain or stacked, sized to its container, with theme colours (`--ec-*` custom properties), hover dimming and hover events. Hovering, tapping or focusing a bar shows a tooltip, and a stacked chart has a legend. It's one tab stop: the arrow keys move between the bars, and keyboard focus plays the same hover effects inside a focus ring. Screen readers hear the chart as a group named by its `label`, and each bar as one image named by its values ("Okafor: 16 goals, 4 assists"), which `markLabel` can word ("Castillo: 1 goal"). `markDescription` adds what the name doesn't say, such as a player's position, without repeating it. `seriesLabels` names the series for people (`{ xg: "Expected goals" }`) wherever the chart names them: the legend, tooltip, table and bar names. Under the chart, a "Data table" lists the same numbers in the chart's order, the fallback every screen reader can read; `table: "hidden"` keeps it out of sight, and `table.columns` adds the page's own columns, after the category or, with `after: "values"`, last. `legend: { entries }` adds swatches after the series for colours the page's effects draw, each a theme token or a CSS colour: `{ label: "Goals below xG", color: "negative" }`. `announce: true` adds a polite live region that says what each update changed. Its effect slots take effects or registered presets. `update()` animates the change by the motion mode: in Presentation the values change first (bars resize, the scale follows) and then the rows move to their new places, about half a second each; Analysis does it all at once in about 200 ms; Off jumps. A second `update()` mid-change carries on from where everything is, and hover effects replay once the change settles.
+A first, thin bar chart draws horizontal bars or columns, plain or stacked, sized to its container, with theme colours (`--ec-*` custom properties), hover dimming and hover events. Hovering, tapping or focusing a bar shows a tooltip, and a stacked chart, or one coloured by category, has a legend. It's one tab stop: the arrow keys move between the bars, and keyboard focus plays the same hover effects inside a focus ring. Screen readers hear the chart as a group named by its `label`, and each bar as one image named by its values ("Okafor: 16 goals, 4 assists"), which `markLabel` can word ("Castillo: 1 goal"). `markDescription` adds what the name doesn't say, such as a player's position, without repeating it. `seriesLabels` names the series for people (`{ xg: "Expected goals" }`) wherever the chart names them: the legend, tooltip, table and bar names. Under the chart, a "Data table" lists the same numbers in the chart's order, the fallback every screen reader can read; `table: "hidden"` keeps it out of sight, and `table.columns` adds the page's own columns, after the category or, with `after: "values"`, last. `legend: { entries }` adds swatches after the series for colours the page's effects draw, each a theme token or a CSS colour: `{ label: "Goals below xG", color: "negative" }`. `announce: true` adds a polite live region that says what each update changed. Its effect slots take effects or registered presets. `update()` animates the change by the motion mode: in Presentation the values change first (bars resize, the scale follows) and then the rows move to their new places, about half a second each; Analysis does it all at once in about 200 ms; Off jumps. A second `update()` mid-change carries on from where everything is, and hover effects replay once the change settles.
 
 ```js
 import { barChart } from "expressive-charts";
@@ -140,6 +140,16 @@ const shots = donutChart("#shots", {
 await shots.update({ data: afterMatchweek });
 ```
 
+A bar chart with one series can colour each bar by its category rather than its series: `colorBy: "category"` gives each bar its own palette slot, by its key, as the donut does for its slices. So one `colorAssignment()` passed to both keeps each outcome in the same colour, and the legend lists the categories. A stack colours its segments by series, and throws with it.
+
+```js
+import { barChart, colorAssignment, donutChart } from "expressive-charts";
+
+const colors = colorAssignment();      // shared: "Goal" is the same colour as a slice and as a column
+donutChart("#share", { label: "Shot outcomes", data: outcomes, category: "outcome", value: "shots", colors });
+barChart("#counts", { label: "Shot outcomes", data: outcomes, x: "outcome", y: "shots", colorBy: "category", colors });
+```
+
 A line chart draws a line per series through one row per x, each ending in a dot and a label in the right margin that counts as the line moves ("52 goals"). The pointer anywhere over the chart hovers every series at the nearest x: a dashed crosshair, each series' point, and a tooltip above them, with nothing dimmed. It's one tab stop whose arrow keys go x by x, each x heard as one image ("12: 15 goals, 14.2 xg", worded by `markLabel`), and it has the same tooltip, data table (a row per x, with no total), legend and announcements as the other charts. Each point is a dot, so effects meant for a line, which `only("goals", …)` also matches on the goals points, act on the line alone. `reveal(x)` shows the data up to x at once, part way between rows and with no events, so `playback()` (below) can play a season while decorations follow every frame. `update()` changes the values first and then moves the rows, a new week growing out of the last:
 
 ```js
@@ -160,6 +170,8 @@ const xg = lineChart("#xg", {
 await xg.update({ data: [...weeks, nextWeek] }); // the new week grows out of the last
 xg.reveal(20);                         // through matchweek 20: lines end there, and later weeks can't be hovered
 ```
+
+Every chart's handle also has `focus(key)`, which moves keyboard focus to a mark (on a line chart, its x) as a key press would, showing the focus ring and playing its hover, and `labels()`, each mark's labels as drawn: `{ key, role, text, x, y, anchor, element }`, where `role` is `"category"` or `"value"` (a bar's category and value, a slice's category and share, a line's end label).
 
 Charts follow the device's light or dark setting, with eight series colours checked for contrast and colour-vision deficiencies in both. Theme them with `--ec-*` custom properties, which your CSS always overrides, and pin a theme with `data-theme` on any ancestor ([Rendering](docs/architecture.md#rendering) has the details):
 

@@ -31,6 +31,7 @@ import { seriesLabel } from "./series";
 import { chartEvents } from "./shell/events";
 import { decimals, format, percent, round } from "./shell/format";
 import { chartHover } from "./shell/hover";
+import { chartLabel } from "./shell/labels";
 import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, resolveTarget, type ChartEnv } from "./shell/setup";
@@ -57,6 +58,8 @@ interface SliceRecord<D> {
   /** The label outside the ring: the category over the share. */
   readonly label: SVGTextElement;
   readonly share: SVGTextElement;
+  /** Where the label is drawn now; undefined while it's dropped for room. */
+  drawnLabel: SliceLabel | undefined;
   parts: StyledPart[];
   readonly handle: SvgMarkHandle;
   /** In data units, so every frame's angles are true shares. */
@@ -206,6 +209,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
       path: svgElement("path", { class: "ec-slice", "data-series": row.series }, body),
       label: svgElement("text", { class: "ec-label", "aria-hidden": "true" }, group),
       share: svgElement("text", { class: "ec-value", "aria-hidden": "true" }, group),
+      drawnLabel: undefined,
       parts: [],
       handle: svgMarkHandle(() => record, { halos: () => halos }),
       value: animated(entering ? 0 : row.value, interpolateNumber, env),
@@ -236,6 +240,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
     record.parts = [{ element: record.path, d: outline.d, colors: sliceColors, visible }];
     const presence = record.presence.value;
     const opacity = presence < 1 ? presence : undefined;
+    record.drawnLabel = label;
     for (const [text, placement] of [
       [record.label, label?.category],
       [record.share, label?.share]
@@ -719,6 +724,17 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
     on: events.on,
 
     marks: () => order.map((record) => record.shown.geometry),
+
+    focus(key) {
+      if (!destroyed) hover.focus(key);
+    },
+
+    // Outside the ring, the category over the share; the centre's text isn't a slice's.
+    labels: () =>
+      order.flatMap((record) => [
+        ...chartLabel(record.key, "category", record.drawnLabel?.category, record.label),
+        ...chartLabel(record.key, "value", record.drawnLabel?.share, record.share)
+      ]),
 
     destroy() {
       if (destroyed) return;

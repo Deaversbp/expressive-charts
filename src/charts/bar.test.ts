@@ -2,6 +2,9 @@ import { createMotion, manualClock, type DataEffect, type EffectContext, type Ge
 import { createRegistry, type PresetFactory } from "../core/registry";
 import { play } from "../core/testing";
 import { barChart, type BarChart, type ChartEnv } from "./bar";
+import { colorAssignment, type ColorAssignment } from "./colors";
+import { donutChart } from "./donut";
+import { seriesColors } from "./render/theme";
 import type { BarChartOptions } from "./types";
 
 interface Player {
@@ -215,6 +218,136 @@ describe("barChart: keys and colours", () => {
     const assists = mark("Okafor").querySelector('[data-series="assists"]') as SVGPathElement;
     expect(assists.style.getPropertyValue("--ec-mark")).toBe("var(--ec-series-4, #c28409)");
     expect(assists.style.getPropertyValue("--ec-mark-strong")).toBe("var(--ec-series-4-strong, #9d6a07)");
+  });
+});
+
+describe("barChart: colours by category", () => {
+  interface Shot {
+    outcome: string;
+    shots: number;
+  }
+  /** The prototype's card 3. */
+  const shots: Shot[] = [
+    { outcome: "Goal", shots: 58 },
+    { outcome: "Saved", shots: 112 },
+    { outcome: "Off target", shots: 149 },
+    { outcome: "Blocked", shots: 87 }
+  ];
+  const outcomes = shots.map((shot) => shot.outcome);
+  const env = (): ChartEnv => ({ presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion: quietMotion("off"), clock: manualClock() });
+  const place = () => document.body.appendChild(document.createElement("div"));
+  /** Columns of shots by outcome, each in its outcome's colour. */
+  const columns = (options: Partial<BarChartOptions<Shot>> = {}, container: Element = place()) =>
+    barChart<Shot>(container, { label: "Shot outcomes", data: shots, x: "outcome", y: "shots", colorBy: "category", width: 600, ...options }, env());
+  const donut = (colors: ColorAssignment) => donutChart<Shot>(place(), { label: "Shot outcomes", data: shots, category: "outcome", value: "shots", width: 600, colors }, env());
+  /** A shared assignment that logs every key it's asked about. */
+  function logged(): { readonly colors: ColorAssignment; readonly asked: string[] } {
+    const inner = colorAssignment();
+    const asked: string[] = [];
+    return {
+      asked,
+      colors: {
+        slot(key) {
+          asked.push(key);
+          return inner.slot(key);
+        }
+      }
+    };
+  }
+  const fill = (svg: SVGSVGElement, key: string, part = ".ec-segment") => svg.querySelector<SVGElement>(`.ec-mark[data-key="${key}"] ${part}`)!.style.getPropertyValue("--ec-mark");
+
+  it("gives each bar its category's slot, so one assignment shared with a donut keeps each colour", () => {
+    // The columns first, sorted, so they meet the outcomes in another order than the donut's.
+    const first = logged();
+    const bars = columns({ sort: "value", colors: first.colors });
+    const slices = donut(first.colors);
+    for (const outcome of outcomes) expect(fill(bars.element, outcome)).toBe(fill(slices.element, outcome, ".ec-slice"));
+    expect(new Set(outcomes.map((outcome) => fill(bars.element, outcome))).size).toBe(4);
+    // The series' name never takes a slot an outcome would get.
+    expect(first.asked).not.toContain("shots");
+    expect(new Set(first.asked)).toEqual(new Set(outcomes));
+    // The donut first: the columns take the slices' colours, in data order.
+    const second = logged();
+    const ring = donut(second.colors);
+    const after = columns({ colors: second.colors });
+    outcomes.forEach((outcome, i) => expect(fill(after.element, outcome)).toBe(fill(ring.element, outcome, ".ec-slice")));
+    expect(outcomes.map((outcome) => fill(after.element, outcome))).toEqual([1, 2, 3, 4].map((slot) => seriesColors(slot).color));
+    expect(second.asked).not.toContain("shots");
+  });
+
+  it("colours by key, pinned or in order, and keeps each bar's colour through a sort", async () => {
+    const chart = columns({ colors: { Saved: 5 } });
+    expect(fill(chart.element, "Saved")).toBe(seriesColors(5).color);
+    expect(fill(chart.element, "Goal")).toBe(seriesColors(1).color);
+    expect(chart.element.querySelector<SVGElement>('[data-key="Saved"] .ec-segment')!.style.getPropertyValue("--ec-mark-strong")).toBe(seriesColors(5).strong);
+    const goal = fill(chart.element, "Goal");
+    await chart.update({ sort: "value" });
+    expect(fill(chart.element, "Goal")).toBe(goal);
+    // With a key, the key picks the slot.
+    const keyed = columns({ key: (d) => d.outcome.toLowerCase(), colors: { goal: 3 } });
+    expect(keyed.element.querySelector<SVGElement>('[data-key="goal"] .ec-segment')!.style.getPropertyValue("--ec-mark")).toBe(seriesColors(3).color);
+  });
+
+  it("lists the categories in the legend in the bars' order, coloured as their bars, as a donut's legend does", async () => {
+    const container = place();
+    const chart = columns({ sort: "value" }, container);
+    const items = () => Array.from(container.querySelectorAll<HTMLElement>(".ec-legend-item"));
+    const listed = () => items().map((item) => [item.getAttribute("data-key"), item.textContent]);
+    expect(container.querySelector(".ec-legend")!.nextElementSibling).toBe(chart.element);
+    expect(listed()).toEqual([
+      ["Off target", "Off target"],
+      ["Saved", "Saved"],
+      ["Blocked", "Blocked"],
+      ["Goal", "Goal"]
+    ]);
+    items().forEach((item) => expect(item.style.getPropertyValue("--ec-mark")).toBe(fill(chart.element, item.getAttribute("data-key")!)));
+    expect(items().some((item) => item.hasAttribute("data-series"))).toBe(false);
+    // It follows the sort, the page's entries come after, and one category is listed too.
+    await chart.update({ sort: "none", legend: { entries: [{ label: "Average", color: "text-muted" }] } });
+    expect(listed()).toEqual([...outcomes.map((outcome) => [outcome, outcome]), [null, "Average"]]);
+    await chart.update({ data: shots.slice(0, 1), legend: true });
+    expect(listed()).toEqual([["Goal", "Goal"]]);
+    await chart.update({ legend: false });
+    expect(container.querySelector(".ec-legend")).toBeNull();
+  });
+
+  it("throws on a stack, and update() rejects one, changing nothing", async () => {
+    const container = place();
+    const make = (options: Partial<BarChartOptions<Player>>) => () => barChart<Player>(container, { label: "Goals by player", data: players, y: "name", width: 600, ...options }, env());
+    expect(make({ stack: ["goals", "assists"], colorBy: "category" })).toThrow(new TypeError('barChart: colorBy: "category" gives each bar one colour, so it needs one series, not a stack. A stack colours its segments by series.'));
+    expect(make({ x: "goals", colorBy: "rank" as never })).toThrow(new TypeError('barChart: colorBy must be "series" or "category", got rank.'));
+    expect(container.childElementCount).toBe(0);
+
+    const stacked = setup({ stack: ["goals", "assists"], x: undefined });
+    const look = () => [stacked.container.innerHTML, stacked.chart.labels().map((label) => label.text)];
+    const before = look();
+    await expect(stacked.chart.update({ colorBy: "category" })).rejects.toThrow(/needs one series, not a stack/);
+    expect(look()).toEqual(before);
+    const plain = setup({ colorBy: "category" });
+    const was = plain.container.innerHTML;
+    await expect(plain.chart.update({ stack: ["goals", "assists"] })).rejects.toThrow(/needs one series, not a stack/);
+    expect(plain.container.innerHTML).toBe(was);
+    // Back to series and a stack together is fine.
+    await plain.settle(plain.chart.update({ colorBy: "series", stack: ["goals", "assists"], x: undefined }));
+    expect(plain.mark("Okafor").querySelectorAll(".ec-segment")).toHaveLength(2);
+  });
+
+  it("switches with update(): every bar takes its new colour on the change's first frame, and the legend follows", async () => {
+    const { chart, container, mark, settle } = setup();
+    const color = (key: string) => (mark(key).querySelector(".ec-segment") as SVGPathElement).style.getPropertyValue("--ec-mark");
+    const legend = () => Array.from(container.querySelectorAll(".ec-legend-item"), (item) => item.getAttribute("data-key"));
+    expect(players.map((p) => color(p.name))).toEqual([1, 1, 1].map((slot) => seriesColors(slot).color));
+    expect(legend()).toEqual([]);
+    // Only Okafor's value changes, so the others aren't otherwise redrawn until the change lands.
+    const updated = chart.update({ colorBy: "category", data: players.map((p) => (p.name === "Okafor" ? { ...p, goals: 20 } : p)) });
+    // "goals" already has slot 1 in this chart's own assignment.
+    expect(players.map((p) => color(p.name))).toEqual([2, 3, 4].map((slot) => seriesColors(slot).color));
+    expect(legend()).toEqual(["Okafor", "Tanaka", "Lindqvist"]);
+    await settle(updated);
+    const back = chart.update({ colorBy: "series", data: players });
+    expect(players.map((p) => color(p.name))).toEqual([1, 1, 1].map((slot) => seriesColors(slot).color));
+    expect(legend()).toEqual([]);
+    await settle(back);
   });
 });
 
@@ -588,6 +721,88 @@ describe("barChart: keyboard", () => {
     okafor.focus();
     press(okafor, "ArrowDown");
     expect(hover.log).toEqual([]);
+  });
+
+  it("moves focus to a mark with focus(key) as a key press would, whatever the last input was", async () => {
+    const hover = recorder();
+    const { chart, svg, mark, clock } = setup({ on: { hover: hover.effect } });
+    const events = listen(chart);
+    const ring = svg.querySelector(".ec-focus")!;
+    // The last input was a click, which would leave a focus without its ring.
+    pointer("pointerdown", document.body);
+    chart.focus("Tanaka");
+    expect(focused()).toBe("Tanaka");
+    expect(tabIndexes(svg)).toEqual(["Okafor -1", "Tanaka 0", "Lindqvist -1"]);
+    expect(ring.getAttribute("visibility")).toBeNull();
+    expect(events).toEqual(["hover Tanaka keyboard"]);
+    expect(hover.log).toEqual(["run Tanaka"]);
+    expect(svg.classList.contains("ec-hovering")).toBe(true);
+    // Focused from a click already: no focusin comes, and the ring and the story still play.
+    pointer("pointerdown", mark("Okafor"));
+    mark("Okafor").focus();
+    expect(ring.getAttribute("visibility")).toBe("hidden");
+    chart.focus("Okafor");
+    expect(ring.getAttribute("visibility")).toBeNull();
+    expect(events).toEqual(["hover Tanaka keyboard", "leave Tanaka", "hover Okafor keyboard"]);
+    // A key that isn't on screen does nothing: unknown, or on its way out.
+    chart.focus("Nobody");
+    void chart.update({ data: players.filter((p) => p.name !== "Lindqvist") });
+    chart.focus("Lindqvist");
+    expect(focused()).toBe("Okafor");
+    clock.advance(1000);
+    chart.destroy();
+    expect(() => chart.focus("Okafor")).not.toThrow();
+  });
+});
+
+describe("barChart: labels()", () => {
+  /** Checks what labels() says against the <text> it names (its text, its place there, its mark), and lists them by key, role, text and class. */
+  const drawn = (chart: BarChart<Player>) =>
+    chart.labels().map((label) => {
+      const { element } = label;
+      expect([element.textContent, element.getAttribute("text-anchor")]).toEqual([label.text, label.anchor]);
+      // Attributes are rounded to 0.001.
+      expect(label.x).toBeCloseTo(Number(element.getAttribute("x")), 2);
+      expect(label.y).toBeCloseTo(Number(element.getAttribute("y")), 2);
+      expect(element.closest(".ec-mark")!.getAttribute("data-key")).toBe(label.key);
+      return `${label.key} ${label.role} ${label.text} ${element.getAttribute("class")}`;
+    });
+
+  it("gives each bar's category and value labels by key, as drawn, in visual order", async () => {
+    const { chart, settle } = setup();
+    expect(drawn(chart)).toEqual([
+      "Okafor category Okafor ec-label",
+      "Okafor value 16 ec-value",
+      "Tanaka category Tanaka ec-label",
+      "Tanaka value 6 ec-value",
+      "Lindqvist category Lindqvist ec-label",
+      "Lindqvist value 10 ec-value"
+    ]);
+    const okafor = chart.labels()[0]!;
+    expect([okafor.anchor, okafor.x < chart.labels()[1]!.x]).toEqual(["end", true]);
+    await settle(chart.update({ sort: "value" }));
+    expect(chart.labels().map((label) => label.key)).toEqual(["Okafor", "Okafor", "Lindqvist", "Lindqvist", "Tanaka", "Tanaka"]);
+    // Columns: the category under the column, the value over it.
+    const columns = setup({ x: "name", y: "goals" }).chart.labels();
+    expect(columns.slice(0, 2).map((label) => [label.role, label.anchor])).toEqual([
+      ["category", "middle"],
+      ["value", "middle"]
+    ]);
+    expect(columns[0]!.y).toBeGreaterThan(columns[1]!.y);
+  });
+
+  it("follows a change as it's drawn, leaving out marks on their way out", async () => {
+    const { chart, clock, settle } = setup();
+    const updated = chart.update({ data: players.filter((p) => p.name !== "Lindqvist").map((p) => ({ ...p, goals: p.goals + 10 })) });
+    clock.advance(250);
+    const now = drawn(chart);
+    expect(now.map((label) => label.split(" ").slice(0, 2).join(" "))).toEqual(["Okafor category", "Okafor value", "Tanaka category", "Tanaka value"]);
+    // Counting: part way from 16 to 26.
+    const counted = Number(chart.labels()[1]!.text);
+    expect(counted).toBeGreaterThan(16);
+    expect(counted).toBeLessThan(26);
+    await settle(updated);
+    expect(chart.labels()[1]!.text).toBe("26");
   });
 });
 

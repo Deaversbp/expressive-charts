@@ -1,6 +1,7 @@
 // barChart: the thin reference bar chart. Horizontal bars or vertical columns, plain or stacked; keyed
 // marks described with describe.bar; a measured layout; axis, grid and labels in theme colours;
-// built-in hover dimming; pointer, touch and keyboard hover with a tooltip; a legend for stacks; a data table and, with `announce`, a
+// colours by series or, with one series, by category; built-in hover dimming; pointer, touch and
+// keyboard hover with a tooltip; a legend for stacks or categories; a data table and, with `announce`, a
 // live region for screen readers. update() animates the change: staged in presentation (values, then positions), in one short stage
 // in analysis, at once when motion is off.
 //
@@ -27,6 +28,7 @@ import { seriesLabel } from "./series";
 import { chartEvents } from "./shell/events";
 import { decimals, format, round } from "./shell/format";
 import { chartHover } from "./shell/hover";
+import { chartLabel } from "./shell/labels";
 import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, resolveTarget, type ChartEnv } from "./shell/setup";
@@ -93,7 +95,7 @@ const RING = 2;
 
 export function barChart<D>(target: string | Element, options: BarChartOptions<D>, env: ChartEnv): BarChart<D> {
   const container = resolveTarget(target, "barChart");
-  checkChartOptions(options, "barChart");
+  checkOptions(options);
   let current = options;
   const motion = chartMotion(options.motion, env.motion);
   const effects = resolveEffects(options.on, env.presets);
@@ -233,6 +235,9 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     setAttributes(record.value, { opacity });
     const segments = row.geometry.segments ?? [];
     const keep = new Set<string>();
+    // By category, the bar's own slot: the assignment never hears the series' name, so a shared one
+    // keeps every slot for the categories.
+    const ownColors = byCategory(current) ? seriesColors(colors.slot(record.key)) : undefined;
     record.parts = segments.map((segment) => {
       const series = segment.series ?? segment.key;
       keep.add(series);
@@ -241,7 +246,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
         element = svgElement("path", { class: "ec-segment", "data-series": series }, record.body);
         record.paths.set(series, element);
       }
-      const partColors = seriesColors(colors.slot(series));
+      const partColors = ownColors ?? seriesColors(colors.slot(series));
       element.setAttribute("d", segment.outline.d);
       setStyles(element, markColorStyles(partColors));
       return { element, d: segment.outline.d, colors: partColors, visible: segment.length >= 0.5 };
@@ -286,12 +291,22 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     tooltip.show(record.shown.geometry, row, () => summaryContent(row.label.text, labelled(row.values, current), format(current)), record.handle.style.transform);
   }
 
-  const syncLegend = (): void =>
+  /** The legend for `next`: the series or, coloured by category, each bar's category in visual order. */
+  function syncLegend(next: BarLayout<D>): void {
+    if (byCategory(current)) {
+      legend.categories(
+        next.rows.map((row) => ({ key: row.key, label: row.label.text })),
+        colors,
+        current.legend
+      );
+      return;
+    }
     legend.update(
       barEncoding(current).series.map((s) => ({ series: s.series, label: seriesLabel(current.seriesLabels, s.series) })),
       colors,
       current.legend
     );
+  }
 
   /** The data table for `opts`, laid out as `next`: its rows in visual order. Throws on a column it can't read. */
   function tableFor(opts: BarChartOptions<D>, next: BarLayout<D>): TableModel | undefined {
@@ -606,7 +621,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   // ── First render ───────────────────────────────────────────────────────────
 
   describeChart(svg, current);
-  syncLegend();
+  syncLegend(laidOut);
   table.render(firstTable);
   setAttributes(svg, sizeAttributes(laidOut.frame.bands));
   for (const tick of laidOut.ticks) addTick(tick.value, 1);
@@ -628,7 +643,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       if (next.on !== undefined && next.on !== current.on) throw new TypeError("barChart: `on` can't be changed by update() yet.");
       if (next.motion !== undefined && next.motion !== current.motion) throw new TypeError("barChart: `motion` can't be changed by update() yet.");
       const merged: BarChartOptions<D> = { ...current, ...next };
-      checkChartOptions(merged, "barChart");
+      checkOptions(merged);
       // Throws on data it can't draw, or a table column it can't read, before anything changes.
       const nextLayout = layout(merged);
       const nextTable = tableFor(merged, nextLayout);
@@ -636,7 +651,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       const previous = current;
       current = merged;
       describeChart(svg, current);
-      syncLegend();
+      syncLegend(nextLayout);
       table.render(nextTable);
       // A region that appears with its first text is often missed: it announces from the next update.
       const announcing = announcer !== undefined;
@@ -656,6 +671,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
           if (announcing) announceChange(previous, diff);
         }
       );
+      // Coloured the other way now: every bar takes its new colour on the change's first frame.
+      if (byCategory(current) !== byCategory(previous)) for (const record of [...order, ...leaving.values()]) dirty.add(record);
       const settled = transitionTo(nextLayout, motion.mode === "off" || nextLayout.orientation !== orientation);
       await transitions.wait(settled, leaves);
     },
@@ -663,6 +680,16 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     on: events.on,
 
     marks: () => order.map((record) => record.shown.geometry),
+
+    focus(key) {
+      if (!destroyed) hover.focus(key);
+    },
+
+    labels: () =>
+      order.flatMap((record) => [
+        ...chartLabel(record.key, "category", record.shown.label, record.label),
+        ...chartLabel(record.key, "value", record.shown.value, record.value)
+      ]),
 
     destroy() {
       if (destroyed) return;
@@ -692,6 +719,21 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       svg.remove();
     }
   };
+}
+
+/** The options every chart shares, then `colorBy`: "category" needs one series, so a stack throws. */
+function checkOptions<D>(options: BarChartOptions<D>): void {
+  checkChartOptions(options, "barChart");
+  const { colorBy } = options;
+  if (colorBy !== undefined && colorBy !== "series" && colorBy !== "category") throw new TypeError(`barChart: colorBy must be "series" or "category", got ${String(colorBy)}.`);
+  if (colorBy === "category" && options.stack !== undefined) {
+    throw new TypeError('barChart: colorBy: "category" gives each bar one colour, so it needs one series, not a stack. A stack colours its segments by series.');
+  }
+}
+
+/** Each bar takes its own slot, by key, rather than each segment its series'. */
+function byCategory<D>(options: BarChartOptions<D>): boolean {
+  return options.colorBy === "category";
 }
 
 /**

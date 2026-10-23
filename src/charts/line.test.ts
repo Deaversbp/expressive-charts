@@ -174,6 +174,27 @@ describe("lineChart: drawing", () => {
     expect(own.line("xg").querySelector(".ec-end-label")!.textContent).toBe("4.4 xG!");
   });
 
+  it("gives each line's end label as its value through labels(), as drawn, and none that aren't shown", async () => {
+    const { chart, line, settle } = setup();
+    const labels = chart.labels();
+    expect(labels.map((label) => `${label.key} ${label.role} ${label.text} ${label.anchor}`)).toEqual(["goals value 5 goals start", "xg value 4.4 xg start"]);
+    for (const label of labels) {
+      expect(label.element).toBe(line(label.key).querySelector(".ec-end-label"));
+      expect(label.element.textContent).toBe(label.text);
+      expect(label.x).toBeCloseTo(Number(label.element.getAttribute("x")), 2);
+      expect(label.y).toBeCloseTo(Number(label.element.getAttribute("y")), 2);
+    }
+    // Following the reveal, as drawn.
+    chart.reveal(2);
+    expect(chart.labels().map((label) => label.text)).toEqual(["2 goals", "2.1 xg"]);
+    expect(chart.labels()[0]!.x).toBeLessThan(labels[0]!.x);
+    // None with labels: false, and none that are empty.
+    await settle(chart.update({ labels: (value, series) => (series === "xg" ? "" : `${value}`) }));
+    expect(chart.labels().map((label) => `${label.key} ${label.text}`)).toEqual(["goals 2"]);
+    await settle(chart.update({ labels: false }));
+    expect(chart.labels()).toEqual([]);
+  });
+
   it("keeps the default end label when labels throws, and reports it once", async () => {
     const reported = vi.spyOn(console, "error").mockImplementation(() => {});
     const { line, chart } = setup({
@@ -210,6 +231,23 @@ describe("lineChart: drawing", () => {
     expect(make({ series: [] })).toThrow(/needs series/);
     expect(make({ label: "" })).toThrow(/needs a label/);
     expect(container.childElementCount).toBe(0);
+  });
+
+  it("throws on a row key that's also a line's or a point's, so focus(key) can't mean two things", async () => {
+    const container = document.body.appendChild(document.createElement("div"));
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion: quietMotion(), clock: manualClock() };
+    // Week 1 keyed "goals@2", beside week 2's point "goals@2".
+    const clash = (d: Week) => (d.week === 1 ? "goals@2" : String(d.week));
+    const make = (options: Partial<LineChartOptions<Week>>) => () => lineChart<Week>(container, { label: "Bad", data: weeks, x: "week", series: ["goals"], ...options }, env);
+    expect(make({ key: clash })).toThrow(new RangeError('lineChart: the key "goals@2" would name both an x and a line or point. A row\'s key can\'t be a series, or a series and a key joined with "@".'));
+    expect(make({ key: (d) => (d.week === 3 ? "goals" : d.week) })).toThrow(/the key "goals" would name both an x and a line or point/);
+    expect(container.childElementCount).toBe(0);
+    // update() rejects it, changing nothing; the same key is fine where the series differ.
+    const { chart, keys } = setup();
+    const before = keys();
+    await expect(chart.update({ key: clash })).rejects.toThrow(/the key "goals@2" would name both/);
+    expect(keys()).toEqual(before);
+    expect(() => make({ key: clash, series: ["xg"] })()).not.toThrow();
   });
 
   it("draws nothing for no data, and no lines", () => {
@@ -416,6 +454,32 @@ describe("lineChart: keyboard", () => {
     expect(Array.from(ring.children, (g) => g.querySelector(".ec-focus-gap")!.getAttribute("d"))).toEqual(outlines);
     column("2").blur();
     expect(ring.getAttribute("visibility")).toBe("hidden");
+  });
+
+  it("moves focus to an x's focus stop with focus(key), by the x's key or one of its points', as a key press would", () => {
+    const { chart, svg, column } = setup();
+    const events = listen(chart);
+    const ring = svg.querySelector(".ec-focus")!;
+    // The last input was a click, which would leave a focus without its ring.
+    pointer("pointerdown", document.body);
+    chart.focus("3");
+    expect(focused()).toBe("3");
+    expect(tabIndexes(svg)).toEqual(["1 -1", "2 -1", "3 0", "4 -1"]);
+    expect(ring.getAttribute("visibility")).toBeNull();
+    expect(events).toEqual(["hover goals@3 keyboard 1/2", "hover xg@3 keyboard 2/2"]);
+    chart.focus("xg@2");
+    expect(document.activeElement).toBe(column("2"));
+    expect(events.slice(2)).toEqual(["leave goals@3", "leave xg@3", "hover goals@2 keyboard 1/2", "hover xg@2 keyboard 2/2"]);
+    // A line isn't one x's; an unknown key and an x past the reveal aren't on screen.
+    chart.focus("goals");
+    chart.focus("12");
+    chart.reveal(3);
+    chart.focus("4");
+    chart.focus("goals@4");
+    expect(document.activeElement).toBe(column("2"));
+    expect(events).toHaveLength(6);
+    chart.destroy();
+    expect(() => chart.focus("1")).not.toThrow();
   });
 
   it("names each x like a stacked bar, and words it with markLabel given a MarkSummary", () => {

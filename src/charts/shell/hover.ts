@@ -1,7 +1,8 @@
 // Hover for a reference chart's marks. Pointer, touch and keyboard focus share one hover: the marks'
 // emphasis (`ec-hot`), the others' dimming (`ec-hovering` on the <svg>), the tooltip, the runner's
-// hover and leave, and the events. Focus from a key press shows the focus ring and plays the hover;
-// focus from a click or tap moves the tab stop but leaves the hover to the pointer.
+// hover and leave, and the events. Focus from a key press, or from the chart's focus(key), shows the
+// focus ring and plays the hover; focus from a click or tap moves the tab stop but leaves the hover to
+// the pointer.
 //
 // What's hovered is a target: what the pointer is over and what takes focus. A target stands for one
 // mark or several, hovered together in one batch: a bar or a slice is its own mark, while a line
@@ -70,6 +71,8 @@ export interface ChartHover {
   dropGone(): void;
   /** After the marks changed: the tab stop stays on its key, or moves to its nearest neighbour, and focus follows. */
   sync(): void;
+  /** Moves focus to the live target `key` as a key press would: the ring shows and its hover plays. Does nothing for a key that isn't live. */
+  focus(key: string): void;
   destroy(): void;
 }
 
@@ -229,6 +232,9 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       });
     },
     sync: () => keyboard.sync(),
+    focus(key) {
+      if (options.live(key)) keyboard.focus(key);
+    },
     destroy() {
       interaction.destroy();
       keyboard.destroy();

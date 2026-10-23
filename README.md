@@ -409,6 +409,7 @@ The dev server's index links the demos built on the library:
 | --- | --- |
 | `npm run dev` | Serves the `demo/` folder with live reload |
 | `npm run build` | Builds the npm package (ESM + CommonJS + types, with the `icons/sport` and `testing` entries), a script-tag bundle (`dist/expressive-charts.global.js`) and the stylesheet as a file (`dist/expressive-charts.css`) |
+| `npm run size` | Measures the built package and fails when a size is over its budget in `scripts/size-budget.json` (see [CONTRIBUTING.md](CONTRIBUTING.md#bundle-size)) |
 | `npm test` | Runs the test suite |
 | `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html`, `demo/donut.html`, `demo/line.html` and `demo/morph.html` in Chromium, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](CONTRIBUTING.md#visual-tests)) |
 | `npm run typecheck` | Checks types without building |

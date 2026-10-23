@@ -1,6 +1,6 @@
 # Screen-reader check: `barChart` (M2 step 5)
 
-This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3), [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html` (M4), and [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html` (M5). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
+This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3), [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html` (M4), [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html` (M5), and [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html` (M6). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
 
 **Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).**
 
@@ -258,6 +258,46 @@ If the chart's description isn't heard in step 1, it's also in the card's note, 
 | 13 | Shift+Tab until you reach "Drop" (about 3 times), and press Space. | "Drop, toggle button, not pressed", then "pressed". Nothing else: the switch is rebuilt, still showing the columns, and focus stays on Drop. | |
 
 If the announcement in steps 3, 5, 6 or 9 isn't heard, or is heard before the switch lands, say so: the live region is written when the switch lands, and could move.
+
+## G. The stress page's date line: `lineChart` on dates
+
+`demo/stress.html` (M6) runs each case at sizes up to past its limit. Its third card, "A line on dates, playing", is a `lineChart` whose x is a date: a year of daily visits and their 28-day average, red wherever a day is below its average, with a Play button. This script covers what dates add; otherwise the chart reads as in [section E](#e-the-line-page-linechart-and-a-d3-line).
+
+- **The chart.** The `<svg>` is `role="group"`, named "Daily visits, 2025", with a description in a `<desc>`: "Visits each day and their 28-day average, 2025. The visits line is red wherever a day is below its 28-day average." The lines, dots, end labels, axes and the arrow are hidden. Each day is one focus stop, `role="img"`, named by the chart's default: the day as a medium date in the page's locale, then each series' value and name ("Jan 1, 2025: 959 Visits, 936 28-day average"). The page gives no tooltip function, so a day has no description.
+- **Keyboard order.** The chart is one tab stop. The arrow keys go one day at a time (Right and Down to the next, Left and Up to the previous), Home and End to the ends, with no wrap-around.
+- **The data table.** Date, Visits and 28-day average, a row per day, each named by its date ("Jan 1, 2025").
+- **The controls.** The Years and Series buttons are toggle buttons in groups named "Years" and "Series"; a press draws the chart again, and focus stays on the button. "Play" plays the year in about 8 seconds, and is "Pause" while it plays. The date beside it ("Through Dec 31, 2025") isn't a live region. The readout under the controls is a polite live region, written once a play ends.
+
+**Setup.** Run `npm run dev` and open `stress.html` at the address Vite prints, for example `http://localhost:5173/stress.html`. **Reload before you start**, so the card shows 1 year and 2 series in Presentation. Use NVDA + Chrome, with the setup from [A](#a-nvda--chrome-windows). To reach the card, press 2 (the next heading at level 2) until NVDA says "A line on dates, playing, heading, level 2".
+
+**Listen for:**
+
+1. Each day is read **once, as one item**, with its date and both values: "Jan 1, 2025: 959 Visits, 936 28-day average". Never a number on its own, and never twice.
+2. Moving into the chart says its name once, and perhaps its description.
+3. The arrow keys go one day at a time and stop at the ends.
+4. Nothing is read while the year plays. When it ends, the readout is read once.
+5. In the table, each row is named by its date, and each cell is read with its column's header.
+6. Nothing is read that you can't see: not the end labels, the axes or the arrow.
+
+**Known, no need to report:** "Visits" has a capital in the middle of a name, since it's the series' name in the legend too. The readout is long, and full of numbers: it's for measuring, not for reading. Do say if a date is read in a way that's hard to follow.
+
+**NVDA + Chrome**, starting in browse mode:
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press 2 until "A line on dates, playing, heading, level 2". Then press Tab 10 times. | On the way: "Years, grouping, 1, toggle button, pressed", "2", "5", "10", "Series, grouping, 1, toggle button, not pressed", "2, toggle button, pressed", "3", "4", "Play, button". Then "Daily visits, 2025, grouping", perhaps with its description, then "Jan 1, 2025: 959 Visits, 936 28-day average, graphic". | |
+| 2 | NVDA+Space (focus mode), then Right arrow twice. | "Jan 2, 2025: 1,164 Visits, 941 28-day average, graphic", then "Jan 3, 2025: 1,077 Visits, 943 28-day average, graphic". The crosshair moves a day at a time. | |
+| 3 | End, then Left arrow. | "Dec 31, 2025: 955 Visits, 848 28-day average, graphic", then "Dec 30, 2025: 1,117 Visits, 842 28-day average, graphic". | |
+| 4 | Home, then Left arrow. | "Jan 1, 2025: 959 Visits, 936 28-day average, graphic", then nothing new: January 1 is the first day. | |
+| 5 | Escape, then NVDA+Space (browse mode). Shift+Tab once, to "Play". Press Space, and wait until the year stops (about 8 seconds). | "Play, button". Nothing while it plays (perhaps "Pause" once, as the button's name changes). When it stops, the readout, once: "Smooth. Played 1 year of days, 2 series in Presentation: …", ending "Runs: 732 started, 366 of them on visits, 1 drawn." It may say "Not smooth". | |
+| 6 | Tab twice, to "Data table". Press Space. | On the way, "Daily visits, 2025, grouping" and "Jan 1, 2025: …". Then "Data table, button, collapsed", then "expanded". | |
+| 7 | Press T (next table). If nothing happens, press NVDA+Space until NVDA says "Browse mode", then T. | "Daily visits, 2025, table with 366 rows and 3 columns", then "row 1, column 1, Date". | |
+| 8 | Ctrl+Alt+Down, then Ctrl+Alt+Right twice. | "row 2, Jan 1, 2025". Then "Visits, column 2, 959", "28-day average, column 3, 936". | |
+| 9 | Ctrl+Alt+Down. | "Jan 2, 2025, row 3, 941": the row's date with the new row. | |
+| 10 | Shift+Tab until "10, toggle button, not pressed" (the Years group; about 7 times). Press Space, and wait a few seconds while the chart is drawn again. Then Tab 6 times. | "10, toggle button, pressed". Then, on the way, "2, toggle button, pressed" and "Play, button", then "Daily visits, 2016 to 2025, grouping" and "Jan 1, 2016: 959 Visits, 934 28-day average, graphic". | |
+| 11 | NVDA+Space (focus mode), Right arrow, then End. | "Jan 2, 2016: 838 Visits, 938 28-day average, graphic", then "Dec 31, 2025: 565 Visits, 503 28-day average, graphic". | |
+
+Ten years are 3,653 days, and the arrow keys go a day at a time, so step 11 uses End. If you'd want a larger step (Page Up and Page Down by a month, say), say so: the charts have none yet.
 
 ## Re-check after M2 step 7
 

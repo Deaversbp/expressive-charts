@@ -20,6 +20,11 @@
 // Then it creates and destroys each case's chart 50 times (switching between two sizes and back) and
 // checks that DOM nodes and event listeners come back to where they started, after garbage collection.
 //
+// The machine must be quiet: another browser, a test suite or a Docker run at the same time can
+// double every number. So each repetition first times a fixed loop in the page (unthrottled), and the
+// header gives that loop's range over the whole run: a run whose slowest loop is well over its fastest
+// was shared, and its numbers aren't comparable.
+//
 // On a CPU with performance and efficiency cores (Intel's 12th generation and later), Windows moves
 // the renderer between core types and whole runs drift by 2× (M4 step 6). --affinity pins this
 // process to the given logical CPUs before the browser starts, and the browser inherits it.
@@ -179,6 +184,12 @@ async function once(kase, size, combo, rate) {
     // The line's readout says how long it took to draw once it has.
     const drawn = kase === CASES.line ? await lineDrawn(page, size, combo.series) : undefined;
     await cdp.send("HeapProfiler.collectGarbage");
+    const speed = await page.evaluate(() => {
+      const began = performance.now();
+      let sum = 0;
+      for (let i = 0; i < 2e7; i++) sum += Math.sqrt(i);
+      return sum > 0 ? performance.now() - began : 0;
+    });
     await cdp.send("Emulation.setCPUThrottlingRate", { rate });
     const busy = await taskMs(cdp);
     const data = await run(page, kase.card, kase.start ?? `${kase.card} [data-start]`);
@@ -198,7 +209,8 @@ async function once(kase, size, combo, rate) {
       drawn: number("drawn") ?? drawn,
       runsStarted: number("runsStarted"),
       runsOnVisits: number("runsOnVisits"),
-      runsDrawn: number("runsDrawn")
+      runsDrawn: number("runsDrawn"),
+      speed
     };
   } finally {
     await page.close();
@@ -314,6 +326,11 @@ const out = [];
 const m = results.machine;
 out.push(`# Stress benchmark, ${m.date}`, "");
 out.push(`${m.cpu} (${m.logicalCpus} logical CPUs${m.affinity === "none" ? "" : `, pinned to ${m.affinity}`}), ${m.memoryGB} GB, ${m.os}; ${m.browser}, 1000 × 2000 viewport.`);
+const speeds = Object.values(results.cases).flatMap((variants) => variants.flatMap((variant) => Object.values(variant.rates).flatMap((rate) => rate.reps.map((rep) => rep.speed)))).sort((a, b) => a - b);
+if (speeds.length > 0) {
+  const ratio = speeds[speeds.length - 1] / speeds[0];
+  out.push(`Speed check: a fixed loop took ${fixed(speeds[0])} to ${fixed(speeds[speeds.length - 1])} ms (median ${fixed(median(speeds))}) before each repetition${ratio > 1.25 ? `: **${ratio.toFixed(1)}× apart, so the machine was busy with something else during this run**` : ""}.`);
+}
 out.push(`Medians of ${m.reps} repetitions, each on a fresh page. Times in ms; "work" is the main thread's work per frame. Smooth: 95th percentile ≤ 20 ms, longest ≤ 50 ms, and a hover shown within 100 ms.`, "");
 
 const limits = [];

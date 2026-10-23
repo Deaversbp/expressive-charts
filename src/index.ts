@@ -1,9 +1,10 @@
 // Public entry point and composition root: the only file that brings charts and effects together.
 // Exports are added here as each layer is built. See docs/architecture.md for the design.
 
-import { motion as pageMotion, type Motion } from "./core";
+import { motion as pageMotion, type Motion, type TransitionEffect } from "./core";
 import {
   barChart as drawBarChart,
+  chartSwitch as buildChartSwitch,
   donutChart as drawDonutChart,
   expressive as attach,
   fromVegaView as attachVega,
@@ -12,6 +13,9 @@ import {
   type BarChart,
   type BarChartOptions,
   type ChartEnv,
+  type ChartSwitch,
+  type ChartSwitchOptions,
+  type ChartSwitchViews,
   type DonutChart,
   type DonutChartOptions,
   type ExpressiveOptions,
@@ -23,6 +27,7 @@ import {
   type VegaViewLike
 } from "./charts";
 import { motionSwitch as buildMotionSwitch, type MotionSwitch, type MotionSwitchOptions } from "./charts/controls";
+import { morph } from "./effects";
 import { iconRegistry, presetRegistry } from "./registries";
 
 export const VERSION = "0.0.0";
@@ -42,6 +47,12 @@ export type {
   ChartChange,
   ChartLabel,
   ChartOptions,
+  ChartSwitch,
+  ChartSwitchOptions,
+  ChartSwitchView,
+  ChartSwitchViewFactory,
+  ChartSwitchViewName,
+  ChartSwitchViews,
   ColorAssignment,
   DonutChart,
   DonutChartOptions,
@@ -98,6 +109,18 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
  */
 export function lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D> {
   return drawLineChart(target, options, env);
+}
+
+/**
+ * Views of the same data in `target` (an element or a selector), one shown at a time: `show(view)`
+ * turns each mark into the mark with its key in the other view with `transition`, morph() by default,
+ * while the labels move and swap their text. Each view's function draws its chart in the container
+ * it's given; pass it the `colors` it's given too, so a key keeps its colour from view to view.
+ */
+export function chartSwitch<T extends ChartSwitchViews>(target: string | Element, options: ChartSwitchOptions<T>): ChartSwitch<T> {
+  // Charts never import effects: the default transition is filled in here.
+  const filled = typeof options === "object" && options !== null && options.transition === undefined ? { ...options, transition: morph() } : options;
+  return buildChartSwitch(target, filled as ChartSwitchOptions<T> & { readonly transition: TransitionEffect }, env);
 }
 
 /**

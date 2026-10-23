@@ -8,7 +8,8 @@
  * (registerPreset, registerIcon, registerIcons), the reference charts (barChart, donutChart and
  * lineChart, with their options, mark events, accessors, colorAssignment and handles, LineChart's with
  * reveal), the icons (defineIcon, iconFromSvg, icons), the first
- * effects (travel with its gaits, flash, wiggle, pulse, threshold, morph, sequence, parallel, only, stagger), the
+ * effects (travel with its gaits, flash, wiggle, pulse, threshold, morph, sequence, parallel, only, stagger),
+ * chartSwitch with its types, the
  * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch, playback with its
  * playButton, and the adapters, expressive() with its types (MarkSource, Attachment, ExpressiveOptions) and
  * fromVegaView() with its own (VegaOptions, VegaViewLike, VegaAttachment). The conformance suite is ./testing.ts.
@@ -17,15 +18,7 @@
  */
 
 export * from "../../src/index";
-import type {
-  ChartOptions as BuiltChartOptions,
-  ColorAssignment,
-  describe as builders,
-  MarkEvents,
-  MarkGeometry,
-  Sample,
-  TransitionEffect
-} from "../../src/index";
+import type { ChartOptions as BuiltChartOptions, describe as builders, MarkGeometry, Sample } from "../../src/index";
 
 // ── Shared contracts and drawing API: built, in src/core/contracts ───────────
 // MarkGeometry, Outline, Sample, MarkData (with previous), Paint, MarkStyle, MarkHandle, IconHandle,
@@ -71,13 +64,9 @@ import type {
 // so the `update` slot no longer collides with `chart.update()`. MarkEvent and MarkEvents are built,
 // in src/charts.
 
-/** What reference charts and adapters have in common. focus() came with keyboard support to the adapter (M1 step 9), and to the charts' handles in M5 step 2. */
-export interface MarkSourceHandle<D> {
-  on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void;
-  marks(): readonly MarkGeometry[];
-  focus(key: string): void;
-  destroy(): void;
-}
+// The sketch's MarkSourceHandle, what reference charts and adapters have in common, went with its
+// chartSwitch declaration: the built chartSwitch types its views by what it uses (ChartSwitchView:
+// element, marks(), labels(), focus(key) and destroy()), so adapters can join later (M5 decision 4).
 
 // ── Geometry builders: public, shared by reference charts and adapters ───────
 
@@ -123,21 +112,12 @@ export declare const describe: typeof builders & {
 /** NEW NoInfer on `on` (built): without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
 export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 
-export interface ChartSwitch<V extends string> {
-  show(view: V): Promise<void>;
-  readonly current: V;
-  destroy(): void;
-}
-
-export declare function chartSwitch<V extends string>(
-  target: string | Element,
-  options: {
-    readonly views: { readonly [K in V]: (container: Element) => MarkSourceHandle<any> };
-    readonly transition: TransitionEffect;
-    readonly initial: NoInfer<V>;
-    readonly colors?: ColorAssignment;
-  }
-): ChartSwitch<V>;
+// chartSwitch is built (M5 step 3, src/charts/switch.ts), with ChartSwitch, ChartSwitchOptions,
+// ChartSwitchView, ChartSwitchViewFactory, ChartSwitchViewName and ChartSwitchViews. Changed from the
+// sketch: each view's function is given the switch's ColorAssignment beside its container, so a
+// switch that makes its own still shares it with every view; `transition` defaults to morph();
+// `announce` says the new view's label; the handle has chart(view), typed as that view's function
+// returns it; and ChartSwitch is typed by the views record rather than by their names.
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 

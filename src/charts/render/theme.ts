@@ -177,6 +177,11 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-center-label) { fill: var(--ec-text-muted, ${TOKENS["text-muted"]}); font-size: 12.5px; }
 :where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot)) { opacity: var(--ec-dim-opacity, 0.3); }
 :where(.ec-chart.ec-morphing .ec-marks) { visibility: hidden; }
+:where(.ec-switch) { display: grid; grid-template-columns: minmax(0, 1fr); position: relative; }
+:where(.ec-switch-view) { grid-area: 1 / 1; min-width: 0; }
+:where(.ec-switch-view.ec-switch-inactive) { visibility: hidden; }
+:where(.ec-switch-view.ec-switching .ec-focus, .ec-switch-view.ec-switching .ec-overlay, .ec-switch-view.ec-switching .ec-columns) { visibility: hidden; }
+:where(.ec-switch-overlay) { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
 :where(.ec-motion-switch) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--ec-text, ${TOKENS.text}); font-size: 13px; }
 :where(.ec-motion-label) { font-weight: 600; }
 :where(.ec-motion-modes) { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ec-ring, color-mix(in srgb, currentColor 12%, transparent)); border-radius: 8px; background: var(--ec-surface, ${TOKENS.surface}); }

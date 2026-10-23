@@ -51,7 +51,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      # The size check (M6 step 2, scripts/size.mjs) goes here, as `- run: npm run size`, once it's on main.
+      - run: npm run size
       - run: npm run pack-check
       - run: npm publish --provenance --access public
         env:

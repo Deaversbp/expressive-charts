@@ -2076,10 +2076,12 @@ expressive(lines, {
   geometry: (_el, d, key) => describe.line({ key, series: d.series, points: points(d), width: 2 }),
   samples: (d, mark) => samplesAlong(mark, points(d)), // values along the line, for threshold
   dim: true,                                         // the other line fades
-  watch: true,                                       // follows the page's own transitions
+  watch: true,                                       // follows a reveal that gives each path its rows every frame
   on: { decorate: only("goals", threshold({ compareTo: "xg" })) } // red wherever goals are below xG
 });
 ```
+
+This line's `geometry` and `samples` are built from the rows bound to each path, so `watch` follows the line only while the page updates those rows every frame, as a reveal does (`paths.datum(…).attr("d", …)` on each frame). A D3 transition that binds the new rows once and interpolates the path's `d` would show only its end: the overlay jumps to the final line. There, describe the line from the element's own path (`describe.line` from points read off it each frame), or call `refresh()` when the transition ends. Rects need nothing: they're read from the element.
 
 **Observable Plot** binds each rect to its row's index, so pass `datum`. Plot draws a new `<svg>` each time, so pass `refresh()` the new one's rects. After a transform that derives new data (`groupY`, `binX`), the index is into Plot's derived rows, not yours: read them through the mark's `render` option instead. A Plot line's path is bound to its series' row indices, with `-1` where Plot breaks the line at a missing value: pass `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, a `geometry` from those rows' points through Plot's own scales (`plot.scale("x").apply(r.week)`), and `samples` from `samplesAlong` on the same points. Where Plot leaves a gap, the described line goes straight across it. The accessors are tested against Plot 0.6.17.
 
@@ -2115,7 +2117,7 @@ interface ExpressiveOptions<D>
 - `keyboard`: `boolean`. Default false. Makes marks focusable as one tab stop: the arrow keys, Home and End move between them in visual order (round a pie, clockwise from 12 o'clock), focus plays the hover effects, and a ring shows.
 - `dim`: `boolean`. Default false: the host owns its styling. True dims the other marks while one is hovered, and gives the hovered one its strong colour.
 - `markLabel`: `(datum: D, mark: HostMark<D>) => string`. Names each mark for screen readers as one item: its first part becomes `role="img"` with the text as its name, and its other parts are hidden, so a stack isn't read in pieces. Default: the adapter writes no ARIA. With `keyboard`, give it, since a focusable element needs a name. Make the `<svg>` `role="group"`, not `role="img"`.
-- `watch`: `boolean`. Default false. Follows the host's own transitions frame by frame, without `refresh()`: once a frame, the marks whose geometry attributes (or whose ancestors' `transform` or `style`) changed are read again, and their effects follow, with no events. Call `refresh()` when the host joins new data, before its transition starts. Its cost grows with the marks that move: about 17–19 µs a moving column a frame at 500 columns, which halves the most that stay smooth ([Limits](architecture.md#limits)).
+- `watch`: `boolean`. Default false. Follows the host's own transitions frame by frame, without `refresh()`: once a frame, the marks whose geometry attributes (or whose ancestors' `transform` or `style`) changed are read again, and their effects follow, with no events. Call `refresh()` when the host joins new data, before its transition starts. A `geometry` or `samples` callback should read the element, or rows the host updates every frame: one that reads rows bound once, as a transition's targets, sees only the end. Its cost grows with the marks that move: about 17–19 µs a moving column a frame at 500 columns, which halves the most that stay smooth ([Limits](architecture.md#limits)).
 
 #### `MarkSource<D>`
 

@@ -6,7 +6,10 @@
 // machine. Names start with "stress-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { FRAME, iconTransforms, modeButton, openDemo, pickMode, REST, tabInto, type Demo } from "./demo";
+import { FRAME, iconTransforms, modeButton, openDemo, pickMode, REST, stressDemo, tabInto } from "./demo";
+
+// The page draws six charts and about 22,500 elements, and WebKit plays its frames slowly in Docker.
+test.describe.configure({ timeout: 90_000 });
 
 type Case = "update" | "hover" | "line" | "host" | "switch" | "draw";
 const CASES: readonly Case[] = ["update", "hover", "line", "host", "switch", "draw"];
@@ -25,20 +28,6 @@ const day = (page: Page, date: string): Locator => lineChart(page).locator(`.ec-
 
 /** A play's base duration on the page. */
 const PLAY = 8000;
-
-const stressDemo: Demo = {
-  path: "/stress.html",
-  async ready(page) {
-    await expect(page.locator("#update-chart .ec-mark")).toHaveCount(100);
-    await expect(page.locator("#hover-chart .ec-mark")).toHaveCount(100);
-    await expect(lineChart(page).locator(".ec-column")).toHaveCount(365);
-    // expressive() has named the D3 columns, so it's attached.
-    await expect(page.locator('#host-chart rect[role="img"]')).toHaveCount(20);
-    // Both of the switch's views are drawn, one of them hidden.
-    await expect(page.locator("#switch-chart .ec-mark")).toHaveCount(40);
-    await expect(page.locator("#draw-chart .ec-mark")).toHaveCount(1000);
-  }
-};
 
 /** Runs the clock a little at a time until the case's readout reports its next run. */
 async function reported(page: Page, name: Case, runs = 1): Promise<void> {

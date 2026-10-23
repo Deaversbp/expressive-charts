@@ -5,12 +5,14 @@
 //
 // A layout is drawn from a few numbers: the frame (the value scale, and the box: the x range and where
 // the plot sits) and each row's x and values. Transitions interpolate those numbers, and the place
-// functions draw any state in between, and any reveal, the same way the layout draws its own.
+// functions draw any state in between, and any reveal, the same way the layout draws its own. On a
+// time axis an x is its Date's time in ms, and only its ticks, its wording and the samples' `at` know.
 
 import { describe, type MarkData, type MarkGeometry, type Rect, type Sample } from "../core";
 import { clean, niceDomain, niceStep, type Tick } from "./bar-layout";
 import type { TextPlacement } from "./render/text";
 import { decimals } from "./shell/format";
+import { TIME_ZONES, timeName, timeTicks, type TimeZone } from "./time";
 import type { Accessor, LineChartOptions } from "./types";
 
 export type { Tick } from "./bar-layout";
@@ -21,12 +23,16 @@ export interface LineSeries<D> {
   readonly value: (d: D, i: number) => unknown;
 }
 
-/** Which accessor gives the x, which the key, which the values. */
+/** Which accessor gives the x, which the key, which the values; and how an x is said. */
 export interface LineEncoding<D> {
   readonly x: (d: D, i: number) => unknown;
   /** Undefined: the key is the x. */
   readonly key: ((d: D, i: number) => unknown) | undefined;
   readonly series: readonly LineSeries<D>[];
+  /** A time axis's zone. */
+  readonly timeZone: TimeZone;
+  /** Words an x for people instead of the default. */
+  readonly xFormat: ((x: Date | number) => string) | undefined;
 }
 
 export interface LineValue {
@@ -39,6 +45,7 @@ export interface LineRow<D> {
   readonly datum: D;
   /** The row's index in `data`. */
   readonly index: number;
+  /** A number, or on a time axis its Date's time in ms. */
   readonly x: number;
   /** The x as text: the tooltip's title, the table's row header and the start of the x's name. */
   readonly label: string;
@@ -85,6 +92,8 @@ export interface LineLayout<D> {
   readonly frame: LineFrame;
   /** In ascending x. */
   readonly rows: readonly LineRow<D>[];
+  /** Whether x is a time axis: the data gives Dates. */
+  readonly time: boolean;
   readonly series: readonly string[];
   /** Gridlines and labels for the values, from the bottom. */
   readonly yTicks: readonly Tick[];
@@ -152,7 +161,7 @@ const CENTRE = 0.36;
 /** Reads the options: the x, the key and the series. Throws on what it can't draw. */
 export function lineEncoding<D>(options: LineChartOptions<D>): LineEncoding<D> {
   const { x, series, key } = options;
-  if (typeof x !== "string" && typeof x !== "function") throw new TypeError("lineChart needs x: a numeric field or a function that returns each row's x.");
+  if (typeof x !== "string" && typeof x !== "function") throw new TypeError("lineChart needs x: a field of numbers or Dates, or a function that returns each row's x.");
   if (!Array.isArray(series) || series.length === 0) throw new TypeError("lineChart needs series: the numeric fields to draw as lines.");
   const seen = new Set<string>();
   for (const field of series as readonly unknown[]) {
@@ -163,24 +172,31 @@ export function lineEncoding<D>(options: LineChartOptions<D>): LineEncoding<D> {
   if (key !== undefined && typeof key !== "string" && typeof key !== "function") throw new TypeError("lineChart: key must be a field name or a function.");
   const labels: unknown = options.labels;
   if (labels !== undefined && labels !== false && typeof labels !== "function") throw new TypeError("lineChart: labels must be false or a function that returns a line's end label.");
+  const timeZone: unknown = options.timeZone ?? "UTC";
+  if (!TIME_ZONES.includes(timeZone as TimeZone)) throw new TypeError(`lineChart: timeZone must be "UTC" or "local", got ${show(timeZone)}.`);
+  const xFormat: unknown = options.xFormat;
+  if (xFormat !== undefined && typeof xFormat !== "function") throw new TypeError("lineChart: xFormat must be a function that turns an x into text.");
   return {
     x: accessor(x),
     key: key === undefined ? undefined : accessor(key),
-    series: series.map((field) => ({ series: field, value: accessor<D, unknown>(field) }))
+    series: series.map((field) => ({ series: field, value: accessor<D, unknown>(field) })),
+    timeZone: timeZone as TimeZone,
+    xFormat: options.xFormat
   };
 }
 
 export function layoutLines<D>(input: LineLayoutInput<D>): LineLayout<D> {
   const { width, measure } = input;
   const height = input.height ?? HEIGHT;
-  const rows = prepareRows(input);
+  const { rows, time } = prepareRows(input);
   const series = input.encoding.series.map((s) => s.series);
   const domain = niceDomain(rows.flatMap((row) => row.values.map((v) => v.value)));
   const yTexts = domain.ticks.map(input.format);
   const xLo = rows[0]?.x ?? 0;
   const xHi = rows[rows.length - 1]?.x ?? 0;
-  const xValues = rows.length > 0 ? xTickValues(xLo, xHi) : [];
-  const xTexts = xValues.map(xText);
+  const ticked = rows.length === 0 ? [] : time ? timeTicks(xLo, xHi, input.encoding.timeZone) : xTickValues(xLo, xHi).map((value) => ({ value, text: xText(value) }));
+  const xValues = ticked.map((tick) => tick.value);
+  const xTexts = ticked.map((tick) => tick.text);
   const xWidths = xTexts.map((text) => measure(text, "ec-tick", TICK_SIZE));
 
   // The values' labels on the left; the end labels, or the last x label, on the right.
@@ -202,6 +218,7 @@ export function layoutLines<D>(input: LineLayoutInput<D>): LineLayout<D> {
     height,
     frame,
     rows,
+    time,
     series,
     yTicks: domain.ticks.map((value, i) => placeYTick(frame, value, yTexts[i]!)),
     xTicks: spaced(xTicks, xWidths),
@@ -224,9 +241,10 @@ export function positions(frame: LineFrame): { x(value: number): number; y(value
  * Draws each series' line through `rows` (in ascending x) up to `through`: a vertex per row at or
  * before it, plus the point part way to the next row when `through` falls between two. With no row
  * at or before it, a line is its first point. Each line's data has the row at its revealed end, a
- * sample per vertex (`t` by distance along the walk, `at` its x), and the other lines as `related`.
+ * sample per vertex (`t` by distance along the walk, `at` its x: a Date on a `time` axis), and the
+ * other lines as `related`.
  */
-export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], series: readonly string[], through: number): PlacedLine<D>[] {
+export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], series: readonly string[], through: number, time = false): PlacedLine<D>[] {
   const first = rows[0];
   if (!first) return [];
   const at = positions(frame);
@@ -252,7 +270,7 @@ export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], se
     const samples: Sample[] = vertices.map((v, j) => {
       if (j > 0) distance += Math.hypot(points[j]!.x - points[j - 1]!.x, points[j]!.y - points[j - 1]!.y);
       const t = geometry.length > 0 ? (j === vertices.length - 1 ? 1 : Math.min(1, distance / geometry.length)) : 0;
-      return { t, value: v.value, at: v.at };
+      return { t, value: v.value, at: sampleAt(v.at, time) };
     });
     const data: MarkData<D> = { datum: end.datum, samples, related: related(name) };
     datas.set(name, data);
@@ -267,15 +285,15 @@ export function pointKey(series: string, row: string): string {
   return `${series}@${row}`;
 }
 
-/** Each series' point at the row: a dot, with the row's value as its one sample and the other series' points as `related`. */
-export function placePoints<D>(frame: LineFrame, row: RowState<D>, series: readonly string[]): PlacedPoint<D>[] {
+/** Each series' point at the row: a dot, with the row's value as its one sample (`at` its x: a Date on a `time` axis) and the other series' points as `related`. */
+export function placePoints<D>(frame: LineFrame, row: RowState<D>, series: readonly string[], time = false): PlacedPoint<D>[] {
   const at = positions(frame);
   const x = at.x(row.x);
   const datas = new Map<string, MarkData<D>>();
   return series.map((name) => {
     const value = row.values[name] ?? 0;
     const key = pointKey(name, row.key);
-    const data: MarkData<D> = { datum: row.datum, samples: [{ t: 0, value, at: row.x }], related: (other) => (other === name ? undefined : datas.get(other)) };
+    const data: MarkData<D> = { datum: row.datum, samples: [{ t: 0, value, at: sampleAt(row.x, time) }], related: (other) => (other === name ? undefined : datas.get(other)) };
     datas.set(name, data);
     return { key, series: name, geometry: describe.point({ key, series: name, x, y: at.y(value), r: DOT_RADIUS }), data };
   });
@@ -388,26 +406,60 @@ function spaced(ticks: readonly XTick[], widths: readonly number[]): XTick[] {
   return kept.map((edge) => edge.tick);
 }
 
-function prepareRows<D>({ data, encoding }: LineLayoutInput<D>): LineRow<D>[] {
+/** The rows in ascending x, and whether x is a time axis: the first row's x is a Date. */
+function prepareRows<D>({ data, encoding }: LineLayoutInput<D>): { rows: LineRow<D>[]; time: boolean } {
   const keys = new Set<string>();
-  const rows = data.map((datum, index): LineRow<D> => {
-    const x = encoding.x(datum, index);
-    if (typeof x !== "number" || !Number.isFinite(x)) throw new RangeError(`lineChart: x must be a finite number, got ${show(x)} in row ${index}.`);
-    const key = String(encoding.key ? encoding.key(datum, index) : x);
+  let time = false;
+  const read = data.map((datum, index) => {
+    const raw = encoding.x(datum, index);
+    if (index === 0) time = raw instanceof Date;
+    const x = xOf(raw, index, time);
+    // A date is keyed by its ISO string, which says the same instant the same way on every machine.
+    const key = String(encoding.key ? encoding.key(datum, index) : time ? new Date(x).toISOString() : x);
     if (keys.has(key)) throw new Error(`lineChart: two rows have the key "${key}". Keys must be unique.`);
     keys.add(key);
     const values = encoding.series.map(({ series, value }) => ({ series, value: numberOf(value(datum, index), series, key) }));
-    return { key, datum, index, x, label: xText(x), values };
+    return { key, datum, index, x, values };
   });
   // Array.prototype.sort is stable, so the error below names the rows in data order.
-  rows.sort((a, b) => a.x - b.x);
-  for (let i = 1; i < rows.length; i++) {
-    const [a, b] = [rows[i - 1]!, rows[i]!];
+  read.sort((a, b) => a.x - b.x);
+  for (let i = 1; i < read.length; i++) {
+    const [a, b] = [read[i - 1]!, read[i]!];
     if (a.x === b.x) {
-      throw new Error(`lineChart: the rows "${a.key}" and "${b.key}" have the same x, ${xText(a.x)}. Each x is one point on every line, so x values must be unique.`);
+      const x = time ? new Date(a.x).toISOString() : xText(a.x);
+      throw new Error(`lineChart: the rows "${a.key}" and "${b.key}" have the same x, ${x}. Each x is one point on every line, so x values must be unique.`);
     }
   }
-  return rows;
+  const word = xWording(encoding, time, read.map((row) => row.x));
+  return { rows: read.map((row) => ({ ...row, label: word(row.x) })), time };
+}
+
+/** A row's x as a number: a finite number, or on a time axis a valid Date's time. Every row's x is the same kind as the first's. */
+function xOf(x: unknown, index: number, time: boolean): number {
+  if (x instanceof Date) {
+    if (!time) throw new TypeError(`lineChart: x must be all numbers or all Dates, but row 0's is a number and row ${index}'s a Date.`);
+    const t = x.getTime();
+    if (Number.isNaN(t)) throw new TypeError(`lineChart: x must be a valid Date, got an invalid Date in row ${index}.`);
+    return t;
+  }
+  if (time) {
+    if (typeof x === "number") throw new TypeError(`lineChart: x must be all numbers or all Dates, but row 0's is a Date and row ${index}'s a number.`);
+    throw new TypeError(`lineChart: x must be a valid Date, got ${show(x)} in row ${index}.`);
+  }
+  if (typeof x !== "number" || !Number.isFinite(x)) throw new RangeError(`lineChart: x must be a finite number, got ${show(x)} in row ${index}.`);
+  return x;
+}
+
+/** How an x is said for people: `xFormat`'s words, given the x as the data has it; or a time axis's medium date; or a number as given. */
+function xWording<D>(encoding: LineEncoding<D>, time: boolean, xs: readonly number[]): (x: number) => string {
+  const { xFormat } = encoding;
+  if (xFormat) return (x) => xFormat(time ? new Date(x) : x);
+  return time ? timeName(xs, encoding.timeZone) : xText;
+}
+
+/** A sample's `at` for an x: on a time axis, a Date of its own, so an effect that changes it changes nothing else. */
+function sampleAt(x: number, time: boolean): number | Date {
+  return time ? new Date(x) : x;
 }
 
 /** A line can't skip a value yet (gaps are backlog), nor count a missing one as 0 as a bar does. */

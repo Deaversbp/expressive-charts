@@ -1,6 +1,6 @@
 # Plan: expressive-charts v0.1
 
-Status: M1, M2 and M3 are complete (October 2026, §9). M4's steps 1–8 are all built (§9). `demo/line.html` passed your checklist walk and your screen-reader check. What's left is for you: a look at its new Vega-Lite card, and two short listening steps for it (section E, steps 13 and 14). M5 is complete too (§9): `demo/morph.html` passed your checklist walk, where you kept `"unroll"` as `morph()`'s default, and your screen-reader check (section F of [a11y-check.md](a11y-check.md)). M6 is next. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1, M2 and M3 are complete (October 2026, §9). M4's steps 1–8 are all built (§9). `demo/line.html` passed your checklist walk and your screen-reader check. What's left is for you: a look at its new Vega-Lite card, and two short listening steps for it (section E, steps 13 and 14), both planned in M6 (steps 6 and 7). M5 is complete too (§9): `demo/morph.html` passed your checklist walk, where you kept `"unroll"` as `morph()`'s default, and your screen-reader check (section F of [a11y-check.md](a11y-check.md)). M6, hardening and 0.1.0, is planned (§9, 23 October 2026): nine steps in four waves, from the stress demo, dates on the line chart's x and the size check to publishing 0.1.0 last. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -690,6 +690,8 @@ Automated visual regression (Playwright screenshots on a manual clock) is worth 
 ## 9. Milestones
 
 Each milestone ends with a page in `demo/` and is split into small PRs that keep `typecheck`, `test` and `build` green. `lab.html` stays untouched as the reference.
+
+The donut comes *before* the line on purpose. The architecture's central bet is that one effect works on any chart, and a second chart type tests that more cheaply than the line chart, which also brings in data effects and playback.
 
 ### M1: Ball and cleat on real bars ✅
 
@@ -1618,18 +1620,240 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 ### M6: Hardening and 0.1.0
 
-- A stress demo to set documented SVG limits (§10).
-- Dates on `lineChart`'s x axis: time ticks and `Intl` formatting, with no dependency (M4 decision 3).
-- A full accessibility audit.
-- A bundle-size check in CI, done with a Node script and no new dependency.
-- README API docs.
-- Decide whether to add more subpath exports, then publish 0.1.0.
+Hardening the library for its first release, then publishing it: a stress demo that sets the SVG limits, dates on `lineChart`'s x, a bundle-size check in CI, an accessibility audit, the API reference, the follow-ups from M4 and M5 that belong before 0.1.0, packaging, and last, 0.1.0 on npm.
 
-The donut comes *before* the line on purpose. The architecture's central bet is that one effect works on any chart, and a second chart type tests that more cheaply than the line chart, which also brings in data effects and playback.
+**Demo:** `demo/stress.html`, the stress page: each case at sizes up to past its limit, with a frame readout, and a year of daily values on a date axis.
+
+**Where M6 starts** (checked against main at 9f5f752 while planning, 23 October 2026):
+
+- **Already built.**
+  - **Packaging.** Three JS entries (`.`, `./icons/sport`, `./testing`), each ES module and CommonJS with types, plus `./style.css` and the script-tag bundle. `package.test.ts` checks that every JS entry is free of side effects and that there are no runtime dependencies; `index.node.test.ts` imports the package in Node with no DOM.
+  - **Tree-shaking works.** Measured on main's build with Vite 8, minified, a page pays only for what it imports:
+
+    | A page that imports | min | gzip |
+    | --- | --- | --- |
+    | `motion`, `animated` | 5.4 KB | 2.1 KB |
+    | `describe`, `matrix` | 10.2 KB | 3.8 KB |
+    | `expressive`, `travel` | 90.2 KB | 27.3 KB |
+    | `barChart` | 102.7 KB | 30.9 KB |
+    | `lineChart`, `threshold`, `playback`, `playButton` | 119.7 KB | 35.8 KB |
+    | `chartSwitch` with `donutChart` and `barChart` | 145.1 KB | 41.9 KB |
+    | everything | 247.6 KB | 70.5 KB |
+
+    The script-tag bundle is 198 KB minified (70.2 KB gzip), the stylesheet 9.9 KB (2.3 KB), the sport pack 2.8 KB (1.2 KB) and the testing entry 21.8 KB (6.2 KB). `npm pack` makes a 1.19 MB tarball, 4.5 MB unpacked, of which 2.9 MB is source maps.
+  - **The name.** `expressive-charts` is free on npm, and so are `expressivecharts`, `expressive.charts` and `expressive_charts`, which npm's look-alike rule would also block.
+  - **The 0.x promise.** Every name in CHANGELOG's lists is exported, and no `@experimental` marker is left in `src/` or the sketch.
+  - **Dates, partly.** `Sample.at` already takes a `Date`, and `threshold` matches by `at` when both series have numbers or `Date`s there. The visual suite pins `en-US` and UTC.
+  - **`watch`** was measured in M4 step 6 (open question 13), with a page in that session's scratchpad, not in the repository.
+  - **Accessibility record.** Sections A, D, E (steps 1–12) and F passed with NVDA + Chrome. VoiceOver + Safari has heard only the "1 goal" wording (section B, in part). Section C hasn't been run with either.
+  - **The sketch** declares only `describe.shape`; everything else in it is the real API.
+- **Assumed by the plan but not built.**
+  - The stress demo and a script that measures it.
+  - Dates on x: `x` is numeric only, and `format` takes numbers only.
+  - The size check, a release workflow and the API reference.
+  - `update({ on })` (open question 14): each chart throws "`on` can't be changed by update() yet".
+  - A header for a donut's value column (open question 17).
+  - M5's follow-ups (step 4's list).
+- **Gaps.**
+  - **The repository is private.** npm makes no provenance for a private repository, even for a public package, and README's links into `docs/` would be dead for npm's readers.
+  - **The first publish.** npm's trusted publishing (OIDC, no token) can only be set up for a package that already exists, so 0.1.0 itself goes out with a token or from your terminal.
+  - **Types for `require`.** Each entry's `require` condition points at `index.d.ts`, though the build writes `index.d.cts`. The package is `"type": "module"`, so a CommonJS project under `node16` resolution would be given ES module types.
+  - **`VERSION`** in `src/index.ts` is a hand-written `"0.0.0"`, and its test only checks its shape, so it can drift from `package.json`.
+  - **The package leaves out CHANGELOG.md**, where the promise is.
+  - **The promise's list** names the contracts but not the types they use (`Point`, `Rect`, `Icon`, `MotionView`, `Tween`, `TweenOptions`, `Timing`, `Easing`, the `describe` specs, the testing entry's option and recording types). The motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`) is in neither of its lists.
+  - **Observable Plot** is in README's first line and in CLAUDE.md, but only the adapter spike tried it (Plot 0.6.17, on a page that wasn't committed). No test uses real Plot.
+  - **Browsers.** Every test runs in Chromium or jsdom, and README names no browsers.
+  - **Forced colours** (Windows contrast themes): only the legend's swatches opt out. Nothing else has been checked.
+  - **TypeScript.** 7.0.2 is npm's `latest`; the repository builds with 5.9.3 (`^5.6.3`). The published types use `NoInfer`, so they need TypeScript 5.4 or newer, which nothing says.
+- **Out of date** (each fixed by a step below or by this plan):
+  - Open question 7's recommendation ("after M1") and question 11.
+  - architecture.md's "Dates on x come in M6" and the sketch's comment on x.
+  - "The donut comes *before* the line on purpose", which sits under M6 but is about M3 and M4: it moves to §9's opening.
+  - CHANGELOG's "Nothing is published yet" and README's status (step 9).
+  - `src/charts/README.md` has no rows for `donut.ts`, `donut-layout.ts` or `controls/` (M4 step 5's note).
+  - README's "all type-checked against the proposed API": the sketch is the real API now.
+  - **M4 isn't marked ✅:** a look at the Vega-Lite card on `demo/line.html` (step 6's walk), and section E's steps 13 and 14 (step 7).
+
+**What's carried into M6, and where it goes:**
+
+| Item | Goes to |
+| --- | --- |
+| Q6, more subpath exports | Decision 6: none, with the numbers above |
+| Q7, TypeScript 7 | Decision 8: after 0.1.0 |
+| Q10, `path` and `angle` | Decision 8: kept, settled before 0.1.0 since `MarkGeometry` is in the promise |
+| Q11, releasing | Decision 4, step 9 |
+| Q13, `watch`'s default | Step 6 |
+| Q14, `update({ on })` | Decision 3, step 4 |
+| Q17, the donut's value header | Decision 3, step 4 |
+| Q15, donut labels at narrow widths; Q16, a Vitest flavour of `checkEffect` | Stay open: no page and no author needs them yet |
+| §10's SVG performance risk, and "Runs on every point" | Step 6 |
+| M4's two leftovers | Step 6's walk (the Vega-Lite card), step 7 (E 13–14) |
+| The accessibility record | Decision 2, step 7 |
+| M5: line charts as switch views | Backlog (decision 3) |
+| M5: one start time, a handle method to end hover, helpers into core | Decision 3, step 4 |
+| M5: a transition effect reporting its progress | Backlog: an addition to the author API, which can come in any 0.x release |
+| M4 step 7's notes: decorations draw above the points; slot 2's orange is close to `--ec-negative` | Backlog: the first changes baselines, the second the palette |
+| M5 step 2's note: a new `colors` in `update()` recolours bars only as each is next drawn | Backlog |
+| `describe.shape`, and the adapter reading circles | Backlog: additions |
+| The promise matches the API | Decision 8, step 3 |
+
+**Decided while planning M6 (23 October 2026):** decisions 1–8 are yours, and 9–16 follow from them and the code.
+
+1. **Dates are in UTC by default, with local time as an option** (M4 decision 3). Ticks fall on day, month and year boundaries in UTC, and the names, the tooltip and the table say the dates in UTC, as Observable Plot does. So a date-only value such as `new Date("2026-01-05")`, which JavaScript reads as UTC midnight, is labelled 5 January on every machine, and screenshots match everywhere. `timeZone: "local"` follows the viewer's clock. Other zones by name (`"Europe/London"`) go to the backlog.
+2. **The audit: NVDA, plus a written WCAG pass.** You run what NVDA hasn't heard yet: section C, section E's steps 13 and 14, and the stress page's script G (step 6). The sessions write a WCAG 2.2 AA pass of every page, with `axe-core` as a pinned dev dependency in the visual suite, and manual checks for what it can't see (decision 12). VoiceOver + Safari is recorded as not run for 0.1, and goes to the backlog.
+3. **M6 builds three of the carried items:**
+   - **`update({ on })`** (Q14, "by M6 at the latest"): a page changes a chart's effects without recreating it, so `donut.html`'s picker keeps focus and doesn't replay the enter effects.
+   - **M5's switch fixes:** one start time for the switch's tween and the pairs' runs (the 0.17 px jump), a handle method that ends a chart's hover (replacing the blur and synthetic `pointerleave`), and `unease`, `goesRound` and the path transforms moved into `src/core`.
+   - **Table headers per series** (`table.series: { shots: "Shots" }`), defaulting to `seriesLabels`. That names the donut's value column (Q17), and would let the line page head its columns "Goals" and "xG", as the lab does.
+
+   Line charts as switch views (the gap against M5 decision 4) go to the backlog: no page needs them, and they're an addition.
+4. **0.1.0 is published from CI with provenance, from a public repository** (Q11).
+   - You make the repository public before step 9.
+   - A release workflow publishes 0.1.0 with `--provenance`, using a granular token with a short expiry that you add as a secret.
+   - Then you set up trusted publishing on npmjs.com and delete the token, so later releases need none.
+5. **The API reference: README plus `docs/api.md`.** README becomes npm's landing page: install, a quick start, the entries, browser and TypeScript support, the limits, and links. `docs/api.md` documents every export of every entry, and a test fails when an export is missing from it.
+6. **No more subpath exports for 0.1.0** (Q6). Bundlers already keep only what a page imports (the table above), so `/core` or `/effects` wouldn't make any page smaller. The size check measures those import sets, so a change that breaks tree-shaking fails CI.
+7. **Observable Plot becomes a pinned dev dependency, with tests,** as D3 and Vega are: a stacked Plot bar and a Plot line rendered in jsdom, through `expressive()`, with `checkEffect` on their marks.
+8. **Settled before the API is frozen:**
+   - **`path` and `angle` keep their names** (Q10). After 0.1.0, renaming them would need a minor release and a migration note.
+   - **TypeScript stays on 5.9 for 0.1.0** (Q7), pinned exactly. TypeScript 7 goes to the backlog as its own PR, since tsup's declaration build uses the TypeScript JS API. README says the types need TypeScript 5.4 or newer, for `NoInfer`.
+   - **The promise names every type its contracts use,** and says that the motion core is outside it, with the charts, adapters, built-in effects and controls (decision 14).
+   - **Firefox and WebKit too:** the visual suite's DOM checks run in both, without screenshots, so README can name the browsers it supports.
+9. **Dates on x** (decision 1).
+   - **What makes a time axis.** An `x` that gives `Date`s. Every row's x must be the same kind: numbers and dates together throw a `TypeError`, and so does an invalid date. Numbers stay a number axis.
+   - **Keys.** A date's default key is its `toISOString()`, so `goals@2026-01-05T00:00:00.000Z` is a point's. x values must still be unique, by time.
+   - **`timeZone`** is `"UTC"` (the default, decision 1) or `"local"`. It's named as `Intl`'s option is, so IANA names can join it later without a rename.
+   - **Ticks.** Like the number axis: both ends labelled, and round steps of about a quarter of the range between them that don't come within 8 px of a neighbour. The steps are 1, 5, 15 and 30 seconds and minutes; 1, 3, 6 and 12 hours; 1 and 2 days; a week; 1 and 3 months; then years, in the number axis's nice steps. A tick falls on its boundary in the chart's zone (a day at midnight, a month on its first). Each is worded for its own level, in the page's locale through `Intl.DateTimeFormat`: the year on a year, the month on a month ("Feb"), the day on a day ("Feb 8", or "8 Feb" in `en-GB`), the time within a day.
+   - **Wording for people.** The names, the tooltip's title, the table's row headers and the announcements all say an x one way: a medium date ("Jan 5, 2026"), with the time when any x has one. `xFormat(x)` words it instead, as `format` words values. `markLabel`'s summary has it as `category`.
+   - **`reveal(x)`** takes a `Date` or its time in ms, since `playback()` plays numbers: `playback({ from: +first, to: +last, … })`.
+   - **No dependency.** Ticks are built with `Date`'s own UTC or local setters, which handle daylight saving, and worded with `Intl`.
+   - **Only the line chart.** A bar chart's category stays text, so columns over time are labelled by the page.
+10. **The size check.** `scripts/size.mjs`, Node built-ins plus Vite's build API (already a dev dependency).
+    - It measures raw, gzip and brotli for each published JS file and the stylesheet, and min + gzip for the import sets in the table above.
+    - Budgets are in `scripts/size-budget.json`, at today's sizes plus about 10%, rounded up to 0.5 KB. Over a budget, it fails. A PR that raises a budget says why.
+    - It runs in CI's check job on Node 24, after the build, prints a table, and writes it to the job summary.
+11. **The stress demo.**
+    - **Cases,** each a card, with a picker for its size. Each chart keeps its defaults (table, legend, names), since that's what pages get.
+      - Bars that update: a `barChart` of 100 to 5,000 bars, every value changing in one staged update, with and without `flash` on each.
+      - Hover on a large chart: the hover feedback and the dimming of every other bar, on 100 to 5,000 bars.
+      - A line on dates, playing: a year to ten years of daily values in one to four series, with `threshold` and a riding icon in `on.decorate`, played through `playback()`. It counts the runs that start and the runs that draw ("Runs on every point").
+      - Host bars with `watch`: 20 to 2,000 D3 bars in a hand-written transition, with and without `watch` (Q13).
+      - A switch with many pairs: `chartSwitch` between 20 to 1,000 horizontal bars and columns, through `morph()`.
+      - The first draw of 1,000 to 10,000 static bars.
+    - **Nothing plays by itself.** Each case has a start button, and whatever plays has a pause (WCAG 2.2.2).
+    - **A frame readout** as text: the last run's frames, its 95th-percentile frame interval, its longest frame and its long tasks.
+    - **Smooth** means a 95th-percentile frame interval of at most 20 ms and no frame over 50 ms. Hover feedback must start within 100 ms.
+    - **Measuring.** `scripts/bench.mjs` (committed, not in CI, since timings are noisy) drives headless Chromium through Playwright against `npm run dev`, on the real clock: every case at every size, unthrottled ("a laptop") and with CDP's 4× CPU slowdown ("a mid-range phone", Lighthouse's mobile setting). Five repetitions on fresh pages, the median reported, with ms of main-thread work per frame as in M4 step 6. It also creates and destroys each chart 50 times, and checks that DOM nodes and event listeners come back to where they started. A real phone over the network (`npm run dev -- --host`) is optional in the walk.
+    - **The limits** are the largest size of each case that's smooth, at 1× and at 4×. They replace §10's rough guide, and go in README and architecture.md with the machine they came from.
+    - **Fixes.** M6 documents the limits. A hot spot with a contained fix (one place, no API change, no baseline change) gets its own commit in step 6, with its numbers before and after. Anything bigger goes to the backlog with its numbers.
+12. **The audit's method** (decision 2). `docs/a11y-audit.md`, one table per page, a row per WCAG 2.2 AA criterion that applies, each pass, fail or not applicable, with its evidence: a test, a tool's result, or your screen-reader run. It covers at least:
+    - names, roles and values (4.1.2), info and relationships (1.3.1), status messages (4.1.3);
+    - use of colour (1.4.1: the threshold's red is in the legend, and the Difference column says it), contrast of text and of marks and the focus ring (1.4.3, 1.4.11);
+    - reflow at 320 px and zoom to 400% (1.4.10), text spacing (1.4.12);
+    - content on hover or focus (1.4.13): whether the tooltip can be dismissed, hovered and kept;
+    - keyboard, focus order and visible focus (2.1.1, 2.1.2, 2.4.3, 2.4.7), focus not hidden by the tooltip (2.4.11), target size (2.5.8);
+    - pause, stop, hide (2.2.2) and reduced motion;
+    - forced colours, which WCAG doesn't require but Windows users rely on.
+
+    A small fix goes in step 7, each in its own commit; a baseline it changes is shown to you. Anything bigger goes to the backlog with what was found.
+13. **Packaging.**
+    - Each entry's `require` condition gets its own types (`.d.cts`), and `import` keeps `.d.ts`.
+    - `files` adds CHANGELOG.md. Source maps stay: they're most of the unpacked size, but bundlers and debuggers use them, and the tarball is 1.2 MB.
+    - `homepage` and `bugs`, and `publishConfig` with `access: "public"` and `provenance: true` (decision 4).
+    - A test checks that `VERSION` equals `package.json`'s version.
+    - `scripts/pack-check.mjs` packs the tarball, installs it in a temporary project, imports every entry in Node as ESM and as CommonJS, and typechecks a small consumer against it under `bundler`, `node16` (ESM) and `node16` (CommonJS) resolution. It runs in CI.
+    - `.github/workflows/release.yml` runs on a published GitHub release whose tag is `v` and the package's version. It runs `typecheck`, `test`, `build`, the size check and `pack-check`, then `npm publish` on Node 24 (npm 11.5 or newer, which trusted publishing needs), with `id-token: write`. It does nothing until a release is published.
+14. **The promise** (decision 8). CHANGELOG's list names the types its contracts use, and says that the motion core is outside it with the rest. `src/promise.test.ts` imports every promised name, values and types, so a rename or a removal fails `typecheck`. 0.1.0's CHANGELOG entry summarises everything in the release, not only what Unreleased lists today.
+15. **The carried items** (decision 3).
+    - **`update({ on })`** swaps a chart's effects. The runner clears the changed slots' runs and starts the new effects where the old ones were: a `decorate` run starts again on every live mark, and a hover that's held replays with the new hover effect. Nothing enters again, and focus stays. An `on` with a missing preset name rejects before anything changes.
+    - **`leave()`** on every chart handle ends its hover, pointer or keyboard, as the viewer moving away would, and fires `leave`. Focus stays where it is.
+    - **One start time.** The switch's tween and the pairs' runs start from one frame time, so a reverse at real speed begins exactly where the shapes are. It's checked in headless Chromium on the real clock.
+    - **Into core,** with no change in behaviour: `unease` into `src/core/easing.ts`, `goesRound` into `src/core/geometry`, and `parsePath`, `transformPath` and `formatPath` from `src/icons/path.ts` into `src/core/geometry`, all internal.
+    - **`table.series`** gives a header per series, defaulting to its `seriesLabels` name.
+16. **Publishing** (decision 4, step 9).
+    - A dry run comes first: `npm pack` (its file list and sizes shown to you), `pack-check`, `npm publish --dry-run`, and `npm view` for the name and its look-alikes.
+    - You do everything that needs your npm account, a token or GitHub's settings.
+    - Nothing is published, tagged or released without your go-ahead in that session.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `package.json`, `package-lock.json`, `src/index.ts`, `src/charts/index.ts`, `src/charts/types.ts`, `src/core/index.ts`, `src/core/geometry/index.ts`, `src/charts/render/theme.ts`, `.github/workflows/ci.yml`, `playwright.config.ts`, `tests/visual/demo.ts`, `demo/index.html`, `docs/architecture.md`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `docs/effects-guide.md`, `docs/sketches/api.ts`, `docs/a11y-check.md` and this plan.
+
+Each step's session reads its siblings' hand-over notes first, and writes its own in M6's shared notes folder: commits, files, decisions beyond the brief, where the plan and the code differ, and follow-ups.
+
+**Wave 1** (parallel):
+
+1. **Dates on the line chart's x.** Owns `src/charts/time.ts` (new, pure: time steps, ticks and their wording) with its tests; the date paths in `src/charts/line.ts` and `line-layout.ts`; `x`, `timeZone` and `xFormat` in `LineChartOptions`; and the sketch's x.
+   - As decisions 1 and 9. Tests:
+     - ticks across ranges from seconds to decades, at month ends, on leap days, and across daylight-saving changes in local time (with the zone pinned in the test);
+     - names, the tooltip, the table and announcements in `en-US` and `en-GB`;
+     - default keys, `reveal` by `Date` and by ms, and numbers mixed with dates throwing;
+     - an update that grows a new day out of the last;
+     - `threshold` matching a reference series by `Date`, and `checkEffect` on a dated line's marks.
+   - **Done when** every existing test and baseline passes unchanged, and a number axis behaves exactly as before.
+   - Docs: architecture.md's Line chart, README, CHANGELOG. The sketch's x widens to `number | Date`.
+2. **The bundle-size check.** Owns `scripts/size.mjs` and `scripts/size-budget.json` (new), the `size` script in `package.json`, and its step in `ci.yml`.
+   - As decisions 6 and 10. The PR shows a run with a lowered budget failing.
+   - Docs: architecture.md's Build outputs (the numbers), CONTRIBUTING (raising a budget), and open question 6 answered with the numbers.
+3. **Packaging and the API freeze.** Owns `package.json`'s `exports`, `files`, `publishConfig` and metadata; the `VERSION` test; `scripts/pack-check.mjs` (new) and its CI step; `.github/workflows/release.yml` (new); `src/promise.test.ts` (new); and the promise in CHANGELOG.
+   - As decisions 4, 8, 13 and 14. The release workflow isn't run.
+   - Pins TypeScript to 5.9.3 (decision 8).
+   - **Done when** `pack-check` passes locally and in CI, and the promise test passes.
+   - Docs: CONTRIBUTING (releasing), architecture.md's Build outputs, CHANGELOG, README (TypeScript 5.4 or newer).
+4. **The carried items** (decision 3). Owns the runner's effect swap in `src/core/runner.ts`; `leave()` in `src/charts/shell/hover.ts` and on `Chart`; the `on` paths in `bar.ts`, `donut.ts` and `line.ts` (small edits, since step 1 owns the rest of `line.ts`); `src/charts/table.ts` and `TableOptions`; the start time and `leave()` in `src/charts/switch.ts`; the helpers moved into `src/core`; and `demo/donut.ts`'s picker.
+   - As decision 15. Suggested as two PRs: the moves and the start time, then the chart API.
+   - Tests: an effect swapped on each chart (decorate restarted, a held hover replaying, focus kept, nothing entering), `leave()` on each chart and in a switch, `table.series` on each chart, and the moved helpers' existing tests unchanged in their new home.
+   - **Done when** every existing test and baseline passes unchanged, `donut.html`'s picker keeps focus, and a reverse at real speed starts with no jump.
+   - Docs: architecture.md (the chart handle, Runner, Switching), README, CHANGELOG, open questions 14 and 17 answered.
+5. **Observable Plot** (decision 7). Owns `@observablehq/plot` in `package.json` and `package-lock.json` (pinned), `src/plot.test.ts` (new) and the Plot sources in `src/conformance.test.ts`.
+   - A stacked Plot bar and a Plot line, rendered in jsdom, through `expressive()` with the accessor architecture.md's Adapters gives for each kind of mark:
+     - the bar's rects, each bound to its row's index: `datum: (el) => rows[el.__data__]`;
+     - the line's path, bound to its series' array of row indices, with `-1` at a gap: `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, and a `geometry` from those rows' points.
+   - Then every built-in effect through `checkEffect` on both, `threshold` on the line through `samplesAlong`, keyboard order, and the adapter's warning on a bar given no `datum`.
+   - Docs: Adapters in architecture.md, whose Plot accessors and caveat about transforms that derive new data come from the spike, now with the tests behind them; README.
+
+**Wave 2** (after wave 1 lands):
+
+6. **`demo/stress.html`, the limits, its screenshots and listening script G.** Owns `demo/stress.html`, `demo/stress.ts`, `scripts/bench.mjs`, the link in `demo/index.html`, `tests/visual/stress.spec.ts` with its `stress-` baselines, section G of `docs/a11y-check.md`, §10's SVG performance risk and "Runs on every point", open question 13, and the limits in architecture.md and README.
+   - **The page,** as decision 11, with the motion switch and a checklist that is the "Done when" list below. The date line is seeded: a daily series and its 28-day average, red below the average, the core arrow riding its leading edge.
+   - **Screenshots,** all `stress-`: the page at small sizes in light and dark, the date line at rest and part way through its play, and its tooltip. Reduced motion and Off are checked in the DOM, and nothing plays by itself. The page fits 1000 × 2000, and the baselines are made in Docker.
+   - **Run `bench.mjs`** and record the limits, the `watch` numbers (Q13: does it stay opt-in?) and the run counts.
+   - A listening script, section G, for the date line: each day read once with its date and values, the arrow keys going a day at a time, the table's rows named by date. **You run it** with NVDA + Chrome.
+   - Then check the "Done when" list in the browser with you, at real frame rates if the pane is hidden, and look at the Vega-Lite card on `demo/line.html` (M4's leftover).
+7. **The accessibility audit** (decisions 2 and 12). Owns `docs/a11y-audit.md` (new), the Results in `docs/a11y-check.md`, `tests/visual/a11y.spec.ts` (new: `axe-core` on every demo page in both themes, at 320 px, under forced colours and mid-switch), `axe-core` in `package.json` (pinned), Firefox and WebKit in `playwright.config.ts` (decision 8), and the small fixes it finds.
+   - **You run** section C and section E's steps 13 and 14 with NVDA + Chrome. When E 13–14 pass, M4 gets its ✅.
+   - The stress page joins the axe list once step 6 has landed, whichever lands second.
+   - **Done when** every criterion has a result, every failure is fixed or in the backlog with what was found, and your runs are recorded.
+
+**Wave 3** (after wave 2 lands):
+
+8. **README and the API reference** (decision 5). Owns `README.md` (rewritten as npm's landing page), `docs/api.md` (new) and `src/api-docs.test.ts` (new), `src/charts/README.md`'s rows, and README's links, which become absolute where npm can't follow a relative one.
+   - README covers: install (npm and a script tag), a quick start, the four entries, the browsers (decision 8) and TypeScript 5.4 or newer, CSP, accessibility (from step 7), the limits (from step 6), the 0.x promise, and links.
+   - `docs/api.md` documents every export of every entry: what it is, its options with their defaults, and what it returns. `src/api-docs.test.ts` fails when an export has no entry, or an entry no export.
+   - **Done when** the test passes, and every example in README is type-checked (as the sketch's are) or run.
+
+**Wave 4:**
+
+9. **Publish 0.1.0.** Owns the version (`package.json`, `VERSION`), CHANGELOG's 0.1.0 entry, README's status, and this plan's status line and M6's ✅.
+   - **The dry run,** as decision 16: `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you), `npm publish --dry-run`, and `npm view` for the name and its look-alikes. The PR has its results.
+   - **You:** make the repository public, create the npm token and add it as the repository's secret (decision 4).
+   - **Then, on your go-ahead in that session:** the `v0.1.0` release is created, and the release workflow publishes it.
+   - **After:** check the npm page (the version, README, the provenance badge), install 0.1.0 in a fresh project, then set up trusted publishing and delete the token (you).
+   - **Done when** 0.1.0 is on npm and every item of the "Done when" list below holds.
+
+**Done when:**
+- **Limits.** `demo/stress.html` runs every case at sizes up to past its limit, with a frame readout and nothing playing by itself. `scripts/bench.mjs` has measured each case on a laptop and at 4× slowdown, and the limits replace §10's rough guide in README, architecture.md and this plan. Open question 13 and "Runs on every point" have their numbers.
+- **Dates.** `lineChart` takes dates on x, with time ticks and `Intl` wording in the names, the tooltip, the table and announcements, in the zone of decision 1, and no dependency. The stress page's date line shows it in light and dark.
+- **Size.** CI checks the bundle sizes, the import sets included, against their budgets, with a Node script and no new dependency. Open question 6 is answered with the numbers.
+- **Accessibility.** The audit is written up with every WCAG 2.2 AA criterion that applies, sections C, E 13–14 and G have passed with NVDA + Chrome, and M4 has its ✅.
+- **Docs.** README is npm's landing page, and the API reference is checked by a test.
+- **The API.** It matches the 0.x promise, which names every type it covers, and a test fails if a promised name goes. No `@experimental` is left.
+- **The carried items** of decision 3 are built: `update({ on })`, `leave()`, the switch's one start time, the helpers in core and `table.series`, with no existing baseline changed.
+- **Plot.** A stacked Plot bar and a Plot line pass `checkEffect` through `expressive()`, with Plot a pinned dev dependency.
+- **Packaging.** `pack-check` passes for ESM and CommonJS and their types; the package has no runtime dependencies; `typecheck`, `test`, `build` and the size check are green.
+- **0.1.0 is on npm,** with provenance, its CHANGELOG entry, and its release on GitHub. This plan's status line says M6 is done.
 
 ### Backlog (after 0.1)
 
-These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brainstorm across BI chart types (bar to map, plus radar and comparison charts).
+These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brainstorm across BI chart types (bar to map, plus radar and comparison charts). The items after the line chart extras were left by M4 and M5, or deferred in M6 planning.
 
 - **Linked hover.** Hovering a mark fires a hover for the marks in linked charts or series that share its *linking value*, and their ordinary effects run. It's needed for combo charts (column and line point together), butterflies (both halves), small multiples, and radar axes.
   - It isn't an effect. Effects only touch their own mark; linking touches other marks, so it lives with the charts and adapters, like hover dimming.
@@ -1647,6 +1871,16 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
   - a `curve` option, which needs sampled arc-length tables and approximate threshold crossings (M4 decision 5);
   - gaps for missing values: M4's line throws on them (decision 9);
   - hovering only the nearest point, instead of the crosshair.
+- A transition effect reporting its progress, so a switch can keep a transition with other timing in step (M5).
+- Line charts as switch views (M6 decision 3).
+- Time zones by name on a date axis (M6 decision 1).
+- TypeScript 7 (M6 decision 8).
+- VoiceOver + Safari on every section (M6 decision 2).
+- `describe.shape`, and the adapter reading circles.
+- Decorations drawing below a line chart's points, and a palette check against `--ec-negative` (M4 step 7).
+- Recolouring at once when `update()` changes `colors` (M5 step 2).
+- A lighter path than `refresh()` for a Vega chart played frame by frame (M4 step 8).
+- Whatever M6's stress demo and audit find that's bigger than a contained fix.
 
 ---
 
@@ -1659,12 +1893,12 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 3. **Persisting the viewer's motion choice** across pages (`localStorage`). *Decided: opt-in `persist`* (M2 step 4). *Recommendation:* opt-in `motionSwitch(el, motion, { persist: "key" })`.
 4. **Live-region announcements** on update, on or off by default. *Decided: off by default, with an `announce` option* (M2 step 5). *Recommendation:* off by default, with a one-line option.
 5. **Playwright for visual regression** needs a new dev dependency plus browsers in CI. *Decided in M2 planning: yes, Chromium only; built in M2 step 6.* *Recommendation:* decide at M2.
-6. **More subpath exports** (`expressive-charts/core`, `/effects`) for smaller bundles. The first one (`/icons/sport`) is needed in M1. *Recommendation:* decide the rest in M6 using real bundle numbers.
-7. **TypeScript 7** (the native compiler) is a separate upgrade. *Recommendation:* after M1, once there's real code to typecheck.
+6. **More subpath exports** (`expressive-charts/core`, `/effects`) for smaller bundles. The first one (`/icons/sport`) is needed in M1. *Recommendation:* decide the rest in M6 using real bundle numbers. *Decided in M6 planning: none for 0.1.0* (M6 decision 6). On main's build, bundlers keep only what a page imports (`motion` alone is 2.1 KB gzip, everything 70.5 KB), so more entries wouldn't make any page smaller. The size check (M6 step 2) measures those import sets instead, so a change that breaks tree-shaking fails CI.
+7. **TypeScript 7** (the native compiler) is a separate upgrade. *Recommendation:* after M1, once there's real code to typecheck. *Decided in M6 planning: after 0.1.0* (M6 decision 8). TypeScript 7.0.2 is out; 0.1.0 builds with 5.9.3, pinned, and README says its types need 5.4 or newer.
 8. **Framework wrappers** (React, Vue, Svelte) are out of scope for 0.1. The imperative `update()` API is designed to be easy to wrap.
 9. **Line smoothing.** v0.1 lines are straight polylines, which keeps `threshold` crossings exact and arc length cheap. Curves would mean sampled arc-length tables and approximate crossings. *Decided in M4 planning: straight lines only in v0.1* (M4 decision 5). A `curve` option is in the backlog. Host charts drawn with curves work only approximately: the page describes the curve with points taken from the path, and `threshold`'s crossings between samples are approximate.
-10. **Naming.** Keep the draft's `path` and `angle`, or rename them to `walk` and `heading` to avoid confusion with `outline`? *Recommendation:* keep them; the doc comments carry the meaning.
-11. **Releasing.** Check that the npm name is available, and publish from CI with provenance.
+10. **Naming.** Keep the draft's `path` and `angle`, or rename them to `walk` and `heading` to avoid confusion with `outline`? *Recommendation:* keep them; the doc comments carry the meaning. *Decided in M6 planning: kept* (M6 decision 8), before the 0.x promise freezes `MarkGeometry`.
+11. **Releasing.** Check that the npm name is available, and publish from CI with provenance. *Decided in M6 planning* (M6 decision 4): the name is free (23 October 2026). npm makes no provenance for a private repository, so you make this one public. 0.1.0 is published from CI with `--provenance` and a short-lived token, since trusted publishing can only be set up for a package that exists; then trusted publishing takes over (M6 step 9).
 12. **D3 in demos and tests.** Adapter demos and tests are most convincing against real D3, but D3 would be a new dev dependency (never a runtime one). *Decided in M3 planning: yes, `d3-shape` and `d3-selection` only, pinned, as dev dependencies* (M3 decision 1). *Recommendation:* M1 uses a hand-written SVG chart; decide on D3 as a dev dependency in M3, when pie paths need it.
 13. **Cost of `watch`.** Following a host's transition through attribute changes means re-reading geometry on every frame. *Recommendation:* measure it in M4 before making it more than opt-in. *Planned in M4* (decision 14, step 6): `watch: true` is opt-in. It re-reads only the marks whose attributes changed, once a frame. Step 6 measures it on a D3 transition and a D3 line's reveal, records the numbers here, and says whether it stays opt-in.
 
@@ -1690,15 +1924,15 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
     - it only helps a page whose `geometry` reads the element or a row it updates each frame, and one that reads a transition's target row would see its decorations jump to the end;
     - turning it on by default would change what existing attachments do between refreshes.
 
-    A page that animates its marks should turn it on; the line demo does. Revisit a default with the M6 stress demo, which sets the SVG limits.
-14. **Changing effects with `update({ on })`.** Charts can't change `on` after they're created, so M3's demo recreates its charts when the viewer picks another effect. A page that switches effects loses focus and replays its enter effects. *Recommendation:* add it when a page needs it, by M6 at the latest. The runner would clear the slots' runs and resolve the new ones. *M4 planning:* the line demo has no effect picker, so M4 doesn't need it either.
+    A page that animates its marks should turn it on; the line demo does. Revisit a default with the M6 stress demo, which sets the SVG limits. *Planned in M6 step 6.*
+14. **Changing effects with `update({ on })`.** Charts can't change `on` after they're created, so M3's demo recreates its charts when the viewer picks another effect. A page that switches effects loses focus and replays its enter effects. *Recommendation:* add it when a page needs it, by M6 at the latest. The runner would clear the slots' runs and resolve the new ones. *M4 planning:* the line demo has no effect picker, so M4 doesn't need it either. *M6 planning:* built in M6 step 4 (decision 3), and `donut.html`'s picker uses it.
 15. **Donut labels at narrow widths.** M3 drops a label that would overlap the one before it, and every slice stays named in the legend, the tooltip, the table and its ARIA name. Leader lines, or labels inside large slices, would keep more of them. *Recommendation:* look at the demo at phone width in M3 step 6 and decide then. Don't add a label-placement engine before a page needs one. *Looked at in M3 step 6:* with the lab's four outcomes, every label stays at 375 and 320 px wide, because the ring shrinks first (to an outer radius of about 92 px at 320). Nothing is dropped, so the demo needs neither. Revisit with a page of many small slices.
 16. **A test-runner flavour of `checkEffect`.** M3 exports one runner-agnostic function that throws. A Vitest helper that makes one test per fixture would report failures more readably, but it would tie the package to one runner. *Recommendation:* wait until effect authors ask for it.
-17. **Naming a donut's value column.** The donut's table heads its value column with the field's name ("shots"). Only `seriesLabels` renames it, and that also changes the slices' names and the centre text (noticed in M3 step 6). *Recommendation:* a `table.value` header, beside `table.share` and `table.total`. M4 step 1 owns `table.ts`, so it could add it there if you want it in M4; otherwise in M6.
+17. **Naming a donut's value column.** The donut's table heads its value column with the field's name ("shots"). Only `seriesLabels` renames it, and that also changes the slices' names and the centre text (noticed in M3 step 6). *Recommendation:* a `table.value` header, beside `table.share` and `table.total`. M4 step 1 owns `table.ts`, so it could add it there if you want it in M4; otherwise in M6. *M6 planning:* `table.series`, a header per series that defaults to its `seriesLabels` name, in M6 step 4 (decision 3).
 
 ### Risks
 
-- **SVG performance.** Hover effects touch only a handful of nodes, so they're cheap at any chart size. The cost is whole-chart transitions, which write attributes for every mark on every frame. Rough guide, to be confirmed by the M6 stress demo:
+- **SVG performance.** Hover effects touch only a handful of nodes, so they're cheap at any chart size. The cost is whole-chart transitions, which write attributes for every mark on every frame. Rough guide, to be confirmed by the M6 stress demo (step 6 measures it and replaces this guide):
   - Smooth up to about 1,000 animated marks on a laptop and a few hundred on a mid-range phone.
   - Several thousand static marks are fine.
 

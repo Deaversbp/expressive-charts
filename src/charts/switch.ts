@@ -9,9 +9,10 @@
 // views' other parts fade, each as a function of s, as the lab draws its centre and baseline from
 // its one `t`. So a switch back mid-way plays the same picture backwards from where it is.
 
-import { defaultClock, easeInOutCubic, linear, matrix, tween, type MarkGeometry, type Matrix, type MotionEnv, type Point, type TransitionEffect, type Tween } from "../core";
+import { defaultClock, easeInOutCubic, linear, matrix, tween, type Clock, type MarkGeometry, type Matrix, type MotionEnv, type Point, type TransitionEffect, type Tween } from "../core";
+import { unease } from "../core/easing";
+import { formatPath, parsePath, transformPath } from "../core/geometry/path";
 import { isTransitionEffect, playTransition, type Transition, type TransitionPair, type TransitionSurface } from "../core/transition";
-import { formatPath, parsePath, transformPath } from "../icons/path";
 import { between, boxIn } from "./adapter/space";
 import { chartAnnouncer, type Announcer } from "./announce";
 import { toColorAssignment, type ColorAssignment } from "./colors";
@@ -314,11 +315,14 @@ export function chartSwitch<T extends ChartSwitchViews>(
       session.progress = progress;
       session.scene.draw(session.forward ? progress : 1 - progress);
     };
-    session.transition = playTransition(session.forward ? session.pairs : session.reversed, { effect, surface, start: begin, motion, clock, icons: env.icons });
-    // Started in the same moment as the pairs' runs, on the same clock and with morph's timing, so
-    // `progress` is the progress morph draws the shapes at, frame by frame. An effect can't say how
-    // far it has got, so this schedule is the switch's: an effect that keeps to it stays in step.
-    session.driver = drive(begin, at, { clock, motion });
+    // The pairs' runs and the switch's own tween start at one time, on the same clock and with
+    // morph's timing, so `progress` is the progress morph draws the shapes at, frame by frame, and a
+    // reverse begins exactly where they are. An effect can't say how far it has got, so this schedule
+    // is the switch's: an effect that keeps to it stays in step.
+    const started = startClock(clock);
+    session.transition = playTransition(session.forward ? session.pairs : session.reversed, { effect, surface, start: begin, motion, clock: started.clock, icons: env.icons });
+    session.driver = drive(begin, at, { clock: started.clock, motion });
+    started.release();
     void Promise.all([session.driver.finished, session.transition.finished]).then(([result]) => {
       if (active === session && session.run === run && result === "done") land(session, true);
     });
@@ -504,6 +508,23 @@ function drive(begin: number, at: (progress: number) => void, env: MotionEnv): T
   return running;
 }
 
+/**
+ * The clock, with its time held at one reading until release(): what everything started before then
+ * takes as its start. A live clock (performance.now()) moves while the pairs' runs sample their
+ * outlines and draw their first frame, so a tween made after them would start a little later
+ * (a fraction of a millisecond in Chromium) and lag the shapes. After release() it reads the clock, so a tween an
+ * effect starts later starts when it does.
+ */
+function startClock(clock: Clock): { readonly clock: Clock; release(): void } {
+  let held: number | undefined = clock.now();
+  return {
+    clock: { now: () => held ?? clock.now(), onFrame: (callback) => clock.onFrame(callback) },
+    release() {
+      held = undefined;
+    }
+  };
+}
+
 /** The inactive view can't be seen, reached or read, but keeps its layout, so its geometry is ready for a switch. */
 function setActive(container: HTMLElement, active: boolean): void {
   container.classList.toggle("ec-switch-inactive", !active);
@@ -536,11 +557,6 @@ const fadeIn = (s: number): number => clamp((s - HALF) / (1 - HALF));
 const clamp = (value: number): number => Math.min(1, Math.max(0, value));
 /** Weighted on both sides, as morph mixes, so a switch back puts a label where the switch forward had it. */
 const mix = (x: number, y: number, s: number): number => x * (1 - s) + y * s;
-
-/** The linear progress at which easeInOutCubic reaches s: morph's own, so a run from part way keeps its timing. */
-function unease(s: number): number {
-  return s < 0.5 ? Math.cbrt(s / 4) : 1 - Math.cbrt(2 * (1 - s)) / 2;
-}
 
 const isIdentity = (m: Matrix): boolean => m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
 

@@ -1,8 +1,10 @@
-// SVG path data for iconFromSvg: read any path data, move it through a transform, and write it back
-// out. What's written is built from numbers only, so nothing from the input passes through.
+// Any SVG path data: read it, move it through a transform, and write it back out. iconFromSvg reads
+// icons' markup with it, and a chart switch moves marks' outlines between coordinate spaces. What's
+// written is built from numbers only, so nothing from the input passes through.
 
-import type { Matrix, Point } from "../core";
-import { formatNumber } from "../core/geometry";
+import type { Matrix } from "../contracts/drawing";
+import type { Point } from "../contracts/geometry";
+import { formatNumber } from "./path-data";
 
 /** Absolute commands only: H and V become L, S becomes C, T becomes Q. */
 export type PathCommand =

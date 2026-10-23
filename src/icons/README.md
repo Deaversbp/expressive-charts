@@ -6,6 +6,5 @@ Icons for effects such as `travel`: path data plus paint, never raw markup. Each
 | --- | --- |
 | `define.ts` | `defineIcon`: fills an icon's defaults, checks it and freezes it |
 | `svg.ts` | `iconFromSvg`: keeps only plain shapes from SVG markup, safely |
-| `path.ts` | Internal: reads, transforms and rewrites path data for `iconFromSvg` |
 | `core.ts` | The neutral core icons, `dot`, `arrow` and `chevron`, registered by name in every chart |
 | `sport/` | The optional sport pack (`soccerBall`, `cleat`), its own entry point: `expressive-charts/icons/sport` |

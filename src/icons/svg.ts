@@ -4,8 +4,8 @@
 import type { Icon, IconShape, Matrix, Point, Rect } from "../core";
 import { matrix } from "../core";
 import { parseTransform } from "../core/geometry";
+import { formatPath, parsePath, transformPath, type PathCommand } from "../core/geometry/path";
 import { defineIcon, type IconSpec } from "./define";
-import { formatPath, parsePath, transformPath, type PathCommand } from "./path";
 
 /**
  * What iconFromSvg takes besides the markup. `anchor`, `pivot`, `footprint` and `radius` are in the

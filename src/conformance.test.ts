@@ -1,11 +1,13 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// six sources: bars from the reference barChart and from expressive() on bars drawn by other code,
-// the slices of the reference donutChart, the slices of a D3 pie through expressive(), the lines and
-// points of the reference lineChart, and the lines of a D3 line chart through expressive(), with
-// samples from samplesAlong. Each source also draws its marks at another size, as a resize would, for
-// the check that effects follow onChange. This test brings charts and effects together, so it lives
-// beside src/index.ts, the only module allowed to.
+// eight sources: bars from the reference barChart, from expressive() on bars drawn by other code and
+// from a stacked Observable Plot bar through expressive(), the slices of the reference donutChart, the
+// slices of a D3 pie through expressive(), the lines and points of the reference lineChart, and the
+// lines of a D3 line chart and of a Plot line through expressive(), with samples from samplesAlong.
+// Each source also draws its marks at another size, as a resize would, for the check that effects
+// follow onChange. This test brings charts and effects together, so it lives beside src/index.ts, the
+// only module allowed to.
 
+import { barX, lineY, plot, type Plot } from "@observablehq/plot";
 import { select } from "d3-selection";
 import { arc, line, pie, type PieArcDatum } from "d3-shape";
 import {
@@ -77,6 +79,18 @@ function adapterMarks(moved = false): readonly MarkGeometry[] {
     });
   });
   const fx = expressive<{ row: Player; series: string }>(rects, { key: (d) => d.row.name, segment: (d) => d.series });
+  return fx.marks();
+}
+
+/** What Plot binds to an element: a row's index, or a line's array of them. */
+const plotBound = <T>(element: Element): T => (element as Element & { __data__: T }).__data__;
+
+/** A stacked Plot bar, goals then assists, each rect's row read by its index; narrower when moved. */
+function plotBarMarks(moved = false): readonly MarkGeometry[] {
+  const rows = players.flatMap((p) => (["goals", "assists"] as const).map((metric) => ({ name: p.name, metric, value: p[metric] })));
+  const svg = plot({ document, width: moved ? 480 : 600, marks: [barX(rows, { x: "value", y: "name", fill: "metric" })] });
+  const rects = document.body.appendChild(svg).querySelectorAll('g[aria-label="bar"] > rect');
+  const fx = expressive(rects, { datum: (el) => rows[plotBound<number>(el)]!, key: (d) => d.name, segment: (d) => d.metric, value: (d) => d.value });
   return fx.marks();
 }
 
@@ -181,6 +195,28 @@ function d3LineSource(moved = false): { readonly marks: readonly MarkGeometry[];
 
 const d3LineMarks = (moved = false): readonly MarkGeometry[] => d3LineSource(moved).marks;
 
+/**
+ * A Plot line on the same season: each path's rows from its indices, described from their points
+ * through Plot's scales, with samplesAlong samples, and the data a decoration gets. Smaller when moved.
+ */
+function plotLineSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<string, MarkData> } {
+  const rows = weeks.flatMap((w) => (["goals", "xg"] as const).map((series) => ({ week: w.week, series, value: w[series] })));
+  const svg = plot({ document, width: moved ? 416 : 520, height: moved ? 192 : 240, marks: [lineY(rows, { x: "week", y: "value", stroke: "series", strokeWidth: 2 })] }) as SVGSVGElement & Plot;
+  const x = (week: number): number => svg.scale("x")!.apply(week);
+  const y = (value: number): number => svg.scale("y")!.apply(value);
+  const data = new Map<string, MarkData>();
+  const fx = expressive(document.body.appendChild(svg).querySelectorAll('g[aria-label="line"] > path'), {
+    datum: (el) => plotBound<number[]>(el).filter((i) => i >= 0).map((i) => rows[i]!),
+    key: (d) => d[0]!.series,
+    geometry: (_el, d, key) => build.line({ key, series: key, points: d.map((r) => ({ x: x(r.week), y: y(r.value) })), width: 2 }),
+    samples: (d, mark) => samplesAlong(mark, d.map((r) => ({ x: x(r.week), y: y(r.value), value: r.value, at: r.week }))),
+    on: { decorate: { kind: "data", run: async (mark, markData) => void data.set(mark.key, markData), end: () => {}, clear: () => {} } }
+  });
+  return { marks: fx.marks(), data };
+}
+
+const plotLineMarks = (moved = false): readonly MarkGeometry[] => plotLineSource(moved).marks;
+
 const effects: Record<string, AnyMarkEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
@@ -199,13 +235,14 @@ const options: Record<string, CheckEffectOptions> = { "staggered flash, third of
 
 /** A source's marks, or with `true` the same marks moved. */
 type Source = (moved?: boolean) => readonly MarkGeometry[];
-const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars": adapterMarks };
+const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars": adapterMarks, "Plot bars through expressive()": plotBarMarks };
 const sources: Record<string, Source> = {
   ...bars,
   donutChart: donutMarks,
   "D3 pie through expressive()": pieMarks,
   lineChart: lineMarks,
-  "D3 line through expressive()": d3LineMarks
+  "D3 line through expressive()": d3LineMarks,
+  "Plot line through expressive()": plotLineMarks
 };
 
 afterEach(() => {
@@ -282,6 +319,30 @@ describe("lines from a D3 line through expressive()", () => {
   it("threshold below xG passes the conformance checks on both lines, with the adapter's samples", async () => {
     const { marks, data } = d3LineSource();
     const twins = d3LineSource(true);
+    const of = (mark: MarkGeometry) => (marks.includes(mark) ? data : twins.data).get(mark.key)!;
+    const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+    await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: of });
+    // Not vacuously: goals are below xG up to week 2's crossing and again from week 4's.
+    const ctx = testContext();
+    threshold({ compareTo: "xg" }).end(marks[0]!, data.get("goals")!, ctx);
+    expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);
+  });
+});
+
+describe("lines from a Plot line through expressive()", () => {
+  it("finds a line for each series, in document order, with a sample at each week", () => {
+    const { marks, data } = plotLineSource();
+    expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg"]);
+    for (const mark of marks) {
+      expect(mark.outline.closed).toBe(false);
+      expect(data.get(mark.key)!.samples.map((sample) => sample.at)).toEqual(weeks.map((w) => w.week));
+    }
+    expect(data.get("goals")!.related("xg")).toBe(data.get("xg"));
+  });
+
+  it("threshold below xG passes the conformance checks on both lines, with the adapter's samples", async () => {
+    const { marks, data } = plotLineSource();
+    const twins = plotLineSource(true);
     const of = (mark: MarkGeometry) => (marks.includes(mark) ? data : twins.data).get(mark.key)!;
     const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
     await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: of });

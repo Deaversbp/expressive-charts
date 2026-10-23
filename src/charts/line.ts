@@ -291,6 +291,10 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
         keys.add(key);
       }
     }
+    // focus(key) takes an x's key or a point's: a row keyed "goals@2" beside a row "2" would make the point ambiguous.
+    for (const row of next.rows) {
+      if (keys.has(row.key)) throw new RangeError(`lineChart: the key "${row.key}" would name both an x and a line or point. A row's key can't be a series, or a series and a key joined with "@".`);
+    }
     return next;
   }
 

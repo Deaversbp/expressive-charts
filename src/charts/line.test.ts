@@ -233,6 +233,23 @@ describe("lineChart: drawing", () => {
     expect(container.childElementCount).toBe(0);
   });
 
+  it("throws on a row key that's also a line's or a point's, so focus(key) can't mean two things", async () => {
+    const container = document.body.appendChild(document.createElement("div"));
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion: quietMotion(), clock: manualClock() };
+    // Week 1 keyed "goals@2", beside week 2's point "goals@2".
+    const clash = (d: Week) => (d.week === 1 ? "goals@2" : String(d.week));
+    const make = (options: Partial<LineChartOptions<Week>>) => () => lineChart<Week>(container, { label: "Bad", data: weeks, x: "week", series: ["goals"], ...options }, env);
+    expect(make({ key: clash })).toThrow(new RangeError('lineChart: the key "goals@2" would name both an x and a line or point. A row\'s key can\'t be a series, or a series and a key joined with "@".'));
+    expect(make({ key: (d) => (d.week === 3 ? "goals" : d.week) })).toThrow(/the key "goals" would name both an x and a line or point/);
+    expect(container.childElementCount).toBe(0);
+    // update() rejects it, changing nothing; the same key is fine where the series differ.
+    const { chart, keys } = setup();
+    const before = keys();
+    await expect(chart.update({ key: clash })).rejects.toThrow(/the key "goals@2" would name both/);
+    expect(keys()).toEqual(before);
+    expect(() => make({ key: clash, series: ["xg"] })()).not.toThrow();
+  });
+
   it("draws nothing for no data, and no lines", () => {
     const { chart, svg } = setup({ data: [] });
     expect(chart.marks()).toEqual([]);

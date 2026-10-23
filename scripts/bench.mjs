@@ -9,7 +9,9 @@
 //   npm run bench -- --affinity 0xffff        Windows: keep the browser on these logical CPUs
 //   npm run bench -- --json results.json      also write every repetition as JSON
 //
-// Each repetition is a fresh page: it picks the case's size and options with the page's own buttons,
+// Each case is measured alone, on stress.html?case=<name>, which draws only that card: the page with
+// all six holds about 22,500 DOM nodes at its smallest sizes, and restyling and painting them costs
+// every case about 5 ms a frame. Each repetition is a fresh page: it picks the case's size and options with the page's own buttons,
 // collects garbage, sets the CPU slowdown (CDP's Emulation.setCPUThrottlingRate, Lighthouse's way of
 // imitating a mid-range phone at 4×), presses the case's start button, and waits for its readout. The
 // page measures its frames (demo/stress.ts); this adds the main thread's work per frame, Chrome's
@@ -62,20 +64,22 @@ const TIMEOUT = 300_000;
  * its start button, and the two sizes the create-and-destroy check switches between.
  */
 const CASES = {
-  update: { title: "Bars that update", card: "#update-case", unit: "Bars", sizes: [100, 500, 1000, 2000, 5000], options: { effect: ["none", "flash"] }, cycle: [100, 500] },
-  hover: { title: "Hover on a large chart", card: "#hover-case", unit: "Bars", sizes: [100, 500, 1000, 2000, 5000], options: {}, cycle: [100, 500] },
+  update: { title: "Bars that update", name: "update", card: "#update-case", ready: "#update-chart .ec-mark", unit: "Bars", sizes: [100, 500, 1000, 2000, 5000], options: { effect: ["none", "flash"] }, cycle: [100, 500] },
+  hover: { title: "Hover on a large chart", name: "hover", card: "#hover-case", ready: "#hover-chart .ec-mark", unit: "Bars", sizes: [100, 500, 1000, 2000, 5000], options: {}, cycle: [100, 500] },
   line: {
     title: "A line on dates, playing",
+    name: "line",
     card: "#line-case",
+    ready: "#line-chart .ec-column",
     unit: "Years",
     sizes: [1, 2, 5, 10],
     options: { series: ["1", "2", "3", "4"] },
     start: "#line-play button",
     cycle: [1, 2]
   },
-  host: { title: "Host columns with watch", card: "#host-case", unit: "Columns", sizes: [20, 100, 200, 500, 1000, 2000], options: { follow: ["watch", "refresh"] }, cycle: [20, 100] },
-  switch: { title: "A switch with many pairs", card: "#switch-case", unit: "Bars", sizes: [20, 100, 200, 500, 1000], options: {}, cycle: [20, 100] },
-  draw: { title: "The first draw", card: "#draw-case", unit: "Columns", sizes: [1000, 2000, 5000, 10000], options: {}, cycle: [1000, 2000] }
+  host: { title: "Host columns with watch", name: "host", card: "#host-case", ready: '#host-chart rect[role="img"]', unit: "Columns", sizes: [20, 100, 200, 500, 1000, 2000], options: { follow: ["watch", "refresh"] }, cycle: [20, 100] },
+  switch: { title: "A switch with many pairs", name: "switch", card: "#switch-case", ready: "#switch-chart .ec-mark", unit: "Bars", sizes: [20, 100, 200, 500, 1000], options: {}, cycle: [20, 100] },
+  draw: { title: "The first draw", name: "draw", card: "#draw-case", ready: "#draw-chart .ec-mark", unit: "Columns", sizes: [1000, 2000, 5000, 10000], options: {}, cycle: [1000, 2000] }
 };
 const chosen = list("cases", Object.keys(CASES));
 for (const name of chosen) if (!(name in CASES)) throw new Error(`Unknown case "${name}". Cases: ${Object.keys(CASES).join(", ")}.`);
@@ -100,13 +104,13 @@ const url = new URL("stress.html", base).href;
 const browser = await chromium.launch();
 const context = await browser.newContext({ viewport: { width: 1000, height: 2000 }, deviceScaleFactor: 1, locale: "en-US", timezoneId: "UTC" });
 
-/** A fresh page with the stress demo drawn, and a CDP session on it. */
-async function open() {
+/** A fresh page with the case drawn alone, and a CDP session on it. */
+async function open(kase) {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
-  await page.goto(url);
-  await page.locator("#draw-chart .ec-mark").first().waitFor();
+  await page.goto(`${url}?case=${kase.name}`);
+  await page.locator(kase.ready).first().waitFor({ state: "attached" });
   await frames(page, 2);
   const cdp = await context.newCDPSession(page);
   await cdp.send("Performance.enable");
@@ -176,7 +180,7 @@ function combinations(options) {
 
 /** One repetition of a case at a size, with options, at a CPU slowdown. */
 async function once(kase, size, combo, rate) {
-  const { page, cdp, errors } = await open();
+  const { page, cdp, errors } = await open(kase);
   try {
     await pick(page, kase.card, "size", size);
     for (const [picker, value] of Object.entries(combo)) await pick(page, kase.card, picker, value);
@@ -247,7 +251,7 @@ function summarise(reps) {
 
 /** Creates and destroys the case's chart CYCLES times, and compares the DOM counters before and after. */
 async function cycles(kase) {
-  const { page, cdp, errors } = await open();
+  const { page, cdp, errors } = await open(kase);
   const [a, b] = kase.cycle;
   const counters = async () => {
     await frames(page, 2);
@@ -325,6 +329,7 @@ const fixed = (value, digits = 1) => (value === undefined ? "" : value.toFixed(d
 const out = [];
 const m = results.machine;
 out.push(`# Stress benchmark, ${m.date}`, "");
+out.push("Each case alone on the page (stress.html?case=…).");
 out.push(`${m.cpu} (${m.logicalCpus} logical CPUs${m.affinity === "none" ? "" : `, pinned to ${m.affinity}`}), ${m.memoryGB} GB, ${m.os}; ${m.browser}, 1000 × 2000 viewport.`);
 const speeds = Object.values(results.cases).flatMap((variants) => variants.flatMap((variant) => Object.values(variant.rates).flatMap((rate) => rate.reps.map((rep) => rep.speed)))).sort((a, b) => a - b);
 if (speeds.length > 0) {

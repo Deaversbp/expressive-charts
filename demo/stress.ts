@@ -230,6 +230,19 @@ interface Run {
   readonly cancelled: Promise<"cancelled">;
 }
 
+/**
+ * `stress.html?case=host` draws that case alone, its card the only one shown, so scripts/bench.mjs
+ * measures each case without the others' marks and tables on the page. Without it, all six are drawn.
+ */
+const alone = new URLSearchParams(location.search).get("case");
+
+/** Whether to draw a case; one left out has its card hidden. */
+function drawn(name: string): boolean {
+  if (alone === null || alone === name) return true;
+  document.getElementById(`${name}-case`)?.setAttribute("hidden", "");
+  return false;
+}
+
 // ── Bars ─────────────────────────────────────────────────────────────────────
 
 interface Bar {
@@ -306,7 +319,7 @@ updateCard.start.addEventListener("click", async () => {
   report(updateCard.readout, `${count(updateSize)} bars${updateFlash ? " with flash" : ""}`, stats, { data: { size: updateSize } });
 });
 
-buildUpdate();
+if (drawn("update")) buildUpdate();
 
 // ── Case 2: hover on a large chart ───────────────────────────────────────────
 
@@ -390,7 +403,7 @@ hoverCard.start.addEventListener("click", async () => {
   });
 });
 
-buildHover();
+if (drawn("hover")) buildHover();
 
 // ── Case 3: a line on dates, playing ─────────────────────────────────────────
 
@@ -638,7 +651,7 @@ segmented(lineCard.group("series"), String(lineSeries), (value) => {
   buildLine();
 });
 
-buildLine();
+if (drawn("line")) buildLine();
 
 // ── Case 4: host columns with watch ──────────────────────────────────────────
 
@@ -799,7 +812,7 @@ hostCard.start.addEventListener("click", async () => {
   });
 });
 
-buildHost();
+if (drawn("host")) buildHost();
 
 // ── Case 5: a switch with many pairs ─────────────────────────────────────────
 
@@ -863,7 +876,7 @@ switchCard.start.addEventListener("click", async () => {
   report(switchCard.readout, `${count(switchSize)} ${current.to === "columns" ? "bars to columns" : "columns to bars"}`, stats, { data: { size: switchSize } });
 });
 
-buildSwitch();
+if (drawn("switch")) buildSwitch();
 
 // ── Case 6: the first draw ───────────────────────────────────────────────────
 
@@ -910,7 +923,7 @@ drawCard.start.addEventListener("click", async () => {
   });
 });
 
-buildDraw();
+if (drawn("draw")) buildDraw();
 
 // The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.
 motionSwitch("#motion");

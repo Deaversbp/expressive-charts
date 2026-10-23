@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work across bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG (vega-embed's default). Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart, a donut chart and a line chart, the `expressive()` adapter for marks drawn by other code (and `fromVegaView()` for Vega and Vega-Lite), icons, the first effects (`travel`, `flash`, `wiggle`, `pulse`, the data effect `threshold` and the transition effect `morph`, with `sequence`, `parallel`, `only` and `stagger`), the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-donut-and-line-charts-travel-and-the-adapter)). Switching between charts with `morph` (`chartSwitch`) is still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
+> **Status: pre-alpha.** The motion core, the mark geometry, the effect runner, a bar chart, a donut chart and a line chart, the `expressive()` adapter for marks drawn by other code (and `fromVegaView()` for Vega and Vega-Lite), icons, the first effects (`travel`, `flash`, `wiggle`, `pulse`, the data effect `threshold` and the transition effect `morph`, with `sequence`, `parallel`, `only` and `stagger`), switching between charts with `chartSwitch`, the viewer's `motionSwitch`, `playback()` with its `playButton()`, and a public API for [writing your own effects](#writing-effects) are built ([below](#available-now-the-motion-core-mark-geometry-bar-donut-and-line-charts-travel-and-the-adapter)). The morph demo is still to come. Nothing is published to npm. See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## The idea
 
@@ -232,7 +232,7 @@ const pastTarget = threshold({ compareTo: 10, when: "above", color: "series-1-st
 barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { decorate: pastTarget } });
 ```
 
-`morph()` is the first transition effect: it turns one mark's shape into another's, as the lab's donut turns into columns. It plays between two views of a mark rather than on one, so it doesn't go in `on`: the chart switch, still to come in M5, plays it on each pair of marks with the same key. Two areas (bars, slices, points) are sampled at `points` (default 160) and each point moves in a straight line to its partner, in the mark's colour; two lines morph along their strokes, their width too; an area and a line crossfade. It takes 950 ms in Presentation, 200 in Analysis, and none with motion off, and a switch back mid-way retraces from where the shapes are:
+`morph()` is the first transition effect: it turns one mark's shape into another's, as the lab's donut turns into columns. It plays between two views of a mark rather than on one, so it doesn't go in `on`: a chart switch plays it on each pair of marks with the same key. Two areas (bars, slices, points) are sampled at `points` (default 160) and each point moves in a straight line to its partner, in the mark's colour; two lines morph along their strokes, their width too; an area and a line crossfade. It takes 950 ms in Presentation, 200 in Analysis, and none with motion off, and a switch back mid-way retraces from where the shapes are:
 
 ```js
 import { morph } from "expressive-charts";
@@ -242,6 +242,24 @@ const unroll = morph({ align: "unroll" }); // side to side: the slice stands up,
 ```
 
 `"unroll"` is the default for now; the morph demo is where it's chosen.
+
+`chartSwitch()` shows views of the same data in one place, one at a time, and morphs each mark into the mark with its key in the next: the lab's donut turning into columns. Each view is a function that draws its chart in the container it's given, with the switch's colours, so each outcome keeps its colour from slice to column. Labels move with their shapes and swap their text half way ("14%" becomes "58"), a key in only one view fades, and the old view's axes, centre text, legend and table fade out as the new one's fade in. Only the shown view can be seen, reached or read; focus on a mark moves to the same key in the new view; and a switch back mid-way reverses from where the shapes are. It takes 950 ms in Presentation, 200 in Analysis, and none with motion off:
+
+```js
+import { barChart, chartSwitch, donutChart } from "expressive-charts";
+
+const shots = chartSwitch("#shots", {
+  views: {
+    donut: (el, colors) => donutChart(el, { label: "Shot outcomes, share of total", data: outcomes, category: "outcome", value: "shots", colors }),
+    columns: (el, colors) => barChart(el, { label: "Shot outcomes, counts", data: outcomes, x: "outcome", y: "shots", orientation: "vertical", colorBy: "category", colors })
+  },
+  initial: "donut",
+  announce: true // a polite live region says "Shot outcomes, counts" after a switch
+});
+button.addEventListener("click", () => shots.show(shots.current === "donut" ? "columns" : "donut"));
+```
+
+`transition` defaults to `morph()`, `colors` to a new assignment, and `shots.chart("columns")` is the bar chart itself, for `update()` and the rest.
 
 `motionSwitch()` is the viewer's own control: Presentation, Analysis and Off as buttons with `aria-pressed`, and a note on what the mode does. A click is the viewer's choice, so it overrides the device's reduced-motion setting; until then, Off is pressed and the note says why. It follows the motion whoever changes it, and `persist` (opt-in) keeps the choice in `localStorage`:
 
@@ -333,7 +351,7 @@ fromVegaView(view, {
 });
 ```
 
-See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, `morph`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar, donut and line charts, [Adapters](docs/architecture.md#adapters) for `expressive()` and `fromVegaView()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
+See [docs/architecture.md](docs/architecture.md#core) for the motion API, [Mark geometry](docs/architecture.md#mark-geometry) for the builders, [Effects](docs/architecture.md#effects) and [Icons](docs/architecture.md#icons) for `travel`, `flash`, `wiggle`, `pulse`, `threshold`, `morph`, the combinators (`stagger` too) and icons, [Runner](docs/architecture.md#runner) for how effects are played on marks, [Reference charts](docs/architecture.md#reference-charts) for the bar, donut and line charts and [switching between them](docs/architecture.md#switching-between-charts), [Adapters](docs/architecture.md#adapters) for `expressive()` and `fromVegaView()`, and [Controls](docs/architecture.md#controls) for `motionSwitch()`, `playback()` and `playButton()`. [docs/effects-guide.md](docs/effects-guide.md) is the guide to writing effects.
 
 ## Writing effects
 

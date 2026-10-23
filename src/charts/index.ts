@@ -20,6 +20,15 @@ export {
   type VegaViewLike
 } from "./adapter";
 export { colorAssignment, type ColorAssignment } from "./colors";
+export {
+  chartSwitch,
+  type ChartSwitch,
+  type ChartSwitchOptions,
+  type ChartSwitchView,
+  type ChartSwitchViewFactory,
+  type ChartSwitchViewName,
+  type ChartSwitchViews
+} from "./switch";
 export { styleOptions, type StyleOptions } from "./render/theme";
 export type {
   Accessor,

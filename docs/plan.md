@@ -1863,12 +1863,30 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
 
 **Wave 2** (after wave 1 lands):
 
-6. **`demo/stress.html`, the limits, its screenshots and listening script G.** Owns `demo/stress.html`, `demo/stress.ts`, `scripts/bench.mjs`, the link in `demo/index.html`, `tests/visual/stress.spec.ts` with its `stress-` baselines, section G of `docs/a11y-check.md`, §10's SVG performance risk and "Runs on every point", open question 13, and the limits in architecture.md and README.
+6. ✅ **`demo/stress.html`, the limits, its screenshots and listening script G.** Owns `demo/stress.html`, `demo/stress.ts`, `scripts/bench.mjs`, the link in `demo/index.html`, `tests/visual/stress.spec.ts` with its `stress-` baselines, section G of `docs/a11y-check.md`, §10's SVG performance risk and "Runs on every point", open question 13, and the limits in architecture.md and README.
    - **The page,** as decision 11, with the motion switch and a checklist that is the "Done when" list below. The date line is seeded: a daily series and its 28-day average, red below the average, the core arrow riding its leading edge.
    - **Screenshots,** all `stress-`: the page at small sizes in light and dark, the date line at rest and part way through its play, and its tooltip. Reduced motion and Off are checked in the DOM, and nothing plays by itself. The page fits 1000 × 2000, and the baselines are made in Docker.
    - **Run `bench.mjs`** and record the limits, the `watch` numbers (Q13: does it stay opt-in?) and the run counts.
    - A listening script, section G, for the date line: each day read once with its date and values, the arrow keys going a day at a time, the table's rows named by date. **You run it** with NVDA + Chrome.
    - Then check the "Done when" list in the browser with you, at real frame rates if the pane is hidden, and look at the Vega-Lite card on `demo/line.html` (M4's leftover).
+   - **Built** (23 October 2026) as decision 11 describes ([architecture.md](architecture.md#limits) has the limits). No library code changed.
+     - **The page.** Six cards, each with a size picker (segmented buttons), a start button and a readout that's a polite live region, written once a run ends: its frames, the 95th-percentile interval, the longest frame and the long tasks, with a verdict, and the same as data attributes for the bench. The date line is a year to ten years of daily visits to 31 December 2025, seeded, with their 28-day average and the same two a year earlier as series 3 and 4; `only("visits", parallel(threshold({ compareTo: "average" }), travel("arrow", { ride: "on" })))`, wrapped to count its runs, played over 8 s base. The hover case's button hovers a bar every 50 ms (a `pointerover` on each, 60 in all) and is Stop while it sweeps; the date line's Play is Pause while it plays. Everything else ends within 2 s. `stress.html?case=host` draws one case alone. The page fits 1000 × 2000.
+     - **`scripts/bench.mjs`** (`npm run bench`, about 47 minutes for everything): each case at every size and option, alone on a fresh page, unthrottled and at 4×, five times, on the real clock, with the main thread's work per frame (`TaskDuration`) beside the page's numbers; `--affinity` pins it to some CPUs on Windows; then 50 create-and-destroy cycles per case, checking DOM nodes and listeners after garbage collection. Markdown tables, and JSON with `--json`.
+     - **The limits**, in architecture.md and README, replace §10's rough guide, which was 2 to 10 times too generous. Unthrottled / at 4×: a staged update of every bar, 100 / under 100 bars; hover, 1,000 / 500; the date line, 5 years (1–2 series) or 2 (3–4) / a year (1 series); D3 columns with `watch`, 500 / 20, with `refresh()` at the end, 1,000 / 100; a switch, 200 / 20 pairs. A first draw is one long task: 86 ms for 1,000 columns, 1.0 s for 10,000.
+     - **Open question 13 and "Runs on every point"** have their numbers (below). `watch` stays opt-in.
+     - **No leaks:** after 50 cycles, every case's chart left no DOM node and no listener behind.
+     - **Screenshots:** five `stress-` baselines made in Docker (the page in light and dark, and the date line at rest, mid-play and with its tooltip), with the readouts masked. `stress.spec.ts` has 15 tests: nothing plays by itself, each button runs its case and reports, reduced motion and Off jump every case to its end, and the date line's names, arrow keys and table rows by date. Step 7 landed first, so the DOM checks run in Firefox and WebKit too, and the page joined `a11y.spec.ts`'s list (axe, tab order, tooltips, 320 px, forced colours), its chrome given step 7's colour fixes.
+     - **Script G**, 11 steps in `docs/a11y-check.md`, is yours to run with NVDA + Chrome.
+   - **Decisions beyond the plan:**
+     - **Each case is measured alone.** With all six on the page, about 22,500 DOM nodes at their smallest sizes, every case paid about 5 ms more a frame, and at 4× not even 20 columns were smooth: a number about the page, not the chart.
+     - **The arrow rides the tip from the start.** `travel`'s trip lasts the distance ÷ 360 px/s, and the visits line is 9,373 px long for a year (26 s) and 60,242 px for ten (167 s), far past the 5 s WCAG 2.2.2 allows motion that starts by itself. The page's `riding(effect)` draws the end state at once and follows the line. The backlog has the cap.
+     - **A first draw** isn't judged smooth or not: its readout gives the time until the frame that shows it.
+     - **The bench checks the machine.** Each repetition first times a fixed loop. Runs taken while step 7's Docker suite was busy drifted by 2× and were thrown away; the header flags a run whose loop times are over 1.25× apart.
+     - The bars are 150 px tall, the switch 180 and the line 200, so the page fits the screenshot's 1000 × 2000.
+   - **Where the plan and the code differ:**
+     - **No contained fix.** In a 1,000-bar update, 77% of attribute writes set the value already there, and in a ten-year play 98.8% (every day's hit column and `tabindex`, on every frame). Skipping them in `setAttributes` and the keyboard's `tabindex` was tried, but no gain could be shown above the drift of a shared machine, and one comparison made a bar update slower, so it's in the backlog. The date axis's `Date` per vertex costs 0.09 ms a frame on ten years (1% of the play's script), so it has no cache.
+     - Bar charts draw every label, so past about 40 bars they overlap; `a11y.spec.ts`'s text-spacing check skips this page.
+     - **The walk** (23 October 2026): you looked at the stress page and at the Vega-Lite card on `demo/line.html` (M4's leftover) in the browser, and both look fine. M4's ✅ still waits for section E's steps 13 and 14.
 7. **The accessibility audit** (decisions 2 and 12). Owns `docs/a11y-audit.md` (new), the Results in `docs/a11y-check.md`, `tests/visual/a11y.spec.ts` (new: `axe-core` on every demo page in both themes, at 320 px, under forced colours and mid-switch), `axe-core` in `package.json` (pinned), Firefox and WebKit in `playwright.config.ts` (decision 8), and the small fixes it finds.
    - **You run** section C and section E's steps 13 and 14 with NVDA + Chrome. When E 13–14 pass, M4 gets its ✅.
    - The stress page joins the axe list once step 6 has landed, whichever lands second.
@@ -1945,6 +1963,11 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 - Changing an attachment's effects, as `update({ on })` changes a chart's: `expressive()` has no way to, so `donut.html` attaches the D3 pie's effects again when the picker changes (M6 step 4).
 - **A tooltip that can be hovered** (WCAG 1.4.13, M6 step 7). It's `pointer-events: none`, so moving the pointer onto it hovers whatever is under it: another mark, whose tooltip replaces it, or nothing, which hides it. Making it hoverable would block the marks it covers. The options: hold it while the pointer crosses onto it, and let it go once the pointer settles on another mark; or show its text in a line beside the chart, where it covers nothing ([a11y-audit.md](a11y-audit.md#what-it-found)).
 - **Dimming that keeps text readable** (M6 step 7). Hover dims every other mark to 30%, its labels with it: names fall to 2.0:1 in light and 2.5:1 in dark, and bars to 1.5:1. The audit counts it as a judgement call, since leaving restores them and the values are in the tooltip, the names and the table. Dimming only the bodies would keep the text at 4.5:1, and changes every hover screenshot.
+- **A cap on `travel`'s trip** (M6 step 6). A trip lasts the distance ÷ 360 px/s, with no limit, so a decoration's first trip along a year of daily values lasts 26 s, and along ten years 167 s, starting by itself. The stress page draws the end state instead.
+- **Fewer attribute writes per frame** (M6 step 6). 77% of a 1,000-bar update's attribute writes, and 98.8% of a ten-year line's play, set the value already there. Skipping them showed no gain that could be told from a shared machine's drift; measure it again on a quiet one, with the two orders interleaved.
+- **A bar's per-frame cost** (M6 step 6): about 30 µs of script a bar, most of it building its `describe.bar` walk and outline every frame. Lazy walks, or transforms for a bar that only moves, would raise the limit of 100 updating bars.
+- **Thinning a bar chart's labels** (M6 step 6). Every bar has its category and value label, so past about 40 bars they overlap.
+- **Larger steps on a long axis** (M6 step 6): Page Up and Page Down by a month, say. Ten years of days is 3,653 presses of an arrow key.
 - Whatever M6's stress demo and audit find that's bigger than a contained fix.
 
 ---
@@ -1990,6 +2013,19 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
     - turning it on by default would change what existing attachments do between refreshes.
 
     A page that animates its marks should turn it on; the line demo does. Revisit a default with the M6 stress demo, which sets the SVG limits. *Planned in M6 step 6.*
+
+    *Measured again in M6 step 6*, on `demo/stress.html` (D3 columns in a hand-written transition of 750 ms base, with `threshold({ compareTo: 50, when: "above" })`), each size alone, with the same machine and method, five fresh pages:
+
+    | ms per frame | `refresh()` at the end | `watch` | `refresh()`, 4× slower | `watch`, 4× slower |
+    |---|---|---|---|---|
+    | 20 columns | 0.93 | 1.85 | 4.37 | 9.06 |
+    | 100 | 2.05 | 4.38 | 11.0 | 24.9 |
+    | 200 | 3.80 | 6.95 | 20.6 | 36.8 |
+    | 500 | 5.77 | 14.4 | 33.0 | 80.3 |
+    | 1,000 | 11.2 | 29.8 | 66.9 | 163 |
+    | 2,000 | 22.3 | 57.6 | 187 | 318 |
+
+    From 500 columns up, `watch` adds 17–19 µs a moving column a frame (about 95 µs at 4×), a little more than M4's 13 µs at 200. It halves the largest number that stays smooth: 1,000 columns with `refresh()` at the end, 500 with `watch`, and at 4× 100 and 20. **It stays opt-in**, for M4's reasons.
 14. **Changing effects with `update({ on })`.** Charts can't change `on` after they're created, so M3's demo recreates its charts when the viewer picks another effect. A page that switches effects loses focus and replays its enter effects. *Recommendation:* add it when a page needs it, by M6 at the latest. The runner would clear the slots' runs and resolve the new ones. *M4 planning:* the line demo has no effect picker, so M4 doesn't need it either. *M6 planning:* built in M6 step 4 (decision 3), and `donut.html`'s picker uses it. *Built in M6 step 4:* the runner's `swap()` clears a changed slot's runs and starts the new effect where they were: `decorate` again on every mark, a held hover replayed once the change settles, and `enter`, `update` and `exit` in their end state, so nothing enters again. Focus stays. `expressive()`'s attachments still can't change their effects (backlog), so the D3 pie on `donut.html` is attached again.
 15. **Donut labels at narrow widths.** M3 drops a label that would overlap the one before it, and every slice stays named in the legend, the tooltip, the table and its ARIA name. Leader lines, or labels inside large slices, would keep more of them. *Recommendation:* look at the demo at phone width in M3 step 6 and decide then. Don't add a label-placement engine before a page needs one. *Looked at in M3 step 6:* with the lab's four outcomes, every label stays at 375 and 320 px wide, because the ring shrinks first (to an outer radius of about 92 px at 320). Nothing is dropped, so the demo needs neither. Revisit with a page of many small slices.
 16. **A test-runner flavour of `checkEffect`.** M3 exports one runner-agnostic function that throws. A Vitest helper that makes one test per fixture would report failures more readably, but it would tie the package to one runner. *Recommendation:* wait until effect authors ask for it.
@@ -1997,9 +2033,13 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 
 ### Risks
 
-- **SVG performance.** Hover effects touch only a handful of nodes, so they're cheap at any chart size. The cost is whole-chart transitions, which write attributes for every mark on every frame. Rough guide, to be confirmed by the M6 stress demo (step 6 measures it and replaces this guide):
-  - Smooth up to about 1,000 animated marks on a laptop and a few hundred on a mid-range phone.
-  - Several thousand static marks are fine.
+- **SVG performance.** Hover effects touch only a handful of nodes, so they're cheap at any chart size. The cost is whole-chart transitions, which write attributes for every mark on every frame. *Measured in M6 step 6* ([architecture.md](architecture.md#limits) has the method and the table), each case alone, unthrottled and at 4× CPU slowdown:
+  - a staged update of every bar is smooth up to 100 bars, and under 100 at 4×: each bar costs about 30 µs of script a frame, then style, layout and paint;
+  - hover, with the other bars dimmed, up to 1,000 bars (500 at 4×);
+  - a line on dates, played with `threshold` and a riding icon, up to 5 years of days in 1 or 2 series and 2 years in 3 or 4 (a year at 4×, in one series);
+  - D3 columns followed by `watch` up to 500 (20 at 4×), or 1,000 with `refresh()` at the end (100);
+  - a switch up to 200 pairs (20 at 4×);
+  - a first draw is one long task: 86 ms for 1,000 static columns, a second for 10,000.
 
   **Canvas becomes necessary** for dense scatter plots (10k+ points), many long lines revealed or re-thresholded every frame, or particle-style effects. Canvas also loses per-mark DOM, so focus and ARIA would need a parallel hidden structure; it's a real cost and the reason to wait until a chart needs it. Mitigations:
   - Animate transforms rather than `d` where possible.
@@ -2019,7 +2059,7 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
   - runs make their overlay group only when they first draw, so the empty runs cost objects, not DOM;
   - points are dots (M4 decision 4), so line effects don't misfire on them;
   - `only` takes a predicate for a page that wants the line alone;
-  - the M6 stress demo counts it.
+  - the M6 stress demo counts it. *Counted in M6 step 6:* on the date line, `only("visits", …)` starts a run on every line and point, 732 for a year in two series and 14,616 for ten years in four; 366 and 3,654 are on the visits line and its points, and 1 draws. They cost nothing per frame (a reveal tells only the lines' runs), and their share of the chart's first draw is with the points': 57 ms for a year in two series, 629 ms for ten years in four.
 - **Vega internals.** `fromVegaView()` reads `__data__` and the scenegraph, which Vega doesn't document. Mitigations: exact versions, the helper duck-typed so the library never imports Vega, and the step free to slip to M6.
 - **Host charts we don't control.** Adapters run inside other libraries' SVG: transforms on parent groups, marks re-created on every render, and the host's own CSS. Mitigations: geometry in the marks' nearest common ancestor's coordinates (converted with each element's CTM), an overlay on the root `<svg>` with that ancestor's transform (Vega removes foreign children from its own groups when it redraws), keys rather than elements as identity, and never writing a host element's `transform` without composing it with the host's own.
 

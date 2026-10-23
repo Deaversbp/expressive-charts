@@ -67,6 +67,21 @@ export const morphDemo: Demo = {
   }
 };
 
+/** demo/stress.html: every case drawn at its smallest size. */
+export const stressDemo: Demo = {
+  path: "/stress.html",
+  async ready(page) {
+    await expect(page.locator("#update-chart .ec-mark")).toHaveCount(100);
+    await expect(page.locator("#hover-chart .ec-mark")).toHaveCount(100);
+    await expect(page.locator("#line-chart .ec-column")).toHaveCount(365);
+    // expressive() has named the D3 columns, so it's attached.
+    await expect(page.locator('#host-chart rect[role="img"]')).toHaveCount(20);
+    // Both of the switch's views are drawn, one of them hidden.
+    await expect(page.locator("#switch-chart .ec-mark")).toHaveCount(40);
+    await expect(page.locator("#draw-chart .ec-mark")).toHaveCount(1000);
+  }
+};
+
 /** Opens a demo, bars.html unless another is given, with time stopped at START. */
 export async function openDemo(page: Page, demo: Demo = barsDemo): Promise<void> {
   await page.clock.install({ time: 0 });
@@ -150,7 +165,7 @@ export async function hoverShape(page: Page, shape: Locator): Promise<{ x: numbe
 
 /** Presses Tab, as a keyboard user would, until focus is inside `container`. */
 export async function tabInto(page: Page, container: Locator): Promise<void> {
-  for (let presses = 0; presses < 30; presses++) {
+  for (let presses = 0; presses < 60; presses++) {
     await page.keyboard.press("Tab");
     if (await container.evaluate((element) => element.contains(document.activeElement))) return;
   }

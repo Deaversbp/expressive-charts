@@ -1804,8 +1804,11 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
    - **Done when** every existing test and baseline passes unchanged, `donut.html`'s picker keeps focus, and a reverse at real speed starts with no jump.
    - Docs: architecture.md (the chart handle, Runner, Switching), README, CHANGELOG, open questions 14 and 17 answered.
 5. **Observable Plot** (decision 7). Owns `@observablehq/plot` in `package.json` and `package-lock.json` (pinned), `src/plot.test.ts` (new) and the Plot sources in `src/conformance.test.ts`.
-   - A stacked Plot bar and a Plot line, rendered in jsdom, through `expressive()` with `datum: (el) => rows[el.__data__]`: every built-in effect through `checkEffect`, `threshold` on the line through `samplesAlong`, keyboard order, and the adapter's warning without `datum`.
-   - Docs: Adapters in architecture.md (with the spike's caveat about transforms that derive new data), README.
+   - A stacked Plot bar and a Plot line, rendered in jsdom, through `expressive()` with the accessor architecture.md's Adapters gives for each kind of mark:
+     - the bar's rects, each bound to its row's index: `datum: (el) => rows[el.__data__]`;
+     - the line's path, bound to its series' array of row indices, with `-1` at a gap: `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, and a `geometry` from those rows' points.
+   - Then every built-in effect through `checkEffect` on both, `threshold` on the line through `samplesAlong`, keyboard order, and the adapter's warning on a bar given no `datum`.
+   - Docs: Adapters in architecture.md, whose Plot accessors and caveat about transforms that derive new data come from the spike, now with the tests behind them; README.
 
 **Wave 2** (after wave 1 lands):
 

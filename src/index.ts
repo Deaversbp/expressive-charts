@@ -40,6 +40,7 @@ export type {
   BarChartOptions,
   Chart,
   ChartChange,
+  ChartLabel,
   ChartOptions,
   ColorAssignment,
   DonutChart,

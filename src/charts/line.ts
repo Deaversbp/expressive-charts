@@ -47,12 +47,13 @@ import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
 import { svgSurface } from "./render/surface";
 import { setAttributes, setStyles, sizeAttributes, svgElement, transformAttribute } from "./render/svg";
-import { placeText, textMeasure } from "./render/text";
+import { placeText, textMeasure, type TextPlacement } from "./render/text";
 import { injectStyles, markColorStyles, seriesColors, type SeriesColors } from "./render/theme";
 import { seriesLabel } from "./series";
 import { chartEvents } from "./shell/events";
 import { decimals, format, round } from "./shell/format";
 import { chartHover } from "./shell/hover";
+import { chartLabel } from "./shell/labels";
 import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, resolveTarget, type ChartEnv } from "./shell/setup";
@@ -118,6 +119,8 @@ interface LineRecord<D> extends MarkBase<D> {
   /** The dot at its revealed end. */
   readonly end: SVGCircleElement;
   readonly label: SVGTextElement;
+  /** Where the end label is drawn now; undefined while it shows none. */
+  drawnLabel: TextPlacement | undefined;
   /** 0 to 1: a series entering or leaving fades its line in or out. */
   readonly presence: Animated<number>;
 }
@@ -379,6 +382,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       path: svgElement("path", { class: "ec-stroke", "stroke-width": LINE_WIDTH }, body),
       end: svgElement("circle", { class: "ec-end", r: DOT_RADIUS }, body),
       label: svgElement("text", { class: "ec-value ec-end-label" }, group),
+      drawnLabel: undefined,
       parts: [],
       handle: svgMarkHandle(() => record),
       target: placed,
@@ -572,7 +576,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     entries.forEach(([line], i) => {
       const text = placed[i];
       if (text) placeText(line.label, text);
-      setAttributes(line.label, { visibility: text && text.text !== "" ? undefined : "hidden" });
+      line.drawnLabel = text && text.text !== "" ? text : undefined;
+      setAttributes(line.label, { visibility: line.drawnLabel ? undefined : "hidden" });
     });
   }
 
@@ -1131,6 +1136,16 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     on: events.on,
 
     marks: () => [...lineOrder.map((line) => line.shown.geometry), ...rowOrder.filter(revealed).flatMap((record) => livePoints(record).map((point) => point.shown.geometry))],
+
+    focus(key) {
+      if (destroyed) return;
+      // An x takes focus, for its own key or one of its points'.
+      const record = rows.get(key) ?? points.get(key)?.row;
+      if (record) hover.focus(record.key);
+    },
+
+    // A line's end label is its value; points have none.
+    labels: () => lineOrder.flatMap((line) => chartLabel(line.key, "value", line.drawnLabel, line.label)),
 
     destroy() {
       if (destroyed) return;

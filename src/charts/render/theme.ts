@@ -176,6 +176,7 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-center-value) { fill: var(--ec-text, ${TOKENS.text}); font-size: 26px; font-weight: 600; }
 :where(.ec-chart .ec-center-label) { fill: var(--ec-text-muted, ${TOKENS["text-muted"]}); font-size: 12.5px; }
 :where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot)) { opacity: var(--ec-dim-opacity, 0.3); }
+:where(.ec-chart.ec-morphing .ec-marks) { visibility: hidden; }
 :where(.ec-motion-switch) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--ec-text, ${TOKENS.text}); font-size: 13px; }
 :where(.ec-motion-label) { font-weight: 600; }
 :where(.ec-motion-modes) { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ec-ring, color-mix(in srgb, currentColor 12%, transparent)); border-radius: 8px; background: var(--ec-surface, ${TOKENS.surface}); }

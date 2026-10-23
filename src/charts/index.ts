@@ -26,6 +26,7 @@ export type {
   BarChartOptions,
   Chart,
   ChartChange,
+  ChartLabel,
   ChartOptions,
   DonutChartOptions,
   KeyOfType,

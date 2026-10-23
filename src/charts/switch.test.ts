@@ -285,6 +285,44 @@ describe("chartSwitch: a switch", () => {
     }
   });
 
+  it("keeps its own schedule with a transition that takes longer, and lands once that has ended too", async () => {
+    const clock = manualClock();
+    const motion = createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion, clock };
+    const starts: number[] = [];
+    // 1500 ms, linear: not the switch's schedule, which an effect can't tell it about.
+    const slow: TransitionEffect = {
+      kind: "transition",
+      async run(from, _to, ctx) {
+        starts.push(ctx.start);
+        ctx.layer.path(from.outline.d, { fill: "mark" });
+        await ctx.tween({ duration: 1500, ease: (k) => k, update: () => {} }).finished;
+      },
+      end() {},
+      clear() {}
+    };
+    const draw = (container: HTMLElement, colors: ColorAssignment) => donutChart(container, { label: "Shots", data: outcomes, category: "outcome", value: "shots", colors, width: 600 }, env);
+    const target = document.body.appendChild(document.createElement("div"));
+    const switcher = chartSwitch(target, { views: { a: draw, b: draw }, initial: "a", transition: slow }, env);
+    const landed = vi.fn();
+    void switcher.show("b").then(landed);
+    clock.advance(950);
+    await flush();
+    // The labels and fades are done; the pairs still play.
+    expect(landed).not.toHaveBeenCalled();
+    expect(target.querySelectorAll(".ec-switch-runs > .ec-run")).toHaveLength(4);
+    clock.advance(550);
+    await flush();
+    expect(landed).toHaveBeenCalledTimes(1);
+    expect(target.querySelectorAll(".ec-switch-runs > .ec-run")).toHaveLength(0);
+    // A switch back starts the effect from the switch's own progress, not the effect's.
+    void switcher.show("a");
+    clock.advance(300);
+    starts.length = 0;
+    void switcher.show("b");
+    expect(starts).toEqual([1, 1, 1, 1].map(() => expect.closeTo(1 - at(300), 9)));
+  });
+
   it("does nothing for the view already shown, and returns the same promise for the view a switch is heading for", async () => {
     const { switcher, clock, transition } = setup();
     await expect(switcher.show("donut")).resolves.toBeUndefined();

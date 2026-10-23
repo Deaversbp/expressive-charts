@@ -51,7 +51,13 @@ export interface ChartSwitchOptions<T extends ChartSwitchViews> {
   readonly views: T;
   /** The view shown first. */
   readonly initial: NoInfer<ChartSwitchViewName<T>>;
-  /** Plays each pair of marks, matched by key. Default: morph(). */
+  /**
+   * Plays each pair of marks, matched by key. Default: morph(). The switch draws the labels and the
+   * fades, and starts a reverse, on morph's schedule: 950 ms base with transition timing, eased in
+   * and out (easeInOutCubic), and from `start` the rest of a full run's time. A transition effect
+   * can't report how far its shapes have got, so one with other timing still plays, but its shapes
+   * drift from the labels and a switch back can jump.
+   */
   readonly transition?: TransitionEffect;
   /** Palette slots by key, shared by every view (each view's function is given it). Default: a new assignment. */
   readonly colors?: ColorAssignment | Readonly<Record<string, number>>;
@@ -310,7 +316,8 @@ export function chartSwitch<T extends ChartSwitchViews>(
     };
     session.transition = playTransition(session.forward ? session.pairs : session.reversed, { effect, surface, start: begin, motion, clock, icons: env.icons });
     // Started in the same moment as the pairs' runs, on the same clock and with morph's timing, so
-    // `progress` is the progress morph draws the shapes at, frame by frame.
+    // `progress` is the progress morph draws the shapes at, frame by frame. An effect can't say how
+    // far it has got, so this schedule is the switch's: an effect that keeps to it stays in step.
     session.driver = drive(begin, at, { clock, motion });
     void Promise.all([session.driver.finished, session.transition.finished]).then(([result]) => {
       if (active === session && session.run === run && result === "done") land(session, true);

@@ -418,6 +418,21 @@ The dev server's index links the demos built on the library:
 - `demo/line.html`: the lab's second card. Goals against expected goals over a season on `lineChart` and on a D3 line through `expressive()` (with `samplesAlong` and `watch`), each with the goals line red below xG (`threshold`) and a ball riding its leading edge, and one "Play season" button (`playButton()`), scrubber and motion switch driving both through `playback()`. A Vega-Lite line through `fromVegaView()` shows the whole season with the same decoration.
 - `demo/morph.html`: the lab's third card with its morph. The shot outcomes as a `donutChart` and as category columns on `barChart` in one `chartSwitch`, each slice turning into its own column and back with `morph()`, its labels moving with it. A button switches (a click mid-way goes back), V on a focused slice or column switches with focus following it, and a control compares `morph()`'s two mappings, `"drop"` and `"unroll"`.
 
+## Limits
+
+SVG charts stay smooth up to a few hundred moving marks. Measured on `demo/stress.html` with `npm run bench` (headless Chromium, each case alone, on an Intel Core i7-12700KF, October 2026), and with Chrome's 4× CPU slowdown standing in for a mid-range phone:
+
+| Case | Smooth up to | At 4× slowdown |
+| --- | --- | --- |
+| A bar chart's staged update, every value changing | 100 bars | under 100 |
+| Hover, dimming the other bars | 1,000 bars | 500 |
+| A line on a date axis, played with `threshold` and a riding icon | 5 years of days (1–2 series), 2 years (3–4) | 1 year (1 series) |
+| D3 columns in a transition, followed by `watch` | 500 | 20 |
+| The same, with `refresh()` at the end | 1,000 | 100 |
+| A `chartSwitch` with `morph()` | 200 pairs | 20 |
+
+The first draw of 1,000 static bars takes about 90 ms, and of 10,000 about a second. [docs/architecture.md](docs/architecture.md#limits) has the method and the numbers.
+
 ## Development
 
 | Command | What it does |

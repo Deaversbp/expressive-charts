@@ -277,3 +277,86 @@ describe("end labels", () => {
     expect(b!.y).toBeCloseTo(200 + 12.5 * 0.36, 9);
   });
 });
+
+describe("a time axis", () => {
+  interface Day {
+    date: Date;
+    goals: number;
+    xg: number;
+  }
+
+  /** Midnight UTC on the nth day from 5 January 2026, or another hour. */
+  const day = (n: number, hour = 0): Date => new Date(Date.UTC(2026, 0, 5 + n, hour));
+  const days: Day[] = [2, 0, 4, 1, 3].map((n) => ({ date: day(n), goals: n, xg: n + 0.5 }));
+  const RealDateTimeFormat = Intl.DateTimeFormat;
+
+  beforeEach(() => {
+    // The page's locale is en-US.
+    vi.spyOn(Intl, "DateTimeFormat").mockImplementation(function (locales?: string | string[], options?: Intl.DateTimeFormatOptions) {
+      return new RealDateTimeFormat(locales ?? "en-US", options);
+    } as unknown as typeof Intl.DateTimeFormat);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("comes from Dates: rows in ascending time, keyed by ISO string, each x its time in ms", () => {
+    const { rows, time } = layout<Day>({ data: days, x: "date", series: ["goals"] });
+    expect(time).toBe(true);
+    expect(rows.map((row) => row.key)).toEqual([0, 1, 2, 3, 4].map((n) => day(n).toISOString()));
+    expect(rows[0]!.key).toBe("2026-01-05T00:00:00.000Z");
+    expect(rows.map((row) => row.x)).toEqual([0, 1, 2, 3, 4].map((n) => day(n).getTime()));
+    expect(rows.map((row) => row.index)).toEqual([1, 3, 0, 4, 2]);
+    // The page's key still wins, and numbers stay a number axis.
+    expect(layout<Day>({ data: days, x: "date", key: (d) => `d${d.goals}`, series: ["goals"] }).rows.map((row) => row.key)).toEqual(["d0", "d1", "d2", "d3", "d4"]);
+    expect(layout<Week>({ data: weeks, x: "week", series: ["goals"] }).time).toBe(false);
+  });
+
+  it("says each x as a medium date, with the time when any has one, and labels the days on the axis", () => {
+    const { rows, xTicks } = layout<Day>({ data: days, x: "date", series: ["goals"] });
+    expect(rows.map((row) => row.label)).toEqual(["Jan 5, 2026", "Jan 6, 2026", "Jan 7, 2026", "Jan 8, 2026", "Jan 9, 2026"]);
+    expect(xTicks.map((tick) => [tick.value, tick.label.text])).toEqual([0, 1, 2, 3, 4].map((n) => [day(n).getTime(), `Jan ${5 + n}`]));
+    const timed = layout<Day>({ data: [...days, { date: day(4, 13), goals: 5, xg: 5 }], x: "date", series: ["goals"] });
+    expect(timed.rows.map((row) => row.label.replace(/\u202f/g, " ")).slice(-2)).toEqual(["Jan 9, 2026, 12:00 AM", "Jan 9, 2026, 1:00 PM"]);
+  });
+
+  it("words x with xFormat, given a Date or a number, and leaves the ticks alone", () => {
+    const dated = layout<Day>({ data: days, x: "date", series: ["goals"], xFormat: (x) => `Day ${(x as Date).getUTCDate()}` });
+    expect(dated.rows.map((row) => row.label)).toEqual(["Day 5", "Day 6", "Day 7", "Day 8", "Day 9"]);
+    expect(dated.xTicks[0]!.label.text).toBe("Jan 5");
+    const numbered = layout<Week>({ data: weeks, x: "week", series: ["goals"], xFormat: (x) => `Week ${String(x)}` });
+    expect(numbered.rows.map((row) => row.label)).toEqual(["Week 1", "Week 2", "Week 3"]);
+    expect(numbered.xTicks.map((tick) => tick.label.text)).toEqual(["1", "1.5", "2", "2.5", "3"]);
+  });
+
+  it("throws on numbers mixed with Dates, an invalid Date, two rows at one time, or options it can't take", () => {
+    const at = (...xs: unknown[]) => () => layout({ data: xs.map((date, i) => ({ date, goals: i })) as unknown as Day[], x: "date", series: ["goals"] });
+    expect(at(day(0), 3)).toThrow(new TypeError("lineChart: x must be all numbers or all Dates, but row 0's is a Date and row 1's a number."));
+    expect(at(3, day(0))).toThrow(new TypeError("lineChart: x must be all numbers or all Dates, but row 0's is a number and row 1's a Date."));
+    expect(at(day(0), new Date("not a date"))).toThrow(new TypeError("lineChart: x must be a valid Date, got an invalid Date in row 1."));
+    expect(at(new Date(Number.NaN))).toThrow(/x must be a valid Date, got an invalid Date in row 0/);
+    expect(at(day(0), "2026-01-06")).toThrow(new TypeError('lineChart: x must be a valid Date, got "2026-01-06" in row 1.'));
+    const twice = () => layout<Day>({ data: [days[0]!, { ...days[0]!, date: new Date(days[0]!.date) }], x: "date", key: (_d, i) => i, series: ["goals"] });
+    expect(twice).toThrow(/the rows "0" and "1" have the same x, 2026-01-07T00:00:00.000Z/);
+    const options = { label: "", data: days, x: "date", series: ["goals"] } as const;
+    expect(() => lineEncoding<Day>({ ...options, timeZone: "Europe/London" as "UTC" })).toThrow(new TypeError('lineChart: timeZone must be "UTC" or "local", got "Europe/London".'));
+    expect(() => lineEncoding<Day>({ ...options, xFormat: "short" as unknown as () => string })).toThrow(/xFormat must be a function/);
+    expect(lineEncoding<Day>(options).timeZone).toBe("UTC");
+  });
+
+  it("gives each sample its own Date on a time axis", () => {
+    const rows = states([
+      { key: "a", datum: "A", x: day(0).getTime(), values: [{ series: "goals", value: 0 }] },
+      { key: "b", datum: "B", x: day(2).getTime(), values: [{ series: "goals", value: 50 }] }
+    ]);
+    const box = { ...frame.box, xLo: day(0).getTime(), xHi: day(2).getTime() };
+    const [goals] = placeLines({ ...frame, box }, rows, ["goals"], day(1).getTime(), true);
+    const ats = goals!.data.samples.map((s) => s.at);
+    expect(ats.every((at) => at instanceof Date)).toBe(true);
+    expect(ats.map((at) => (at as Date).toISOString())).toEqual([day(0).toISOString(), day(1).toISOString()]);
+    const [point] = placePoints({ ...frame, box }, rows[1]!, ["goals"], true);
+    expect(point!.data.samples[0]!.at).toEqual(day(2));
+    expect(placePoints({ ...frame, box }, rows[1]!, ["goals"], true)[0]!.data.samples[0]!.at).not.toBe(point!.data.samples[0]!.at);
+  });
+});

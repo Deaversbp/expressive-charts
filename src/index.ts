@@ -103,9 +103,9 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
 }
 
 /**
- * A line chart in `target` (an element or a selector): one row per numeric `x`, a line per field in
- * `series`, with a point per row and series that shows where its x is hovered or focused. `reveal(x)`
- * shows the data up to x, as `playback()` drives it; `on` attaches effects by slot.
+ * A line chart in `target` (an element or a selector): one row per `x`, a number or a Date, a line
+ * per field in `series`, with a point per row and series that shows where its x is hovered or
+ * focused. `reveal(x)` shows the data up to x, as `playback()` drives it; `on` attaches effects by slot.
  */
 export function lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D> {
   return drawLineChart(target, options, env);

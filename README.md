@@ -158,7 +158,7 @@ import { soccerBall } from "expressive-charts/icons/sport";
 
 const xg = lineChart("#xg", {
   label: "Goals vs expected goals, season to date",
-  data: weeks,                         // [{ week: 1, goals: 0, xg: 1.2 }, ...]: one row per x, which must be a number
+  data: weeks,                         // [{ week: 1, goals: 0, xg: 1.2 }, ...]: one row per x, a number or a Date
   x: "week",
   series: ["goals", "xg"],
   seriesLabels: { goals: "Goals scored", xg: "Expected goals (xG)" },
@@ -169,6 +169,13 @@ const xg = lineChart("#xg", {
 });
 await xg.update({ data: [...weeks, nextWeek] }); // the new week grows out of the last
 xg.reveal(20);                         // through matchweek 20: lines end there, and later weeks can't be hovered
+```
+
+An `x` that gives `Date`s makes a time axis. Its ticks fall on second, minute, hour, day, month and year boundaries, each worded for its level in the page's locale ("2026", "Apr", "Feb 8", "3:00 PM"), and each x is said as a medium date ("Jan 5, 2026", with the time when any x has one) in its name, the tooltip, the table and announcements. `xFormat(x)` words it instead. Times are in UTC, so a date-only value such as `new Date("2026-01-05")` is 5 January on every machine; `timeZone: "local"` follows the viewer's clock. A date's key is its ISO string (`goals@2026-01-05T00:00:00.000Z`), numbers and dates together throw, and `reveal()` takes a `Date` or its time in ms, which is what `playback()` plays:
+
+```js
+const daily = lineChart("#daily", { label: "Shots per day", data: days, x: "date", series: ["shots"] }); // [{ date: new Date("2026-01-05"), shots: 14 }, ...]
+playback({ from: +days[0].date, to: +days.at(-1).date, duration: 6500, onFrame: (time) => daily.reveal(time) });
 ```
 
 Every chart's handle also has `focus(key)`, which moves keyboard focus to a mark (on a line chart, its x) as a key press would, showing the focus ring and playing its hover, and `labels()`, each mark's labels as drawn: `{ key, role, text, x, y, anchor, element }`, where `role` is `"category"` or `"value"` (a bar's category and value, a slice's category and share, a line's end label).

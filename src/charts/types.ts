@@ -228,11 +228,27 @@ export interface DonutChartOptions<D> extends Omit<ChartOptions<D>, "colors" | "
 
 export interface LineChartOptions<D> extends ChartOptions<D> {
   /**
-   * Each row's x: a numeric field or a function. There's one row per x, drawn in ascending x, and x
-   * values must be unique whatever the keys, since each x is one focus stop, one hit column and one
-   * place to reveal to. `key` defaults to x.
+   * Each row's x: a field or a function giving a number or a Date. Dates make a time axis, in
+   * `timeZone`. Every row's x must be the same kind: numbers and Dates together throw a TypeError,
+   * and so does an invalid Date. There's one row per x, drawn in ascending x, and x values must be
+   * unique (Dates by their time) whatever the keys, since each x is one focus stop, one hit column
+   * and one place to reveal to. `key` defaults to x: a number with String(), a Date's toISOString().
    */
-  readonly x: Accessor<D, number>;
+  readonly x: Accessor<D, number | Date>;
+  /**
+   * A time axis's zone: "UTC" (the default) or "local", the viewer's clock. Ticks fall on day, month
+   * and year boundaries in it, and the names, the tooltip and the table say times in it. A date-only
+   * value such as new Date("2026-01-05") is UTC midnight, so in UTC it's 5 January on every machine.
+   */
+  readonly timeZone?: "UTC" | "local";
+  /**
+   * Words an x for people instead of the default: in each x's name, the tooltip's title, the table's
+   * row headers and the announcements, and as `markLabel`'s `category`. Given the x as the data has it,
+   * a Date on a time axis or a number. Default: a time axis's medium date in the page's locale ("Jan 5,
+   * 2026"), with the time when any x has one; a number as given. The ticks keep their own wording. A
+   * throw makes the chart throw and update() reject, as `format`'s does.
+   */
+  readonly xFormat?: (x: Date | number) => string;
   /**
    * The numeric fields drawn as lines, in order. Each is a line mark keyed by its field, plus a point
    * mark per row keyed "<series>@<row key>" ("goals@12"). A missing or non-finite value throws.
@@ -254,9 +270,10 @@ export interface LineChart<D> extends Chart<D, LineChartOptions<D>> {
    * playback drives it frame by frame. Points past x are hidden, can't be hovered or focused, and
    * aren't in `marks()`; focus on one moves to the nearest revealed x. The scales, the table, the
    * names and the announcements cover all the data. Clamped to the rows' range, and kept across
-   * `update()`: the default, `reveal(Infinity)`, shows everything, rows added later included.
+   * `update()`: the default, `reveal(Infinity)`, shows everything, rows added later included. On a
+   * time axis, x is a Date or its time in ms, which is what playback() plays.
    */
-  reveal(x: number): void;
+  reveal(x: number | Date): void;
 }
 
 /** A mark's label as the chart draws it now: what a chart's `labels()` gives. */

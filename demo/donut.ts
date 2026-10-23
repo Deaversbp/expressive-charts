@@ -62,16 +62,12 @@ const drawD3Pie = (): void => {
   if (pieSvg) pie = drawPie(pieSvg, outcomes, { sort: order });
 };
 
-/**
- * Builds the three charts with the picked hover effect. update() can't change `on` yet (open question
- * 14), so a new pick destroys them and builds them again with the same data and order. The motion is
- * page-wide and the colours are pinned, so both stay; focus stays on the picker, which isn't rebuilt.
- */
+/** What every chart plays: the picked hover effect, and the flash after a match. */
+const effectsFor = (pick: HoverEffect) => ({ hover: hoverEffects[pick], update: flashChanged });
+
+/** Draws the donut and the columns, and attaches the effects to the D3 pie. */
 function build(): void {
-  donut?.destroy();
-  columns?.destroy();
-  pieEffects?.destroy();
-  const on = { hover: hoverEffects[effect], update: flashChanged };
+  const on = effectsFor(effect);
 
   donut = donutChart<Outcome>("#donut", {
     label: "Shot outcomes",
@@ -99,6 +95,17 @@ function build(): void {
     on
   });
 
+  attachPie();
+}
+
+/**
+ * Attaches the picked effects to the D3 pie. An attachment's effects can't change, so a new pick
+ * attaches them again: the pie's tab stop goes back to its first slice.
+ */
+function attachPie(): void {
+  pieEffects?.destroy();
+  pieEffects = undefined;
+  const on = effectsFor(effect);
   drawD3Pie();
   if (pie) {
     pieEffects = expressive(pie.slices, {
@@ -144,10 +151,16 @@ function segmented(id: string, onPick: (value: string) => void): (value: string)
   return show;
 }
 
+// update({ on }) swaps the hover effect in place: the donut and the columns keep their marks, their
+// tab stops and a hover that's held, and nothing enters again. The flash is the same effect, so it's
+// kept. Focus stays on the picker.
 segmented("effect", (value) => {
   if (value === effect) return;
   effect = value as HoverEffect;
-  build();
+  const on = effectsFor(effect);
+  void donut?.update({ on });
+  void columns?.update({ on });
+  attachPie();
 });
 
 // The order drives all three. In Presentation the donut resizes its slices first, then turns them to

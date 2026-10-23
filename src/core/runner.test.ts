@@ -700,6 +700,106 @@ describe("createRunner", () => {
     });
   });
 
+  describe("swap", () => {
+    it("keeps a slot's runs when its effect is the same, and starts a new decorate on every live mark, in its place", () => {
+      const decorate = probe();
+      const hover = probe();
+      const next = probe();
+      const { runner, surface } = setup({ decorate, hover });
+      runner.enter([input("a"), input("b"), input("c")]);
+      runner.hover([input("b")]);
+      void runner.exit([input("c")]);
+      runner.swap({ decorate: next, hover }, [input("a"), input("b")]);
+      expect(hover.log).toEqual(["run b #0"]);
+      expect(decorate.log).toEqual(["run a #0", "run b #1", "run c #2", "clear #2", "clear #0", "clear #1"]);
+      expect(next.log).toEqual(["run a #0", "run b #1"]);
+      expect(next.contexts[1]!.batch).toEqual({ index: 1, count: 2 });
+      // Where the old runs were: their order, so the hover's style still wins and its group stacks above.
+      expect(surface.groups.filter((group) => !group.cleared).map((group) => `${group.slot} ${group.key} ${group.order}`)).toEqual(["hover b 4", "decorate a 1", "decorate b 2"]);
+      expect(surface.picture("b").length).toBe(2);
+    });
+
+    it("replays a held hover with the new hover effect, or once a transition settles", () => {
+      const hover = probe();
+      const next = probe();
+      const later = probe();
+      const { runner } = setup({ hover });
+      runner.enter([input("a"), input("b")]);
+      runner.hover([input("a"), input("b")]);
+      runner.leave(["b"]);
+      runner.swap({ hover: next }, [input("a"), input("b")]);
+      expect(hover.log).toEqual(["run a #0", "run b #1", "clear #1", "clear #0"]);
+      expect(next.log).toEqual(["run a #0"]);
+      expect(next.contexts[0]!.batch).toEqual({ index: 0, count: 1 });
+
+      runner.interrupt();
+      runner.swap({ hover: later }, [input("a"), input("b")]);
+      expect(later.log).toEqual([]);
+      runner.settle();
+      expect(later.log).toEqual(["run a #0"]);
+    });
+
+    it("draws a new enter and update effect's end state where their runs were, so nothing enters again", async () => {
+      const enter = probe();
+      const update = probe();
+      const nextEnter = probe();
+      const nextUpdate = probe();
+      const { runner, clock } = setup({ enter, update });
+      runner.enter([input("a"), input("b")]);
+      clock.advance(100);
+      await flush();
+      const from = bar("a", 90);
+      runner.update([{ ...input("a", 60), from }]);
+      runner.swap({ enter: nextEnter, update: nextUpdate }, [input("a", 60), input("b")]);
+      expect(enter.log).toEqual(["run a #0", "run b #1", "done a #0", "done b #1", "clear #0", "clear #1"]);
+      expect(nextEnter.log).toEqual(["end a #0", "end b #1"]);
+      expect(nextEnter.contexts[1]!.batch).toEqual({ index: 1, count: 2 });
+      expect(nextUpdate.log).toEqual(["end a #0"]);
+      expect(nextUpdate.contexts[0]!.previous).toBe(from);
+      expect(clock.idle).toBe(true);
+      await flush();
+      expect(update.log).toEqual(["run a #0", "clear #0", "cancelled a #0"]);
+    });
+
+    it("replaces an exit in its place, so the mark still leaves, and clears a slot left empty", async () => {
+      const exit = probe();
+      const nextExit = probe();
+      const decorate = probe();
+      const { runner } = setup({ decorate, exit });
+      runner.enter([input("a"), input("b"), input("c")]);
+      const gone: string[] = [];
+      void runner.exit([input("a")]).then(() => gone.push("a"));
+      void runner.exit([input("b")]).then(() => gone.push("b"));
+      await flush();
+      expect(gone).toEqual([]);
+
+      runner.swap({ exit: nextExit }, [input("c")]);
+      expect(nextExit.log).toEqual(["end a #0", "clear #0", "end b #1", "clear #1"]);
+      expect(decorate.log.filter((entry) => entry.startsWith("clear"))).toEqual(["clear #0", "clear #1", "clear #2"]);
+      await flush();
+      expect(gone).toEqual(["a", "b"]);
+
+      void runner.exit([input("c")]).then(() => gone.push("c"));
+      runner.swap({}, []);
+      await flush();
+      expect(gone).toEqual(["a", "b", "c"]);
+    });
+
+    it("draws end states with motion off, and does nothing for the same effects or after destroy", () => {
+      const decorate = probe();
+      const next = probe();
+      const { runner } = setup({ decorate }, "off");
+      runner.enter([input("a")]);
+      runner.swap({ decorate }, [input("a")]);
+      expect(decorate.log).toEqual(["end a #0"]);
+      runner.swap({ decorate: next }, [input("a")]);
+      expect(next.log).toEqual(["end a #0"]);
+      runner.destroy();
+      runner.swap({ decorate }, [input("a")]);
+      expect(decorate.log).toEqual(["end a #0", "clear #0"]);
+    });
+  });
+
   describe("errors", () => {
     it("reports and clears an effect that throws, without touching other marks", () => {
       const boom = new Error("boom");

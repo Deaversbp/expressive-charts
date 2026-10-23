@@ -612,7 +612,7 @@ describe("donutChart: updates", () => {
   it("rejects what it can't take, leaving the chart as it was", async () => {
     const { chart, keys } = setup();
     await expect(chart.update({ data: [{ outcome: "Goal", shots: Number.POSITIVE_INFINITY }] })).rejects.toThrow(/finite number/);
-    await expect(chart.update({ on: {} })).rejects.toThrow(/`on` can't be changed/);
+    await expect(chart.update({ on: { hover: "no-such-preset" } })).rejects.toThrow(/Unknown preset "no-such-preset"/);
     expect(keys()).toEqual(["Goal", "Saved", "Off target", "Blocked"]);
   });
 
@@ -676,5 +676,77 @@ describe("donutChart: destroy", () => {
     pointer("pointerover", target);
     expect(hover.log).toEqual(["run Goal", "clear"]);
     return expect(chart.update({ sort: "value" })).resolves.toBeUndefined();
+  });
+});
+
+describe("donutChart: update({ on })", () => {
+  const runs = (log: readonly string[]) => log.filter((entry) => !entry.startsWith("change"));
+
+  it("swaps the effects: decorate starts again on every slice, a held hover replays with the new effect, focus stays and nothing enters", async () => {
+    const decorate = recorder();
+    const hover = recorder();
+    const enter = recorder();
+    const { chart, svg, settle } = setup({ on: { decorate: decorate.effect, hover: hover.effect, enter: enter.effect } });
+    chart.focus("Saved");
+    const events: string[] = [];
+    for (const type of ["enter", "update", "exit", "hover", "leave"] as const) chart.on(type, (event) => events.push(`${type} ${event.mark.key}`));
+    for (const each of [decorate, hover, enter]) each.log.length = 0;
+    const nextDecorate = recorder();
+    const nextHover = recorder();
+    const nextEnter = recorder();
+    await settle(chart.update({ on: { decorate: nextDecorate.effect, hover: nextHover.effect, enter: nextEnter.effect } }));
+    expect(runs(decorate.log)).toEqual(["clear", "clear", "clear", "clear"]);
+    expect(runs(nextDecorate.log)).toEqual(["run Goal", "run Saved", "run Off target", "run Blocked"]);
+    expect(runs(hover.log)).toEqual(["clear"]);
+    expect(runs(nextHover.log)).toEqual(["run Saved"]);
+    // Nothing enters again: the new enter effect only draws its end state.
+    expect(runs(nextEnter.log)).toEqual(["end Goal", "end Saved", "end Off target", "end Blocked"]);
+    expect(events).toEqual([]);
+    expect(document.activeElement?.getAttribute("data-key")).toBe("Saved");
+    expect(svg.querySelector(".ec-overlay .ec-focus-ring")!.getAttribute("visibility")).toBeNull();
+  });
+
+  it("rejects an unknown preset name before anything changes", async () => {
+    const decorate = recorder();
+    const { chart } = setup({ on: { decorate: decorate.effect } });
+    await expect(chart.update({ on: { decorate: "nope" }, label: "Other" })).rejects.toThrow(/Unknown preset "nope"/);
+    expect(chart.element.getAttribute("aria-label")).toBe("Shot outcomes");
+    expect(runs(decorate.log)).toEqual(["run Goal", "run Saved", "run Off target", "run Blocked"]);
+  });
+});
+
+describe("donutChart: leave()", () => {
+  it("ends the hover, pointer or keyboard, and leaves focus where it is", () => {
+    const hover = recorder();
+    const { chart, svg, mark } = setup({ on: { hover: hover.effect } });
+    const events: string[] = [];
+    chart.on("leave", (event) => events.push(`leave ${event.mark.key}`));
+    pointer("pointerover", mark("Saved").querySelector(".ec-slice")!);
+    chart.leave();
+    expect(events).toEqual(["leave Saved"]);
+    expect(svg.classList.contains("ec-hovering")).toBe(false);
+
+    chart.focus("Blocked");
+    chart.leave();
+    expect(events).toEqual(["leave Saved", "leave Blocked"]);
+    expect(hover.log).toEqual(["run Saved", "clear", "run Blocked", "clear"]);
+    expect(document.activeElement?.getAttribute("data-key")).toBe("Blocked");
+    expect(svg.querySelector(".ec-overlay .ec-focus-ring")!.getAttribute("visibility")).toBeNull();
+    chart.leave();
+    expect(events).toHaveLength(2);
+  });
+});
+
+describe("donutChart: table.series", () => {
+  const headers = (container: Element) => Array.from(container.querySelectorAll(".ec-table thead th"), (th) => th.textContent);
+
+  it("names the value column, which seriesLabels alone would rename everywhere", async () => {
+    const { container, chart, mark, settle } = setup({ table: { series: { shots: "Shots" } } });
+    expect(headers(container)).toEqual(["outcome", "Shots", "Share"]);
+    // The slices' names and the centre keep the series' own name.
+    expect(mark("Saved").getAttribute("aria-label")).toBe("Saved: 112 shots, 28%");
+    expect(container.querySelector(".ec-center")!.textContent).toContain("shots");
+    await settle(chart.update({ seriesLabels: { shots: "attempts" }, table: true }));
+    expect(headers(container)).toEqual(["outcome", "attempts", "Share"]);
   });
 });

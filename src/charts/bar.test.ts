@@ -1261,7 +1261,7 @@ describe("barChart: update", () => {
   it("rejects what it can't take, leaving the chart as it was", async () => {
     const { chart, keys } = setup();
     await expect(chart.update({ data: [...players, players[0]!] })).rejects.toThrow(/two rows have the key "Okafor"/);
-    await expect(chart.update({ on: { hover: "wiggle" } })).rejects.toThrow(/`on` can't be changed/);
+    await expect(chart.update({ on: { hover: "no-such-preset" } })).rejects.toThrow(/Unknown preset "no-such-preset"/);
     await expect(chart.update({ motion: "off" })).rejects.toThrow(/`motion` can't be changed/);
     expect(keys()).toEqual(["Okafor", "Tanaka", "Lindqvist"]);
   });
@@ -1652,5 +1652,127 @@ describe("barChart: destroy", () => {
     expect(hover.log).toEqual(["run Okafor", "clear"]);
     expect(() => chart.destroy()).not.toThrow();
     return expect(chart.update({ sort: "key" })).resolves.toBeUndefined();
+  });
+});
+
+describe("barChart: update({ on })", () => {
+  const runs = (log: readonly string[]) => log.filter((entry) => !entry.startsWith("change"));
+
+  it("swaps the effects: decorate starts again on every mark, a held hover replays with the new effect, focus stays and nothing enters", async () => {
+    const decorate = recorder();
+    const hover = recorder();
+    const enter = recorder();
+    const { chart, svg, settle } = setup({ on: { decorate: decorate.effect, hover: hover.effect, enter: enter.effect } });
+    chart.focus("Tanaka");
+    const events: string[] = [];
+    for (const type of ["enter", "update", "exit", "hover", "leave"] as const) chart.on(type, (event) => events.push(`${type} ${event.mark.key}`));
+    for (const each of [decorate, hover, enter]) each.log.length = 0;
+    const nextDecorate = recorder();
+    const nextHover = recorder();
+    await settle(chart.update({ on: { decorate: nextDecorate.effect, hover: nextHover.effect, enter: enter.effect } }));
+    expect(runs(decorate.log)).toEqual(["clear", "clear", "clear"]);
+    expect(runs(nextDecorate.log)).toEqual(["run Okafor", "run Tanaka", "run Lindqvist"]);
+    expect(runs(hover.log)).toEqual(["clear"]);
+    expect(runs(nextHover.log)).toEqual(["run Tanaka"]);
+    expect(runs(enter.log)).toEqual([]);
+    expect(events).toEqual([]);
+    expect(document.activeElement?.getAttribute("data-key")).toBe("Tanaka");
+    expect(svg.querySelector(".ec-focus")!.getAttribute("visibility")).toBeNull();
+    expect(svg.classList.contains("ec-hovering")).toBe(true);
+  });
+
+  it("draws a new enter effect's end state, keeps a slot given the same preset name, and rejects an unknown name before anything changes", async () => {
+    const presets = createRegistry<PresetFactory>({ kind: "preset" });
+    let made = 0;
+    presets.register("probe", () => {
+      made++;
+      return recorder().effect;
+    });
+    const enter = recorder();
+    const { chart, settle } = setup({ on: { hover: "probe", enter: enter.effect } }, { presets });
+    const nextEnter = recorder();
+    await settle(chart.update({ on: { hover: "probe", enter: nextEnter.effect } }));
+    expect(made).toBe(1);
+    expect(runs(enter.log)).toEqual(["run Okafor", "run Tanaka", "run Lindqvist", "clear", "clear", "clear"]);
+    expect(runs(nextEnter.log)).toEqual(["end Okafor", "end Tanaka", "end Lindqvist"]);
+
+    await expect(chart.update({ on: { hover: "nope" }, label: "Other" })).rejects.toThrow(/Unknown preset "nope"/);
+    expect(chart.element.getAttribute("aria-label")).toBe("Goals by player");
+    expect(runs(nextEnter.log)).toEqual(["end Okafor", "end Tanaka", "end Lindqvist"]);
+
+    // A slot left out is cleared.
+    await settle(chart.update({ on: {} }));
+    expect(runs(nextEnter.log)).toEqual(["end Okafor", "end Tanaka", "end Lindqvist", "clear", "clear", "clear"]);
+  });
+
+  it("plays a data change with the new effects", async () => {
+    const update = recorder();
+    const nextUpdate = recorder();
+    const { chart, settle } = setup({ on: { update: update.effect } });
+    await settle(chart.update({ on: { update: nextUpdate.effect }, data: players.map((p) => (p.name === "Tanaka" ? { ...p, goals: 9 } : p)) }));
+    expect(runs(update.log)).toEqual([]);
+    expect(runs(nextUpdate.log).map((entry) => entry.split(" from ")[0])).toEqual(["run Tanaka"]);
+  });
+});
+
+describe("barChart: leave()", () => {
+  const tooltipShown = () => document.querySelector(".ec-tooltip")?.classList.contains("ec-tooltip-shown") ?? false;
+
+  it("ends a pointer hover as the pointer leaving would", () => {
+    const hover = recorder();
+    const { chart, svg, mark } = setup({ on: { hover: hover.effect } });
+    const events: string[] = [];
+    chart.on("leave", (event) => events.push(`leave ${event.mark.key}`));
+    pointer("pointerover", mark("Tanaka").querySelector(".ec-hit")!);
+    expect(svg.classList.contains("ec-hovering")).toBe(true);
+    expect(tooltipShown()).toBe(true);
+    chart.leave();
+    expect(events).toEqual(["leave Tanaka"]);
+    expect(hover.log).toEqual(["run Tanaka", "clear"]);
+    expect(svg.classList.contains("ec-hovering")).toBe(false);
+    expect(mark("Tanaka").classList.contains("ec-hot")).toBe(false);
+    expect(tooltipShown()).toBe(false);
+    // The pointer hovers again when it next moves onto a mark.
+    pointer("pointerover", mark("Tanaka").querySelector(".ec-hit")!);
+    expect(hover.log).toEqual(["run Tanaka", "clear", "run Tanaka"]);
+  });
+
+  it("ends a keyboard hover and leaves focus where it is, with its ring", () => {
+    const hover = recorder();
+    const { chart, svg } = setup({ on: { hover: hover.effect } });
+    const events: string[] = [];
+    chart.on("leave", (event) => events.push(`leave ${event.mark.key}`));
+    chart.focus("Lindqvist");
+    chart.leave();
+    expect(events).toEqual(["leave Lindqvist"]);
+    expect(hover.log).toEqual(["run Lindqvist", "clear"]);
+    expect(document.activeElement?.getAttribute("data-key")).toBe("Lindqvist");
+    expect(svg.querySelector(".ec-focus")!.getAttribute("visibility")).toBeNull();
+    expect(svg.classList.contains("ec-hovering")).toBe(false);
+    // With nothing hovered it does nothing, and after destroy() too.
+    chart.leave();
+    expect(events).toEqual(["leave Lindqvist"]);
+    chart.destroy();
+    expect(() => chart.leave()).not.toThrow();
+  });
+});
+
+describe("barChart: table.series", () => {
+  const headers = (container: Element) => Array.from(container.querySelectorAll(".ec-table thead th"), (th) => th.textContent);
+  const legend = (container: Element) => Array.from(container.querySelectorAll(".ec-legend-item"), (item) => item.textContent);
+
+  it("heads each series' column with its header, or else its seriesLabels name, and nothing else changes", async () => {
+    const { container, chart, mark, settle } = setup({ x: undefined, stack: ["goals", "assists"], seriesLabels: { goals: "Goals" }, table: { series: { assists: "Assists made" } } });
+    expect(headers(container)).toEqual(["name", "Goals", "Assists made", "Total"]);
+    expect(legend(container)).toEqual(["Goals", "assists"]);
+    expect(mark("Okafor").getAttribute("aria-label")).toBe("Okafor: 16 Goals, 4 assists");
+    await settle(chart.update({ table: { series: { goals: "Goals scored" } } }));
+    expect(headers(container)).toEqual(["name", "Goals scored", "assists", "Total"]);
+  });
+
+  it("rejects headers that aren't text", async () => {
+    const { chart } = setup();
+    await expect(chart.update({ table: { series: ["Goals"] as never } })).rejects.toThrow(/table.series must be an object of headers by series/);
+    await expect(chart.update({ table: { series: { goals: 1 as never } } })).rejects.toThrow(/table.series.goals must be a string/);
   });
 });

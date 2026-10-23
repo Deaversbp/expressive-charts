@@ -34,7 +34,7 @@ import { chartHover } from "./shell/hover";
 import { chartLabel } from "./shell/labels";
 import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
-import { checkChartOptions, checkNeeds, containerWidth, describeChart, resolveTarget, type ChartEnv } from "./shell/setup";
+import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
 import { chartTable, tableModel, type TableModel } from "./table";
@@ -90,7 +90,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
   checkOptions(options);
   let current = options;
   const motion = chartMotion(options.motion, env.motion);
-  const effects = resolveEffects(options.on, env.presets);
+  let effects = resolveEffects(options.on, env.presets);
   let colors = toColorAssignment(options.colors);
   const clock = env.clock ?? defaultClock;
   const doc = container.ownerDocument;
@@ -179,9 +179,9 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
 
   // ── Drawing ────────────────────────────────────────────────────────────────
 
-  function layout(opts: DonutChartOptions<D>): DonutLayout<D> {
+  function layout(opts: DonutChartOptions<D>, using = effects): DonutLayout<D> {
     const encoding = donutEncoding(opts);
-    checkNeeds(effects, [encoding.series], "donutChart");
+    checkNeeds(using, [encoding.series], "donutChart");
     return layoutDonut({
       data: opts.data,
       encoding,
@@ -680,13 +680,13 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
 
     async update(next) {
       if (destroyed) return;
-      if (next.on !== undefined && next.on !== current.on) throw new TypeError("donutChart: `on` can't be changed by update() yet.");
       if (next.motion !== undefined && next.motion !== current.motion) throw new TypeError("donutChart: `motion` can't be changed by update() yet.");
       const merged: DonutChartOptions<D> = { ...current, ...next };
       checkOptions(merged);
-      // Throws on data it can't draw, a table column it can't read, or a `format` that throws, before
-      // anything changes.
-      const nextLayout = layout(merged);
+      // Throws on an effect it can't resolve, data it can't draw, a table column it can't read, or a
+      // `format` that throws, before anything changes.
+      const swapped = "on" in next ? nextEffects(effects, current.on, merged.on, env.presets) : effects;
+      const nextLayout = layout(merged, swapped);
       const nextTable = tableFor(merged, nextLayout);
       const nextNames = namesFor(merged, nextLayout);
       if ("colors" in next) colors = toColorAssignment(merged.colors);
@@ -707,6 +707,13 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
       }
       hover.syncDim();
       transitions.supersede();
+      if (swapped !== effects) {
+        // New effects start where the old ones were, on the slices as they are now; a held hover
+        // replays with them once the change settles.
+        runner.interrupt();
+        runner.swap(swapped, order.map(input));
+        effects = swapped;
+      }
 
       // The runner hears exit / update / enter now, then change() on every frame, then settle().
       const leaves = playUpdate(
@@ -727,6 +734,10 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
 
     focus(key) {
       if (!destroyed) hover.focus(key);
+    },
+
+    leave() {
+      if (!destroyed) hover.leave();
     },
 
     // Outside the ring, the category over the share; the centre's text isn't a slice's.

@@ -156,6 +156,16 @@ export interface Runner<D = unknown> {
   interrupt(): void;
   /** The last transition settled: replays hover on the marks still hovered or focused. */
   settle(): void;
+  /**
+   * New effects, as a chart's update({ on }) gives them. A slot whose effect is the same object keeps
+   * its runs. A changed slot's runs are cleared and the new effect starts where they were: `decorate`
+   * on every mark in `marks` (the live marks as they're heading, in visual order, as enter() takes
+   * them), and `hover` on the marks still hovered (from settle() while a transition is in flight).
+   * `enter`, `update` and `exit` draw the new effect's end state on the marks whose runs they replace,
+   * in their place, so nothing enters again, an update keeps showing what it explains, and an exit
+   * still ends. A slot left empty clears its runs.
+   */
+  swap(effects: SlotEffects<D>, marks: readonly RunInput<D>[]): void;
   /** Clears every run and stops following the motion mode. */
   destroy(): void;
 }
@@ -198,15 +208,20 @@ interface StartOptions {
   readonly previous?: MarkGeometry | undefined;
   readonly done?: (() => void) | undefined;
   /** Default: the next start order. */
-  readonly order?: number;
+  readonly order?: number | undefined;
+  /** Draws the effect's end state, whatever the motion mode. */
+  readonly end?: boolean;
 }
+
+const SLOTS: readonly EffectSlot[] = ["decorate", "enter", "update", "exit", "hover"];
 
 const NO_ICONS: IconSource = { get: () => undefined };
 /** Handed out for draws after a run is cleared, so an effect that ignores its signal draws nothing. */
 const INERT = { place() {}, update() {}, remove() {} };
 
 export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> {
-  const { effects, surface } = options;
+  const { surface } = options;
+  let effects = options.effects;
   const motion = options.motion ?? pageMotion;
   const clock = options.clock ?? defaultClock;
   const icons = options.icons ?? NO_ICONS;
@@ -273,7 +288,7 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
     const { mark } = entry;
     const ctx = run.scope.context;
     try {
-      if (motion.mode === "off") {
+      if (more.end || motion.mode === "off") {
         if (effect.kind === "data") effect.end(mark, data, ctx);
         else effect.end(mark, ctx);
         finish(run);
@@ -418,6 +433,18 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
     }
   }
 
+  /** Clears the slot's run on each entry, and returns each order, to start the slot's next run in its place. */
+  function clearSlot(slot: EffectSlot): Map<Entry<D>, number> {
+    const orders = new Map<Entry<D>, number>();
+    for (const entry of [...entries.values()]) {
+      const run = entry.runs.get(slot);
+      if (!run) continue;
+      orders.set(entry, run.order);
+      clearRun(run);
+    }
+    return orders;
+  }
+
   /** The entry's latest data, keeping the previous values the run was given. */
   function latestData(entry: Entry<D>, run: Run<D>): MarkData<D> {
     const previous = run.data.previous;
@@ -521,6 +548,41 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
         const entry = entries.get(key);
         if (entry) start(entry, "hover", entry.data, { index, count: keys.length });
       });
+    },
+
+    swap(next, marks) {
+      if (destroyed) return;
+      const changed = SLOTS.filter((slot) => next[slot] !== effects[slot]);
+      effects = next;
+      for (const slot of changed) {
+        if (slot === "decorate") {
+          const orders = clearSlot(slot);
+          marks.forEach((input, index) => {
+            const entry = track(input);
+            if (!entry.exiting) start(entry, slot, input.data, { index, count: marks.length }, { order: orders.get(entry) });
+          });
+        } else if (slot === "hover") {
+          clearSlot(slot);
+          // Mid-transition, settle() replays them with the new effect.
+          if (transitioning) continue;
+          const keys = [...hovered];
+          keys.forEach((key, index) => {
+            const entry = entries.get(key);
+            if (entry) start(entry, slot, entry.data, { index, count: keys.length });
+          });
+        } else {
+          for (const entry of [...entries.values()]) {
+            const run = entry.runs.get(slot);
+            if (!run) continue;
+            // The new run takes the old one's place: its order, and the exit() promise waiting on it.
+            const done = run.done;
+            run.done = undefined;
+            const data = latestData(entry, run);
+            clearRun(run);
+            start(entry, slot, data, run.batch, { previous: run.previous, done, order: run.order, end: true });
+          }
+        }
+      }
     },
 
     destroy() {

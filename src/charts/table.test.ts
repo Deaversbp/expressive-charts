@@ -78,6 +78,14 @@ describe("tableModel", () => {
     expect(model.headers.map((header) => header.text)).toEqual(["name", "Goals", "assists", "Total"]);
   });
 
+  it("heads a series' column with table.series first, then its label, counting only the option's own keys", () => {
+    const model = tableModel(input({ option: { series: { assists: "Assists made" } }, label: (series) => (series === "goals" ? "Goals" : series) }))!;
+    expect(model.headers.map((header) => header.text)).toEqual(["name", "Goals", "Assists made", "Total"]);
+    const inherited = tableModel(input({ option: { series: {} }, series: ["goals", "constructor"] }))!;
+    expect(inherited.headers.map((header) => header.text)).toEqual(["name", "goals", "constructor", "Total"]);
+    expect(inherited.headers[2]!.numeric).toBe(true);
+  });
+
   it("counts a series a row doesn't have as 0", () => {
     const model = tableModel(input({ rows: [{ key: "A", category: "A", datum: players[0]!, index: 0, values: [{ series: "goals", value: 3 }], total: 3 }] }))!;
     expect(model.rows[0]!.cells.map((cell) => cell.text)).toEqual(["A", "3", "0", "3"]);

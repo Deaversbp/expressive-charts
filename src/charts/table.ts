@@ -30,7 +30,7 @@ export interface TableInput<D> {
   readonly category: string | undefined;
   /** In stack order. */
   readonly series: readonly string[];
-  /** A series' column header: its label. Default: the series' own name. */
+  /** A series' column header when `table.series` has none: its label. Default: the series' own name. */
   readonly label?: (series: string) => string;
   /** In visual order. */
   readonly rows: readonly TableRow<D>[];
@@ -80,10 +80,16 @@ export function checkTableOption(option: unknown, chart: string): void {
     throw new TypeError(`${chart}: ${what}`);
   };
   if (typeof option !== "object" || option === null) fail('table must be true, false, "hidden" or an object of table options.');
-  const { hidden, columns, category, total, share, summary } = option as TableOptions<unknown>;
+  const { hidden, columns, category, total, share, summary, series } = option as TableOptions<unknown>;
   if (hidden !== undefined && typeof hidden !== "boolean") fail("table.hidden must be true or false.");
   for (const [name, text] of Object.entries({ category, total, share, summary })) {
     if (text !== undefined && typeof text !== "string") fail(`table.${name} must be a string.`);
+  }
+  if (series !== undefined) {
+    if (typeof series !== "object" || series === null || Array.isArray(series)) fail('table.series must be an object of headers by series, as { shots: "Shots" }.');
+    for (const [name, header] of Object.entries(series)) {
+      if (typeof header !== "string") fail(`table.series.${name} must be a string: the column's header.`);
+    }
   }
   if (columns === undefined) return;
   if (!Array.isArray(columns)) fail("table.columns must be an array of { label, field }.");
@@ -109,12 +115,14 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
   const grand = input.rows.reduce((sum, row) => sum + row.total, 0);
   const share = (value: number): TableCell[] => (input.shares ? [{ text: percent(grand > 0 ? value / grand : 0), numeric: true }] : []);
   const header = (column: TableColumn<D>): TableCell => ({ text: column.label, numeric: false });
+  // Only the option's own keys count, so "constructor" is just a series.
+  const own = (series: string): string | undefined => (options.series && Object.prototype.hasOwnProperty.call(options.series, series) ? options.series[series] : undefined);
   const blank = (): TableCell => ({ text: "", numeric: false });
 
   const headers: TableCell[] = [
     { text: options.category ?? input.category ?? "Category", numeric: false },
     ...first.map(header),
-    ...input.series.map((series) => ({ text: input.label?.(series) ?? series, numeric: true })),
+    ...input.series.map((series) => ({ text: own(series) ?? input.label?.(series) ?? series, numeric: true })),
     ...(totals ? [{ text: options.total ?? "Total", numeric: true }] : []),
     ...(input.shares ? [{ text: options.share ?? "Share", numeric: true }] : []),
     ...last.map(header)

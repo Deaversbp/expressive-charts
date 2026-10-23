@@ -171,7 +171,13 @@ await xg.update({ data: [...weeks, nextWeek] }); // the new week grows out of th
 xg.reveal(20);                         // through matchweek 20: lines end there, and later weeks can't be hovered
 ```
 
-Every chart's handle also has `focus(key)`, which moves keyboard focus to a mark (on a line chart, its x) as a key press would, showing the focus ring and playing its hover, and `labels()`, each mark's labels as drawn: `{ key, role, text, x, y, anchor, element }`, where `role` is `"category"` or `"value"` (a bar's category and value, a slice's category and share, a line's end label).
+Every chart's handle also has `focus(key)`, which moves keyboard focus to a mark (on a line chart, its x) as a key press would, showing the focus ring and playing its hover; `leave()`, which ends its hover, pointer or keyboard, as the viewer moving away would, and fires `leave`, leaving focus where it is; and `labels()`, each mark's labels as drawn: `{ key, role, text, x, y, anchor, element }`, where `role` is `"category"` or `"value"` (a bar's category and value, a slice's category and share, a line's end label).
+
+`update({ on })` swaps a chart's effects in place, so an effect picker needn't recreate its charts: `decorate` starts again on every mark, a hover that's held replays with the new hover effect, nothing enters again, and focus stays. A slot given the same effect or preset name keeps playing, and an unknown preset name rejects before anything changes. `table: { series: { shots: "Shots" } }` heads a series' column in the data table, which otherwise takes its `seriesLabels` name; only the table changes.
+
+```ts
+await donut.update({ on: { hover: "pulse" } }); // the donut keeps its slices, its tab stop and a held hover
+```
 
 Charts follow the device's light or dark setting, with eight series colours checked for contrast and colour-vision deficiencies in both. Theme them with `--ec-*` custom properties, which your CSS always overrides, and pin a theme with `data-theme` on any ancestor ([Rendering](docs/architecture.md#rendering) has the details):
 

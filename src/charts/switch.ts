@@ -25,13 +25,14 @@ import type { ChartLabel } from "./types";
 /**
  * What a chart switch uses of each view's chart. A reference chart's handle has all of it: its
  * `<svg>` (which takes `ec-morphing` while its marks morph in the switch's overlay), its marks and
- * labels as drawn, focus by key, and destroy().
+ * labels as drawn, focus by key, leave() to end its hover, and destroy().
  */
 export interface ChartSwitchView {
   readonly element: SVGSVGElement;
   marks(): readonly MarkGeometry[];
   labels(): readonly ChartLabel[];
   focus(key: string): void;
+  leave(): void;
   destroy(): void;
 }
 
@@ -166,7 +167,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
       const chart: unknown = options.views[name]!(container, colors);
       if (!isView(chart, container)) {
         (chart as Partial<ChartSwitchView> | null)?.destroy?.();
-        throw new TypeError(`chartSwitch: views.${name} must return the chart it draws in the container it's given (with element, marks(), labels(), focus() and destroy()), such as donutChart(container, { ... }).`);
+        throw new TypeError(`chartSwitch: views.${name} must return the chart it draws in the container it's given (with element, marks(), labels(), focus(), leave() and destroy()), such as donutChart(container, { ... }).`);
       }
       views.set(name, { name, container, chart });
     }
@@ -237,15 +238,6 @@ export function chartSwitch<T extends ChartSwitchViews>(
     return { key: keyed && from.chart.element.contains(keyed) ? (keyed.getAttribute("data-key") ?? undefined) : undefined };
   }
 
-  /** Ends the view's hover as the viewer would: focus leaves its mark, and the pointer leaves its <svg>. */
-  function endHover(from: View): void {
-    const element = focused();
-    if (element && from.container.contains(element)) (element as HTMLElement | SVGElement).blur?.();
-    const win = doc.defaultView;
-    const leave = win?.PointerEvent ? new win.PointerEvent("pointerleave", { pointerType: "mouse" }) : win?.MouseEvent ? new win.MouseEvent("pointerleave") : undefined;
-    if (leave) from.chart.element.dispatchEvent(leave);
-  }
-
   /** Focus that was in the old view goes to the same key in the new one, or to its first mark, unless it has moved on outside the switch. */
   function restoreFocus(to: View, memory: FocusMemory | undefined): void {
     if (!memory) return;
@@ -267,7 +259,9 @@ export function chartSwitch<T extends ChartSwitchViews>(
   function start(from: View, to: View, carried?: { readonly focus: FocusMemory | undefined }): Promise<void> {
     current = to.name;
     const memory = carried ? carried.focus : readFocus(from);
-    endHover(from);
+    // The old view's hover ends as the viewer's would. Focus stays where it is, already read, until
+    // the view turns inert, which takes it off in a browser.
+    from.chart.leave();
     if (motion.mode === "off") {
       for (const each of views.values()) setActive(each.container, each === to);
       restoreFocus(to, memory);
@@ -607,7 +601,7 @@ function isView(value: unknown, container: Element): value is ChartSwitchView {
   const view = value as Partial<Record<keyof ChartSwitchView, unknown>>;
   const element = view.element as Node | undefined;
   return (
-    (["marks", "labels", "focus", "destroy"] as const).every((method) => typeof view[method] === "function") &&
+    (["marks", "labels", "focus", "leave", "destroy"] as const).every((method) => typeof view[method] === "function") &&
     element?.nodeType === 1 &&
     container.contains(element)
   );

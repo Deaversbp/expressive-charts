@@ -61,7 +61,7 @@ const donutDemo: Demo = {
 const effectButton = (page: Page, effect: HoverEffect): Locator =>
   page.getByRole("group", { name: "Hover effect" }).getByRole("button", { name: effect, exact: true });
 
-/** Picks the hover effect for all three charts; the page builds them again. */
+/** Picks the hover effect for all three charts: the page swaps it in place, and attaches the pie's again. */
 async function pickEffect(page: Page, effect: HoverEffect): Promise<void> {
   await effectButton(page, effect).click();
   await expect(effectButton(page, effect)).toHaveAttribute("aria-pressed", "true");
@@ -173,7 +173,7 @@ test("the tooltip on a slice", async ({ page }) => {
 });
 
 test.describe("the effect picker", () => {
-  test("builds the charts again with the new effect, keeping focus, the data and the colours", async ({ page }) => {
+  test("picks the new effect for all three charts, keeping focus, the data and the colours", async ({ page }) => {
     await openDemo(page, donutDemo);
     const colours = (): Promise<string[]> =>
       donut(page).locator(".ec-slice").evaluateAll((slices) => slices.map((path) => getComputedStyle(path).fill));
@@ -187,7 +187,7 @@ test.describe("the effect picker", () => {
     await expect(effectButton(page, "Wiggle")).toBeFocused();
     await donutDemo.ready(page);
     expect(await colours()).toEqual(before);
-    // The rebuilt charts show the match that was added, not the data they started with.
+    // The charts show the match that was added, not the data they started with.
     await expect(slice(page, "Saved")).toHaveAttribute("aria-label", "Saved: 115 shots, 28%");
     await expect(columns(page).locator('.ec-mark[data-key="Saved"]')).toHaveAttribute("aria-label", "Saved: 115 shots");
     await expect(pieSlice(page, "Saved")).toHaveAttribute("aria-label", "Saved: 115 shots, 28%");
@@ -209,6 +209,29 @@ test.describe("the effect picker", () => {
     await page.clock.runFor(75);
     await expect(pieSlice(page, "Saved")).toHaveCSS("transform", /^matrix\(/);
     expect(await iconTransforms(pie(page))).toEqual([]);
+  });
+
+  test("swaps the effect in place with update({ on }): the same charts, their tab stops kept, a held hover replaying", async ({ page }) => {
+    await openDemo(page, donutDemo);
+    // Marks the two charts' <svg>s, to tell whether they're the same elements after the pick.
+    await page.locator("#donut svg.ec-chart, #columns svg.ec-chart").evaluateAll((svgs) => svgs.forEach((svg) => svg.setAttribute("data-probe", "")));
+    // The donut's tab stop moves to Saved; then the pointer rests on its Saved slice.
+    await tabInto(page, donut(page));
+    await page.keyboard.press("ArrowRight");
+    await expect(slice(page, "Saved")).toBeFocused();
+    await hoverSlice(page, "Saved");
+    await page.clock.runFor(REST);
+
+    // A key press on the picker, the pointer still on the slice.
+    await effectButton(page, "Wiggle").focus();
+    await page.keyboard.press("Space");
+    await expect(effectButton(page, "Wiggle")).toBeFocused();
+    await expect(page.locator("#donut svg.ec-chart[data-probe], #columns svg.ec-chart[data-probe]")).toHaveCount(2);
+    await expect(slice(page, "Saved")).toHaveAttribute("tabindex", "0");
+    // The held hover replays with the wiggle, and the ball has gone.
+    await page.clock.runFor(75);
+    await expect(slice(page, "Saved").locator(".ec-body")).toHaveAttribute("transform", /^matrix\(/);
+    expect(await iconTransforms(donut(page))).toEqual([]);
   });
 });
 

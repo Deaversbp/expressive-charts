@@ -57,6 +57,7 @@ Every mark, whoever drew it, is described with the same shape. It has two parts.
 | `bounds`, `center` | the bounding box and the visual centre |
 | `pivot` | where the mark is attached to the chart: a bar's baseline, a donut's centre, a line's first point |
 | `segments` | a stack's parts in order from the baseline, each a `MarkGeometry` with its `series`; every bar has at least one |
+| `labelBounds` | optional: the boxes of the text the chart draws for the mark, so your own text can keep clear of them |
 | `key`, `series` | the mark's stable identity, and its series if it has one |
 
 What each kind of mark gives:
@@ -66,6 +67,9 @@ What each kind of mark gives:
 | Walk | middle of the baseline edge → middle of the tip | start angle → end angle, on the mid-radius arc | first point → last point | none: length 0, at the point |
 | `pivot` | middle of the baseline edge | the donut's centre | the first point | the point |
 | `segments` | at least one | none | none | none |
+| `labelBounds` | its category and value labels | its label outside the ring, or none when it's dropped | its end label | none (unset) |
+
+A mark the library didn't draw has no `labelBounds` unless the page's `geometry` gives it, so an effect that reads it needs a fallback: past the end of the walk, say.
 
 **Conventions** ([architecture.md](architecture.md#conventions) has them all):
 

@@ -1,10 +1,10 @@
 // describe.point: a dot with no direction (a scatter point or a marker).
 
-import type { MarkGeometry } from "../../contracts/geometry";
+import type { MarkGeometry, Rect } from "../../contracts/geometry";
 import { closedOutline } from "../outline";
 import { arc, line } from "../segment";
 import { createWalk } from "../walk";
-import { assemble, finite, size } from "./mark";
+import { assemble, finite, labelBoxes, size } from "./mark";
 
 export interface PointSpec {
   readonly key: string;
@@ -13,6 +13,8 @@ export interface PointSpec {
   readonly y: number;
   /** Radius in px. */
   readonly r: number;
+  /** The boxes of the text drawn for the mark, in the same px: passed through as `labelBounds`. */
+  readonly labelBounds?: readonly Rect[];
 }
 
 /**
@@ -37,6 +39,7 @@ export function describePoint(spec: PointSpec): MarkGeometry {
     ]),
     bounds: { x: center.x - r, y: center.y - r, width: 2 * r, height: 2 * r },
     center,
-    pivot: center
+    pivot: center,
+    labelBounds: labelBoxes("point", spec.labelBounds)
   });
 }

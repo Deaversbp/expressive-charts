@@ -365,7 +365,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const values = record.series.map((series) => ({ series, value: now[series] ?? 0 }));
     const total = values.reduce((sum, v) => sum + v.value, 0);
     const text = record.count === undefined ? row.value.text : format(current)(round(total, record.count));
-    return placeRow(frame, { key: row.key, datum: row.datum, index: row.index, category: row.label.text, values, slot: record.slot.value, text });
+    return placeRow(frame, { key: row.key, datum: row.datum, index: row.index, category: row.label.text, values, slot: record.slot.value, text }, measure);
   }
 
   function addTick(value: number, opacity: number): void {

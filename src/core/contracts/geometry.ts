@@ -58,6 +58,12 @@ export interface MarkGeometry {
   readonly center: Point;
   /** Where the mark is attached to the chart: a bar's baseline, a donut's centre. */
   readonly pivot: Point;
+  /**
+   * The boxes of the text the chart draws for this mark, so an effect's text can keep clear of
+   * them: a bar's category and value labels, a slice's label outside the ring, a line's end label.
+   * Unset when nothing says where they are (segments, points, and marks the library didn't draw).
+   */
+  readonly labelBounds?: readonly Rect[];
 
   /** Ordered parts, from the baseline (goals, then assists). Every bar has at least one. */
   readonly segments?: readonly MarkGeometry[];

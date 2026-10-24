@@ -1,10 +1,10 @@
 // describe.arc: donut and pie slices, in d3.pie()'s angle convention.
 
-import type { MarkGeometry } from "../../contracts/geometry";
+import type { MarkGeometry, Rect } from "../../contracts/geometry";
 import { closedOutline } from "../outline";
 import { arc, boundsOf, extremes, line, polar, TAU } from "../segment";
 import { createWalk } from "../walk";
-import { assemble, finite, size } from "./mark";
+import { assemble, finite, labelBoxes, size } from "./mark";
 
 export interface ArcSpec {
   readonly key: string;
@@ -18,6 +18,8 @@ export interface ArcSpec {
   /** Radians, 0 at 12 o'clock, clockwise: the d3.pie() convention. end < start walks anticlockwise. */
   readonly start: number;
   readonly end: number;
+  /** The boxes of the text drawn for the mark, in the same px: passed through as `labelBounds`. */
+  readonly labelBounds?: readonly Rect[];
 }
 
 /**
@@ -55,6 +57,7 @@ export function describeArc(spec: ArcSpec): MarkGeometry {
     outline: closedOutline(sides),
     bounds: boundsOf(sides.flat().flatMap(extremes)),
     center: walk.point(0.5),
-    pivot: center
+    pivot: center,
+    labelBounds: labelBoxes("arc", spec.labelBounds)
   });
 }

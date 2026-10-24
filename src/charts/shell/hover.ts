@@ -11,10 +11,15 @@
 // The chart says which targets and marks there are and draws them: it finds a live target from an
 // event target, gives a target's marks, their elements and how they are on screen, draws the ring
 // and shows the tooltip.
+//
+// A link (../link.ts) hovers targets too, as "linked": their marks' emphasis, the dimming and their
+// hover runs, with no tooltip, ring or focus. It hears the chart's own hovers, and Escape on a linked
+// hover ends the link's, where it started.
 
 import type { RunInput, Runner } from "../../core/runner";
 import { pointerHover, type HoverTarget } from "../interaction";
 import { keyboardFocus } from "../keyboard";
+import { own, type LinkListener, type LinkPort } from "../link";
 import type { MarkEvents } from "../types";
 import type { ChartEvents } from "./events";
 
@@ -53,10 +58,12 @@ export interface ChartHoverOptions<D> {
 }
 
 export interface ChartHover {
-  /** The hovered target's key. */
+  /** The hovered target's key, when the hover is the chart's own: a link's shows no tooltip. */
   readonly key: string | undefined;
   /** The target showing the focus ring: focused from the keyboard. */
   readonly ringKey: string | undefined;
+  /** The chart's hover as a link drives it, for the chart to register with its handle. */
+  readonly link: LinkPort;
   /** The element with focus in the chart's document or shadow root. */
   active(): Element | null;
   /** An effect restyled a mark: the focus ring and the tooltip of the target it belongs to follow its transform. */
@@ -64,9 +71,9 @@ export interface ChartHover {
   /** After `dim` changed: the others dim, or stop dimming, now. */
   syncDim(): void;
   /**
-   * After the marks changed: ends the hover if its target has left. Otherwise the hover follows the
-   * marks the target stands for now: those it no longer has are left, and new ones are hovered, their
-   * events placed in the target's whole batch, as the runner's runs are.
+   * After the marks changed: ends the hover if its targets have left. Otherwise the hover follows the
+   * marks its targets stand for now: those it no longer has are left, and new ones are hovered, their
+   * events placed in the whole batch, as the runner's runs are.
    */
   dropGone(): void;
   /** After the marks changed: the tab stop stays on its key, or moves to its nearest neighbour, and focus follows. */
@@ -83,11 +90,13 @@ export interface ChartHover {
 }
 
 interface Hovered {
-  /** The target's key. */
-  readonly key: string;
+  /** The targets' keys: one for the chart's own hover, any number for a link's. */
+  readonly keys: readonly string[];
   readonly source: HoverSource;
-  /** The marks hovered for it, in the batch's order. */
+  /** The marks hovered for them, in the batch's order. */
   readonly marks: readonly string[];
+  /** Whether their hover runs play: a link with `effects: false` keeps its marks to emphasis and dimming. */
+  readonly effects: boolean;
 }
 
 export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
@@ -96,6 +105,9 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
   const markElement = (key: string): SVGElement | undefined => (options.markElement ?? options.element)(key);
   let hovered: Hovered | undefined;
   let ringKey: string | undefined;
+  /** The link the chart is in, which hears its own hovers. */
+  let linked: LinkListener | undefined;
+  let destroyed = false;
 
   /** The marks among `keys` that are on screen, with how they are there. */
   const onScreen = (keys: readonly string[]): { readonly key: string; readonly input: RunInput<D> }[] =>
@@ -103,11 +115,13 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       const input = options.onScreen(key);
       return input ? [{ key, input }] : [];
     });
+  /** The marks the targets `keys` stand for, each once. */
+  const marksFor = (keys: readonly string[]): readonly string[] => (keys.length === 1 ? marksOf(keys[0]!) : [...new Set(keys.flatMap(marksOf))]);
 
   /** The marks' hover runs, in one batch, and an event for each with its place in it. */
-  function hoverMarks(marks: ReturnType<typeof onScreen>, source: HoverSource, segment?: string): void {
+  function hoverMarks(marks: ReturnType<typeof onScreen>, source: HoverSource, effects: boolean, segment?: string): void {
     if (marks.length === 0) return;
-    runner.hover(marks.map(({ input }) => input));
+    if (effects) runner.hover(marks.map(({ input }) => input));
     const count = marks.length;
     marks.forEach(({ input }, index) => events.emit("hover", { ...input, batch: { index, count }, source, ...(segment === undefined ? {} : { segment }) }));
   }
@@ -122,24 +136,31 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     marks.forEach(({ input }, index) => events.emit("leave", { ...input, batch: { index, count } }));
   }
 
-  /** Pointer and keyboard hover share this: the marks' emphasis, the others' dimming, the tooltip, the hover runs and the events. */
-  function startHover(key: string, source: HoverSource, segment?: string): void {
-    const marks = onScreen(marksOf(key));
-    hovered = { key, source, marks: marks.map((mark) => mark.key) };
+  /**
+   * Pointer, keyboard and link hover share this: the marks' emphasis, the others' dimming, the hover
+   * runs and the events. The chart's own adds the tooltip and Escape, and tells its link.
+   */
+  function startHover(keys: readonly string[], source: HoverSource, segment?: string, effects = true): void {
+    const marks = onScreen(marksFor(keys));
+    hovered = { keys, source, marks: marks.map((mark) => mark.key), effects };
     for (const { key: mark } of marks) markElement(mark)?.classList.add("ec-hot");
     if (options.dim()) svg.classList.add("ec-hovering");
-    options.tooltip.show(key);
-    listenForEscape(true);
-    hoverMarks(marks, source, segment);
+    if (source !== "linked") {
+      options.tooltip.show(keys[0]!);
+      listenForEscape(true);
+    }
+    hoverMarks(marks, source, effects, segment);
+    if (source !== "linked") linked?.hover(marks.map(({ input }) => input));
   }
 
   function endHover(): void {
-    const marks = hovered?.marks ?? [];
+    const ended = hovered;
     hovered = undefined;
     listenForEscape(false);
     svg.classList.remove("ec-hovering");
     options.tooltip.hide();
-    leaveMarks(marks);
+    leaveMarks(ended?.marks ?? []);
+    if (own(ended)) linked?.leave();
   }
 
   /** The document listening for Escape while something is hovered. */
@@ -171,13 +192,13 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     find: options.find,
     hover(target: HoverTarget, source) {
       // Already playing for keyboard focus: it goes on.
-      if (!options.live(target.key) || hovered?.key === target.key) return;
+      if (!options.live(target.key) || (own(hovered) && hovered.keys[0] === target.key)) return;
       endHover();
-      startHover(target.key, source, target.segment);
+      startHover([target.key], source, target.segment);
     },
     leave() {
-      // Focus holds a keyboard hover until blur or Escape.
-      if (hovered?.source !== "keyboard") endHover();
+      // Focus holds a keyboard hover until blur or Escape, and a link holds its own.
+      if (hovered?.source === "pointer" || hovered?.source === "touch") endHover();
     }
   });
 
@@ -191,43 +212,66 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       if (!options.live(key)) return;
       if (!visible) {
         // Focus from a click or tap: the pointer's own hover plays.
-        if (hovered?.source === "keyboard" && hovered.key !== key) endHover();
+        if (hovered?.source === "keyboard" && hovered.keys[0] !== key) endHover();
         return;
       }
-      if (hovered?.key === key) {
+      if (own(hovered) && hovered.keys[0] === key) {
         // Already playing for the pointer: it goes on, held by focus now.
         hovered = { ...hovered, source: "keyboard" };
         return;
       }
       endHover();
-      startHover(key, "keyboard");
+      startHover([key], "keyboard");
     },
     blur() {
       ringKey = undefined;
       options.ring(ringKey);
       if (hovered?.source !== "keyboard") return;
       // The pointer is still over it: the hover goes on, held by the pointer now.
-      if (interaction.current === hovered.key) hovered = { ...hovered, source: "pointer" };
+      if (interaction.current === hovered.keys[0]) hovered = { ...hovered, source: "pointer" };
       else endHover();
     },
     escape() {
       if (!hovered) return false;
-      endHover();
+      // A link's hover ends where it started, and with it every chart's in the link.
+      if (hovered.source === "linked" && linked) linked.dismiss();
+      else endHover();
       return true;
     }
   });
 
+  const link: LinkPort = {
+    targets: () => options.order().map((key) => ({ key, marks: onScreen(marksOf(key)).map(({ input }) => input) })),
+    hover(keys, effects) {
+      if (hovered !== undefined) endHover();
+      const live = keys.filter(options.live);
+      if (live.length > 0) startHover(live, "linked", undefined, effects);
+    },
+    unlink() {
+      if (hovered?.source === "linked") endHover();
+    },
+    leave,
+    listen(listener) {
+      if (destroyed) return false;
+      linked = listener;
+      return true;
+    }
+  };
+
   return {
     get key() {
-      return hovered?.key;
+      return own(hovered) ? hovered.keys[0] : undefined;
     },
     get ringKey() {
       return ringKey;
     },
+    link,
     active: () => keyboard.active(),
     restyled(key) {
       if (ringKey !== undefined && within(ringKey, key)) options.ring(ringKey);
-      if (hovered !== undefined && (hovered.marks.includes(key) || key === hovered.key) && options.live(hovered.key)) options.tooltip.show(hovered.key);
+      // A link's hover has no tooltip.
+      const target = own(hovered) ? hovered.keys[0]! : undefined;
+      if (target !== undefined && (hovered?.marks.includes(key) || key === target) && options.live(target)) options.tooltip.show(target);
     },
     syncDim() {
       if (!options.dim()) svg.classList.remove("ec-hovering");
@@ -235,26 +279,28 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     },
     dropGone() {
       if (hovered === undefined) return;
-      if (!options.live(hovered.key)) {
+      const keys = hovered.keys.filter(options.live);
+      if (keys.length === 0) {
         interaction.clear();
         endHover();
         return;
       }
-      const { source, marks: before } = hovered;
-      const now = onScreen(marksOf(hovered.key));
+      const { source, marks: before, effects } = hovered;
+      const now = onScreen(marksFor(keys));
+      hovered = { ...hovered, keys };
       if (now.length === before.length && now.every((mark, i) => mark.key === before[i])) return;
       const had = new Set(before);
-      const keys = new Set(now.map((mark) => mark.key));
-      const gone = onScreen(before.filter((key) => !keys.has(key)));
+      const kept = new Set(now.map((mark) => mark.key));
+      const gone = onScreen(before.filter((key) => !kept.has(key)));
       hovered = { ...hovered, marks: now.map((mark) => mark.key) };
       for (const { key } of gone) markElement(key)?.classList.remove("ec-hot");
       for (const { key } of now) if (!had.has(key)) markElement(key)?.classList.add("ec-hot");
-      // The runner hears the target's whole new batch, in order. Mid-change (playUpdate interrupts
+      // The runner hears the targets' whole new batch, in order. Mid-change (playUpdate interrupts
       // first), it holds hovers and replays every hovered mark as one batch when the change settles, so
       // a joined mark's run gets the place its event gives; at rest, the marks that stayed start again
       // with their new places.
       runner.leave(before);
-      runner.hover(now.map(({ input }) => input));
+      if (effects) runner.hover(now.map(({ input }) => input));
       gone.forEach(({ input }, index) => events.emit("leave", { ...input, batch: { index, count: gone.length } }));
       const count = now.length;
       now.forEach(({ key, input }, index) => {
@@ -267,6 +313,9 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     },
     leave,
     destroy() {
+      destroyed = true;
+      linked?.gone();
+      linked = undefined;
       listenForEscape(false);
       interaction.destroy();
       keyboard.destroy();

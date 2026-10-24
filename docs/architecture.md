@@ -886,11 +886,11 @@ Each published JS file and the stylesheet:
 | File | raw | gzip | brotli | gzip budget |
 | --- | ---: | ---: | ---: | ---: |
 | `dist/expressive-charts.css` | 9.9 KB | 2.3 KB | 1.9 KB | 2.5 KB |
-| `dist/expressive-charts.global.js` | 200.6 KB | 71.4 KB | 61.0 KB | 75.5 KB |
+| `dist/expressive-charts.global.js` | 200.8 KB | 71.4 KB | 61.1 KB | 75.5 KB |
 | `dist/icons/sport.cjs` | 7.8 KB | 2.8 KB | 2.6 KB | 3.5 KB |
 | `dist/icons/sport.js` + 2 chunks | 24.9 KB | 8.2 KB | 7.4 KB | 9 KB |
-| `dist/index.cjs` | 377.3 KB | 94.5 KB | 74.5 KB | 100 KB |
-| `dist/index.js` + 3 chunks | 375.8 KB | 95.1 KB | 77.0 KB | 100.5 KB |
+| `dist/index.cjs` | 377.6 KB | 94.6 KB | 74.6 KB | 100 KB |
+| `dist/index.js` + 3 chunks | 376.0 KB | 95.1 KB | 76.9 KB | 100.5 KB |
 | `dist/testing.cjs` | 46.0 KB | 12.6 KB | 11.2 KB | 14 KB |
 | `dist/testing.js` + 2 chunks | 74.4 KB | 19.9 KB | 17.8 KB | 21.5 KB |
 
@@ -906,6 +906,6 @@ What a page pays once its bundler has tree-shaken the package. Each import set i
 | `barChart` | 81.1 KB | 28.2 KB | 30.5 KB |
 | `lineChart`, `threshold`, `playback`, `playButton` | 98.8 KB | 34.1 KB | 35 KB |
 | `chartSwitch`, `donutChart`, `barChart` | 112.7 KB | 37.7 KB | 41 KB |
-| everything | 197.0 KB | 65.2 KB | 69 KB |
+| everything | 197.1 KB | 65.2 KB | 69 KB |
 
 Bundlers keep only what a page imports, because `package.json`'s `sideEffects` names only CSS and `src/package.test.ts` checks that every JS entry is free of side effects. So the package has no `/core` or `/effects` entry: neither would make a page smaller. A change that breaks tree-shaking grows the small sets and fails the check.

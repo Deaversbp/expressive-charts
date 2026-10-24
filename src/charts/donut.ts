@@ -20,6 +20,7 @@ import { chartAnnouncer, changeText, type Announcer } from "./announce";
 import { toColorAssignment } from "./colors";
 import { CENTER_SIZE, donutEncoding, layoutDonut, placeCenter, placeLabels, placeSlice, type CenterLine, type DonutFrame, type DonutLayout, type DonutSlice, type SliceLabel } from "./donut-layout";
 import { chartLegend } from "./legend";
+import { linkable } from "./link";
 import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
 import { maskedRing } from "./render/outside";
@@ -675,7 +676,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
   hover.sync();
   runner.enter(order.map(input));
 
-  return {
+  return linkable(hover.link, {
     element: svg,
 
     async update(next) {
@@ -784,7 +785,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
       order = ring = from = [];
       svg.remove();
     }
-  };
+  });
 }
 
 function checkOptions<D>(options: DonutChartOptions<D>): void {

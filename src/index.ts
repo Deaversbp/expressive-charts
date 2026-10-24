@@ -37,7 +37,7 @@ export * from "./effects";
 export * from "./icons";
 export { registerIcon, registerIcons, registerPreset } from "./registries";
 export { configure } from "./settings";
-export { colorAssignment } from "./charts";
+export { colorAssignment, link } from "./charts";
 export type {
   Accessor,
   Attachment,
@@ -62,6 +62,9 @@ export type {
   LegendEntry,
   LegendOptions,
   LineChart,
+  Link,
+  LinkOptions,
+  LinkSource,
   LineChartOptions,
   MarkEvent,
   MarkEvents,

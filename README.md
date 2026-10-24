@@ -36,24 +36,38 @@ On a page with no bundler, the script-tag bundle defines one global, `Expressive
 
 ## Quick start
 
-A stacked bar chart whose bars tell a story on hover, and blink when an update changes them:
+A bar chart where an arrow runs out a bar on hover, and the bars an update changes blink:
+
+```js
+import { barChart, icons, travel } from "expressive-charts";
+
+const chart = barChart("#sales", {
+  label: "Revenue by region",            // the chart's accessible name
+  data: regions,                         // [{ region: "North", revenue: 42 }, …]
+  y: "region",                           // not numbers, so it's the category
+  x: "revenue",
+  sort: "value",
+  on: {
+    hover: travel(icons.arrow),          // a core icon, in the theme's colours
+    update: "flash"                      // a preset: the bars that changed blink
+  }
+});
+await chart.update({ data: nextQuarter }); // values change, then rows move, by the motion mode
+```
+
+`travel` takes any icon: the core `dot`, `arrow` and `chevron`, the sport pack's ball and boot, or [an SVG icon from a set such as Lucide or Heroicons](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md#an-icon-from-an-icon-set). With the sport pack, a stacked bar tells a story on hover:
 
 ```js
 import { barChart, sequence, travel } from "expressive-charts";
 import { cleat, soccerBall } from "expressive-charts/icons/sport";
 
-const chart = barChart("#goals", {
-  label: "Goals and assists by player",  // the chart's accessible name
+barChart("#goals", {
+  label: "Goals and assists by player",
   data: players,                         // [{ name: "Okafor", goals: 16, assists: 4 }, …]
-  y: "name",                             // not numbers, so it's the category
+  y: "name",
   stack: ["goals", "assists"],
-  sort: "value",
-  on: {
-    hover: sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" })), // a ball rolls out the goals, then a boot steps along the assists
-    update: "flash"                      // a preset: the bars that changed blink
-  }
+  on: { hover: sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" })) } // a ball rolls out the goals, then a boot steps along the assists
 });
-await chart.update({ data: afterMatchweek }); // values change, then rows move, by the motion mode
 ```
 
 The same story on bars you already draw with D3:

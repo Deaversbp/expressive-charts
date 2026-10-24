@@ -22,9 +22,14 @@ export interface TravelOptions {
   readonly ride?: "center" | "on";
 }
 
-/** Base duration: max(260 ms, distance ÷ 360 px/s), with effect timing. */
+/** Base duration: max(260 ms, distance ÷ 360 px/s) times the gait's pace, at most 4 s, with effect timing. */
 const SPEED = 360;
 const SHORTEST = 260;
+/**
+ * The longest trip, base ms, after the gait's pace: past 1,440 px at pace 1 the icon goes faster,
+ * not longer. With stagger's longest spread (500 ms) in front, it still ends within 5 s (WCAG 2.2.2).
+ */
+const LONGEST = 4000;
 /** A walk shorter than this draws nothing. */
 const MIN_WALK = 0.5;
 /** "fit" makes the icon this much of the mark's thickness. */
@@ -148,7 +153,7 @@ function trip(walk: MarkGeometry, icon: Icon, scale: number, options: TravelOpti
     icon,
     size: icon.size * scale,
     span,
-    duration: Math.max(SHORTEST, (span / SPEED) * 1000) * (gait.pace ?? 1),
+    duration: Math.min(LONGEST, Math.max(SHORTEST, (span / SPEED) * 1000) * (gait.pace ?? 1)),
     gait,
     transform(progress) {
       const distance = behind + progress * span;

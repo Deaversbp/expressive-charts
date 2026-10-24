@@ -8,6 +8,7 @@
 import type { Baseline, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
 import { defaultClock, describe, matrix, samplesAlong } from "../../core";
 import { report } from "../../core/report";
+import { linkable, portOf } from "../link";
 import type { ChartEnv } from "../shell/setup";
 import { baselines, describeRects, union, visualOrder, type RectPart } from "./bars";
 import { expressive } from "./expressive";
@@ -304,7 +305,8 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
     observe(next.root);
   }
 
-  return {
+  // Linked through the attachment's hover.
+  return linkable(portOf(attachment)!, {
     refresh,
     on: attachment.on,
     marks: attachment.marks,
@@ -317,7 +319,7 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
       stopFrame = undefined;
       attachment.destroy();
     }
-  };
+  });
 }
 
 function checkView(view: VegaViewLike): void {

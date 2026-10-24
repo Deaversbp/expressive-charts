@@ -29,8 +29,13 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Added
 
+- **`trace`**, a built-in effect: a highlighter stroke drawn along a mark's walk, which stays. `trace({ color, width, opacity, duration })` draws in the overlay and leaves the mark itself untouched, so it's safe in any slot. On a stack it runs the whole walk, and on a point it draws nothing. Its end state is the whole stroke. It isn't a preset. The effects guide's `trace` stays as its worked example, a smaller version.
+- **`link(sources, { by, effects })`**: linked hover across charts and attachments. When one source is hovered by the pointer, touch or the keyboard, the others hover their marks with the same linking value: by default a line point's x, else a mark's key, so a column keyed by its matchweek links with the line's x there. `by(event)` gives the value instead, typed by the sources' rows. Linked marks get their chart's emphasis, dimming and hover effect, with `source: "linked"` on their `hover` event, and no tooltip, focus or announcement; `effects: false` keeps them to emphasis and dimming. The newest hover in a link is the one shown, and Escape or `leave()` on the hovered source ends them all. A source can be in one link at a time, and a `chartSwitch` can't be linked yet. With its types, `Link`, `LinkOptions` and `LinkSource`.
+
 ### Changed
 
+- **`travel`'s trip lasts at most 4 s base**, after the gait's pace. A trip along more than 1,440 px (about 1,250 px for a step) is shorter than before: the icon goes faster rather than longer, so with `stagger` in front it still ends within 5 s. Analysis and Off scale it as before. Nothing needs to change in your code; for a long walk at the old speed, carry the icon in an effect of your own (`defineEffect`).
+- **A `hover` event's `source` can be `"linked"`**, for a mark `link()` hovered because a mark in another chart was. Code that switches on `source` exhaustively gets a type error: add a `"linked"` case, or handle it with `"pointer"` where a linked mark should act as a hovered one. Without `link()`, `source` is never `"linked"`.
 - **Hover dims the other marks' bodies, not their labels**, on the bar and donut charts and in a chart switch. The names and values of the marks that aren't hovered stay at full strength, so they keep 4.5:1 (WCAG 1.4.3); they used to dim with their marks, to 2.0:1 in the light theme. `--ec-dim-opacity` keeps its default, 0.3, and an effect's `opacity` on a dimmed mark still multiplies with it. `expressive()`'s `dim` doesn't change. To dim the labels too, as before, add this to the page's CSS: `.ec-chart.ec-hovering .ec-mark:not(.ec-hot) :is(.ec-label, .ec-value) { opacity: var(--ec-dim-opacity, 0.3); }`.
 
 ## 0.1.0 (24 October 2026)

@@ -160,6 +160,37 @@ describe("delta and label on our charts", () => {
   });
 });
 
+describe("label from a field the chart doesn't plot", () => {
+  interface Form {
+    name: string;
+    goals: number;
+    vsLastMonth: string;
+  }
+  const form: Form[] = [
+    { name: "Okafor", goals: 16, vsLastMonth: "+3" },
+    { name: "Tanaka", goals: 6, vsLastMonth: "-1" }
+  ];
+  const vs = label<Form>((data) => data.datum.vsLastMonth);
+  const texts = (svg: SVGSVGElement) => ["Okafor", "Tanaka"].map((key) => drawn(svg, key).map((text) => text.text));
+
+  it("words a bar's label again when only its row changed, with no update event", async () => {
+    const chart = barChart<Form>(container(), { label: "Form", data: form, y: "name", x: "goals", width: 600, motion: "off", on: { decorate: vs } });
+    const updates = vi.fn();
+    chart.on("update", updates);
+    expect(texts(chart.element)).toEqual([["+3"], ["-1"]]);
+    await chart.update({ data: form.map((row) => (row.name === "Tanaka" ? { ...row, vsLastMonth: "+2" } : row)) });
+    expect(texts(chart.element)).toEqual([["+3"], ["+2"]]);
+    expect(updates).not.toHaveBeenCalled();
+  });
+
+  it("words a slice's label again when only its row changed", async () => {
+    const chart = donutChart<Form>(container(), { label: "Form", data: form, category: "name", value: "goals", width: 640, motion: "off", on: { decorate: vs } });
+    expect(texts(chart.element)).toEqual([["+3"], ["-1"]]);
+    await chart.update({ data: form.map((row) => ({ ...row, vsLastMonth: row.name === "Okafor" ? "+5" : row.vsLastMonth })) });
+    expect(texts(chart.element)).toEqual([["+5"], ["-1"]]);
+  });
+});
+
 describe("how far past the chart's edge the text reaches at 320 px", () => {
   // jsdom's estimate of the text's width, with a bar or a column at the end of its scale. Chrome's
   // own measure is in architecture.md (delta and label): 19.7, 20 and 17.6 px. The layouts leave room

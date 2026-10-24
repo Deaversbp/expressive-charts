@@ -278,9 +278,12 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     setAttributes(ring, { transform: transform && transformAttribute(transform), visibility: undefined });
   }
 
-  /** Draws the mark as `row`. Its runs hear about it when its geometry changed, so decorations follow. */
+  /**
+   * Draws the mark as `row`. Its runs hear about it when its geometry or its row changed, so
+   * decorations follow: a label from a field the bar doesn't plot too.
+   */
   function show(record: MarkRecord<D>, row: BarRow<D>): void {
-    const moved = geometryChanged(record.shown.geometry, row.geometry);
+    const moved = geometryChanged(record.shown.geometry, row.geometry) || record.shown.datum !== row.datum;
     drawMark(record, row);
     if (moved) runner.change(row.geometry, row.data);
     if (record.key === hover.key) showTooltip(record);

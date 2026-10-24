@@ -4,7 +4,7 @@ import type { MarkGeometry, Point, Rect } from "../../contracts/geometry";
 import { closedOutline } from "../outline";
 import { arc, boundsOf, line } from "../segment";
 import { createWalk } from "../walk";
-import { assemble, finite, size } from "./mark";
+import { assemble, finite, labelBoxes, size } from "./mark";
 
 /** The edge a bar grows from. */
 export type Baseline = "left" | "right" | "top" | "bottom";
@@ -37,6 +37,8 @@ export interface BarSpec {
    * before is shorter. Default 0.
    */
   readonly gap?: number;
+  /** The boxes of the text drawn for the bar, its segments having none, in the same px: passed through as `labelBounds`. */
+  readonly labelBounds?: readonly Rect[];
 }
 
 const ANGLE: Readonly<Record<Baseline, number>> = { left: 0, right: Math.PI, top: Math.PI / 2, bottom: -Math.PI / 2 };
@@ -56,6 +58,7 @@ export function describeBar(spec: BarSpec): MarkGeometry {
   size("bar", "height", height);
   const radius = size("bar", "radius", spec.radius ?? 0);
   const gap = size("bar", "gap", spec.gap ?? 0);
+  const labelBounds = labelBoxes("bar", spec.labelBounds);
 
   const horizontal = baseline === "left" || baseline === "right";
   const length = horizontal ? width : height;
@@ -69,7 +72,7 @@ export function describeBar(spec: BarSpec): MarkGeometry {
     p0: number,
     p1: number,
     tip: number,
-    rest: { key: string; series: string | undefined; bounds?: Rect; segments?: readonly MarkGeometry[] }
+    rest: { key: string; series: string | undefined; bounds?: Rect; labelBounds?: readonly Rect[] | undefined; segments?: readonly MarkGeometry[] }
   ): MarkGeometry => {
     const rr = Math.max(0, Math.min(tip, p1 - p0, T / 2));
     const outline = closedOutline([
@@ -119,7 +122,7 @@ export function describeBar(spec: BarSpec): MarkGeometry {
     })
   );
   // The whole bar keeps the exact rectangle it was given.
-  return part(0, length, radius, { key, series, bounds: { x, y, width, height }, segments });
+  return part(0, length, radius, { key, series, bounds: { x, y, width, height }, labelBounds, segments });
 }
 
 /** Chart px at distance p along the walk and s across it, measured from the left (up) edge. */

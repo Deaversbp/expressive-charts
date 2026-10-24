@@ -18,7 +18,7 @@ import { report } from "../core/report";
 import { createRunner, type RunInput } from "../core/runner";
 import { chartAnnouncer, changeText, type Announcer } from "./announce";
 import { toColorAssignment } from "./colors";
-import { CENTER_SIZE, donutEncoding, layoutDonut, placeCenter, placeLabels, placeSlice, type CenterLine, type DonutFrame, type DonutLayout, type DonutSlice, type SliceLabel } from "./donut-layout";
+import { CENTER_SIZE, donutEncoding, layoutDonut, placeCenter, placeLabels, placeSlice, type CenterLine, type DonutFrame, type DonutLayout, type DonutSlice, type SliceLabel, type SliceState } from "./donut-layout";
 import { chartLegend } from "./legend";
 import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
@@ -383,11 +383,11 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
     return out;
   }
 
-  /** Every slice as it is now, part way through a transition, in the ring's order. */
-  function currentSlices(f: DonutFrame): { readonly record: SliceRecord<D>; readonly slice: DonutSlice<D> }[] {
-    return [...angles()].map(([record, { start, span }]) => {
+  /** Every slice as it is now, part way through a transition, in the ring's order, with its label or none. */
+  function currentSlices(f: DonutFrame): { readonly record: SliceRecord<D>; readonly slice: DonutSlice<D>; readonly label: SliceLabel | undefined }[] {
+    const now = [...angles()].map(([record, { start, span }]) => {
       const { row } = record;
-      const slice = placeSlice(f, {
+      const state: SliceState<D> = {
         key: row.key,
         datum: row.datum,
         index: row.index,
@@ -397,9 +397,15 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
         share: span,
         start: start * TAU,
         end: (start + span) * TAU
-      });
-      return { record, slice };
+      };
+      return { record, state };
     });
+    const labels = placeLabels(
+      f,
+      now.map(({ state }) => state),
+      measure
+    );
+    return now.map(({ record, state }, i) => ({ record, slice: placeSlice(f, state, labels[i], measure), label: labels[i] }));
   }
 
   /** Draws every slice as it is now, its label, and the total counting in the hole. */
@@ -409,12 +415,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
     const f = frame.value;
     setAttributes(svg, sizeAttributes(f));
     const slices = currentSlices(f);
-    const labels = placeLabels(
-      f,
-      slices.map(({ slice }) => slice),
-      measure
-    );
-    slices.forEach(({ record, slice }, i) => show(record, slice, labels[i]));
+    for (const { record, slice, label } of slices) show(record, slice, label);
     const total = slices.reduce((sum, { slice }) => sum + slice.value, 0);
     drawCenter(placeCenter(f, count === undefined ? laidOut.centerText : counting(round(total, count)), measure));
   }

@@ -529,6 +529,7 @@ One mark, described the same way whoever drew it. In chart pixels, with y pointi
   - `bounds`: [`Rect`](#rect).
   - `center`: `Point`. Its visual centre, for tooltips, rings and labels.
   - `pivot`: `Point`. Where it's attached to the chart: a bar's baseline, a donut's centre, a line's first point.
+  - `labelBounds`: `readonly Rect[] | undefined`. The boxes of the text the chart draws for the mark, so an effect's own text can keep clear of them: a bar's category and value labels, the two lines of a slice's label outside the ring, a line's end label. An empty list when the mark has none drawn now. Unset on segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#the-marks-own-labels)).
   - `segments`: `readonly MarkGeometry[] | undefined`. A bar's parts, from the baseline; every bar has at least one.
 
 Build one with [`describe`](#describe).
@@ -952,6 +953,7 @@ interface BarSpec
 - `radius`: `number`. Default 0. Rounds the two tip corners; the baseline end stays square.
 - `segments`: `readonly BarSegmentSpec[]`. Its parts, from the baseline. Default: one segment named after `series`, the whole bar. Sizes past the tip are cut off, and a series named twice throws an `Error`.
 - `gap`: `number`. Default 0. Px left empty between segments, out of the start of the later one, so each still ends at its value; it shrinks when the part before it is shorter.
+- `labelBounds`: `readonly Rect[]`. The boxes of the bar's own labels, in chart px, passed through as the geometry's `labelBounds`. Its segments have none.
 
 #### `BarSegmentSpec`
 
@@ -988,6 +990,7 @@ interface ArcSpec
 - `cx`, `cy`: `number`, required. The centre.
 - `inner`, `outer`: `number`, required. Radii in px; an inner of 0 makes a pie slice. Given the wrong way round, they're swapped, as `d3.arc()` does.
 - `start`, `end`: `number`, required. Radians from 12 o'clock, clockwise: the `d3.pie()` convention, so its output plugs straight in. An `end` before `start` walks anticlockwise; more than a full turn draws one ring.
+- `labelBounds`: `readonly Rect[]`. The boxes of the slice's own labels, passed through as the geometry's `labelBounds`.
 
 #### `LineSpec`
 
@@ -999,10 +1002,11 @@ interface LineSpec {
   readonly series?: string;
   readonly points: readonly Point[];
   readonly width?: number;
+  readonly labelBounds?: readonly Rect[];
 }
 ```
 
-A polyline through `points` (at least one), in chart px, with straight legs. `width` is its stroke width, default 1.
+A polyline through `points` (at least one), in chart px, with straight legs. `width` is its stroke width, default 1. `labelBounds`, the boxes of its own labels (an end label), is passed through as the geometry's.
 
 #### `PointSpec`
 
@@ -1015,10 +1019,11 @@ interface PointSpec {
   readonly x: number;
   readonly y: number;
   readonly r: number;
+  readonly labelBounds?: readonly Rect[];
 }
 ```
 
-A dot of radius `r`. Its walk has length 0, so `travel` does nothing on it, while `wiggle`, `pulse` and `flash` still work.
+A dot of radius `r`. Its walk has length 0, so `travel` does nothing on it, while `wiggle`, `pulse` and `flash` still work. `labelBounds`, the boxes of its own labels, is passed through as the geometry's.
 
 #### `matrix`
 

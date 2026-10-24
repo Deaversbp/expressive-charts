@@ -7,7 +7,7 @@
 // placeCenter draw any state in between the same way the layout draws its own.
 
 import { describe, type MarkData, type MarkGeometry, type Rect } from "../core";
-import type { TextPlacement } from "./render/text";
+import { textBoxes, type TextPlacement } from "./render/text";
 import { percent } from "./shell/format";
 import type { DonutChartOptions } from "./types";
 
@@ -145,18 +145,19 @@ export function layoutDonut<D>(input: DonutLayoutInput<D>): DonutLayout<D> {
   const frame = donutFrame(input, rows);
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const starts = joinedStarts(rows.map((row) => row.value));
-  const slices = rows.map((row, i) => {
+  const states = rows.map((row, i): SliceState<D> => {
     const share = total > 0 ? row.value / total : 0;
     // The last slice ends exactly at 12 o'clock again.
     const end = i + 1 < rows.length && total > 0 ? starts[i + 1]! : total > 0 ? 1 : 0;
-    return placeSlice(frame, { ...row, series: input.encoding.series, share, start: starts[i]! * TAU, end: end * TAU });
+    return { ...row, series: input.encoding.series, share, start: starts[i]! * TAU, end: end * TAU };
   });
+  const labels = placeLabels(frame, states, input.measure);
   const centerText = input.center(total);
   return {
     frame,
     total,
-    slices,
-    labels: placeLabels(frame, slices, input.measure),
+    slices: states.map((state, i) => placeSlice(frame, state, labels[i], input.measure)),
+    labels,
     centerText,
     center: placeCenter(frame, centerText, input.measure)
   };
@@ -176,8 +177,11 @@ export function joinedStarts(values: readonly number[]): number[] {
   });
 }
 
-/** Draws a slice in a frame: its arc, described with describe.arc, and its data. */
-export function placeSlice<D>(frame: DonutFrame, state: SliceState<D>): DonutSlice<D> {
+/**
+ * Draws a slice in a frame: its arc, described with describe.arc, and its data. With its label
+ * (and `measure`), the boxes of the label's two lines are its `labelBounds`; with no label, none.
+ */
+export function placeSlice<D>(frame: DonutFrame, state: SliceState<D>, label?: SliceLabel, measure?: Measure): DonutSlice<D> {
   const geometry = describe.arc({
     key: state.key,
     series: state.series,
@@ -186,7 +190,14 @@ export function placeSlice<D>(frame: DonutFrame, state: SliceState<D>): DonutSli
     inner: frame.inner,
     outer: frame.outer,
     start: state.start,
-    end: state.end
+    end: state.end,
+    labelBounds:
+      label && measure
+        ? textBoxes(measure, [
+            [label.category, "ec-label", LABEL_SIZE],
+            [label.share, "ec-value", VALUE_SIZE]
+          ])
+        : []
   });
   return { ...state, geometry, data: sliceData(state.datum, state.share, state.series) };
 }

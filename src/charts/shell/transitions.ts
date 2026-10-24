@@ -162,10 +162,19 @@ export function sameFields<T extends object>(a: T, b: T): boolean {
   return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
 }
 
-/** Whether a mark looks different: its outline, or its segments. Its runs hear about it through change(). */
+/** Whether a mark looks different: its outline, its segments, or its labels' boxes. Its runs hear about it through change(). */
 export function geometryChanged(from: MarkGeometry, to: MarkGeometry): boolean {
-  if (from.outline.d !== to.outline.d) return true;
+  if (from.outline.d !== to.outline.d || labelsMoved(from, to)) return true;
   const a = from.segments ?? [];
   const b = to.segments ?? [];
   return a.length !== b.length || a.some((segment, i) => segment.key !== b[i]!.key || segment.outline.d !== b[i]!.outline.d);
+}
+
+/** Whether a mark's `labelBounds` differ: text placed past them has to follow. */
+export function labelsMoved(from: MarkGeometry, to: MarkGeometry): boolean {
+  const a = from.labelBounds;
+  const b = to.labelBounds;
+  if (a === b) return false;
+  if (!a || !b || a.length !== b.length) return true;
+  return a.some((box, i) => box.x !== b[i]!.x || box.y !== b[i]!.y || box.width !== b[i]!.width || box.height !== b[i]!.height);
 }

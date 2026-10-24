@@ -10,7 +10,7 @@
 
 import { describe, type MarkData, type MarkGeometry, type Rect, type Sample } from "../core";
 import { clean, niceDomain, niceStep, type Tick } from "./bar-layout";
-import type { TextPlacement } from "./render/text";
+import { textBox, type TextPlacement } from "./render/text";
 import { decimals } from "./shell/format";
 import { TIME_ZONES, timeName, timeTicks, type TimeZone } from "./time";
 import type { Accessor, LineChartOptions } from "./types";
@@ -109,9 +109,18 @@ export interface LineLayoutInput<D> {
   readonly height: number | undefined;
   readonly format: (value: number) => string;
   /** Text width in px, for margins. */
-  readonly measure: (text: string, className: string, size: number) => number;
+  readonly measure: Measure;
   /** A line's end label for a value, measured for the right margin; undefined with `labels: false`. */
   readonly label: ((series: string, value: number) => string) | undefined;
+}
+
+type Measure = (text: string, className: string, size: number) => number;
+
+/** How placeLines words the lines' end labels, and measures them for their boxes. */
+export interface EndLabels {
+  /** A line's end label for its value at its end; "" for none. */
+  readonly text: (series: string, value: number) => string;
+  readonly measure: Measure;
 }
 
 /** A row as it's drawn now, part way through a change: where it is, and its values by series. */
@@ -128,6 +137,8 @@ export interface PlacedLine<D> {
   readonly data: MarkData<D>;
   /** The line's revealed end, in px, where its end dot and label go, and its value there. */
   readonly end: { readonly x: number; readonly y: number; readonly value: number };
+  /** Its end label, placed with the others' (its text "" for none); undefined without `labels`. */
+  readonly label: TextPlacement | undefined;
 }
 
 export interface PlacedPoint<D> {
@@ -242,9 +253,10 @@ export function positions(frame: LineFrame): { x(value: number): number; y(value
  * before it, plus the point part way to the next row when `through` falls between two. With no row
  * at or before it, a line is its first point. Each line's data has the row at its revealed end, a
  * sample per vertex (`t` by distance along the walk, `at` its x: a Date on a `time` axis), and the
- * other lines as `related`.
+ * other lines as `related`. With `labels`, the end labels are placed together (placeEndLabels), and
+ * each line's geometry has its own label's box as `labelBounds`: none when its text is "".
  */
-export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], series: readonly string[], through: number, time = false): PlacedLine<D>[] {
+export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], series: readonly string[], through: number, time = false, labels?: EndLabels): PlacedLine<D>[] {
   const first = rows[0];
   if (!first) return [];
   const at = positions(frame);
@@ -257,14 +269,24 @@ export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], se
 
   const datas = new Map<string, MarkData<D>>();
   const related = (own: string) => (name: string) => (name === own ? undefined : datas.get(name));
-  const lines = series.map((name): PlacedLine<D> => {
+  const traced = series.map((name) => {
     const vertices = shown.map((row) => ({ at: row.x, value: row.values[name] ?? 0 }));
     if (share !== undefined) {
       const from = end.values[name] ?? 0;
       vertices.push({ at: through, value: from + share * ((next!.values[name] ?? 0) - from) });
     }
-    const points = vertices.map((v) => ({ x: at.x(v.at), y: at.y(v.value) }));
-    const geometry = describe.line({ key: name, series: name, points, width: LINE_WIDTH });
+    return { name, vertices, points: vertices.map((v) => ({ x: at.x(v.at), y: at.y(v.value) })) };
+  });
+  const placed = labels
+    ? placeEndLabels(
+        frame,
+        traced.map(({ name, vertices, points }) => ({ ...points[points.length - 1]!, text: labels.text(name, vertices[vertices.length - 1]!.value) }))
+      )
+    : [];
+  const lines = traced.map(({ name, vertices, points }, i): PlacedLine<D> => {
+    const label = placed[i];
+    const labelBounds = labels ? (label && label.text !== "" ? [textBox(label, labels.measure, "ec-value", VALUE_SIZE)] : []) : undefined;
+    const geometry = describe.line({ key: name, series: name, points, width: LINE_WIDTH, ...(labelBounds ? { labelBounds } : {}) });
     // By distance, as the walk measures it; the last is exactly 1.
     let distance = 0;
     const samples: Sample[] = vertices.map((v, j) => {
@@ -275,7 +297,7 @@ export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], se
     const data: MarkData<D> = { datum: end.datum, samples, related: related(name) };
     datas.set(name, data);
     const tip = vertices[vertices.length - 1]!;
-    return { series: name, geometry, data, end: { ...points[points.length - 1]!, value: tip.value } };
+    return { series: name, geometry, data, end: { ...points[points.length - 1]!, value: tip.value }, label };
   });
   return lines;
 }
@@ -484,7 +506,7 @@ function distinctLabels<D>(rows: readonly LineRow<D>[], label: (series: string, 
   return [...shapes.values()];
 }
 
-function widest(texts: readonly string[], className: string, size: number, measure: LineLayoutInput<unknown>["measure"]): number {
+function widest(texts: readonly string[], className: string, size: number, measure: Measure): number {
   return texts.reduce((max, text) => Math.max(max, measure(text, className, size)), 0);
 }
 

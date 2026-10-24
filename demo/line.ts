@@ -1,7 +1,8 @@
-// M4: the prototype's second card (step 7). The lab's season, goals against expected goals over 38
-// matchweeks, on the library's lineChart and on a line drawn with D3 through expressive(). Both carry
-// the same decoration: the goals line red wherever it's below xG, and a ball riding its leading edge.
-// One playback() drives both, with its playButton(), the page's scrubber and the motion switch.
+// The prototype's season, goals against expected goals over 38 matchweeks, on the library's
+// lineChart, on a line drawn with D3 through expressive(), and on a Vega-Lite line through
+// fromVegaView(). All three carry the same decoration: the goals line red wherever it's below xG, and
+// a ball riding its leading edge. One playback() drives the first two, with its playButton(), the
+// page's scrubber and the motion switch.
 import {
   describe,
   expressive,
@@ -61,12 +62,12 @@ const end = weeks[weeks.length - 1]!;
 
 /** "1 goal", "28 goals". */
 const goals = (value: number): string => `${value} ${value === 1 ? "goal" : "goals"}`;
-/** "+0.4", "-2.6": to a tenth, signed, as the lab's Difference column has it. */
+/** "+0.4", "-2.6": to a tenth, signed, as the prototype's Difference column has it. */
 function signed(value: number): string {
   const tenths = Math.round(value * 10) / 10;
   return `${tenths >= 0 ? "+" : ""}${tenths.toFixed(1)}`;
 }
-/** The lab's "+0.4 vs expected": goals less xG. */
+/** The prototype's "+0.4 vs expected": goals less xG. */
 const versus = (d: Week): string => `${signed(d.goals - d.xg)} vs expected`;
 
 /** The ball's width in px: smaller than its own 17 px, so it doesn't hide the lines' last weeks. */
@@ -84,10 +85,10 @@ const chart = lineChart<Week>("#line", {
   // xG takes slot 2, which the page's CSS makes a dashed grey, so the red below it stands out.
   colors: { goals: 1, xg: 2 },
   seriesLabels: { goals: "Goals scored", xg: "Expected goals (xG)" },
-  // The lab's end labels: "28 goals", "27.6 xG".
+  // The prototype's end labels: "28 goals", "27.6 xG".
   labels: (value, series) => (series === "xg" ? `${value.toFixed(1)} xG` : goals(Math.round(value))),
   legend: { entries: [{ label: "Goals below xG", color: "negative" }] },
-  // The lab's tooltip: the week, both values, and the gap. The page's CSS makes the first line bold.
+  // The prototype's tooltip: the week, both values, and the gap. The page's CSS makes the first line bold.
   tooltip: (d) => `Matchweek ${d.week}\n${goals(d.goals)} · ${d.xg.toFixed(1)} xG\n${versus(d)}`,
   // Each week's name has its values; its description adds only the gap, so nothing is read twice.
   markLabel: (d) => `Matchweek ${d.week}: ${goals(d.goals)}, ${d.xg.toFixed(1)} xG`,
@@ -131,8 +132,8 @@ const d3Effects = expressive(host.paths, {
 
 // The Vega-Lite line shows the whole season. Vega draws new elements on every data change, so
 // playing it frame by frame would replace a focused line 60 times a second and fire an update each
-// frame (the plan's step 8 has the numbers). fromVegaView() reads the View's line mark, "marks",
-// from its scenegraph, and follows the View's own renders, a resize included.
+// frame. fromVegaView() reads the View's line mark, "marks", from its scenegraph, and follows the
+// View's own renders, a resize included.
 async function attachVega(box: HTMLElement): Promise<VegaLine> {
   const vegaLine = await drawVegaLine(box, weeks);
   const svg = box.querySelector("svg");
@@ -161,8 +162,9 @@ window.addEventListener("resize", () => {
   void vegaReady.then((vegaLine) => vegaLine.resize());
 });
 
-// One playback drives both charts: the lab's 6.5 s season in Presentation, about 2 s in Analysis, and
-// at once in Off. It rests at the end, so the whole season shows until something reveals less.
+// One playback drives both charts: the prototype's 6.5 s season in Presentation, about 2 s in
+// Analysis, and at once in Off. It rests at the end, so the whole season shows until something
+// reveals less.
 const slider = document.querySelector<HTMLInputElement>("#week");
 const status = document.getElementById("week-status");
 /** The last whole matchweek drawn. */

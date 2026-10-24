@@ -1,10 +1,10 @@
-# Screen-reader check: `barChart` (M2 step 5)
+# Screen-reader checks
 
-This check settles the ARIA roles of the reference bar chart (plan §7.2). It also checks the data table and the live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html` (M3), [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html` (M4), [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html` (M5), and [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html` (M6). Run it with one or both of NVDA + Chrome and VoiceOver + Safari. Then send back what you heard, and the roles and labels get adjusted to match.
+These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, and [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
 
-**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C and section E's steps 13 and 14 are pending. M6's WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G are pending. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
 
-A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to send back.
+A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to paste into an issue.
 
 ## What's being tested
 
@@ -124,7 +124,7 @@ If a bar is read twice or in pieces here but not on the first chart, the differe
 
 ## D. The donut page: `donutChart` and a D3 pie
 
-`demo/donut.html` (M3) shows the lab's shot outcomes three ways: the library's `donutChart`, the same data as columns on `barChart`, and a pie the page draws with D3, which `expressive()` names. The columns are read like section A's bars, so this script covers the two donuts:
+`demo/donut.html` shows a season's shot outcomes three ways: the library's `donutChart`, the same data as columns on `barChart`, and a pie the page draws with D3, which `expressive()` names. The columns are read like section A's bars, so this script covers the two donuts:
 
 - **The donut.** The `<svg>` is `role="group"`, named by its label ("Shot outcomes"). The total in the hole is hidden, and its text is the group's description ("406 shots"), so it's heard on the way in. Each slice is `role="img"`, named by its category, its count and its share: "Saved: 112 shots, 28%". The labels round the ring are inside the slice and hidden, so the name is the only thing read.
 - **Keyboard order.** The donut is one tab stop. The arrow keys go round the ring clockwise from 12 o'clock: Right and Down to the next slice, Left and Up to the previous, Home and End to the ends, with no wrap-around. In data order that's Goal, Saved, Off target, Blocked.
@@ -165,7 +165,7 @@ If the total isn't heard in steps 1 and 5, it's still in the table's total row, 
 
 ## E. The line page: `lineChart` and a D3 line
 
-`demo/line.html` (M4) shows the lab's second card twice: goals against expected goals over a season on the library's `lineChart`, and on a line the page draws with D3, which `expressive()` names. One "Play season" button and one scrubber drive both.
+`demo/line.html` shows goals against expected goals over a season on the library's `lineChart`, and on a line the page draws with D3, which `expressive()` names. One "Play season" button and one scrubber drive both.
 
 - **The line chart.** The `<svg>` is `role="group"`, named by its label ("Goals vs expected goals, season to date"), with a description in a `<desc>`: "Cumulative goals scored and expected goals over 38 matchweeks. The goals line is red wherever goals are below xG." The lines, dots, end labels, axes and the ball are hidden. Each matchweek is one focus stop, `role="img"`, named by `markLabel` with both values ("Matchweek 12: 18 goals, 19.0 xG"), and described by `markDescription` with only the gap ("-1.0 vs expected"), so nothing is read twice.
 - **Keyboard order.** The chart is one tab stop. The arrow keys go one week at a time (Right and Down to the next, Left and Up to the previous), Home and End to the ends, with no wrap-around. Weeks past the scrubber's week are hidden and can't be reached, but the names and the table always cover the whole season.
@@ -206,7 +206,7 @@ If the total isn't heard in steps 1 and 5, it's still in the table's total row, 
 
 If the chart's description isn't heard in step 1, it's also in the card's note, but say so: it may need to move.
 
-**Added with M4 step 8: the Vega-Lite line.** Below the two charts, the page draws the season a third time as a Vega-Lite line, which `fromVegaView()` names. It doesn't play: it shows the whole season. Its `<svg>` is `role="group"`, named "Goals and expected goals on a Vega-Lite line"; Vega hides its axes (`aria-hidden`), and `markLabel` names each line as on the D3 line. Vega gives the groups around its lines roles of its own (`graphics-object`, `graphics-symbol`) with no names; since M6's audit, `fromVegaView()` takes those off, so Chrome's tree for this chart is the D3 line's: the group, then one image per line. It's one tab stop, after the D3 line. Listen for:
+**The Vega-Lite line.** Below the two charts, the page draws the season a third time as a Vega-Lite line, which `fromVegaView()` names. It doesn't play: it shows the whole season. Its `<svg>` is `role="group"`, named "Goals and expected goals on a Vega-Lite line"; Vega hides its axes (`aria-hidden`), and `markLabel` names each line as on the D3 line. Vega gives the groups around its lines roles of its own (`graphics-object`, `graphics-symbol`) with no names; since the accessibility audit, `fromVegaView()` takes those off, so Chrome's tree for this chart is the D3 line's: the group, then one image per line. It's one tab stop, after the D3 line. Listen for:
 
 8. Each Vega-Lite line is read once, by name, and nothing unnamed (a "graphic" or "group" with no name) is read before it.
 
@@ -217,7 +217,7 @@ If the chart's description isn't heard in step 1, it's also in the card's note, 
 
 ## F. The morph page: a chart switch
 
-`demo/morph.html` (M5) shows the lab's shot outcomes as a donut and as columns in one `chartSwitch`. A button switches between them, and the slices morph into their columns and back. This script covers what the switch adds; the donut reads as in [section D](#d-the-donut-page-donutchart-and-a-d3-pie) and the columns as section A's bars.
+`demo/morph.html` shows a season's shot outcomes as a donut and as columns in one `chartSwitch`. A button switches between them, and the slices morph into their columns and back. This script covers what the switch adds; the donut reads as in [section D](#d-the-donut-page-donutchart-and-a-d3-pie) and the columns as section A's bars.
 
 - **One view at a time.** Each view is a whole chart with its own legend and data table. The view that isn't shown is hidden from screen readers (`aria-hidden`) and can't be reached (`inert`). During a switch, about a second in Presentation, neither view can be read or reached.
 - **The two charts.** The donut's `<svg>` is `role="group"`, named "Shot outcomes, share of total", and its slices are named as in section D ("Saved: 112 shots, 28%"). The columns' is named "Shot outcomes, counts", and each column "Saved: 112 shots".
@@ -261,7 +261,7 @@ If the announcement in steps 3, 5, 6 or 9 isn't heard, or is heard before the sw
 
 ## G. The stress page's date line: `lineChart` on dates
 
-`demo/stress.html` (M6) runs each case at sizes up to past its limit. Its third card, "A line on dates, playing", is a `lineChart` whose x is a date: a year of daily visits and their 28-day average, red wherever a day is below its average, with a Play button. This script covers what dates add; otherwise the chart reads as in [section E](#e-the-line-page-linechart-and-a-d3-line).
+`demo/stress.html` runs each case at sizes up to past its limit. Its third card, "A line on dates, playing", is a `lineChart` whose x is a date: a year of daily visits and their 28-day average, red wherever a day is below its average, with a Play button. This script covers what dates add; otherwise the chart reads as in [section E](#e-the-line-page-linechart-and-a-d3-line).
 
 - **The chart.** The `<svg>` is `role="group"`, named "Daily visits, 2025", with a description in a `<desc>`: "Visits each day and their 28-day average, 2025. The visits line is red wherever a day is below its 28-day average." The lines, dots, end labels, axes and the arrow are hidden. Each day is one focus stop, `role="img"`, named by the chart's default: the day as a medium date in the page's locale, then each series' value and name ("Jan 1, 2025: 959 Visits, 936 28-day average"). The page gives no tooltip function, so a day has no description.
 - **Keyboard order.** The chart is one tab stop. The arrow keys go one day at a time (Right and Down to the next, Left and Up to the previous), Home and End to the ends, with no wrap-around.
@@ -299,9 +299,9 @@ If the announcement in steps 3, 5, 6 or 9 isn't heard, or is heard before the sw
 
 Ten years are 3,653 days, and the arrow keys go a day at a time, so step 11 uses End. If you'd want a larger step (Page Up and Page Down by a month, say), say so: the charts have none yet.
 
-## Re-check after M2 step 7
+## Re-check: each bar's description
 
-M2 step 7 gave each bar of the library's chart a description: the player's position. The roles, names, table and announcements are unchanged, so only these need hearing again:
+Each bar of the library's chart has a description: the player's position, added after section A had passed. The roles, names, table and announcements are unchanged, so only these need hearing again:
 
 | Screen reader | Do | Expect to hear (roughly) | What you heard |
 | --- | --- | --- | --- |
@@ -316,15 +316,15 @@ If a description isn't read at all, that's acceptable: the position is also in t
 - That run heard "Castillo: 1 goals" in step 3, a known issue then. The demo now words its bars' names with `markLabel`, so the steps above say "1 goal". Only the wording changed, not the roles or the structure. **The new wording was heard as "Castillo: 1 goal" with NVDA + Chrome and with VoiceOver + Safari (October 2026).**
 - The one hitch was the tester's, not the page's. In step 11, T did nothing because NVDA was still in focus mode; after NVDA+Space back to browse mode, it found the table. Step 11 now says so.
 
-**M2 step 7's descriptions, NVDA + Chrome on Windows, 22 October 2026: passed.** In [the re-check](#re-check-after-m2-step-7) (section A, steps 1 and 3), each bar's position was read after its name, and neither the name nor the numbers were read twice. So `markDescription` works as intended, and the descriptions stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on the descriptions.
+**The bars' descriptions, NVDA + Chrome on Windows, 22 October 2026: passed.** In [the re-check](#re-check-each-bars-description) (section A, steps 1 and 3), each bar's position was read after its name, and neither the name nor the numbers were read twice. So `markDescription` works as intended, and the descriptions stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on the descriptions.
 
-**VoiceOver + Safari:** the full script hasn't been run yet. It was used to hear the "1 goal" wording above. **Not run for 0.1** (M6 decision 2): every section with VoiceOver + Safari is in the plan's backlog.
+**VoiceOver + Safari:** the full script hasn't been run yet. It was used to hear the "1 goal" wording above. **Not run for 0.1**: every section with VoiceOver + Safari is in the development log's backlog.
 
-**The second chart (section C):** not run yet, with either screen reader. **Pending (23 October 2026):** M6 step 7 asked for it with NVDA + Chrome, and it couldn't be run that day. Until it is, the evidence is what M6's audit checked without a screen reader ([a11y-audit.md](a11y-audit.md)): axe finds nothing on the page, Chrome's tree for the chart is its group and then one image per player, named with what the bar shows ("Okafor: 16 goals" … "Castillo: 1 goal"), and the tab order is pinned by the visual suite.
+**The second chart (section C):** not run yet, with either screen reader. **Pending (23 October 2026):** the accessibility audit asked for it with NVDA + Chrome, and it couldn't be run that day. Until it is, the evidence is what the audit checked without a screen reader ([a11y-audit.md](a11y-audit.md)): axe finds nothing on the page, Chrome's tree for the chart is its group and then one image per player, named with what the bar shows ("Okafor: 16 goals" … "Castillo: 1 goal"), and the tab order is pinned by the visual suite.
 
 **The donut page (section D), NVDA + Chrome on Windows, 22 October 2026: passed.** All 13 steps read as expected, so every "Listen for" item passed: each slice was read once as one item with its share, the donut's name and total were heard on the way in, the arrow keys went clockwise from 12 o'clock and stopped at the ends, the table's Share column and total row were read with their headers, each match was announced once, and the D3 pie read like the donut with its labels silent. The names and roles stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
 
-**The Vega-Lite line on the line page (section E, steps 13 and 14, added with M4 step 8):** not run yet. **Pending (23 October 2026):** M6 step 7 asked for them with NVDA + Chrome, and they couldn't be run that day. Before asking, the audit found and fixed what step 13 listens for: Vega's unnamed `graphics-symbol` around each line, which axe flagged, and its `graphics-object`s, which Chrome named from the lines' names. Chrome's tree for the Vega-Lite line is now the D3 line's, which passed steps 11 and 12.
+**The Vega-Lite line on the line page (section E, steps 13 and 14):** not run yet. **Pending (23 October 2026):** the accessibility audit asked for them with NVDA + Chrome, and they couldn't be run that day. Before asking, the audit found and fixed what step 13 listens for: Vega's unnamed `graphics-symbol` around each line, which axe flagged, and its `graphics-object`s, which Chrome named from the lines' names. Chrome's tree for the Vega-Lite line is now the D3 line's, which passed steps 11 and 12.
 
 **The line page (section E), NVDA + Chrome on Windows, 22 October 2026: passed.** All 12 steps read as expected, so every "Listen for" item passed:
 - each matchweek was read once, as one item, with both values and then its gap;
@@ -336,7 +336,7 @@ If a description isn't read at all, that's acceptable: the position is also in t
 
 The names, descriptions and roles stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
 
-**The morph page (section F), NVDA + Chrome on Windows, 23 October 2026: passed.** You reported that all 13 steps sounded as expected, so every "Listen for" item passed:
+**The morph page (section F), NVDA + Chrome on Windows, 23 October 2026: passed.** The tester reported that all 13 steps sounded as expected, so every "Listen for" item passed:
 - each slice and column was read once, as one item;
 - the button was read by the view it goes to, "Show as columns" and then "Show as donut";
 - each switch announced the new view's name once it landed;

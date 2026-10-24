@@ -55,9 +55,9 @@
 <body>
 <main class="wrap">
   <header>
-    <p class="eyebrow">Milestones 1 and 2 · ball and cleat</p>
-    <h1>Ball and cleat on the real library</h1>
-    <p class="lede">The prototype's first card, rebuilt on <code>barChart</code> and <code>travel</code>, and the same story on a chart the library didn't draw. Hover a bar, then switch the motion mode, the metric and the sort, and play the next matchweek.</p>
+    <p class="eyebrow">Bar charts · hover stories</p>
+    <h1>Ball and cleat</h1>
+    <p class="lede">A ball rolls along each player's goals and a boot steps along their assists, on <code>barChart</code> with <code>travel</code>, and the same story on a chart the library didn't draw. Hover a bar, then switch the motion mode, the metric and the sort, and play the next matchweek.</p>
   </header>
 
   <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
@@ -91,14 +91,14 @@
     <svg id="host-chart" role="group" aria-label="Harbor City FC: goals by player"></svg>
   </section>
 
-  <section class="card" aria-labelledby="check-title">
-    <h2 id="check-title">Milestones 1 and 2: done when</h2>
+  <section class="card" aria-labelledby="try-title">
+    <h2 id="try-title">Things to try</h2>
     <ul class="checklist">
-      <li>This page reproduces the first card of <a href="./lab.html">the prototype</a>: the ball and cleat on both charts, staged sorting, the metric switch, <b>Play next matchweek</b> with a flash on the bars that changed, a tooltip with the player's position, a legend for Goals + assists, a data table, and the motion switch.</li>
-      <li>Sorting is staged in Presentation (values first, then positions), one quick step in Analysis, and instant in Off and under reduced motion. Clicking again mid-change makes nothing jump.</li>
-      <li>Keyboard focus plays the same stories: Tab into a chart, then the arrow keys, Home and End; Escape stops.</li>
-      <li>Light and dark come from the library's own defaults (switch your system theme); text is never in a series colour.</li>
-      <li>The screen-reader check in <code>docs/a11y-check.md</code> passes; the Playwright suite and the conformance tests pass in CI.</li>
+      <li>Tab into a chart, then use the arrow keys, Home and End: keyboard focus plays the same stories as the pointer. Escape stops.</li>
+      <li>Sort in Presentation: the values change first, then the rows move. Click again mid-change, and nothing jumps.</li>
+      <li>Pick Off, or turn on reduced motion: every change jumps to where it ends.</li>
+      <li>Open the bar chart's data table: it lists each player's position too, as the tooltip does.</li>
+      <li>Switch your system between light and dark: the charts' colours come from the library's own theme, and text is never in a series colour.</li>
     </ul>
   </section>
 </main>

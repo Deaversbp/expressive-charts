@@ -29,7 +29,7 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
   {
     name: "bars",
     demo: barsDemo,
-    stops: [...MOTION, "Goals", "Assists", "Goals + assists", "Highest first", "A–Z", "Play next matchweek", "Okafor: 16 goals", "Data table", "Okafor: 16 goals", "the prototype"],
+    stops: [...MOTION, "Goals", "Assists", "Goals + assists", "Highest first", "A–Z", "Play next matchweek", "Okafor: 16 goals", "Data table", "Okafor: 16 goals"],
     charts: [{ chart: "#chart", shape: '.ec-mark[data-key="Okafor"] .ec-segment' }]
   },
   {

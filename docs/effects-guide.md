@@ -1,6 +1,6 @@
 # Writing effects
 
-An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `threshold`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: our bar chart, the donut, and SVG charts drawn by D3 or Observable Plot through `expressive()`.
+An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `threshold`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: the library's bar, donut and line charts, SVG charts drawn by D3 or Observable Plot through `expressive()`, and Vega or Vega-Lite charts rendered as SVG, through `fromVegaView()`.
 
 This guide covers the contract an effect reads, the drawing API it writes through, how it keeps time, the rules that keep charts readable, data effects, composing, testing with `checkEffect`, and transition effects, which play between two views of a mark, with `checkTransition`. It ends with two worked examples and a review checklist.
 
@@ -318,7 +318,7 @@ expect(ctx.layer.picture()).toEqual([{ kind: "path", d: fixtures.bar.slice(0, 1)
 
 ## Transition effects and `checkTransition`
 
-A transition effect plays between two views of one mark, as `morph` turns a donut slice into a column. Where a mark effect gets one geometry, it gets two: `run(from, to, ctx)` turns `from` into `to`, `end(from, to, ctx)` draws the final state at once, and `clear(ctx)` cleans up. It never goes in a chart's `on`; M5's chart switch plays it on each pair of marks with the same key, in an overlay above both views. There's no definer: it's a plain object of kind `"transition"`.
+A transition effect plays between two views of one mark, as `morph` turns a donut slice into a column. Where a mark effect gets one geometry, it gets two: `run(from, to, ctx)` turns `from` into `to`, `end(from, to, ctx)` draws the final state at once, and `clear(ctx)` cleans up. It never goes in a chart's `on`; `chartSwitch` plays it on each pair of marks with the same key, in an overlay above both views. There's no definer: it's a plain object of kind `"transition"`.
 
 ```ts
 import { linear, type Point, type TransitionEffect } from "expressive-charts";
@@ -348,7 +348,7 @@ Its context is a `TransitionContext`: the `EffectContext` above, with `start`.
 - **Retrace.** A run from b to a at `1 − p` should draw exactly what the run from a to b drew at p. So pair the two shapes by their geometry, never by which one is `from` (morph's `"drop"` turns from the mark that goes round its pivot, whichever it is); draw items in an order that doesn't depend on it either (morph's crossfade always puts the area below the stroke); and weight both sides, `a·(1 − p) + b·p`, so the numbers round alike both ways.
 - **`mark` does nothing, and `onChange` never fires.** Both views' marks are hidden while a transition plays, and a resize lands it at once rather than moving its shapes. Draw only in `ctx.layer`.
 - **The end state is `to`.** Draw it as the real mark looks, since the switch clears the overlay and shows the real mark when the run ends.
-- **Timing.** A switch is a data transition, not a decoration, so use `"transition"` timing (the default): ×1 in Presentation, at most 200 ms in Analysis, a jump in Off. `morph` takes 950 ms base, the lab's.
+- **Timing.** A switch is a data transition, not a decoration, so use `"transition"` timing (the default): ×1 in Presentation, at most 200 ms in Analysis, a jump in Off. `morph` takes 950 ms base.
 
 `checkTransition` checks one on pairs of marks, from a to b and from b to a:
 
@@ -379,7 +379,7 @@ checkTransition found 5 problems with replay:
 
 ## Worked examples
 
-Both are in [docs/sketches/examples/effects](sketches/examples/effects/), where `npm run typecheck` checks them against the real API, and both pass `checkEffect` in the library's own tests. [Sketch 06](sketches/examples/06-custom-effects.ts) uses them on a bar chart and on another library's bars.
+Both are in [docs/sketches/examples/effects](sketches/examples/effects/), where `npm run typecheck` checks them against the real API, and both pass `checkEffect` in the library's own tests. [`06-custom-effects.ts`](sketches/examples/06-custom-effects.ts) uses them on a bar chart and on another library's bars.
 
 ### trace
 
@@ -487,7 +487,7 @@ function place(mark: MarkGeometry, rise: number): Pick<TextStyle, "at" | "anchor
 
 - It reads its own data and nothing about the chart, so it's `defineDataEffect` with no row type: it fits any chart.
 - It rises 8 px towards its place, along the mark's up side, and fades in; then it stays, since a change label is information.
-- `run()` and `end()` both draw through `label()`, so `end()` leaves the same fields as the run's last frame, `opacity: 1` included. The sketch's first version drew `end()` on its own without `opacity`, and `checkEffect` reported the difference (the failure above).
+- `run()` and `end()` both draw through `label()`, so `end()` leaves the same fields as the run's last frame, `opacity: 1` included. A first version drew `end()` on its own without `opacity`, and `checkEffect` reported the difference (the failure above).
 - `label()` follows `onChange`, so the label stays beside the end of a bar that's still growing in the `update` slot, or that's resized.
 - The anchor follows the walk's heading, so on a bar growing left the text reads away from the bar instead of over its tip.
 

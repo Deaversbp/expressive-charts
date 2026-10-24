@@ -1,4 +1,4 @@
-// M6: the stress page (step 6). Six cases, each a card with a size picker, a start button and a frame
+// The stress page. Six cases, each a card with a size picker, a start button and a frame
 // readout: bars that update, hover on a large chart, a line on dates playing, D3 columns followed with
 // watch, a switch with many pairs, and the first draw. Every chart keeps the library's defaults (its
 // legend, data table and a name for every mark), since that's what pages get. Nothing plays until a

@@ -1119,7 +1119,7 @@ const gaits: {
 }
 ```
 
-How an icon moves as it travels. `roll()` spins it by the distance over its radius. `step()` takes a whole number of steps, at least one, each lifting it the same height and raising its front a little less as the trip goes on, eased in and out and 15% slower (the prototype's boot). `slide()` keeps it still. `gaits.step()` throws a `RangeError` for a bad option.
+How an icon moves as it travels. `roll()` spins it by the distance over its radius. `step()` takes a whole number of steps, at least one, each lifting it the same height and raising its front a little less as the trip goes on, eased in and out and 15% slower, as a boot walks. `slide()` keeps it still. `gaits.step()` throws a `RangeError` for a bad option.
 
 #### `Gait`
 
@@ -1274,7 +1274,7 @@ interface MorphOptions {
 type MorphAlign = "unroll" | "drop"
 ```
 
-`"unroll"` matches each side with the same side: a slice stands up, its outer arc becoming a column's side. `"drop"` turns the matching by a side, as the prototype does: a slice's outer arc becomes the column's top, so it settles onto the baseline. Between two marks of the same kind (two bars, two slices) they match alike.
+`"unroll"` matches each side with the same side: a slice stands up, its outer arc becoming a column's side. `"drop"` turns the matching by a side: a slice's outer arc becomes the column's top, so it settles onto the baseline. Between two marks of the same kind (two bars, two slices) they match alike.
 
 #### `sequence()`
 
@@ -2337,7 +2337,7 @@ interface PlayButtonOptions {
 
 ## `expressive-charts/icons/sport`
 
-An optional icon pack, its own entry so the main one doesn't carry it: a ball and a boot, converted from the prototype and drawn in fixed colours (a white ball is white in any theme). Pass them to `travel()`, or register them to use by name. The script-tag bundle doesn't include them.
+An optional icon pack, its own entry so the main one doesn't carry it: a ball and a boot, drawn in fixed colours (a white ball is white in any theme). Pass them to `travel()`, or register them to use by name. The script-tag bundle doesn't include them.
 
 ```ts
 import { barChart, registerIcons, sequence, travel } from "expressive-charts";

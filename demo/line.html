@@ -48,7 +48,7 @@
   a { color: var(--link); }
   /* The motion switch sits on the page, darker than the charts' surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
   #motion { --ec-text-muted: var(--muted); }
-  /* The tooltip function's text is plain; its first line, the week, is bold as in the lab. */
+  /* The tooltip function's text is plain; its first line, the week, is bold, as in the prototype (lab.html). */
   #line .ec-tooltip::first-line { font-weight: 600; }
   /* xG is what goals are read against: a dashed grey on both charts, so it can't be mistaken for the
      red below it, whatever the viewer's colour vision. It's xG's palette slot on these two charts, so
@@ -89,9 +89,9 @@
 <body>
 <main class="wrap">
   <header>
-    <p class="eyebrow">Milestone 4 · line chart and data effects</p>
+    <p class="eyebrow">Line charts · data effects</p>
     <h1>Goals vs expected goals, three ways</h1>
-    <p class="lede">The prototype's second card on the library: a season of goals against expected goals on <code>lineChart</code>, and the same story on a line drawn with D3. One Play button, one scrubber and the motion switch drive both. Each carries one decoration, <code>only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" })))</code>, with no change to effect code.</p>
+    <p class="lede">A season of goals against expected goals on <code>lineChart</code>, on a line drawn with D3, and on a Vega-Lite line. One Play button, one scrubber and the motion switch drive the first two. Each carries one decoration, <code>only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" })))</code>, with no change to effect code.</p>
   </header>
 
   <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
@@ -135,11 +135,11 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="differences-title">
-      <h2 id="differences-title">Differences from the lab's card</h2>
+    <section class="card" aria-labelledby="notes-title">
+      <h2 id="notes-title">Design notes</h2>
       <ul class="checklist">
-        <li>The ball riding the goals line is new; the lab has none. It's drawn at 11 px, smaller than its own 17, so it doesn't hide the last weeks.</li>
-        <li>xG is a dashed grey line, where the lab's is orange: orange sat too close to the red below xG, and the dash tells the lines apart whatever the viewer's colour vision. The legends draw each entry as a short line, so xG's shows its dash.</li>
+        <li>The ball is drawn at 11 px, smaller than the icon's own 17 px, so it doesn't hide the last weeks.</li>
+        <li>xG is a dashed grey line rather than a second colour: a colour such as orange sits too close to the red below xG, and the dash tells the lines apart whatever the viewer's colour vision. The legends draw each entry as a short line, so xG's shows its dash.</li>
         <li>The goals line's end dot and hover dot keep their series colour, since <code>threshold</code> draws nothing on a dot. The tooltip's "vs expected" line and the table's Difference column still say when goals are below xG.</li>
         <li>"Goals below xG" comes after the series in the legend, since a page's entries follow the chart's own.</li>
         <li>The table's headers are the series' names, "Goals scored" and "Expected goals (xG)", and its values share the chart's one format, so an xG of 20.0 reads "20".</li>
@@ -147,17 +147,13 @@
     </section>
   </div>
 
-  <section class="card" aria-labelledby="check-title">
-    <h2 id="check-title">Milestone 4: done when</h2>
+  <section class="card" aria-labelledby="try-title">
+    <h2 id="try-title">Things to try</h2>
     <ul class="checklist">
-      <li><code>lineChart</code> draws the lab's card 2: two lines with end labels, a crosshair across both with the tooltip, a legend with the page's "Goals below xG", a table with a Difference column, a name for each matchweek, one tab stop whose arrow keys go week by week, and staged updates. Light and dark come from the library's defaults.</li>
-      <li><code>threshold({ compareTo: "xg" })</code> colours the goals line below xG on <code>lineChart</code> and on the D3 line through <code>expressive()</code>, with samples from <code>samplesAlong</code>. It follows every frame of a reveal, and shows with motion off.</li>
-      <li><code>playback()</code> and <code>playButton()</code> play the season (about 6.5 s in Presentation, 2 s in Analysis, at once in Off) and pause it; the scrubber seeks; and <code>reveal()</code> fires no events.</li>
-      <li>The ball rides the goals line's leading edge on both charts, with no change to <code>travel</code> or its gaits during the milestone.</li>
-      <li><code>checkEffect</code>, with its fifth check, passes for every built-in effect, <code>threshold</code> included, on every fixture, and on real marks from <code>barChart</code>, <code>donutChart</code>, <code>lineChart</code>, <code>expressive()</code> bars, D3 pies and D3 lines.</li>
-      <li><code>expressive()</code> has <code>samples</code> and <code>samplesAlong</code>, the <code>needs</code> check, stroke colours and open-outline halos, hover emphasis under <code>dim: true</code>, and opt-in <code>watch</code>, with its cost measured.</li>
-      <li>The line screenshots are green in CI, and no other baseline has changed apart from step 4's host hover ones. The line chart's screen-reader check in <code>docs/a11y-check.md</code> passes.</li>
-      <li>The package still has no runtime dependencies, and <code>typecheck</code>, <code>test</code> and <code>build</code> are green. <code>fromVegaView()</code> reads a Vega-Lite line on this page, or has moved to milestone 6 with a note saying why.</li>
+      <li>Press <b>Play season</b>: the goals line turns red wherever it falls below xG as it's drawn, and the ball rides its leading edge. Pause, or drag the scrubber to any week.</li>
+      <li>Play in each mode: the season takes about 6.5 s in Presentation and 2 s in Analysis, and Off goes straight to the end, with the red still showing.</li>
+      <li>Tab into the line chart, then use the arrow keys to read both lines and the gap week by week.</li>
+      <li>Open the line chart's data table: its Difference column says how far goals are above or below xG each week.</li>
     </ul>
   </section>
 </main>

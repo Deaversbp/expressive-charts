@@ -51,9 +51,9 @@
 <body>
 <main class="wrap">
   <header>
-    <p class="eyebrow">Milestone 5 · morph</p>
+    <p class="eyebrow">Chart switch · morph</p>
     <h1>Shot outcomes, as a donut and as columns</h1>
-    <p class="lede">The prototype's third card with its morph, on the library: the season's shots as a <code>donutChart</code> and as columns on <code>barChart</code>, in one <code>chartSwitch</code>. Each slice turns into its own column and back with <code>morph()</code>, and its labels move with it.</p>
+    <p class="lede">A season's shots as a <code>donutChart</code> and as columns on <code>barChart</code>, in one <code>chartSwitch</code>. Each slice turns into its own column and back with <code>morph()</code>, and its labels move with it.</p>
   </header>
 
   <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
@@ -79,33 +79,29 @@
     <section class="card" aria-labelledby="align-title">
       <h2 id="align-title">Two ways to morph</h2>
       <ul class="checklist">
-        <li><b>Drop</b> is the lab's. Each slice's outer arc becomes its column's top, so the slice settles onto the baseline.</li>
-        <li><b>Unroll</b> matches each side with the same side. The slice stands up: its outer arc becomes the column's left side, and the angle it spans becomes its height.</li>
+        <li><b>Drop</b> turns each slice's outer arc into its column's top, so the slice settles onto the baseline.</li>
+        <li><b>Unroll</b>, <code>morph()</code>'s default, matches each side with the same side. The slice stands up: its outer arc becomes the column's left side, and the angle it spans becomes its height.</li>
         <li>Either way, a switch back retraces the same path, from wherever the shapes are.</li>
       </ul>
     </section>
 
-    <section class="card" aria-labelledby="differences-title">
-      <h2 id="differences-title">Differences from the lab's card</h2>
+    <section class="card" aria-labelledby="notes-title">
+      <h2 id="notes-title">Design notes</h2>
       <ul class="checklist">
-        <li>Each view is a whole chart, with its own legend, tooltip, keyboard order and data table, and only the one showing can be reached or read. The lab's card is one picture.</li>
-        <li>The button says "Show as columns", where the lab's says "Show as bars".</li>
+        <li>Each view is a whole chart, with its own legend, tooltip, keyboard order and data table, and only the one showing can be reached or read.</li>
+        <li>Each outcome keeps its colour in both views: the columns colour by category, from the donut's colours.</li>
         <li>The old view's legend and table fade out by 40% of the way and the new view's fade in from half way, so for a moment neither shows.</li>
-        <li><kbd>V</kbd> on a focused slice or column is new: it's how a keyboard user switches and keeps their place.</li>
+        <li><kbd>V</kbd> on a focused slice or column is how a keyboard user switches and keeps their place.</li>
       </ul>
     </section>
   </div>
 
-  <section class="card" aria-labelledby="check-title">
-    <h2 id="check-title">Milestone 5: done when</h2>
+  <section class="card" aria-labelledby="try-title">
+    <h2 id="try-title">Things to try</h2>
     <ul class="checklist">
-      <li>This page reproduces the lab's card 3 on the library: the shot outcomes as a donut and as columns, each outcome in the same colour in both; a toggle that morphs every slice into its column and back, the labels moving with their shapes and swapping their text half way; the centre total fading out and the axes fading in; a legend, a table and the motion switch; and light and dark from the library's defaults.</li>
-      <li>A switch takes about 950 ms in Presentation, 200 ms in Analysis, and none in Off or under reduced motion, and a switch back mid-way reverses from where the shapes are.</li>
-      <li><code>morph()</code> passes <code>checkTransition</code> on every fixture pair, both ways and with each mapping. <code>checkTransition</code> is exported from <code>expressive-charts/testing</code>, and <code>CHANGELOG.md</code> lists <code>TransitionEffect</code> in the 0.x promise.</li>
-      <li>Keyboard focus follows its key across a switch, and only the view showing can be reached or read.</li>
-      <li><code>barChart</code> takes <code>colorBy: "category"</code>, and every chart handle has <code>focus(key)</code> and <code>labels()</code>. No existing screenshot baseline has changed.</li>
-      <li>You've picked <code>morph()</code>'s default mapping on this page, and the morph screen-reader check in <code>docs/a11y-check.md</code> passes.</li>
-      <li>The package still has no runtime dependencies, and <code>typecheck</code>, <code>test</code> and <code>build</code> are green.</li>
+      <li>Switch in each mode: about 950 ms in Presentation, 200 ms in Analysis, and none in Off or under reduced motion.</li>
+      <li>Watch the labels: they move with their shapes and swap their text half way, while the centre total fades out and the axes fade in.</li>
+      <li>Switch with Drop, then with Unroll, and click again mid-way with each: the shapes go back the way they came.</li>
     </ul>
   </section>
 </main>

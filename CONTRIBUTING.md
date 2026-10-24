@@ -77,7 +77,7 @@ A new import set goes in `importSets` in `scripts/size.mjs`, with its budget in 
 ## Adding a chart
 
 1. Create `src/charts/<name>.ts`.
-2. Give every mark a stable key and describe it with `MarkGeometry`, including `path` and `angle`.
+2. Give every mark a stable key and describe it as a `MarkGeometry`, with the `describe` builders (`describe.bar`, `.arc`, `.line` or `.point`) where one fits.
 3. Emit the standard events (`enter`, `update`, `exit`, `hover`, `leave`).
 4. Make every existing effect work on it. If one doesn't, extend `MarkGeometry` rather than special-casing the effect.
 

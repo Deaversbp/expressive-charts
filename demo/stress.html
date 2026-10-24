@@ -78,7 +78,7 @@
 <body>
 <main class="wrap">
   <header>
-    <p class="eyebrow">Milestone 6 · hardening</p>
+    <p class="eyebrow">Performance · limits</p>
     <h1>Stress cases</h1>
     <p class="lede">Each case up to past its limit, with the library's defaults: legends, tables and a name for every mark. Nothing plays until you press its button. <b>Smooth</b> is a 95th percentile of 20 ms or less between frames, no frame over 50 ms, and a hover shown within 100 ms.</p>
   </header>
@@ -217,19 +217,12 @@
       <div class="chart" id="draw-chart"></div>
     </section>
 
-    <section class="card" aria-labelledby="check-title">
-      <h2 id="check-title">Milestone 6: done when</h2>
+    <section class="card" aria-labelledby="try-title">
+      <h2 id="try-title">Things to try</h2>
       <ul class="checklist">
-        <li><b>Limits.</b> Each case runs past its limit here, and nothing plays by itself. <code>scripts/bench.mjs</code> has measured them at 1× and 4×, and the limits, open question 13 and "Runs on every point" have their numbers in the docs.</li>
-        <li><b>Dates.</b> <code>lineChart</code> takes dates on x, worded with <code>Intl</code>, in UTC by default.</li>
-        <li><b>Size.</b> CI checks the bundle sizes against their budgets.</li>
-        <li><b>Accessibility.</b> The WCAG 2.2 AA audit is written; C, E 13–14 and G pass with NVDA.</li>
-        <li><b>Docs.</b> README is npm's landing page; a test checks the API reference.</li>
-        <li><b>The API</b> matches the 0.x promise.</li>
-        <li><b>The carried items</b> are built, with no baseline changed.</li>
-        <li><b>Plot</b> passes <code>checkEffect</code> through <code>expressive()</code>.</li>
-        <li><b>Packaging.</b> <code>pack-check</code> and every check are green.</li>
-        <li><b>0.1.0 is on npm,</b> with provenance and its release.</li>
+        <li>Run a case at each size, from the smallest up, and watch where its readout stops saying <b>Smooth</b>. The limits depend on the device: README's Limits table has them for a desktop CPU, unthrottled and slowed down four times.</li>
+        <li>On the D3 columns, compare <code>watch</code>, which follows every frame of the host's own transition, with <code>refresh()</code> once it ends.</li>
+        <li>In a clone of the repository, <code>npm run bench</code> presses the same buttons in headless Chromium, against <code>npm run dev</code>, and records every readout.</li>
       </ul>
     </section>
   </div>

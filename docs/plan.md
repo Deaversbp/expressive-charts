@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M6 are complete (§9). **0.1.0 is on npm**, published from CI with provenance on 24 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.1.0)), with its demo pages at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes after 0.1, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M6 are complete (§9). **0.1.0 is on npm**, published from CI with provenance on 24 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.1.0)), with its demo pages at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes after 0.1, are in the backlog at the end of §9. M7, for 0.2.0, is planned (§9, 24 October 2026): six steps in three waves, from the built-in `trace`, `delta` and `label` and linked hover to publishing 0.2.0 last. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -1961,6 +1961,166 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
 - **0.1.0 is on npm,** with provenance, its CHANGELOG entry, and its release on GitHub. This plan's status line says M6 is done.
 
 **Status: complete (24 October 2026).** Every item on the list holds. The last two came on release day: your NVDA runs of sections C, E 13–14 and G passed, so M4 has its ✅, and 0.1.0 is on npm with provenance, with its release on GitHub (step 9).
+
+### M7: Effects that explain, and linked hover (0.2.0)
+
+Built-in effects that draw a path and label a change, a way for their text to keep clear of the charts' own labels, linked hover across charts, two fixes from the backlog, and last, 0.2.0 on npm.
+
+**Demo:** `demo/season.html`, the season so far: weekly columns, the goals vs xG line and D3 columns linked by matchweek; the players' bars with each change since the last matchweek; and a slope chart with each player's change labelled.
+
+**Where M7 starts** (checked against main at 56915e9 while planning, 24 October 2026):
+
+- **Already built.**
+  - **Effects.** `travel`, `flash`, `wiggle`, `pulse`, `threshold` and `morph`, with `sequence`, `parallel`, `only` and `stagger`. The presets are exactly `flash`, `wiggle` and `pulse`.
+  - **`trace` and `delta`** are the effects guide's worked examples, in `docs/sketches/examples/effects/` (32 and 54 lines). They're written against the public API, and `src/effects-guide.test.ts` passes both through `checkEffect`, `delta` whether its value changed or not. Sketch 06 uses them on `barChart` and on `expressive()`.
+  - **Text.** The drawing API already draws text: `layer.text(content, { at, anchor, color, opacity })`, in the theme's text colour by default. The SVG layer implements it, but no built-in effect uses it yet. Every chart's and attachment's overlay is `aria-hidden`.
+  - **What data effects get.** A bar's samples run from 0 at the baseline to its total at the tip, and a slice's from 0 to its share (0 to 1); neither has an `at`. A line's are its vertices, and a line point's is its one value, both with `at` (its x). An `update` event's data has `previous`.
+  - **Hover.** `src/charts/shell/hover.ts` is shared by the bar, donut and line charts: targets (a line chart's x stands for every series' point there, the crosshair), emphasis (`ec-hot`), dimming, the tooltip, Escape and `leave()`. `expressive()` has its own hover, on `pointerHover` in `src/charts/interaction.ts`, and dims the host's mark elements with `ec-dimmed`. Charts and attachments both fire `hover` and `leave` to `on()`, with `source` `"pointer"`, `"keyboard"` or `"touch"`. Attachments have `focus(key)` but no `leave()`.
+  - **`travel`'s trip** lasts `max(260 ms, distance ÷ 360 px/s)` base, times the gait's pace, with no limit.
+  - **Sizes** (0.1.0, gzip, against their budgets): everything 65.2 KB of 69, `barChart` 28.2 of 30.5, the line page's four imports 34.1 of 35, and the script-tag bundle 71.4 of 75.5.
+  - **Tests.** 1,584 unit tests (M6 step 9's dry run). The visual suite runs its DOM checks in Chromium, Firefox and WebKit.
+  - **Releasing.** `release.yml` publishes when a GitHub release is published, with `--provenance`, `NODE_AUTH_TOKEN` from `NPM_TOKEN`, and a check for npm 11.5.1 or newer. The token and the secret are deleted, and no trusted publisher is set up yet. npm lists `0.0.0-stage` and `0.1.0`, which is `latest`.
+  - **TypeScript** is pinned at 5.9.3. npm's `latest` is 7.0.2, with 7.1 in beta.
+- **Gaps.**
+  - **Where the text would go.** The sketch's `delta` puts "+2" 10 px past the end of the walk. That's where a bar's value label is, past its tip, and a line's end label, past its end; a slice's label is outside the ring. `MarkGeometry` says nothing about a mark's labels, and `labels()` gives their anchor points, not their boxes.
+  - **The sketch's numbers.** `delta` words a change with a template string, so 0.1 + 0.2 reads "+0.30000000000000004". On a slice it would show the change in share, as a fraction.
+  - **Hearing the change.** Overlay text isn't read by screen readers, and the default announcement names the marks that changed, not by how much ("Okafor and Tanaka changed").
+  - **No hover without focus.** A chart is hovered only by the pointer, touch or `focus(key)`, which moves focus. A linked chart mustn't take focus.
+  - **Dimming takes the labels with it.** `.ec-mark:not(.ec-hot)` dims the whole mark group to `--ec-dim-opacity` (0.3), its category and value labels too, so names fall to 2.0:1 in light and 2.5:1 in dark (M6 step 7).
+- **Out of date** (each fixed by the step named):
+  - The backlog says linked hover "generalises the line chart's `pointer: "x"`". There's no such option: the crosshair is how every line chart hovers (step 4).
+  - [ideas/effects-by-chart.md](ideas/effects-by-chart.md) says `delta` and `trace` are in sketch 06. They're in `sketches/examples/effects/`, which sketch 06 imports (step 1).
+  - `release.yml`'s comment and CONTRIBUTING's Releasing speak of 0.1.0's token as still to come (step 6).
+
+**What M7 takes from the backlog, and what stays:**
+
+| Item | Goes to |
+| --- | --- |
+| Linked hover, and whether linked marks get `source: "linked"` | Decisions 3 and 13, step 4 |
+| `trace` as a built-in | Decisions 5 and 9, step 2 |
+| Change labels: `delta` and `label` | Decisions 4 and 10–12, step 1 |
+| Comparisons between neighbouring marks | Stay with the page, computed into the rows, as the backlog says |
+| A cap on `travel`'s trip | Decisions 2 and 14, step 2 |
+| Dimming that keeps text readable | Decisions 2 and 15, step 3 |
+| A tooltip that can be hovered, thinning bar labels, Page Up and Page Down, the icon sets' fills, TypeScript 7, line charts as switch views, and the rest | Stay in the backlog |
+| New: drawing a mark itself in | Backlog (decision 5) |
+| New: a chart switch in a link | Backlog (decision 13) |
+
+When a step lands, it marks its backlog item as built in M7.
+
+**Decided while planning M7 (24 October 2026):** decisions 1–7 are yours, and 8–16 follow from them and the code.
+
+1. **M7 builds four things, in this order of priority:** `trace` and `delta` as built-ins, then `label`, then linked hover. Linked hover is the largest, so it starts in wave 1 beside the effects.
+2. **Two backlog items join it:** a cap on `travel`'s trip, and dimming that keeps text readable, since linked hover spreads dimming to more charts. The others stay in the backlog.
+3. **Linked marks get a full hover, marked as linked.** Emphasis, the dimming of the other marks in their chart, and their chart's own hover effect, with `source: "linked"` on the `hover` event. They get no tooltip, no focus ring and no focus, and nothing is announced. `link(sources, { effects: false })` keeps them to emphasis and dimming. Effects can't tell a linked hover from any other, so the effect contract doesn't change.
+4. **A mark says where its own labels are.** `MarkGeometry` gets an optional field, `labelBounds`: the boxes of the text the chart draws for the mark. `delta` and `label` put their text past them. Our charts fill it in. Marks the library didn't draw have none, so the text sits 10 px past the end, as in the sketch.
+5. **`trace` is a highlighter.** It's the sketch, grown: a stroke drawn along the mark's walk, which stays. The mark itself is untouched, so it's safe in any slot. Drawing a mark itself in (a faint copy, then the mark at its own width and colour) goes to the backlog: in the hover slot it would hide data, and a stack would draw in one colour.
+6. **One release, 0.2.0, when M7 is done.** Trusted publishing is set up once, just before it.
+7. **Trusted publishing, with direct `npm publish`.** You add the trusted publisher within 2 days before the release, then set the package to require 2FA and disallow tokens. The workflow doesn't change. Staging stays the fallback (CONTRIBUTING's Releasing).
+8. **What's an addition and what isn't** (the 0.x promise). 0.2.0 breaks nothing in the effect-author API. It's a minor release because three changes outside the promise need one.
+
+   | Change | Under the promise? | Kind |
+   | --- | --- | --- |
+   | `trace`, `delta` and `label` | No: built-in effects | New exports: additions |
+   | `labelBounds` on `MarkGeometry` and on the `describe` specs | Yes | An optional field: an addition. Code that builds a `MarkGeometry` needs no change, and an effect that ignores the field works as before |
+   | `link()` and its types | No: a chart feature | New exports: additions |
+   | `"linked"` in a hover event's `source` | No: `MarkEvents` is a chart type | A change: a page that switches on `source` exhaustively gets a type error. Listed under Changed, with what to write |
+   | The trip cap | No: `travel`'s behaviour | A change: a trip along more than 1,440 px is shorter |
+   | Dimming only the bodies | No: the charts' look | A change: labels stay at full strength while another mark is hovered |
+
+   For later: the icon sets' fill rule and opacity would be optional `IconShape` fields, so additions. `"square"` caps and `"bevel"` joins would widen unions on `IconShape` and `Paint`, which code that reads them may not handle, so they'd be breaking: a minor release with a migration note. TypeScript 7 is an addition if the published types still work on TypeScript 5.4, and breaking if they don't, which `pack-check` would need to test.
+9. **`trace({ color, width, opacity, duration })`**, a geometry effect.
+   - It draws an overlay path along the walk, from its start to its end, in `"mark"` at 3 px and 50% opacity with round caps, over 500 ms base with `effect` timing, eased in and out. The stroke stays, and follows `onChange`.
+   - **End state:** the whole stroke.
+   - A mark with no length (a point) gets nothing. On a stack, it runs the whole walk.
+   - A `duration`, `width` or `opacity` that isn't a finite number, or is negative, throws a `RangeError`, as `stagger`'s `delay` does, and so does an `opacity` over 1.
+   - It isn't a preset.
+10. **`delta({ value, format, color })`**, a data effect for the `update` slot.
+    - The change is `value(data) − value(data.previous)`. `value` defaults to the last sample's value: a bar's total, a line's value at its revealed end, a slice's share. With no `previous`, or no change, it draws nothing.
+    - **`format`** words the change. By default it's `Intl.NumberFormat` in the page's locale, with the sign shown and at most two decimals (`+2`, `-0.3`). A page with its own units passes its own, such as a donut's share as `+5%`.
+    - The text is in the theme's `"text"`, never the series' colour. `color` takes another token.
+    - It rises 8 px into place and fades in over 400 ms base, with `effect` timing, and stays until the next update clears it, following the mark.
+    - **End state:** the text in place, so reduced motion shows the change.
+11. **`label(text, { color })`**, a data effect, usually for `decorate`.
+    - `text(data, mark)` returns the text, or `undefined` or `""` for none: last value minus first on a slope, a step's own signed value, or a field such as `vsLastMonth`. It's typed by the rows it reads, as `defineDataEffect<D>` is, so a `label` for one kind of row is a type error on a chart of another.
+    - It rises into place as `delta` does, then follows every change, with its text worked out again from the new data.
+    - **End state:** the text in place.
+    - On a line chart, `decorate` runs on the points too, so a label meant for the line goes in `only()` with a filter on the mark's length or key. api.md's example shows it.
+    - `delta` and `label` share one internal helper for placing and rising, `src/effects/caption.ts`.
+12. **`labelBounds`** (decision 4).
+    - `readonly labelBounds?: readonly Rect[]`: the boxes of the text the chart draws for this mark, in the mark's coordinates. A bar's are its category and value labels, a slice's its label outside the ring, and a line's its end label. Points and segments have none.
+    - The `describe` specs take it and pass it through, so a page that describes host marks can give it. `expressive()` keeps it from a `geometry` the page gives, and otherwise leaves it unset.
+    - **Placing text past them.** From `end`, along the walk's heading: 10 px past the end, or 6 px past the farthest box the heading meets, whichever is further. The anchor is `"start"` or `"end"` by the heading, as in the sketch, and `"middle"` within 45° of vertical, so a column's text sits centred above its value.
+    - **The chart's edge.** Text isn't measured (the drawing API is renderer-neutral), so it can pass the chart's edge. The `<svg>` is `overflow: visible`, so it's drawn, but at 320 px it could make the page scroll sideways. Step 1 measures that on our charts, and step 5's 320 px check covers the demo.
+13. **`link(sources, { by, effects })`** (decision 3).
+    - `sources` are chart handles (bar, donut and line) and attachments (`expressive()`, `fromVegaView()`). It returns `{ destroy() }`, and lives in `src/charts/link.ts`, exported from the main entry.
+    - **The linking value.** By default, a mark's last sample's `at` if it has one (a line point's x), else its key (a bar's or a slice's category, unless the page keys it otherwise). Values are compared as strings, a `Date` by its ISO string, as keys are. `by(event)` gives it instead, for example `(event) => event.data.datum.week`, typed by the sources' rows.
+    - **What happens.** When a source is hovered by the pointer, touch or the keyboard, every other source hovers its targets with that value: a line chart its x, a bar chart its bar. They fire `hover` with `source: "linked"`, and `leave` when the origin leaves. A source with no match does nothing.
+    - **One hover a link.** The newest hover anywhere in it is the one shown. Escape or `leave()` on the origin ends them all. A source mid-change holds its linked hover and replays it, as for any hover.
+    - **Its limits.** A source can be in one link at a time: a second throws a `TypeError`. A destroyed source drops out. A chart switch can't be linked yet (backlog).
+    - **Inside.** Each chart and attachment registers its hover with the link module when it's made, in a `WeakMap` keyed by its handle, so `link()` can hover given keys without focus. Nothing new is public on the handles.
+14. **The trip cap.** A trip lasts at most 4 s base, after the gait's pace, so past 1,440 px at pace 1 the icon goes faster, not longer. With `stagger`'s longest spread (500 ms) in front, it still ends within WCAG 2.2.2's 5 s. Analysis and Off scale it as before. The stress page keeps its `riding()`.
+15. **Readable dimming.** Hover dims the other marks' bodies, not their labels, so every label keeps 4.5:1. `--ec-dim-opacity` keeps its default, 0.3. `expressive()`'s `dim` already dims only the host's mark elements, so it doesn't change. An effect's `opacity` on a dimmed body still multiplies with the dimming. Every hover baseline is made again in Docker and shown to you, and the audit's 1.4.3 judgement call becomes a pass.
+16. **The rest.**
+    - **The guide's examples stay.** `trace` and `delta` in `docs/sketches/examples/effects/` stay the effects guide's worked examples, and the guide says they're smaller versions of the built-ins. `src/effects-guide.test.ts` keeps checking them.
+    - **Accessibility.** `delta` and `label` draw in the overlay, which screen readers don't read, so a page that relies on them says the same in its table or its announcement. api.md says so, and the demo does both. Linked hover is visual only.
+    - **Docs.** Each step adds its exports to api.md (`src/api-docs.test.ts` fails otherwise), its sections to architecture.md, and its entries to CHANGELOG, under a new `## Unreleased` above 0.1.0 with Added and Changed lists. Each Changed entry says what to write instead, as a migration note would.
+    - **Sizes.** A step that takes a set past its budget raises the budget in the same PR and says why (CONTRIBUTING's Bundle size). The line page's set has 0.9 KB of room.
+    - **The release** goes as CONTRIBUTING's Releasing says, through trusted publishing. Nothing is published, tagged or released without your go-ahead in that session.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `package.json`, `src/index.ts`, `src/effects/index.ts`, `src/charts/index.ts`, `src/charts/types.ts`, `src/effects/conformance.test.ts`, `src/conformance.test.ts`, `scripts/size-budget.json`, `src/charts/README.md`, `src/effects/README.md`, `docs/architecture.md`, `docs/api.md`, `docs/effects-guide.md`, `README.md`, `CHANGELOG.md` and this plan. The first step to land adds CHANGELOG's Unreleased.
+
+Each step's session reads the hand-over notes in its notes folder first, `plan-0-2.md` from planning among them, and writes its own there: commits, files, decisions beyond the brief, where the plan and the code differ, and follow-ups.
+
+**Wave 1** (parallel):
+
+1. **Text clear of the marks' own labels: `labelBounds`, `delta` and `label`** (decisions 4 and 10–12). In two PRs.
+   - **The contract and the charts** (the first PR). Owns `labelBounds` in `src/core/contracts/geometry.ts` and the `describe` specs (`src/core/geometry/describe/`); the boxes in `bar-layout.ts`, `donut-layout.ts` and `line-layout.ts`, with small edits in `bar.ts`, `donut.ts` and `line.ts`; and `expressive()` keeping a `geometry`'s field.
+     - Tests: each chart's marks have boxes that hold their labels' text as drawn, after a transition and a resize too; a stack's segments and a line's points have none; `checkEffect` on every source passes unchanged.
+     - **Done when** every existing test and baseline passes unchanged.
+   - **The effects** (the second PR). Owns `src/effects/delta.ts`, `label.ts` and `caption.ts` (new), with their tests, exports and rows in both conformance sweeps.
+     - Tests: text past each kind of label (bars, negative bars, columns, slices, a line's end), and 10 px past the end on host marks; the rise, the end state and Off; `value` and `format`; no change, no `previous`, and a stack; `label` following a change with new text; `label`'s row type checked; and how far past the chart's edge the text reaches at 320 px.
+   - Docs: architecture.md (Mark geometry, Effects), the effects guide (The mark, and the worked examples), api.md, README's list, CHANGELOG, and the ideas doc's pointer to the sketches.
+2. **`trace`, and `travel`'s trip cap** (decisions 5, 9 and 14). Owns `src/effects/trace.ts` (new) with its tests, export and conformance rows, and the trip's duration in `src/effects/travel.ts` with its tests.
+   - Tests: `trace` on every kind of mark and source, following a change, and its options and their `RangeError`s; trips of 1,000, 1,440 and 10,000 px, with each gait's pace.
+   - **Done when** every existing test and baseline passes unchanged. No demo walk should be longer than 1,440 px; the step checks.
+   - Docs: architecture.md (trace, and travel's "How long"), api.md, the effects guide's worked examples, README, CHANGELOG (`trace` under Added, the cap under Changed).
+3. **Readable dimming** (decision 15). Owns the dimming rule in `src/charts/render/theme.ts` with `mark-style.test.ts`, the hover baselines it changes, a check in `tests/visual/a11y.spec.ts` that labels keep 4.5:1 while another mark is hovered, and the audit's 1.4.3 rows in `docs/a11y-audit.md`.
+   - The baselines are made again in Docker, and you see each one before it's committed.
+   - Docs: architecture.md (hover dimming), api.md (`--ec-dim-opacity`), CHANGELOG (Changed).
+4. **Linked hover** (decisions 3 and 13). Owns `src/charts/link.ts` (new) with its tests, the linked paths in `src/charts/shell/hover.ts` and in `expressive()`'s hover, the registering in each chart and attachment (small edits), `"linked"` in `MarkEvents`, and `link`'s export.
+   - Tests: bars and a line linked by matchweek, both ways; a D3 attachment and a Vega one; the keyboard, Escape and `leave()`; `by` and `effects: false`; a source mid-update; a destroyed source; a second link throwing; and no tooltip, focus or announcement on a linked chart.
+   - Docs: architecture.md (a Linked hover section), api.md, README, CHANGELOG (`link` under Added, the `source` under Changed), and the backlog's stale `pointer: "x"`.
+
+**Wave 2** (after wave 1 lands):
+
+5. **`demo/season.html`, its screenshots and listening script H.** Owns `demo/season.html` and `demo/season.ts`, the link in `demo/index.html`, `tests/visual/season.spec.ts` with its `season-` baselines, the page in `a11y.spec.ts`'s list, a table for it in `docs/a11y-audit.md`, and section H of `docs/a11y-check.md`.
+   - **The page,** with the motion switch and "Things to try", in the voice of the other demo pages:
+     - **Linked by matchweek:** a `barChart` of goals per matchweek, the goals vs xG `lineChart`, and D3 columns of shots through `expressive()`, in one `link()`, with a toggle for `effects: false`.
+     - **Since the last matchweek:** the players' bars with `update: parallel(flash(), delta())`, Play next matchweek, a Change column in the table, and an announcement that says each change.
+     - **The season so far:** a D3 slope chart of each player's goals at matchweek 1 and now, with `decorate: label(...)` giving the change and `hover: trace()`.
+     - Nothing plays by itself.
+   - **Screenshots,** all `season-`, made in Docker: the page in light and dark, a linked hover, the bars after a matchweek, and the slope chart mid-trace. Reduced motion and Off are checked in the DOM: the deltas and labels show at once, and the trace is whole.
+   - **Script H**, for NVDA + Chrome: a linked hover says nothing and moves no focus, and the changes are in the table and the announcement. You run it.
+   - **The walk:** you look at the page in the browser, at 320 px too. A fifth GIF for README (`npm run media`) is optional.
+
+**Wave 3:**
+
+6. **Publish 0.2.0** (decisions 6 and 7). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.2.0 entry, README's status, `release.yml`'s comment, CONTRIBUTING's Releasing, and this plan's status line and M7's ✅.
+   - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you) and `npm publish --dry-run`. The PR has its results.
+   - **You,** within 2 days before the release, add the trusted publisher on npmjs.com: GitHub Actions, user `Deaversbp`, repository `expressive-charts`, workflow `release.yml`, with direct `npm publish` allowed.
+   - **Then, on your go-ahead in that session:** the `v0.2.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
+   - **After:** check npm (the version, README, provenance), install 0.2.0 in a fresh project, and check jsDelivr. You set the package's publishing access to require 2FA and disallow tokens. Deprecating `0.0.0-stage` is optional, with your npm account.
+   - **If npm refuses a direct publish,** the fallback is staging, as CONTRIBUTING says: the workflow's last step changed in its own PR, with a check for npm 11.15 or newer, and your approval with 2FA.
+
+**Done when:**
+- **Effects.** `trace`, `delta` and `label` are built-ins, each passing `checkEffect` on every kind of mark and every conformance source, with end states that keep their information.
+- **Labels.** Our charts' marks give `labelBounds`, and `delta` and `label` put their text past them.
+- **Linked hover.** `link()` links our charts and attachments by a shared value, with `source: "linked"`, and no tooltip or focus on the linked charts.
+- **The backlog's two.** `travel`'s trip lasts at most 4 s base, and hover dims bodies, not labels.
+- **The demo.** `demo/season.html` shows all of it, with its screenshots, its place in the axe checks and the written audit, and script H passed with NVDA + Chrome.
+- **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise is unchanged except for `labelBounds`.
+- **0.2.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M7 is done.
 
 ### Backlog (after 0.1)
 

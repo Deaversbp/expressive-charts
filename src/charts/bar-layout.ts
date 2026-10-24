@@ -6,7 +6,7 @@
 // state in between the same way the layout draws its own.
 
 import { describe, type MarkData, type MarkGeometry, type Rect } from "../core";
-import type { TextPlacement } from "./render/text";
+import { textBox, type TextPlacement } from "./render/text";
 import type { Accessor, BarChartOptions } from "./types";
 
 export type { TextPlacement } from "./render/text";
@@ -120,9 +120,11 @@ export interface BarLayoutInput<D> {
   readonly width: number;
   readonly height: number | undefined;
   readonly format: (value: number) => string;
-  /** Text width in px, for margins. */
-  readonly measure: (text: string, className: string, size: number) => number;
+  /** Text width in px, for margins and the labels' boxes. */
+  readonly measure: Measure;
 }
+
+type Measure = (text: string, className: string, size: number) => number;
 
 // From the prototype: 34 px rows with 20 px bars, a 2 px gap between segments, rounded tips.
 const ROW = 34;
@@ -200,16 +202,17 @@ export function layoutBars<D>(input: BarLayoutInput<D>): BarLayout<D> {
     height: frame.bands.height,
     orientation: frame.orientation,
     frame,
-    rows: rows.map((row, slot) => placeRow(frame, { ...row, slot, text: texts[slot]! })),
+    rows: rows.map((row, slot) => placeRow(frame, { ...row, slot, text: texts[slot]! }, input.measure)),
     ticks: domain.ticks.map((value, i) => placeTick(frame, value, ticks[i]!))
   };
 }
 
 /**
- * Draws a row in a frame: its bar (described with describe.bar), labels and pointer target. In between
- * two states of opposite sign a stack can mix signs; values against the total's sign then draw as 0.
+ * Draws a row in a frame: its bar (described with describe.bar, its labels' boxes as `labelBounds`),
+ * labels and pointer target. In between two states of opposite sign a stack can mix signs; values
+ * against the total's sign then draw as 0.
  */
-export function placeRow<D>(frame: BarFrame, row: BarRowState<D>): BarRow<D> {
+export function placeRow<D>(frame: BarFrame, row: BarRowState<D>, measure: Measure): BarRow<D> {
   const { scale, bands } = frame;
   const at = position(scale);
   const unit = Math.abs(scale.extent / (scale.hi - scale.lo));
@@ -226,42 +229,55 @@ export function placeRow<D>(frame: BarFrame, row: BarRowState<D>): BarRow<D> {
     segments: row.values.map((v) => ({ series: v.series, size: Math.max(0, negative ? -v.value : v.value) * unit }))
   };
   const fields = { key: row.key, datum: row.datum, index: row.index, slot: row.slot, values: row.values, total };
+  /** The labels' boxes, leaving out a label with no text. */
+  const boxes = (label: TextPlacement, value: TextPlacement): Rect[] => {
+    const out: Rect[] = [];
+    if (label.text !== "") out.push(textBox(label, measure, "ec-label", LABEL_SIZE));
+    if (value.text !== "") out.push(textBox(value, measure, "ec-value", VALUE_SIZE));
+    return out;
+  };
 
   if (frame.orientation === "horizontal") {
+    const line = band + bands.band / 2 + LABEL_SIZE * CENTRE;
+    const label: TextPlacement = { x: scale.label, y: line, anchor: "end", text: row.category };
+    const value: TextPlacement = { x: negative ? tip - PAD : tip + PAD, y: line, anchor: negative ? "end" : "start", text: row.text };
     const geometry = describe.bar({
       ...bar,
       x: Math.min(zero, tip),
       y: band + (bands.band - bands.thickness) / 2,
       width: Math.abs(tip - zero),
       height: bands.thickness,
-      baseline: negative ? "right" : "left"
+      baseline: negative ? "right" : "left",
+      labelBounds: boxes(label, value)
     });
-    const line = band + bands.band / 2 + LABEL_SIZE * CENTRE;
     return {
       ...fields,
       geometry,
       data: barData(row.datum, total, geometry),
-      label: { x: scale.label, y: line, anchor: "end", text: row.category },
-      value: { x: negative ? tip - PAD : tip + PAD, y: line, anchor: negative ? "end" : "start", text: row.text },
+      label,
+      value,
       hit: { x: 0, y: band, width: bands.width, height: bands.band }
     };
   }
 
   const centre = band + bands.band / 2;
+  const label: TextPlacement = { x: centre, y: scale.label, anchor: "middle", text: row.category };
+  const value: TextPlacement = { x: centre, y: negative ? tip + PAD + VALUE_SIZE * 0.8 : tip - PAD, anchor: "middle", text: row.text };
   const geometry = describe.bar({
     ...bar,
     x: centre - bands.thickness / 2,
     y: Math.min(zero, tip),
     width: bands.thickness,
     height: Math.abs(tip - zero),
-    baseline: negative ? "top" : "bottom"
+    baseline: negative ? "top" : "bottom",
+    labelBounds: boxes(label, value)
   });
   return {
     ...fields,
     geometry,
     data: barData(row.datum, total, geometry),
-    label: { x: centre, y: scale.label, anchor: "middle", text: row.category },
-    value: { x: centre, y: negative ? tip + PAD + VALUE_SIZE * 0.8 : tip - PAD, anchor: "middle", text: row.text },
+    label,
+    value,
     hit: { x: band, y: 0, width: bands.band, height: bands.height }
   };
 }
@@ -412,7 +428,7 @@ function barData<D>(datum: D, total: number, geometry: MarkGeometry): MarkData<D
   return data;
 }
 
-function widest(texts: readonly string[], className: string, size: number, measure: BarLayoutInput<unknown>["measure"]): number {
+function widest(texts: readonly string[], className: string, size: number, measure: Measure): number {
   return texts.reduce((max, text) => Math.max(max, measure(text, className, size)), 0);
 }
 

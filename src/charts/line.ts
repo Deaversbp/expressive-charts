@@ -28,13 +28,13 @@ import {
   lineEncoding,
   placeColumns,
   placeCrosshair,
-  placeEndLabels,
   placeLines,
   placePoints,
   placeXTick,
   placeYTick,
   pointKey,
   positions,
+  type EndLabels,
   type LineFrame,
   type LineLayout,
   type LineRow,
@@ -326,11 +326,21 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     };
   }
 
-  /** Each line and point as laid out in `next`, at the reveal. */
+  /**
+   * The end labels' wording for placeLines: counting between values while a change plays, or at
+   * rest (`counted` false) each value as it is. Undefined with `labels: false`.
+   */
+  function endLabels(counted: boolean): EndLabels | undefined {
+    const label = labeler(current);
+    if (!label) return undefined;
+    return { text: counted ? (series, value) => label(series, round(value, counting[series] ?? decimals(value))) : label, measure };
+  }
+
+  /** Each line and point as laid out in `next`, at the reveal, the lines with their end labels. */
   function placedFor(next: LineLayout<D>): { readonly lines: Map<string, PlacedLine<D>>; readonly points: Map<string, PlacedPoint<D>> } {
     const states = next.rows.map(restState);
     return {
-      lines: new Map(placeLines(next.frame, states, next.series, drawnThrough(next), next.time).map((line) => [line.series, line])),
+      lines: new Map(placeLines(next.frame, states, next.series, drawnThrough(next), next.time, endLabels(false)).map((line) => [line.series, line])),
       points: new Map(states.flatMap((state) => placePoints(next.frame, state, next.series, next.time)).map((point) => [point.key, point]))
     };
   }
@@ -535,7 +545,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       showAll(pairs.map(({ record }) => ({ record, placed: record.target })));
     };
     settle(lineOrder, (line) => placed.lines.get(line.series));
-    paintLabels(frame, new Map(lineOrder.flatMap((line) => (placed.lines.has(line.series) ? [[line, placed.lines.get(line.series)!] as const] : []))));
+    paintLabels(new Map(lineOrder.flatMap((line) => (placed.lines.has(line.series) ? [[line, placed.lines.get(line.series)!] as const] : []))));
     const states = rowOrder.map((record) => ({ record, state: restState(record.row) }));
     for (const { record } of states) settle(livePoints(record), (point) => placed.points.get(point.key));
     paintColumns(frame, states);
@@ -565,27 +575,18 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   function paintLines(frame: LineFrame, states: readonly RowState<D>[]): void {
     const drawnLines = [...lineOrder, ...leavingLines()];
     if (states.length === 0 || drawnLines.length === 0) return;
-    const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut), laidOut.time);
+    const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut), laidOut.time, endLabels(true));
     showAll(drawnLines.map((line, i) => ({ record: line, placed: placed[i]! })));
-    paintLabels(frame, new Map(drawnLines.map((line, i) => [line, placed[i]!])));
+    paintLabels(new Map(drawnLines.map((line, i) => [line, placed[i]!])));
   }
 
-  /** Each line's end label, counting between values, kept 16 px apart; or none with `labels: false`. */
-  function paintLabels(frame: LineFrame, ends: ReadonlyMap<LineRecord<D>, PlacedLine<D>>): void {
-    const label = labeler(current);
-    const entries = [...ends];
-    const placed = label
-      ? placeEndLabels(
-          frame,
-          entries.map(([line, { end }]) => ({ x: end.x, y: end.y, text: label(line.series, round(end.value, counting[line.series] ?? decimals(end.value))) }))
-        )
-      : [];
-    entries.forEach(([line], i) => {
-      const text = placed[i];
+  /** Each line's end label as placeLines placed it, counting between values, kept 16 px apart; or none with `labels: false`. */
+  function paintLabels(ends: ReadonlyMap<LineRecord<D>, PlacedLine<D>>): void {
+    for (const [line, { label: text }] of ends) {
       if (text) placeText(line.label, text);
       line.drawnLabel = text && text.text !== "" ? text : undefined;
       setAttributes(line.label, { visibility: line.drawnLabel ? undefined : "hidden" });
-    });
+    }
   }
 
   /**

@@ -1,10 +1,10 @@
 // describe.line: a straight-segment polyline, as d3.line() draws with its default curve.
 
-import type { MarkGeometry, Point } from "../../contracts/geometry";
+import type { MarkGeometry, Point, Rect } from "../../contracts/geometry";
 import { openOutline } from "../outline";
 import { boundsOf, line, type LineSegment } from "../segment";
 import { createWalk } from "../walk";
-import { assemble, finite, size } from "./mark";
+import { assemble, finite, labelBoxes, size } from "./mark";
 
 export interface LineSpec {
   readonly key: string;
@@ -13,6 +13,8 @@ export interface LineSpec {
   readonly points: readonly Point[];
   /** Stroke width in px. Default 1, SVG's default. */
   readonly width?: number;
+  /** The boxes of the text drawn for the mark, in the same px: passed through as `labelBounds`. */
+  readonly labelBounds?: readonly Rect[];
 }
 
 /** The walk is the line itself, first point to last. Its outline is open: the stroke. */
@@ -44,6 +46,7 @@ export function describeLine(spec: LineSpec): MarkGeometry {
     outline: openOutline(walk),
     bounds: { x: box.x - pad, y: box.y - pad, width: box.width + width, height: box.height + width },
     center: walk.point(0.5),
-    pivot: first
+    pivot: first,
+    labelBounds: labelBoxes("line", spec.labelBounds)
   });
 }

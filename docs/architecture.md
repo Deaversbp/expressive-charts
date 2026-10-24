@@ -85,7 +85,7 @@ effective mode = viewerChoice ?? (prefersReduced ? "off" : requested)
 Every mark, whether it's drawn by one of our charts or by another library, is described with the same `MarkGeometry` shape (`src/core/contracts/geometry.ts`). It has two parts:
 
 - **The walk**, from where the data starts to where it ends: `start`, `end`, `length`, `path(t)`, `angle(t)` and `slice(t0, t1)`.
-- **The body**: `thickness`, `outline`, `bounds`, `center`, `pivot`, plus ordered `segments` for stacks.
+- **The body**: `thickness`, `outline`, `bounds`, `center`, `pivot`, plus ordered `segments` for stacks, and `labelBounds`, the boxes of the mark's own labels ([below](#the-marks-own-labels)).
 
 For a bar, the walk is the centre line from the baseline to the tip. For a donut slice, it's the mid-radius arc. For a line, it's the line itself. That's what lets one `travel` effect roll a ball along all three.
 
@@ -125,6 +125,16 @@ describe.arc({ key: "Saved", cx: 0, cy: 0, inner: 70, outer: 116, start: d.start
 - **Gaps between segments.** The `gap` comes out of the start of the later segment, so every segment still ends at its value. It shrinks when the segment before it is shorter, and the tip rounding fades in as a segment nears the tip, so a stack that grows or shrinks never jumps. The whole bar's outline is the full rounded rectangle, gaps included.
 - **Slices** use the `d3.pie()` convention: radians, 0 at 12 o'clock, clockwise. So pie output plugs straight in, and `angle(t)` equals the d3 angle. As with `d3.arc()`, radii given the wrong way round are swapped and more than a full turn draws one ring. If `end < start`, the walk runs anticlockwise and its up side is inward; the outline is still clockwise.
 - **Planned:** `describe.shape(element, spec)`, which walks any SVG shape with `getPointAtLength` in the browser.
+
+### The marks' own labels
+
+`labelBounds` is optional: the boxes of the text the chart draws for the mark, in the mark's coordinates, so an effect that draws text can keep clear of them. It's an addition under the 0.x promise: code that builds a `MarkGeometry` needs no change, and an effect that ignores it works as before.
+
+- **What our charts give.** A bar: its category label and its value label, in that order, for bars and columns either way. A slice: the two lines of its label outside the ring, its category then its share, or an empty list when the label is dropped. A line: its end label, or an empty list when its text is `""`. A stack's segments, a line's points, and a line with `labels: false` have none: the field is unset.
+- **How they're worked out.** Each layout boxes a label as it places it, so a box is where the label is drawn in every frame of a change, a reveal and a resize. Nothing is read from the DOM. A box is the label's measured width (`src/charts/render/text.ts`) and 0.16 em more at either side (a W's lean, an f's hook), from 1.05 em above its baseline (an accented capital's top) to 0.25 em below it (a descender's foot). So in Chrome a box holds the label's `getBBox()` with Segoe UI, Arial, Georgia, Verdana and Consolas; a Times New Roman "ff" reaches 0.8 px past it. Chart text has tabular digits, so a label is measured with its digits as 0s: one that counts through values while a change plays is measured once for each shape, not each frame.
+- **They follow.** A mark whose boxes moved counts as changed, so its runs hear `onChange` even when the mark itself didn't move: a line's end label pushed aside by another's, or one whose text changed.
+- **The builders** take `labelBounds` and pass it through as given. A box with a coordinate that isn't finite, or a negative size, throws a `RangeError` that names the builder and the field.
+- **Host marks.** The library doesn't know where a host's labels are, so marks `expressive()` reads from rects, and `fromVegaView()`'s, have none. A page's `geometry` can give them, and `expressive()` keeps them; a `refresh()` that moves them counts as a change.
 
 ### Geometry helpers
 

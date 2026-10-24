@@ -30,10 +30,12 @@ Everything else can still change in a minor release while the library is 0.x: th
 ### Added
 
 - **`trace`**, a built-in effect: a highlighter stroke drawn along a mark's walk, which stays. `trace({ color, width, opacity, duration })` draws in the overlay and leaves the mark itself untouched, so it's safe in any slot. On a stack it runs the whole walk, and on a point it draws nothing. Its end state is the whole stroke. It isn't a preset. The effects guide's `trace` stays as its worked example, a smaller version.
+- **`link(sources, { by, effects })`**: linked hover across charts and attachments. When one source is hovered by the pointer, touch or the keyboard, the others hover their marks with the same linking value: by default a line point's x, else a mark's key, so a column keyed by its matchweek links with the line's x there. `by(event)` gives the value instead, typed by the sources' rows. Linked marks get their chart's emphasis, dimming and hover effect, with `source: "linked"` on their `hover` event, and no tooltip, focus or announcement; `effects: false` keeps them to emphasis and dimming. The newest hover in a link is the one shown, and Escape or `leave()` on the hovered source ends them all. A source can be in one link at a time, and a `chartSwitch` can't be linked yet. With its types, `Link`, `LinkOptions` and `LinkSource`.
 
 ### Changed
 
 - **`travel`'s trip lasts at most 4 s base**, after the gait's pace. A trip along more than 1,440 px (about 1,250 px for a step) is shorter than before: the icon goes faster rather than longer, so with `stagger` in front it still ends within 5 s. Analysis and Off scale it as before. Nothing needs to change in your code; for a long walk at the old speed, carry the icon in an effect of your own (`defineEffect`).
+- **A `hover` event's `source` can be `"linked"`**, for a mark `link()` hovered because a mark in another chart was. Code that switches on `source` exhaustively gets a type error: add a `"linked"` case, or handle it with `"pointer"` where a linked mark should act as a hovered one. Without `link()`, `source` is never `"linked"`.
 
 ## 0.1.0 (24 October 2026)
 

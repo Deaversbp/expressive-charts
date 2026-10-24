@@ -18,7 +18,11 @@
     "animation",
     "motion",
     "svg",
-    "dataviz"
+    "dataviz",
+    "d3",
+    "vega",
+    "observable-plot",
+    "accessibility"
   ],
   "type": "module",
   "main": "./dist/index.cjs",

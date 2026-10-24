@@ -6,6 +6,7 @@
 // block that imports the package), type-checks against the source with the repository's own
 // compiler options, the page's names they use declared in PAGE below. README's links are absolute,
 // since npm shows it away from the repository, and the links in both find their files and headings.
+// README's pictures have alt text, and each plays once and stops within 5 s (WCAG 2.2.2).
 
 import ts from "typescript";
 
@@ -17,6 +18,10 @@ const ENTRIES: Readonly<Record<string, string>> = {
 };
 
 const REPOSITORY = "https://github.com/Deaversbp/expressive-charts";
+/** Where README's pictures are, as files on main. */
+const RAW = "https://raw.githubusercontent.com/Deaversbp/expressive-charts/main";
+/** The demo site, which publishes demo/ (.github/workflows/pages.yml). */
+const SITE = "https://deaversbp.github.io/expressive-charts";
 
 /** The line in docs/api.md that marks an entry as under the 0.x promise. */
 const PROMISED = "*Under the 0.x promise.*";
@@ -74,12 +79,14 @@ interface Repo {
   /** The repository's root, with forward slashes. */
   readonly root: string;
   read(path: string): string;
+  bytes(path: string): Uint8Array;
   exists(path: string): boolean;
 }
 
 async function repo(): Promise<Repo> {
-  // Node APIs aren't typed in this repo (the library never runs Node code), so the one used is typed here.
+  // Node APIs aren't typed in this repo (the library never runs Node code), so the ones used are typed here.
   const { fileURLToPath } = (await import("node:url" as string)) as { fileURLToPath(url: URL): string };
+  const { readFileSync } = (await import("node:fs" as string)) as { readFileSync(path: string): Uint8Array };
   const root = fileURLToPath(new URL("..", import.meta.url)).replace(/\\/g, "/").replace(/\/$/, "");
   return {
     root,
@@ -88,6 +95,7 @@ async function repo(): Promise<Repo> {
       if (text === undefined) throw new Error(`${path} can't be read.`);
       return text.replace(/\r\n/g, "\n");
     },
+    bytes: (path) => readFileSync(`${root}/${path}`),
     exists: (path) => ts.sys.fileExists(`${root}/${path}`) || ts.sys.directoryExists(`${root}/${path}`)
   };
 }
@@ -165,8 +173,56 @@ interface Link {
   readonly line: number;
 }
 
+/** Markdown's links and images, and HTML's href and src. */
 function linksOf(text: string): Link[] {
-  return [...prose(text).matchAll(/\]\(([^)\s]+)\)/g)].map((match) => ({ href: match[1]!, line: lineAt(text, match.index) }));
+  return [...prose(text).matchAll(/\]\(([^)\s]+)\)|\b(?:href|src)="([^"]+)"/g)].map((match) => ({ href: (match[1] ?? match[2])!, line: lineAt(text, match.index) }));
+}
+
+/** The <img> tags outside code: where each points, and its alt text. */
+function imagesOf(text: string): { readonly src: string; readonly alt: string | undefined; readonly line: number }[] {
+  return [...prose(text).matchAll(/<img\b[^>]*>/g)].map((match) => ({
+    src: /\bsrc="([^"]*)"/.exec(match[0])?.[1] ?? "",
+    alt: /\balt="([^"]*)"/.exec(match[0])?.[1],
+    line: lineAt(text, match.index)
+  }));
+}
+
+/**
+ * A GIF's frames' times in ms, from their graphic control extensions, and whether it loops (an
+ * application extension, NETSCAPE2.0 or ANIMEXTS1.0, with a loop count).
+ */
+function gifTiming(gif: Uint8Array): { readonly delays: number[]; readonly loops: boolean } {
+  const delays: number[] = [];
+  let loops = false;
+  let delay = 0;
+  /** The index after the sub-blocks starting at `at`. */
+  const skipBlocks = (at: number): number => {
+    while (gif[at]! !== 0) at += gif[at]! + 1;
+    return at + 1;
+  };
+  const table = (packed: number): number => (packed & 0x80 ? 3 * 2 ** ((packed & 7) + 1) : 0);
+  let at = 13 + table(gif[10]!);
+  while (at < gif.length) {
+    const block = gif[at]!;
+    if (block === 0x3b) break;
+    if (block === 0x21 && gif[at + 1] === 0xf9) {
+      delay = (gif[at + 4]! | (gif[at + 5]! << 8)) * 10;
+      at = skipBlocks(at + 2);
+    } else if (block === 0x21 && gif[at + 1] === 0xff) {
+      const id = String.fromCharCode(...gif.subarray(at + 3, at + 14));
+      loops ||= id === "NETSCAPE2.0" || id === "ANIMEXTS1.0";
+      at = skipBlocks(at + 2);
+    } else if (block === 0x21) {
+      at = skipBlocks(at + 2);
+    } else if (block === 0x2c) {
+      delays.push(delay);
+      delay = 0;
+      at = skipBlocks(at + 10 + table(gif[at + 9]!) + 1);
+    } else {
+      throw new Error(`Not a GIF block: 0x${block.toString(16)} at byte ${at}.`);
+    }
+  }
+  return { delays, loops };
 }
 
 // ── docs/api.md's entries ────────────────────────────────────────────────────
@@ -322,13 +378,16 @@ function apiExamples(repo: Repo, blocks: readonly Block[]): Example[] {
 // ── Links ────────────────────────────────────────────────────────────────────
 
 /**
- * What's wrong with a file's links: a link into the repository (relative, or to its files on GitHub)
- * must find its file, and a heading's anchor in a Markdown file. With `absolute`, every link must
- * be absolute or an anchor in the same file.
+ * What's wrong with a file's links: a link into the repository (relative, to its files on GitHub or
+ * raw.githubusercontent.com, or to a page of the demo site) must find its file, and a heading's anchor
+ * in a Markdown file. With `absolute`, every link must be absolute or an anchor in the same file.
  */
 function brokenLinks(repo: Repo, file: string, text: string, absolute: boolean): string[] {
   const problems: string[] = [];
-  const blob = new RegExp(`^${REPOSITORY.replace(/[.]/g, "\\.")}/(?:blob|tree)/main/([^#?]*)(?:#(.*))?$`);
+  const escape = (url: string): string => url.replace(/[.]/g, "\\.");
+  const blob = new RegExp(`^${escape(REPOSITORY)}/(?:blob|tree)/main/([^#?]*)(?:#(.*))?$`);
+  const raw = new RegExp(`^${escape(RAW)}/([^#?]+)$`);
+  const site = new RegExp(`^${escape(SITE)}/([^#?]*)$`);
   const dir = file.includes("/") ? file.slice(0, file.lastIndexOf("/") + 1) : "";
   for (const { href, line } of linksOf(text)) {
     const at = `${file}:${line}: ${href}`;
@@ -338,10 +397,17 @@ function brokenLinks(repo: Repo, file: string, text: string, absolute: boolean):
       target = file;
       anchor = href.slice(1);
     } else if (/^[a-z]+:/i.test(href)) {
-      const match = blob.exec(href);
-      if (!match) continue;
-      target = decodeURI(match[1]!).replace(/\/$/, "");
-      anchor = match[2];
+      const match = blob.exec(href) ?? raw.exec(href);
+      const page = site.exec(href);
+      if (page) {
+        target = `demo/${decodeURI(page[1]!) || "index.html"}`;
+        if (!target.endsWith(".html")) problems.push(`${at} isn't a page of the demo site`);
+      } else if (match) {
+        target = decodeURI(match[1]!).replace(/\/$/, "");
+        anchor = match[2];
+      } else {
+        continue;
+      }
     } else if (absolute) {
       problems.push(`${at} is relative: npm can't follow it, so link to ${REPOSITORY}/blob/main/…`);
       continue;
@@ -446,5 +512,25 @@ describe("README.md", () => {
 
   it("has absolute links, which find their files and headings", () => {
     expect(brokenLinks(root, "README.md", readme, true)).toEqual([]);
+  });
+
+  it("has pictures in docs/media with alt text, under 1 MB, each GIF playing once and stopping within 5 s", () => {
+    const images = imagesOf(readme);
+    expect(images.length).toBeGreaterThan(0);
+    for (const { src, alt, line } of images) {
+      const at = `README.md:${line}: ${src}`;
+      expect(alt?.trim(), `${at} has no alt text`).toBeTruthy();
+      expect(src.startsWith(`${RAW}/docs/media/`), `${at} isn't in docs/media`).toBe(true);
+      // A GIF's time can be read here; other animated formats (WebP, APNG) would go unchecked.
+      expect(src, `${at} is a GIF or a still`).toMatch(/\.(gif|png|jpe?g)$/);
+      const path = src.slice(RAW.length + 1);
+      const bytes = root.bytes(path);
+      expect(bytes.length, `${at} is over 1 MB`).toBeLessThanOrEqual(1024 * 1024);
+      if (!path.endsWith(".gif")) continue;
+      // WCAG 2.2.2: npm can't pause a picture, so it must stop by itself. The last frame stays.
+      const { delays, loops } = gifTiming(bytes);
+      expect(loops, `${at} loops`).toBe(false);
+      expect(delays.slice(0, -1).reduce((sum, ms) => sum + ms, 0), `${at} plays for more than 5 s`).toBeLessThanOrEqual(5000);
+    }
   });
 });

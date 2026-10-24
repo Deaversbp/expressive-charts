@@ -2,6 +2,19 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work on bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG. Presentation, analysis and reduced-motion modes are built in.
 
+<table>
+  <tr>
+    <td width="50%" valign="top"><a href="https://deaversbp.github.io/expressive-charts/bars.html"><img src="https://raw.githubusercontent.com/Deaversbp/expressive-charts/main/docs/media/arrow-on-hover.gif" width="100%" alt="A bar chart of revenue by region. The pointer moves onto North's bar, the other bars dim, and an arrow runs along it to its end. Then the same on East's bar."></a><br><code>travel(icons.arrow)</code> on hover, from the <a href="#quick-start">quick start</a></td>
+    <td width="50%" valign="top"><a href="https://deaversbp.github.io/expressive-charts/bars.html"><img src="https://raw.githubusercontent.com/Deaversbp/expressive-charts/main/docs/media/ball-and-boot.gif" width="100%" alt="Stacked bars of goals and assists by player. On Tanaka's bar a ball rolls along the goals and a boot steps along the assists, then the same on Lindqvist's."></a><br>A <code>sequence</code> of two <code>travel</code>s on stacked bars</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><a href="https://deaversbp.github.io/expressive-charts/line.html"><img src="https://raw.githubusercontent.com/Deaversbp/expressive-charts/main/docs/media/threshold-line.gif" width="100%" alt="A line chart of goals against expected goals. Play is pressed and the season draws week by week: the goals line is red wherever it's below the dashed xG line, and a ball rides its tip."></a><br><code>threshold</code> and a riding <code>travel</code>, played by <code>playback()</code></td>
+    <td width="50%" valign="top"><a href="https://deaversbp.github.io/expressive-charts/morph.html"><img src="https://raw.githubusercontent.com/Deaversbp/expressive-charts/main/docs/media/donut-to-columns.gif" width="100%" alt="A donut chart of shot outcomes. Show as columns is clicked, and each slice morphs into its own column, keeping its colour."></a><br><code>chartSwitch</code> and <code>morph()</code>, from a donut to columns</td>
+  </tr>
+</table>
+
+Each picture plays once and stops where its effect ends. **[The demo site](https://deaversbp.github.io/expressive-charts/)** has every effect to try, on the library's charts and on D3, Vega-Lite and hand-written ones, with the motion modes and reduced motion.
+
 > **Status: 0.1.0, the first release (October 2026).** The effect-author API is under [the 0.x promise](#the-0x-promise); the charts, adapters, built-in effects and motion core can still change in a minor release. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#010-24-october-2026) lists what's in it.
 
 - **Effects first.** The mark effects `travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, put together with `sequence`, `parallel`, `only` and `stagger`; and the transition effect `morph`, which `chartSwitch` plays to turn each mark of one chart into its mark in the next (a transition can't go into a combinator). An effect reads only a shared description of the mark, so one effect works on every chart, and effects of your own work everywhere the built-in ones do.
@@ -213,7 +226,7 @@ From 0.1.0 the library follows semantic versioning. While it's 0.x, the effect-a
 - [Examples](https://github.com/Deaversbp/expressive-charts/tree/main/docs/sketches/examples): pages written against the API, which `npm run typecheck` checks: ball-and-cleat bars, a goals vs xG line with playback, a donut that morphs into columns, D3 charts, effects of your own and presets.
 - [Changelog](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md), and [the development log](https://github.com/Deaversbp/expressive-charts/blob/main/docs/plan.md): the plan the library was built to, milestone by milestone, with the reasoning behind each decision.
 - [Accessibility audit](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-audit.md) and [screen-reader scripts](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-check.md).
-- [Demos](https://github.com/Deaversbp/expressive-charts/tree/main/demo): `npm run dev` serves them. `bars.html`, `donut.html`, `line.html` and `morph.html` put the library's charts beside D3, Vega-Lite and hand-written ones, with the same effects on each; `stress.html` is the limits above; and `lab.html` is the single-file prototype the library grew out of.
+- [Demos](https://github.com/Deaversbp/expressive-charts/tree/main/demo), on [the demo site](https://deaversbp.github.io/expressive-charts/), or served by `npm run dev`. `bars.html`, `donut.html`, `line.html` and `morph.html` put the library's charts beside D3, Vega-Lite and hand-written ones, with the same effects on each; `stress.html` is the limits above; and `lab.html` is the single-file prototype the library grew out of.
 - [Contributing](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md) and [issues](https://github.com/Deaversbp/expressive-charts/issues).
 
 ## Development
@@ -226,6 +239,8 @@ From 0.1.0 the library follows semantic versioning. While it's 0.x, the effect-a
 | `npm run pack-check` | After a build: packs the package, installs it in a new project and checks every entry as ESM and CommonJS, with its types (see [CONTRIBUTING.md](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md#setup)) |
 | `npm test` | Runs the test suite, which also checks [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) against the exports and type-checks this README's examples |
 | `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html`, `donut.html`, `line.html`, `morph.html` and `stress.html` in Chromium, and their DOM checks and the accessibility checks (axe) in Chromium, Firefox and WebKit, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md#visual-tests)) |
+| `npm run build:site` | Builds the demo pages into `site/`, which `.github/workflows/pages.yml` publishes as [the demo site](https://deaversbp.github.io/expressive-charts/) |
+| `npm run media` | Captures README's pictures (`docs/media/*.gif`) from the demo pages, frame by frame, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md#readmes-pictures-and-the-demo-site)) |
 | `npm run bench` | Measures the stress page's cases in headless Chromium against `npm run dev`, unthrottled and at 4×, about 47 minutes; not in CI |
 | `npm run typecheck` | Checks types without building |
 

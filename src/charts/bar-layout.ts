@@ -6,7 +6,7 @@
 // state in between the same way the layout draws its own.
 
 import { describe, type MarkData, type MarkGeometry, type Rect } from "../core";
-import { textBoxes, type TextPlacement } from "./render/text";
+import { textBox, type TextPlacement } from "./render/text";
 import type { Accessor, BarChartOptions } from "./types";
 
 export type { TextPlacement } from "./render/text";
@@ -229,11 +229,13 @@ export function placeRow<D>(frame: BarFrame, row: BarRowState<D>, measure: Measu
     segments: row.values.map((v) => ({ series: v.series, size: Math.max(0, negative ? -v.value : v.value) * unit }))
   };
   const fields = { key: row.key, datum: row.datum, index: row.index, slot: row.slot, values: row.values, total };
-  const boxes = (label: TextPlacement, value: TextPlacement): Rect[] =>
-    textBoxes(measure, [
-      [label, "ec-label", LABEL_SIZE],
-      [value, "ec-value", VALUE_SIZE]
-    ]);
+  /** The labels' boxes, leaving out a label with no text. */
+  const boxes = (label: TextPlacement, value: TextPlacement): Rect[] => {
+    const out: Rect[] = [];
+    if (label.text !== "") out.push(textBox(label, measure, "ec-label", LABEL_SIZE));
+    if (value.text !== "") out.push(textBox(value, measure, "ec-value", VALUE_SIZE));
+    return out;
+  };
 
   if (frame.orientation === "horizontal") {
     const line = band + bands.band / 2 + LABEL_SIZE * CENTRE;

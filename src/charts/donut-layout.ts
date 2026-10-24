@@ -7,7 +7,7 @@
 // placeCenter draw any state in between the same way the layout draws its own.
 
 import { describe, type MarkData, type MarkGeometry, type Rect } from "../core";
-import { textBoxes, type TextPlacement } from "./render/text";
+import { textBox, type TextPlacement } from "./render/text";
 import { percent } from "./shell/format";
 import type { DonutChartOptions } from "./types";
 
@@ -191,13 +191,7 @@ export function placeSlice<D>(frame: DonutFrame, state: SliceState<D>, label?: S
     outer: frame.outer,
     start: state.start,
     end: state.end,
-    labelBounds:
-      label && measure
-        ? textBoxes(measure, [
-            [label.category, "ec-label", LABEL_SIZE],
-            [label.share, "ec-value", VALUE_SIZE]
-          ])
-        : []
+    labelBounds: label && measure ? labelBoxes(label, measure) : []
   });
   return { ...state, geometry, data: sliceData(state.datum, state.share, state.series) };
 }
@@ -315,6 +309,14 @@ function labelAt<D>(frame: DonutFrame, slice: SliceState<D>, measure: Measure): 
     share: { x: along(widths[1]), y: top + ASCENT + LINE, anchor: "middle", text: share },
     box: { x: along(width) - width / 2, y: top, width, height: BLOCK }
   };
+}
+
+/** The boxes of a label's two lines, leaving out a line with no text. */
+function labelBoxes(label: SliceLabel, measure: Measure): Rect[] {
+  const out: Rect[] = [];
+  if (label.category.text !== "") out.push(textBox(label.category, measure, "ec-label", LABEL_SIZE));
+  if (label.share.text !== "") out.push(textBox(label.share, measure, "ec-value", VALUE_SIZE));
+  return out;
 }
 
 function overlaps(a: Rect, b: Rect): boolean {

@@ -34,11 +34,6 @@ export function textBox(placement: TextPlacement, measure: Measure, className: s
   return { x: start - SIDE * size, y: placement.y - ASCENT * size, width: width + 2 * SIDE * size, height: (ASCENT + DESCENT) * size };
 }
 
-/** The boxes of a mark's labels, each given with its class and size, leaving out those with no text. */
-export function textBoxes(measure: Measure, labels: readonly (readonly [placement: TextPlacement, className: string, size: number])[]): Rect[] {
-  return labels.flatMap(([placement, className, size]) => (placement.text === "" ? [] : [textBox(placement, measure, className, size)]));
-}
-
 type Measure = (text: string, className: string, size: number) => number;
 
 /** Moves a <text> to `placement` and sets its text, when it changed. */

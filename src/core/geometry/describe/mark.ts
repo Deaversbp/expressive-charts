@@ -42,14 +42,17 @@ export function finite(builder: string, field: string, value: number): number {
   return value;
 }
 
-/** A spec's `labelBounds`, checked: each box's numbers finite, its sizes ≥ 0. */
+/** A spec's `labelBounds`, checked: each box's numbers finite, its sizes ≥ 0. Charts give them every frame, so a good box costs four comparisons. */
 export function labelBoxes(builder: string, boxes: readonly Rect[] | undefined): readonly Rect[] | undefined {
-  boxes?.forEach((box, i) => {
-    finite(builder, `labelBounds[${i}].x`, box.x);
-    finite(builder, `labelBounds[${i}].y`, box.y);
-    size(builder, `labelBounds[${i}].width`, box.width);
-    size(builder, `labelBounds[${i}].height`, box.height);
-  });
+  if (!boxes) return boxes;
+  for (let i = 0; i < boxes.length; i++) {
+    const { x, y, width, height } = boxes[i]!;
+    if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(width) && width >= 0 && Number.isFinite(height) && height >= 0) continue;
+    finite(builder, `labelBounds[${i}].x`, x);
+    finite(builder, `labelBounds[${i}].y`, y);
+    size(builder, `labelBounds[${i}].width`, width);
+    size(builder, `labelBounds[${i}].height`, height);
+  }
   return boxes;
 }
 

@@ -2,7 +2,7 @@
 
 These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, and [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
 
-**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G are pending. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
 
 A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to paste into an issue.
 
@@ -320,11 +320,11 @@ If a description isn't read at all, that's acceptable: the position is also in t
 
 **VoiceOver + Safari:** the full script hasn't been run yet. It was used to hear the "1 goal" wording above. **Not run for 0.1**: every section with VoiceOver + Safari is in the development log's backlog.
 
-**The second chart (section C):** not run yet, with either screen reader. **Pending (23 October 2026):** the accessibility audit asked for it with NVDA + Chrome, and it couldn't be run that day. Until it is, the evidence is what the audit checked without a screen reader ([a11y-audit.md](a11y-audit.md)): axe finds nothing on the page, Chrome's tree for the chart is its group and then one image per player, named with what the bar shows ("Okafor: 16 goals" … "Castillo: 1 goal"), and the tab order is pinned by the visual suite.
+**The second chart (section C), NVDA + Chrome on Windows, 24 October 2026: passed.** The tester reported that everything sounded as expected, so every "Listen for" item passed: each player was read once, as one item, with every value the bar shows; the chart's name was heard once on the way in; a value of 1 read "1 goal" or "1 assist"; and nothing was read that can't be seen. `expressive()`'s names and roles stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this chart.
 
 **The donut page (section D), NVDA + Chrome on Windows, 22 October 2026: passed.** All 13 steps read as expected, so every "Listen for" item passed: each slice was read once as one item with its share, the donut's name and total were heard on the way in, the arrow keys went clockwise from 12 o'clock and stopped at the ends, the table's Share column and total row were read with their headers, each match was announced once, and the D3 pie read like the donut with its labels silent. The names and roles stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
 
-**The Vega-Lite line on the line page (section E, steps 13 and 14):** not run yet. **Pending (23 October 2026):** the accessibility audit asked for them with NVDA + Chrome, and they couldn't be run that day. Before asking, the audit found and fixed what step 13 listens for: Vega's unnamed `graphics-symbol` around each line, which axe flagged, and its `graphics-object`s, which Chrome named from the lines' names. Chrome's tree for the Vega-Lite line is now the D3 line's, which passed steps 11 and 12.
+**The Vega-Lite line on the line page (section E, steps 13 and 14), NVDA + Chrome on Windows, 24 October 2026: passed.** The tester reported that both steps sounded as expected. Before they were run, the audit found and fixed what step 13 listens for: Vega's unnamed `graphics-symbol` around each line, which axe flagged, and its `graphics-object`s, which Chrome named from the lines' names. With the fix, the Vega-Lite line reads as the D3 line does, and it stays as built. Versions weren't noted.
 
 **The line page (section E), NVDA + Chrome on Windows, 22 October 2026: passed.** All 12 steps read as expected, so every "Listen for" item passed:
 - each matchweek was read once, as one item, with both values and then its gap;
@@ -345,6 +345,16 @@ The names, descriptions and roles stay as built. Versions weren't noted. VoiceOv
 - nothing was read that can't be seen, apart from the table's caption and the announcement.
 
 The switch's names, roles, announcement and V key stay as built. The Speech Viewer text and the versions weren't recorded. VoiceOver + Safari hasn't been run on this page.
+
+**The stress page's date line (section G), NVDA + Chrome on Windows, 24 October 2026: passed.** The tester reported that everything sounded as expected, so every "Listen for" item passed:
+- each day was read once, as one item, with its date and both values;
+- the chart's name was heard once on the way in;
+- the arrow keys went a day at a time and stopped at the ends;
+- nothing was read while the year played, and the readout was read once when it ended;
+- the table's rows were named by their dates, and each cell was read with its column's header;
+- nothing was read that can't be seen.
+
+The date axis's names, the keyboard and the table stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
 
 Template for the next run:
 

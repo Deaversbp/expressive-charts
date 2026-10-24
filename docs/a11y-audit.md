@@ -17,7 +17,7 @@ It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since 
   - **forced**: under forced colours, each legend's swatches keep their own colours, and a pressed toggle shows in the viewer's selection colours.
 - **The rest of the visual suite**: reduced motion and Off on each page, Play and Pause, the scrubber, the switch's timing, and what a screen reader can reach mid-switch (Chrome's accessibility tree, read over CDP).
 - **Contrast of SVG text and marks**, which axe reports as "incomplete" rather than judging: worked out from the theme's tokens ([Contrast](#contrast)), and validated for the marks by `src/charts/render/theme.test.ts`.
-- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. **Section C and section E's steps 13 and 14 are pending**: they couldn't be run on 23 October 2026. Where a row cites them, its result rests on axe and Chrome's tree until they're heard. Section G, the stress page's date line, hasn't been run either. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
+- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
 - **By hand**, in headless Chromium: the pages at 320 px, with the text spacing, and under forced colours, looked at as pictures; the tooltip's place against every focused mark; the target sizes of every control and mark; and Chrome's accessibility tree for each chart.
 
 ## What it found
@@ -27,7 +27,7 @@ Six problems: five fixed as part of the audit, and one in the backlog. Two judge
 **Fixed:**
 
 1. **Light text under 4.5:1 on the demo pages (1.4.3).** axe found the pages' muted text (#7d7b75) at 3.9:1 on the page background, the motion switch's hint (`--ec-text-muted`, #75736d) at 4.37:1 there, the bars page's link (#2a78d6) at 4.3:1, and the morph page's "Morph" label. Muted text is now #6f6d67 (4.78:1 on the page, 5.04:1 on a card), the motion switch takes it as its `--ec-text-muted`, since it sits on the page rather than a chart's surface, and links are #226dc7 (5.01:1). Dark already passed. The library's own tokens pass on its own surface, so they're unchanged; architecture.md says a page should set `--ec-text-muted` darker on a darker background. *Changes the light page and motion switch screenshots; see [Screenshots](#screenshots).*
-2. **Vega's unnamed image role around each line (1.1.1, 4.1.2).** On `line.html`, Vega gives the group around each line `role="graphics-symbol"` with no name, and the groups above it `graphics-object`. axe flagged the first in every condition. Taking it off alone left Chrome naming the `graphics-object`s from their contents, so NVDA would have heard both lines' names again as a group. With `markLabel`, `expressive()` takes those roles off any unnamed host element around a named mark, on every read, since Vega writes them again when it redraws. Chrome's tree for the Vega-Lite line is then the D3 line's: the group, then one image per line. This is what section E's step 13 listens for, which is pending.
+2. **Vega's unnamed image role around each line (1.1.1, 4.1.2).** On `line.html`, Vega gives the group around each line `role="graphics-symbol"` with no name, and the groups above it `graphics-object`. axe flagged the first in every condition. Taking it off alone left Chrome naming the `graphics-object`s from their contents, so NVDA would have heard both lines' names again as a group. With `markLabel`, `expressive()` takes those roles off any unnamed host element around a named mark, on every read, since Vega writes them again when it redraws. Chrome's tree for the Vega-Lite line is then the D3 line's: the group, then one image per line. This is what section E's step 13 listens for, which passed with NVDA + Chrome on 24 October 2026.
 3. **The tooltip couldn't be dismissed under the pointer (1.4.13).** It covers the marks above the one it describes, and Escape ended a hover only with focus on a mark. Now Escape anywhere ends the hover, the pointer's too, as `leave()` does; an Escape the page has already handled is left alone.
 4. **The line page's own legends lost their colours under forced colours.** Windows contrast themes force border colours but not SVG strokes, so the D3 and Vega-Lite cards' swatches all turned the theme's text colour while their lines kept theirs. They opt out with `forced-color-adjust: none`, as the library's legend swatches already did.
 5. **Pressed toggles were told apart only by weight under forced colours.** Forced colours drop a button's background, so the motion switch's pressed mode, and the pages' own toggles, had only their bold left. They take `Highlight` and `HighlightText` there now.
@@ -101,7 +101,7 @@ Making them again also rewrote 13 others by a few levels on anti-aliased edges (
 
 ## The criteria that apply, page by page
 
-Evidence names the checks above (**axe**, **tab order**, **ring**, **hover**, **spacing**, **5 s**, **reflow**, **forced**), a spec in `tests/visual`, a section of [a11y-check.md](a11y-check.md) heard with NVDA + Chrome ("pending" where it hasn't been yet), or [Contrast](#contrast).
+Evidence names the checks above (**axe**, **tab order**, **ring**, **hover**, **spacing**, **5 s**, **reflow**, **forced**), a spec in `tests/visual`, a section of [a11y-check.md](a11y-check.md) heard with NVDA + Chrome, or [Contrast](#contrast).
 
 ### bars.html
 
@@ -109,7 +109,7 @@ The library's `barChart` with `travel`, and the hand-written chart through `expr
 
 | Criterion | Result | Evidence |
 | --- | --- | --- |
-| 1.1.1 Non-text content | Pass | axe. Each chart is a named group; each bar an image named "Okafor: 16 goals"; the ball, the boot and the focus ring are in `aria-hidden` overlays. NVDA A; C pending. |
+| 1.1.1 Non-text content | Pass | axe. Each chart is a named group; each bar an image named "Okafor: 16 goals"; the ball, the boot and the focus ring are in `aria-hidden` overlays. NVDA A and C. |
 | 1.3.1 Info and relationships | Pass | axe. The table has a caption, column headers and the player as row header (NVDA A, steps 11–13). The toggles are groups named Metric and Sort. |
 | 1.3.2 Meaningful sequence | Pass | Bars are in the DOM in the order shown, and follow a re-sort (`bars.spec.ts`, NVDA A step 9). |
 | 1.3.3 Sensory characteristics | Pass | The page's instructions name controls and keys, not shapes or places. |
@@ -122,7 +122,7 @@ The library's `barChart` with `travel`, and the hand-written chart through `expr
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast): marks, ring. Dimmed bars while hovering: judgement call. |
 | 1.4.12 Text spacing | Pass | spacing. |
 | 1.4.13 Content on hover or focus | **Fail** (hoverable; backlog) | hover: persistent, and dismissible after fix 3. Not hoverable (finding 6). |
-| 2.1.1 Keyboard | Pass | tab order; arrows, Home and End (`bars.spec.ts`); every control is a button. NVDA A; C pending. |
+| 2.1.1 Keyboard | Pass | tab order; arrows, Home and End (`bars.spec.ts`); every control is a button. NVDA A and C. |
 | 2.1.2 No keyboard trap | Pass | tab order, both ways. |
 | 2.1.4 Character key shortcuts | Pass | None. |
 | 2.2.2 Pause, stop, hide | Pass | 5 s. Only hover and updates move anything, and each ends within 2 s. |
@@ -145,7 +145,7 @@ The library's `barChart` with `travel`, and the hand-written chart through `expr
 | 3.2.2 On input | Pass | Toggles and Play next matchweek change the chart they're beside, which their names say. |
 | 3.2.3, 3.2.4 Consistency | Pass | The motion switch is the same control, in the same place, on every page. |
 | 3.3.2 Labels or instructions | Pass | Every control's text is its label. |
-| 4.1.2 Name, role, value | Pass | axe; toggles are `aria-pressed`. NVDA A; C pending. |
+| 4.1.2 Name, role, value | Pass | axe; toggles are `aria-pressed`. NVDA A and C. |
 | 4.1.3 Status messages | Pass | Each matchweek and re-sort is announced in a polite live region (NVDA A, steps 5–8). |
 | Reduced motion (rule 6; 2.3.3 is AAA) | Pass | `reduced-motion.spec.ts`: the device's setting turns motion off until the viewer picks a mode, and every story shows its end at once. |
 | Forced colours (not in WCAG) | Pass | forced; axe under forced colours. Fix 5. |
@@ -197,7 +197,7 @@ The library's `lineChart` with `threshold` and a riding ball, a D3 line through 
 
 | Criterion | Result | Evidence |
 | --- | --- | --- |
-| 1.1.1 Non-text content | Pass (fixed) | axe, after fix 2. Each week is an image named "Matchweek 12: 18 goals, 19.0 xG"; each host line is named for the season, and Chrome's tree for the Vega-Lite line is the D3 line's. NVDA E 1–12; 13–14 pending. |
+| 1.1.1 Non-text content | Pass (fixed) | axe, after fix 2. Each week is an image named "Matchweek 12: 18 goals, 19.0 xG"; each host line is named for the season, and Chrome's tree for the Vega-Lite line is the D3 line's. NVDA E 1–14. |
 | 1.3.1 Info and relationships | Pass | axe. The table's Difference column reads with its header (NVDA E, steps 8–10). |
 | 1.3.2 Meaningful sequence | Pass | Weeks are in order in the DOM and on the keys. |
 | 1.3.3 Sensory characteristics | Pass | "Turns red" describes the chart; the Difference column and the tooltip say the same in words. |
@@ -210,7 +210,7 @@ The library's `lineChart` with `threshold` and a riding ball, a D3 line through 
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast): both lines, the red, the ring. The scrubber is the browser's own. |
 | 1.4.12 Text spacing | Pass | spacing. |
 | 1.4.13 Content on hover or focus | **Fail** (hoverable; backlog) | hover, on the crosshair's tooltip. Finding 6. |
-| 2.1.1 Keyboard | Pass | tab order; weeks by arrow key, the scrubber by arrows, Play by Space, each host line by arrow key (`line.spec.ts`). NVDA E 1–12; 13–14 pending. |
+| 2.1.1 Keyboard | Pass | tab order; weeks by arrow key, the scrubber by arrows, Play by Space, each host line by arrow key (`line.spec.ts`). NVDA E 1–14. |
 | 2.1.2 No keyboard trap | Pass | tab order, both ways. |
 | 2.1.4 Character key shortcuts | Pass | None. |
 | 2.2.2 Pause, stop, hide | Pass | Play season, about 6.5 s, starts only when pressed, and Pause stops it (`line.spec.ts`). 5 s: the ball's first trip at load ends within 1.4 s. |
@@ -228,7 +228,7 @@ The library's `lineChart` with `threshold` and a riding ball, a D3 line through 
 | 3.2.1, 3.2.2 | Pass | Focus shows the week; the scrubber seeks both charts, which its value says. |
 | 3.2.3, 3.2.4 Consistency | Pass | The motion switch as on every page. |
 | 3.3.2 Labels or instructions | Pass | The scrubber has no visible label of its own, but the status beside it says what it sets ("Through matchweek 38"), and its name says it too. |
-| 4.1.2 Name, role, value | Pass (fixed) | axe after fix 2; the scrubber's value text; Play's name switches. NVDA E 1–12; 13–14 pending. |
+| 4.1.2 Name, role, value | Pass (fixed) | axe after fix 2; the scrubber's value text; Play's name switches. NVDA E 1–14. |
 | 4.1.3 Status messages | Pass | Nothing is announced while the season plays, on purpose: the scrubber's value says the week when it's read (NVDA E, step 6). |
 | Reduced motion | Pass | `line.spec.ts`: Play ends at once, with the colour and the ball drawn on all three charts. |
 | Forced colours | Pass (fixed) | forced, after fix 4: the three legends keep their colours. |

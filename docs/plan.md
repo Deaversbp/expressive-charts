@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1, M2 and M3 are complete (October 2026, §9). M4's steps 1–8 are all built (§9). `demo/line.html` passed your checklist walk and your screen-reader check, and you looked at its new Vega-Lite card in M6 step 6's walk. What's left is for you: two short listening steps for that card (section E, steps 13 and 14), pending since M6 step 7. M5 is complete too (§9): `demo/morph.html` passed your checklist walk, where you kept `"unroll"` as `morph()`'s default, and your screen-reader check (section F of [a11y-check.md](a11y-check.md)). M6, hardening and 0.1.0 (§9, planned 23 October 2026): steps 1–8 are built, and step 9 publishes 0.1.0. Main says 0.1.0, but the release is on hold (24 October 2026) for polish before the repository goes public. Your NVDA runs of sections C, E 13–14 and G are pending. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M6 are complete (§9). **0.1.0 is on npm**, published from CI with provenance on 24 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.1.0)), with its demo pages at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes after 0.1, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -1018,7 +1018,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 
 M2's re-check of the bar descriptions, separate from M3, passed with NVDA + Chrome on 22 October 2026, so M2 is complete too.
 
-### M4: Line chart and data effects
+### M4: Line chart and data effects ✅
 
 `lineChart`, with series lines, point marks and a crosshair that hovers every series at the nearest x. `MarkData` samples along a line, plus `samples`, `samplesAlong` and `watch` for adapters. `threshold` in `on.decorate`, following `onChange`. The `playback()` controller, with `playButton()` (WCAG 2.2.2) and the chart's `reveal()`. A ball riding the line's leading edge (`ride: "on"`). Last, and free to slip to M6: the Vega helper `fromVegaView()` ([adapter spike](ideas/adapter-spike.md), recommendation 3), moved here in M3 planning (M3 decision 2). Vega's line items carry every vertex with its row, so they give `samples` without `samplesAlong`.
 
@@ -1402,7 +1402,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 - The package still has no runtime dependencies, and `typecheck`, `test` and `build` are green.
 - `fromVegaView()` reads a Vega-Lite line on the demo, or has moved to M6 with a note saying why.
 
-**Status: every step is built (October 2026), and two checks of step 8 are yours.** Against the "Done when" list:
+**Status: complete (24 October 2026).** Everything on the "Done when" list is met, the last two checks in M6:
 - **The line chart.** `lineChart` draws the lab's card 2 (step 5), and `demo/line.html` passed your checklist walk (step 7).
 - **`threshold`** colours the goals line below xG on `lineChart`, on a D3 line and on a Vega-Lite line. It follows every frame of a reveal and shows with motion off (steps 2, 5, 6 and 8).
 - **Playback.** `playback()` and `playButton()` play and pause the season in each mode, and the scrubber seeks (steps 3 and 7).
@@ -1412,12 +1412,9 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 - **Screenshots.** The line screenshots pass in Docker.
   - Beyond step 4's host hover baselines, two other kinds changed. Step 6 remade two dark host focus baselines, for your hover-colour decision. Step 8 remade the two full-page line baselines, since the page has a new card.
   - CI runs on step 8's pull request.
-- **Screen reader.** Your NVDA + Chrome check of section E passed (steps 1–12). Steps 13 and 14, for the Vega-Lite line, haven't been run.
+- **Screen reader.** Your NVDA + Chrome check of section E passed: steps 1–12 on 22 October 2026, and steps 13 and 14, for the Vega-Lite line, on 24 October 2026 (M6 step 7).
+- **The Vega-Lite card** looked fine in the browser, in M6 step 6's walk (23 October 2026).
 - **Packaging.** No runtime dependencies, and `typecheck`, `test` (1,346 tests) and `build` are green.
-
-**Left for you:**
-- look at the Vega-Lite card on `demo/line.html` in the browser;
-- run section E's steps 13 and 14 with NVDA + Chrome.
 
 ### M5: Morph ✅
 
@@ -1620,7 +1617,7 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 - **Your choices.** You've picked the default `align` in the browser, and your morph screen-reader check passes.
 - **Packaging.** The package still has no runtime dependencies, and `typecheck`, `test` and `build` are green.
 
-### M6: Hardening and 0.1.0
+### M6: Hardening and 0.1.0 ✅
 
 Hardening the library for its first release, then publishing it: a stress demo that sets the SVG limits, dates on `lineChart`'s x, a bundle-size check in CI, an accessibility audit, the API reference, the follow-ups from M4 and M5 that belong before 0.1.0, packaging, and last, 0.1.0 on npm.
 
@@ -1878,7 +1875,7 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
      - **Open question 13 and "Runs on every point"** have their numbers (below). `watch` stays opt-in.
      - **No leaks:** after 50 cycles, every case's chart left no DOM node and no listener behind.
      - **Screenshots:** five `stress-` baselines made in Docker (the page in light and dark, and the date line at rest, mid-play and with its tooltip), with the readouts masked. `stress.spec.ts` has 15 tests: nothing plays by itself, each button runs its case and reports, reduced motion and Off jump every case to its end, and the date line's names, arrow keys and table rows by date. Step 7 landed first, so the DOM checks run in Firefox and WebKit too, and the page joined `a11y.spec.ts`'s list (axe, tab order, tooltips, 320 px, forced colours), its chrome given step 7's colour fixes.
-     - **Script G**, 11 steps in `docs/a11y-check.md`, is yours to run with NVDA + Chrome.
+     - **Script G**, 11 steps in `docs/a11y-check.md`, is yours to run with NVDA + Chrome. *It passed on 24 October 2026.*
    - **Decisions beyond the plan:**
      - **Each case is measured alone.** With all six on the page, about 22,500 DOM nodes at their smallest sizes, every case paid about 5 ms more a frame, and at 4× not even 20 columns were smooth: a number about the page, not the chart.
      - **The arrow rides the tip from the start.** `travel`'s trip lasts the distance ÷ 360 px/s, and the visits line is 9,373 px long for a year (26 s) and 60,242 px for ten (167 s), far past the 5 s WCAG 2.2.2 allows motion that starts by itself. The page's `riding(effect)` draws the end state at once and follows the line. The backlog has the cap.
@@ -1888,8 +1885,8 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
    - **Where the plan and the code differ:**
      - **No contained fix.** In a 1,000-bar update, 77% of attribute writes set the value already there, and in a ten-year play 98.8% (every day's hit column and `tabindex`, on every frame). Skipping them in `setAttributes` and the keyboard's `tabindex` was tried, but no gain could be shown above the drift of a shared machine, and one comparison made a bar update slower, so it's in the backlog. The date axis's `Date` per vertex costs 0.09 ms a frame on ten years (1% of the play's script), so it has no cache.
      - Bar charts draw every label, so past about 40 bars they overlap; `a11y.spec.ts`'s text-spacing check skips this page.
-     - **The walk** (23 October 2026): you looked at the stress page and at the Vega-Lite card on `demo/line.html` (M4's leftover) in the browser, and both look fine. M4's ✅ still waits for section E's steps 13 and 14.
-7. **The accessibility audit** (decisions 2 and 12). Owns `docs/a11y-audit.md` (new), the Results in `docs/a11y-check.md`, `tests/visual/a11y.spec.ts` (new: `axe-core` on every demo page in both themes, at 320 px, under forced colours and mid-switch), `axe-core` in `package.json` (pinned), Firefox and WebKit in `playwright.config.ts` (decision 8), and the small fixes it finds.
+     - **The walk** (23 October 2026): you looked at the stress page and at the Vega-Lite card on `demo/line.html` (M4's leftover) in the browser, and both look fine. M4's ✅ waited for section E's steps 13 and 14, which passed on 24 October 2026.
+7. ✅ **The accessibility audit** (decisions 2 and 12). Owns `docs/a11y-audit.md` (new), the Results in `docs/a11y-check.md`, `tests/visual/a11y.spec.ts` (new: `axe-core` on every demo page in both themes, at 320 px, under forced colours and mid-switch), `axe-core` in `package.json` (pinned), Firefox and WebKit in `playwright.config.ts` (decision 8), and the small fixes it finds.
    - **You run** section C and section E's steps 13 and 14 with NVDA + Chrome. When E 13–14 pass, M4 gets its ✅.
    - The stress page joins the axe list once step 6 has landed, whichever lands second.
    - **Done when** every criterion has a result, every failure is fixed or in the backlog with what was found, and your runs are recorded.
@@ -1903,7 +1900,7 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
      - **Forced colours in Chromium only.** Firefox's and WebKit's emulation only matches the media query and forces no colours, so the checks there would test nothing (and axe then measured the unforced `Highlight` pair).
      - **The fixes are in the demo pages where the library's defaults pass.** `--ec-text-muted` is 4.62:1 on `--ec-surface`; the motion switch's hint failed only on the pages' darker background. Changing the token would change every tick in every screenshot, so architecture.md says a page sets it darker on a darker background, as the demos now do.
      - **Firefox and WebKit found test problems, not library ones**: Firefox's `getBoundingClientRect()` includes a stroke (a flash's halo, the ring's miter allowance), its pointer lands on whole pixels, and past the last tab stop it keeps focus where Chromium leaves the page. The checks now measure fill boxes plus half the stroke, aim at whole pixels, and stop at a repeated stop. No browser needed a library change.
-   - **Left: your NVDA runs.** Section C and section E's steps 13 and 14 couldn't be run on 23 October 2026, so they're recorded as pending in [a11y-check.md](a11y-check.md#results), and the step's ✅ waits for them. The audit's rows that cite them rest on axe and Chrome's tree meanwhile. When E 13–14 pass, M4 gets its ✅ too, along with step 6's look at the Vega-Lite card.
+   - **Your NVDA runs.** Section C and section E's steps 13 and 14 couldn't be run on 23 October 2026. You ran them on 24 October 2026, with step 6's section G, and all three passed ([a11y-check.md](a11y-check.md#results)). So the audit's rows that cite them rest on your runs, and the step and M4 have their ✅.
 
 **Wave 3** (after wave 2 lands):
 
@@ -1929,12 +1926,27 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
 
 **Wave 4:**
 
-9. **Publish 0.1.0.** Owns the version (`package.json`, `VERSION`), CHANGELOG's 0.1.0 entry, README's status, and this plan's status line and M6's ✅.
+9. ✅ **Publish 0.1.0.** Owns the version (`package.json`, `VERSION`), CHANGELOG's 0.1.0 entry, README's status, and this plan's status line and M6's ✅.
    - **The dry run,** as decision 16: `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you), `npm publish --dry-run`, and `npm view` for the name and its look-alikes. The PR has its results.
    - **You:** make the repository public, create the npm token and add it as the repository's secret (decision 4).
    - **Then, on your go-ahead in that session:** the `v0.1.0` release is created, and the release workflow publishes it.
    - **After:** check the npm page (the version, README, the provenance badge) and install 0.1.0 in a fresh project. Then you delete the token and the `NPM_TOKEN` secret. Trusted publishing waits until just before the next release, with direct `npm publish` allowed (decision 4, as changed after step 3).
    - **Done when** 0.1.0 is on npm and every item of the "Done when" list below holds.
+   - **Built** (24 October 2026): [0.1.0 is on npm](https://www.npmjs.com/package/expressive-charts) with provenance, and [its release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.1.0) is on GitHub.
+     - **The release PR** (#65): 0.1.0 in `package.json`, the lockfile and `VERSION`; CHANGELOG's 0.1.0 entry, a summary of everything in the release (decision 14), then the earlier entries as plain facts; README's status; and decision 4's order of token and trusted publishing. Its dry run passed: every check, `npm pack` (35 files, 1.2 MB packed, 4.7 MB unpacked, most of it source maps), `npm publish --dry-run`, and `npm view` for the name and its three look-alikes, all still free.
+     - **The release went on hold for polish** before the repository went public. A read-through as a visitor found the package clean, but the demo pages and docs read as this log, and nothing showed the effects moving. Four pull requests followed:
+       - #66, icons from icon sets: `iconFromSvg` reads `<polyline>` and takes `currentColor` as the theme's `text`, api.md has a recipe for icons from Lucide or Heroicons, and README's quick start leads with `icons.arrow`, the ball and boot second;
+       - #67, the demo pages and docs for a first-time visitor: "Things to try" in place of the milestone checklists, no milestone, review or commit tags, no "you", and 38 baselines made again;
+       - #68, npm keywords (`d3`, `vega`, `observable-plot`, `accessibility`) and this log's banner; the five stale `claude/*` branches were deleted;
+       - #69, four GIFs at the top of README, made by `npm run media` from scripted scenes in Docker, each playing once and stopping within 5 s on its effect's end state (a test checks it), and the demo pages on GitHub Pages.
+     - **Your decisions while it was on hold:** 0.1.0's content is enough, since additions can come in any release; icons stay bring-your-own, with no emoji library and no large set of our own; and the existing commits keep your email, with GitHub's private address from now on.
+     - **You** made the repository public, turned on Pages, added a 7-day granular token as `NPM_TOKEN`, and ran sections C, E 13–14 and G with NVDA + Chrome. All three passed.
+     - **The release.** Main's CI was green on `718fadb`, and the dry run passed there again (1,584 tests). On your go-ahead, `v0.1.0` was created on `718fadb` at 18:56 UTC, and the release workflow passed every step and published with provenance ([Sigstore's log](https://search.sigstore.dev/?logIndex=3441694308)).
+     - **After.** npm shows 0.1.0 as `latest`, with README, its four GIFs, and "Built and signed on GitHub Actions" from `718fadb` and `release.yml`. A fresh project installs it with no dependencies, `npm audit signatures` verifies its registry signature and its attestation, and all three entries load as ES modules and as CommonJS, with the stylesheet. jsDelivr serves the script tag at `expressive-charts@0.1`.
+   - **Where the plan and npm differ:**
+     - **A placeholder version.** For a new package, npm first published `0.0.0-stage`, "Temporary package placeholder for staged publishing" (18:57 UTC), then 0.1.0 (18:59 UTC). `latest` is 0.1.0, but `0.0.0-stage` stays in the list of versions.
+     - **Tokens lose direct publishing.** npm's token form warns that a granular token that bypasses 2FA can't publish directly from January 2027. 0.1.0 wasn't affected. Later releases use trusted publishing, or staged publishing (`npm stage publish`, then approved with 2FA), as CONTRIBUTING says.
+   - **Left for you:** delete the token on npmjs.com and the `NPM_TOKEN` secret, and set up trusted publishing only just before the next release.
 
 **Done when:**
 - **Limits.** `demo/stress.html` runs every case at sizes up to past its limit, with a frame readout and nothing playing by itself. `scripts/bench.mjs` has measured each case on a laptop and at 4× slowdown, and the limits replace §10's rough guide in README, architecture.md and this plan. Open question 13 and "Runs on every point" have their numbers.
@@ -1947,6 +1959,8 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
 - **Plot.** A stacked Plot bar and a Plot line pass `checkEffect` through `expressive()`, with Plot a pinned dev dependency.
 - **Packaging.** `pack-check` passes for ESM and CommonJS and their types; the package has no runtime dependencies; `typecheck`, `test`, `build` and the size check are green.
 - **0.1.0 is on npm,** with provenance, its CHANGELOG entry, and its release on GitHub. This plan's status line says M6 is done.
+
+**Status: complete (24 October 2026).** Every item on the list holds. The last two came on release day: your NVDA runs of sections C, E 13–14 and G passed, so M4 has its ✅, and 0.1.0 is on npm with provenance, with its release on GitHub (step 9).
 
 ### Backlog (after 0.1)
 
@@ -1986,6 +2000,8 @@ These came out of [ideas/effects-by-chart.md](ideas/effects-by-chart.md), a brai
 - **Thinning a bar chart's labels** (M6 step 6). Every bar has its category and value label, so past about 40 bars they overlap.
 - **Larger steps on a long axis** (M6 step 6): Page Up and Page Down by a month, say. Ten years of days is 3,653 presses of an arrow key.
 - Whatever M6's stress demo and audit find that's bigger than a contained fix.
+- **A written audit table for `stress.html`** (M6 step 8). axe and the DOM checks already run on it, and section G passed, but [a11y-audit.md](a11y-audit.md) has no table for it.
+- **More of the icon sets' SVG** (M6 step 9's polish). `iconFromSvg` draws `fill-rule="evenodd"` as nonzero, so a hole in a solid icon (Heroicons' solid set) fills in. It also drops opacity (duotone sets), square caps and bevel joins. Each needs an optional field on `IconShape`, an addition the 0.x promise allows.
 
 ---
 

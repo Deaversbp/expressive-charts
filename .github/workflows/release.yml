@@ -6,8 +6,8 @@ name: Release
 #
 # Authentication: npm tries trusted publishing (OIDC, through `id-token: write`) first, and falls back
 # to the NPM_TOKEN secret. 0.1.0 needs the token, since trusted publishing can only be set up for a
-# package that exists. Once it's set up, the secret is deleted and the token step's value is empty,
-# which npm ignores.
+# package that exists. Once 0.1.0 is out, the secret is deleted, and trusted publishing is set up
+# just before the next release. With no secret, the token step's value is empty, which npm ignores.
 on:
   release:
     types: [published]

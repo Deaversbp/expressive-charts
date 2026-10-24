@@ -3,7 +3,7 @@
 Every export of every entry of `expressive-charts`, values and types: what each is, its options with their defaults, and what it returns. [architecture.md](architecture.md) explains the design behind them, and [the effects guide](effects-guide.md) is the guide to writing effects. [README](../README.md) has the overview.
 
 - **Entries.** The package has four: [`expressive-charts`](#expressive-charts), [`expressive-charts/icons/sport`](#expressive-chartsiconssport), [`expressive-charts/testing`](#expressive-chartstesting) and [`expressive-charts/style.css`](#expressive-chartsstylecss). The main entry is also a script-tag bundle (below).
-- **Layers.** Within the main entry, the names are grouped by layer, as the code is: the [core](#core) (motion, clocks, tweens and playback) and the [contracts](#contracts) charts and effects share, [geometry](#geometry), [effects](#effects), [icons](#icons), [presets and settings](#presets-icons-by-name-and-settings), [charts](#charts), [adapters](#adapters) and [controls](#controls).
+- **Layers.** Within the main entry, the names are grouped by layer, as the code is: the [core](#core) (motion, clocks, tweens and playback) and the [contracts](#contracts) charts and effects share, [geometry](#geometry), [effects](#effects), [icons](#icons), [presets and settings](#presets-icons-by-name-and-settings), [charts](#charts), [adapters](#adapters), [linked hover](#linked-hover) and [controls](#controls).
 - **Durations** are base values in ms, which the motion mode scales: a 500 ms base is 500 ms in Presentation, 175 ms in Analysis, and nothing with motion off ([`Timing`](#timing)).
 - **`D`** is the type of a chart's rows: `barChart<Player>` reads `Player` objects.
 - **The 0.x promise.** An entry marked *Under the 0.x promise.* is part of the effect-author API: from 0.1.0 it breaks only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. Everything else may still change in a minor release while the library is 0.x. [CHANGELOG.md](../CHANGELOG.md#the-0x-promise) has the promise.
@@ -141,7 +141,7 @@ What a duration is for, which decides how each mode scales it ([`defaultScaling`
 | --- | --- | --- | --- | --- |
 | `feedback` | hover colour and dimming | base | base | 0 |
 | `transition` | data changes (the default) | base | base × 0.35, at most 200 ms | 0 |
-| `effect` | `travel`, `wiggle`, `flash`, `pulse` | base | base × 0.35, from 140 to 300 ms | 0 |
+| `effect` | `travel`, `wiggle`, `flash`, `pulse`, `trace` | base | base × 0.35, from 140 to 300 ms | 0 |
 | `playback` | a play, such as a season's | base | base × 0.3 | 0 |
 | `stagger` | the wait before each mark of a `stagger` | base | 0 | 0 |
 
@@ -1023,7 +1023,7 @@ interface PointSpec {
 }
 ```
 
-A dot of radius `r`. Its walk has length 0, so `travel` does nothing on it, while `wiggle`, `pulse` and `flash` still work. `labelBounds`, the boxes of its own labels, is passed through as the geometry's.
+A dot of radius `r`. Its walk has length 0, so `travel` and `trace` do nothing on it, while `wiggle`, `pulse` and `flash` still work. `labelBounds`, the boxes of its own labels, is passed through as the geometry's.
 
 #### `matrix`
 
@@ -1100,7 +1100,7 @@ lineChart("#xg", {
 travel(icon: Icon | string, options?: TravelOptions): GeometryEffect
 ```
 
-Carries an icon along the mark's walk, or along one segment, and leaves it resting at the end: a ball rolling out a bar, round a donut slice or along a line ([architecture.md](architecture.md#travel)). `icon` is an [`Icon`](#icon) or a registered icon's name, looked up each time the effect runs; an unknown name throws then, and the chart reports it. The icon is inset by its footprint, so it stays inside the mark. A trip takes `max(260 ms, distance ÷ 360 px/s)` base, with `"effect"` timing, times its gait's pace, eased by the gait or `easeOutCubic`. A missing segment, or a walk under 0.5 px, makes it a no-op that finishes at once. Its end state is the icon resting at the end, and it follows the mark when the mark moves. Options: [`TravelOptions`](#traveloptions). A non-icon throws a `TypeError`.
+Carries an icon along the mark's walk, or along one segment, and leaves it resting at the end: a ball rolling out a bar, round a donut slice or along a line ([architecture.md](architecture.md#travel)). `icon` is an [`Icon`](#icon) or a registered icon's name, looked up each time the effect runs; an unknown name throws then, and the chart reports it. The icon is inset by its footprint, so it stays inside the mark. A trip takes `max(260 ms, distance ÷ 360 px/s)` base, with `"effect"` timing, times its gait's pace, and at most 4 s, eased by the gait or `easeOutCubic`. So past 1,440 px at pace 1 the icon goes faster, not longer, and a trip ends within 5 s even behind `stagger`. A missing segment, or a walk under 0.5 px, makes it a no-op that finishes at once. Its end state is the icon resting at the end, and it follows the mark when the mark moves. Options: [`TravelOptions`](#traveloptions). A non-icon throws a `TypeError`.
 
 #### `TravelOptions`
 
@@ -1234,6 +1234,31 @@ interface PulseOptions
 - `times`: `number`. Default 2. A whole number from 1 to 6.
 - `width`: `number`. Default 12. The halo's widest stroke in px.
 - `color`: `Color`. Default: the mark's own colour.
+
+#### `trace()`
+
+```ts
+trace(options?: TraceOptions): GeometryEffect
+```
+
+A highlighter: a stroke drawn along the mark's walk, from its start to its end, which stays ([architecture.md](architecture.md#trace)). It's drawn in over 500 ms base with `"effect"` timing, eased in and out, in the overlay, so the mark itself is untouched and it's safe in any slot. On a stack it runs the whole walk; on a point, whose walk has no length, it draws nothing and finishes at once. It follows the mark when the mark moves. Its end state is the whole stroke. It isn't a preset.
+
+```ts
+import { barChart, trace } from "expressive-charts";
+
+barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { hover: trace({ width: 4 }) } });
+```
+
+#### `TraceOptions`
+
+```ts
+interface TraceOptions
+```
+
+- `color`: `Color`. Default `"mark"`, the mark's own colour (a stack's first segment's).
+- `width`: `number`. Default 3. The stroke's width in px; 0 or more.
+- `opacity`: `number`. Default 0.5. From 0 to 1.
+- `duration`: `number`. Default 500. Base ms to draw the stroke, before the motion mode scales it; 0 or more.
 
 #### `threshold()`
 
@@ -1874,12 +1899,12 @@ interface MarkEvents<D> {
   enter: MarkEvent<D>;
   update: MarkEvent<D> & { readonly from: MarkGeometry };
   exit: MarkEvent<D>;
-  hover: MarkEvent<D> & { readonly source: "pointer" | "keyboard" | "touch"; readonly segment?: string };
+  hover: MarkEvent<D> & { readonly source: "pointer" | "keyboard" | "touch" | "linked"; readonly segment?: string };
   leave: MarkEvent<D>;
 }
 ```
 
-The events charts and adapters emit, by type, which `on()` and the effect slots hear alike. Data events fire as a change starts: `enter` and `update` with the new geometry (`update` also with the geometry it starts `from`), `exit` with the geometry on screen. `update` means a mark's values changed, not that it moved. `hover` and `leave` carry the geometry on screen; `hover` says what hovered (`"keyboard"` for focus) and which segment is under the pointer.
+The events charts and adapters emit, by type, which `on()` and the effect slots hear alike. Data events fire as a change starts: `enter` and `update` with the new geometry (`update` also with the geometry it starts `from`), `exit` with the geometry on screen. `update` means a mark's values changed, not that it moved. `hover` and `leave` carry the geometry on screen; `hover` says what hovered (`"keyboard"` for focus, `"linked"` for a mark [`link()`](#link) hovered because a mark in another chart was) and which segment is under the pointer.
 
 #### `LegendOptions`
 
@@ -2269,6 +2294,64 @@ type VegaSample = number | { readonly value: number; readonly at?: string | numb
 ```
 
 A value for data effects, alone or with where it is along x (`at`), which `threshold` matches series by.
+
+### Linked hover
+
+Hover across charts and attachments, by a value their marks share ([architecture.md](architecture.md#linked-hover)): a column and the line's point at its matchweek, both halves of a butterfly, small multiples.
+
+```ts
+import { barChart, expressive, lineChart, link } from "expressive-charts";
+
+const goals = barChart("#goals", { label: "Goals per matchweek", data: weeks, x: (d) => String(d.week), y: "goals", orientation: "vertical" });
+const xg = lineChart("#xg", { label: "Goals vs xG", data: weeks, x: "week", series: ["goals", "xg"] });
+const shots = expressive<Week>("#shots rect", { key: (d) => d.week, dim: true }); // a D3 chart's columns
+const linked = link([goals, xg, shots]);             // by matchweek: each column's key, and the line's x
+linked.destroy();
+link([goals, xg], { by: (event) => event.data.datum.week, effects: false }); // emphasis and dimming only
+```
+
+#### `link()`
+
+```ts
+link<S extends LinkSource<unknown>>(sources: readonly S[], options?: LinkOptions<D>): Link
+```
+
+Links hover across `sources`, charts and attachments whose rows are `D` (a union when they differ). When one is hovered by the pointer, touch or the keyboard, every other one hovers its targets that share a hovered mark's linking value: a line chart its x, a bar chart its bar, a donut its slice, an attachment its mark. They leave when it leaves. Options: [`LinkOptions<D>`](#linkoptionsd). Returns [`Link`](#link-type).
+
+- **A linked mark's hover** is its chart's own: the emphasis, the dimming of the chart's other marks, and its hover effect, with `source: "linked"` on the `hover` event. It gets no tooltip, focus ring or focus, and nothing is announced, so linked hover is visual only: a page that relies on it says the same in its table.
+- **One hover a link.** The newest hover anywhere in the link is the one shown, so a chart's own hover ends when another source is hovered. Escape or `leave()` on the hovered source ends every one, and so does Escape with focus on a source that shows a linked hover. `leave()` on a linked source ends only its own.
+- **A source mid-change** holds its linked hover and plays it once the change settles, as for any hover. A source with no target for the value hovers nothing.
+- **Its limits.** A source can be in one link at a time. A second link, the same source twice, or anything that isn't a chart or an attachment throws a `TypeError`, linking nothing. A [`chartSwitch`](#chartswitch) can't be linked yet. A destroyed source drops out.
+
+#### `LinkOptions<D>`
+
+```ts
+interface LinkOptions<D>
+```
+
+- `by`: `(event: { mark: MarkGeometry; data: MarkData<D> }) => unknown`. A mark's linking value, read from the hovered marks and from every target's marks in the other sources. Default: its last sample's `at` if it has one (a line point's x), else its key (a bar's or a slice's category, unless the page keys it otherwise). Values are compared as strings, a `Date` by its ISO string, as keys are. `undefined` or `null` links nothing, and so does a throw, which is reported. A value several targets share hovers them all, in one batch.
+- `effects`: `boolean`. Default true. False keeps linked marks to emphasis and dimming: their hover effect doesn't play, though their `hover` and `leave` events still fire.
+
+#### `LinkSource<D>`
+
+```ts
+interface LinkSource<D> {
+  on(type: "hover", listener: (event: MarkEvents<D>["hover"]) => void): () => void;
+  marks(): readonly MarkGeometry[];
+}
+```
+
+What `link()` takes, typed by its rows: a chart ([`barChart()`](#barchart), [`donutChart()`](#donutchart), [`lineChart()`](#linechart)) or an attachment ([`expressive()`](#expressive), [`fromVegaView()`](#fromvegaview)). `link()` checks at run time that each is one of these.
+
+#### `Link` (type)
+
+```ts
+interface Link {
+  destroy(): void;
+}
+```
+
+`destroy()` ends the link: linked hovers end, and each source can be linked again. The hovered source's own hover goes on.
 
 ### Controls
 

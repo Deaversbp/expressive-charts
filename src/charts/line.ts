@@ -43,6 +43,7 @@ import {
   type PlacedPoint,
   type RowState
 } from "./line-layout";
+import { linkable } from "./link";
 import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
 import { svgSurface } from "./render/surface";
@@ -1088,7 +1089,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   hover.sync();
   runner.enter(liveMarks().map(input));
 
-  return {
+  return linkable(hover.link, {
     element: svg,
 
     async update(next) {
@@ -1214,7 +1215,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       lineOrder = [];
       svg.remove();
     }
-  };
+  });
 }
 
 /** A row at rest, as laid out. */

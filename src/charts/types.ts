@@ -26,7 +26,8 @@ export interface MarkEvents<D> {
   enter: MarkEvent<D>;
   update: MarkEvent<D> & { readonly from: MarkGeometry };
   exit: MarkEvent<D>;
-  hover: MarkEvent<D> & { readonly source: "pointer" | "keyboard" | "touch"; readonly segment?: string };
+  /** `source` "linked": hovered by `link()`, because a mark in another chart with its linking value was. */
+  hover: MarkEvent<D> & { readonly source: "pointer" | "keyboard" | "touch" | "linked"; readonly segment?: string };
   leave: MarkEvent<D>;
 }
 

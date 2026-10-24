@@ -11,6 +11,7 @@ import { flash } from "./flash";
 import { morph } from "./morph";
 import { pulse } from "./pulse";
 import { threshold } from "./threshold";
+import { trace } from "./trace";
 import { travel } from "./travel";
 import { wiggle } from "./wiggle";
 
@@ -56,6 +57,9 @@ const effects: Record<string, AnyMarkEffect> = {
   pulse: pulse(),
   "pulse once in a colour": pulse({ times: 1, color: "series-3" }),
   "staggered flash, third of five": stagger(flash()),
+  trace: trace(),
+  "trace in a colour, wider, opaque and slower": trace({ color: "series-3", width: 6, opacity: 1, duration: 800 }),
+  "trace while the ball rolls": parallel(trace(), travel(ball)),
   "threshold below a constant": threshold({ compareTo: 0.5 }),
   "threshold above, in a colour": threshold({ compareTo: 0.25, when: "above", color: "series-1-strong" }),
   "threshold below a related series": threshold({ compareTo: "xg" }),

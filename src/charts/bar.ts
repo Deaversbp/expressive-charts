@@ -18,6 +18,7 @@ import { chartAnnouncer, changeText, type Announcer, type SortName } from "./ann
 import { barEncoding, layoutBars, placeRow, placeTick, type BarFrame, type BarLayout, type BarRow, type BarValue } from "./bar-layout";
 import { toColorAssignment } from "./colors";
 import { chartLegend } from "./legend";
+import { linkable } from "./link";
 import { chartMotion } from "./motion";
 import { svgMarkHandle, type StyledPart, type SvgMarkHandle } from "./render/mark-style";
 import { svgSurface } from "./render/surface";
@@ -635,7 +636,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   hover.sync();
   runner.enter(order.map(input));
 
-  return {
+  return linkable(hover.link, {
     element: svg,
 
     async update(next) {
@@ -742,7 +743,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       order = [];
       svg.remove();
     }
-  };
+  });
 }
 
 /** The options every chart shares, then `colorBy`: "category" needs one series, so a stack throws. */

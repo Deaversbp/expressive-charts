@@ -10,6 +10,9 @@
 //
 // With `watch`, the host's own transitions are followed frame by frame (./watch.ts): the marks that
 // changed are read again and the runner hears change(), as on our charts' frames, with no events.
+//
+// A link (../link.ts) hovers marks too, as "linked": the dimming and emphasis with `dim`, and their
+// hover runs, with no focus ring or focus. It hears the attachment's own hovers.
 
 import type { Baseline, MarkData, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
 import { defaultClock, matrix } from "../../core";
@@ -21,6 +24,7 @@ import { createRunner, type RunInput } from "../../core/runner";
 import type { ChartEnv } from "../bar";
 import { pointerHover, type PointerHover } from "../interaction";
 import { keyboardFocus } from "../keyboard";
+import { linkable, own, type LinkListener, type LinkPort } from "../link";
 import { chartMotion } from "../motion";
 import { maskedRing } from "../render/outside";
 import { svgSurface } from "../render/surface";
@@ -108,11 +112,18 @@ interface Diff<D> {
   readonly moved: MarkRecord<D>[];
 }
 
-type HoverSource = "pointer" | "touch" | "keyboard";
+type HoverSource = MarkEvents<unknown>["hover"]["source"];
 type Listeners<D> = { [K in keyof MarkEvents<D>]: Set<(event: MarkEvents<D>[K]) => void> };
 
+interface Hovered {
+  /** The marks' keys: one for the attachment's own hover, any number for a link's. */
+  readonly keys: readonly string[];
+  readonly source: HoverSource;
+  /** Whether their hover runs play: a link with `effects: false` keeps its marks to emphasis and dimming. */
+  readonly effects: boolean;
+}
+
 const SVG_NS = "http://www.w3.org/2000/svg";
-const ONE = { index: 0, count: 1 } as const;
 /**
  * Host roles around named marks that unwrapNames takes off when they have no name: images, read as
  * one picture whose children screen readers may skip (`image` is ARIA 1.3's name for `img`), and
@@ -321,10 +332,12 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   /** The host's elements around named marks whose role we took off (unwrapNames). */
   let unwrapped = new Set<Element>();
   const listeners: Listeners<D> = { enter: new Set(), update: new Set(), exit: new Set(), hover: new Set(), leave: new Set() };
-  let hovered: { readonly key: string; readonly source: HoverSource } | undefined;
+  let hovered: Hovered | undefined;
   /** The mark showing the focus ring. */
   let ringKey: string | undefined;
   let interaction: PointerHover | undefined;
+  /** The link the attachment is in, which hears its own hovers. */
+  let linked: LinkListener | undefined;
   let destroyed = false;
 
   const make = <K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<string, string>, parent?: Element): SVGElementTagNameMap[K] => {
@@ -500,13 +513,13 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       hover(hoverTarget, from) {
         const record = records.get(hoverTarget.key);
         // Already playing for keyboard focus: let it go on.
-        if (!record || hovered?.key === hoverTarget.key) return;
+        if (!record || (own(hovered) && hovered.keys[0] === hoverTarget.key)) return;
         endHover();
-        startHover(record, from, hoverTarget.segment);
+        startHover([record], from, hoverTarget.segment);
       },
       leave() {
-        // Focus holds a keyboard hover until blur or Escape.
-        if (hovered?.source !== "keyboard") endHover();
+        // Focus holds a keyboard hover until blur or Escape, and a link holds its own.
+        if (hovered?.source === "pointer" || hovered?.source === "touch") endHover();
       }
     });
   }
@@ -529,21 +542,46 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
   // ── Hover ──────────────────────────────────────────────────────────────────
 
-  function startHover(record: MarkRecord<D>, from: HoverSource, segment?: string): void {
-    hovered = { key: record.key, source: from };
+  /** Pointer, keyboard and link hover share this; the attachment's own tells its link. */
+  function startHover(marks: readonly MarkRecord<D>[], from: HoverSource, segment?: string, effects = true): void {
+    const started: Hovered = { keys: marks.map((record) => record.key), source: from, effects };
+    hovered = started;
     applyDim();
-    runner.hover([input(record)]);
-    emit("hover", { ...input(record), batch: ONE, source: from, ...(segment === undefined ? {} : { segment }) });
+    if (effects) runner.hover(marks.map(input));
+    marks.forEach((record, index) => emit("hover", { ...input(record), batch: { index, count: marks.length }, source: from, ...(segment === undefined ? {} : { segment }) }));
+    // A listener may have ended it (a refresh() that removed the mark) or started another (focus()), which told the link itself.
+    if (from !== "linked" && hovered === started) linked?.hover(marks.map(input));
   }
 
   function endHover(): void {
     const current = hovered;
     if (!current) return;
     hovered = undefined;
-    const record = find(current.key);
     applyDim();
-    runner.leave([current.key]);
-    if (record) emit("leave", { ...input(record), batch: ONE });
+    leaveMarks(current.keys);
+    if (own(current)) linked?.leave();
+  }
+
+  /** The marks' hover runs end in one batch, and each gets a leave event. */
+  function leaveMarks(keys: readonly string[]): void {
+    const marks = keys.flatMap((key) => find(key) ?? []);
+    runner.leave(keys);
+    marks.forEach((record, index) => emit("leave", { ...input(record), batch: { index, count: marks.length } }));
+  }
+
+  /** After a read: a hover whose marks have all left ends, and a link's goes on with those still here. */
+  function dropGone(): void {
+    if (hovered === undefined) return;
+    const keys = hovered.keys.filter((key) => records.has(key));
+    if (keys.length === hovered.keys.length) return;
+    if (keys.length === 0) {
+      interaction?.clear();
+      endHover();
+      return;
+    }
+    const gone = hovered.keys.filter((key) => !records.has(key));
+    hovered = { ...hovered, keys };
+    leaveMarks(gone);
   }
 
   /**
@@ -556,7 +594,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     if (!dim) return;
     const duration = `${motion.duration(100, "feedback")}ms`;
     for (const record of order) {
-      const hot = hovered?.key === record.key;
+      const hot = hovered?.keys.includes(record.key) === true;
       for (const part of record.mark.parts) {
         edits.toggleClass(part.element, "ec-attached", true);
         edits.toggleClass(part.element, "ec-dimmed", hovered !== undefined && !hot);
@@ -610,28 +648,30 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
             if (!record) return;
             if (!visible) {
               // Focus from a click or tap: the pointer's own hover plays.
-              if (hovered?.source === "keyboard" && hovered.key !== key) endHover();
+              if (hovered?.source === "keyboard" && hovered.keys[0] !== key) endHover();
               return;
             }
-            if (hovered?.key === key) {
+            if (own(hovered) && hovered.keys[0] === key) {
               // Already playing for the pointer: it goes on, held by focus now.
-              hovered = { key, source: "keyboard" };
+              hovered = { ...hovered, source: "keyboard" };
               return;
             }
             endHover();
-            startHover(record, "keyboard");
+            startHover([record], "keyboard");
           },
           blur() {
             ringKey = undefined;
             drawRing();
             if (hovered?.source !== "keyboard") return;
             // The pointer is still over it: the hover goes on, held by the pointer now.
-            if (interaction?.current === hovered.key) hovered = { key: hovered.key, source: "pointer" };
+            if (interaction?.current === hovered.keys[0]) hovered = { ...hovered, source: "pointer" };
             else endHover();
           },
           escape() {
             if (!hovered) return false;
-            endHover();
+            // A link's hover ends where it started, and with it every chart's in the link.
+            if (hovered.source === "linked" && linked) linked.dismiss();
+            else endHover();
             return true;
           }
         })
@@ -775,7 +815,28 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   keyboard?.sync();
   watchMarks();
 
-  return {
+  const link: LinkPort = {
+    targets: () => order.map((record) => ({ key: record.key, marks: [input(record)] })),
+    hover(keys, effects) {
+      endHover();
+      const marks = keys.flatMap((key) => records.get(key) ?? []);
+      if (marks.length > 0) startHover(marks, "linked", undefined, effects);
+    },
+    unlink() {
+      if (hovered?.source === "linked") endHover();
+    },
+    leave() {
+      interaction?.clear();
+      endHover();
+    },
+    listen(listener) {
+      if (destroyed) return false;
+      linked = listener;
+      return true;
+    }
+  };
+
+  return linkable(link, {
     refresh(next) {
       if (destroyed) return;
       // Throws on marks it can't read, before anything changes.
@@ -786,10 +847,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       runner.interrupt();
       const diff = apply(reading);
       watchMarks();
-      if (hovered !== undefined && !records.has(hovered.key)) {
-        interaction?.clear();
-        endHover();
-      }
+      dropGone();
       const exited = runner.exit(diff.exiting.map(input));
       emitEach("exit", diff.exiting);
       runner.update(diff.changed.map(({ record, from }) => ({ ...input(record), from })));
@@ -833,6 +891,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       if (destroyed) return;
       destroyed = true;
       hovered = undefined;
+      linked?.gone();
+      linked = undefined;
       watching?.destroy();
       // The runner resets every mark it styled, through the records, so it goes first.
       runner.destroy();
@@ -847,7 +907,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       order = [];
       owners = new Map();
     }
-  };
+  });
 }
 
 function checkOptions<D>(options: ExpressiveOptions<D>): void {

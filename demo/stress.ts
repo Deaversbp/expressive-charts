@@ -505,9 +505,9 @@ function counted<D>(effect: DataEffect<D>, runsOf: RunCount, drawn = false): Dat
 
 /**
  * The effect's end state from the start, following the mark: the arrow rides the line's tip at once.
- * travel() would first carry it along the whole line at 360 px/s, and a year of days is a walk of
- * about 9,400 px (26 s), ten years about 60,000 (167 s): far past the 5 s that WCAG 2.2.2 allows
- * motion to start by itself. The plan's backlog has it.
+ * travel() would first carry it along the whole line: a year of days is a walk of about 9,400 px,
+ * ten years about 60,000. Its trip is capped at 4 s base, so that's 4 s of motion starting by
+ * itself, at about 6 to 40 times a trip's usual speed, before anything is played.
  */
 function riding(effect: GeometryEffect): GeometryEffect {
   return {

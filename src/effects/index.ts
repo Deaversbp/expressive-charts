@@ -5,6 +5,7 @@ export { travel, type TravelOptions } from "./travel";
 export { flash, type FlashOptions } from "./flash";
 export { wiggle, type WiggleOptions } from "./wiggle";
 export { pulse, type PulseOptions } from "./pulse";
+export { trace, type TraceOptions } from "./trace";
 export { threshold, type ThresholdOptions } from "./threshold";
 export { morph, type MorphAlign, type MorphOptions } from "./morph";
 export { gaits, type Gait, type GaitName, type GaitPose, type GaitState, type StepOptions } from "./gaits";

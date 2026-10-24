@@ -1410,6 +1410,35 @@ registerIcon(tick); // now travel("tick") anywhere
 barChart("#sales", { label: "Revenue by region", data: regions, y: "region", x: "revenue", on: { hover: travel(icons.arrow, { size: "fit" }) } });
 ```
 
+#### An icon from an icon set
+
+Icon sets such as Lucide, Heroicons and Tabler give each icon as SVG markup. Copy an icon's SVG from the set's site and pass it to `iconFromSvg()` with a name, a size and an anchor:
+
+```ts
+import { barChart, iconFromSvg, registerIcon, travel } from "expressive-charts";
+
+// An icon's SVG as these sets give it: a 24×24 viewBox, stroked in currentColor.
+const rising = iconFromSvg(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 18 9 12 13 15 20 7"/>
+    <polyline points="15 7 20 7 20 12"/>
+  </svg>`,
+  { name: "rising", size: 18, anchor: { x: 12, y: 12 } }
+);
+barChart("#sales", { label: "Revenue by region", data: regions, y: "region", x: "revenue", on: { hover: travel(rising) } });
+registerIcon(rising); // or by name, in any chart: travel("rising")
+
+// A round icon rolls: its centre on the walk, and the radius of its outer edge, half the stroke included.
+const coin = iconFromSvg(svgMarkup, { name: "coin", size: 16, anchor: { x: 12, y: 12 }, radius: 11, gait: "roll" });
+```
+
+- **Colour.** `currentColor` becomes the theme's `text` colour, so the icon follows the chart in the light and dark themes, not the page's `color`. To colour it yourself, replace `currentColor` with a colour or a theme token such as `text-muted` or `series-2`. An SVG with no fill draws black, as it would in a page, so give such an icon `fill="currentColor"`. The core icons have a halo in `surface`, so they show on any bar; for one like it, draw the shapes twice, the first with `stroke="surface"` and a wider stroke.
+- **`size`** is the icon's length along the walk in px. Its viewBox is scaled to fit, strokes too. `travel(icon, { size: "fit" })` sizes it to each mark instead.
+- **`anchor`** is the point that sits on the walk, in the viewBox's units: usually the centre, (12, 12) in a 24×24 viewBox, so the icon runs along the middle of the mark. A pin's anchor is its tip. `travel` keeps the icon inside the mark by its `footprint`, which reaches from the anchor to the box's edges unless it's given.
+- **Rolling.** `gait: "roll"` spins the icon by the distance over its `radius`, so set `radius` to the round part's outer edge, in the viewBox's units: 11 for a circle of radius 10 with a stroke 2 wide. Then it turns as a wheel would. The default is half the box's height, 12 in a 24×24 viewBox.
+- **What's kept.** Outline icons come through as they look on the set's site. Fill rules and opacity aren't kept, so a hole in a solid icon (`fill-rule="evenodd"`, as Heroicons' solid style uses) can fill in, and a duotone icon loses its lighter part: use the set's outline style. Copy one icon's `<svg>`, not a sprite's `<use>`, which is dropped.
+- **Licences.** Lucide's licence is ISC, and Heroicons' and Tabler's are MIT. Both let you use the icons in your own work, and both ask for the licence notice to go with copies of them. Check the licence of any set before shipping its icons.
+
 #### `icons`
 
 ```ts
@@ -1440,7 +1469,7 @@ What `defineIcon()` takes: an [`Icon`](#icon) whose `pivot`, `footprint` and `si
 iconFromSvg(markup: string, spec: SvgIconSpec): Icon
 ```
 
-An icon from SVG markup, read as text with no DOM. It keeps only `path`, `circle`, `rect`, `ellipse`, `line` and `polygon`, with their fill, stroke, stroke width, caps and joins (as attributes or in `style`, inherited from groups), and applies their transforms. Everything else is dropped: scripts, event handlers, `<use>`, text, images, and the contents of `<defs>` and `<clipPath>`. Colours must be plain colours or theme tokens, and path data is written again from its numbers, so nothing from the markup passes through. Markup that isn't a string throws a `TypeError`, and a bad field a `RangeError`.
+An icon from SVG markup, read as text with no DOM. It keeps only `path`, `circle`, `rect`, `ellipse`, `line`, `polyline` and `polygon`, with their fill, stroke, stroke width, caps and joins (as attributes or in `style`, inherited from groups), and applies their transforms. `currentColor`, in any case, becomes the `text` token. Everything else is dropped: scripts, event handlers, `<use>`, text, images, and the contents of `<defs>` and `<clipPath>`. Colours must be plain colours or theme tokens, and path data is written again from its numbers, so nothing from the markup passes through. Markup that isn't a string throws a `TypeError`, and a bad field a `RangeError`. [An icon from an icon set](#an-icon-from-an-icon-set) shows how to pick its spec.
 
 #### `SvgIconSpec`
 

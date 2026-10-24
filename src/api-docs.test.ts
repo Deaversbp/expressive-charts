@@ -47,6 +47,7 @@ declare const weeks: Week[];
 declare const nextWeek: Week;
 declare const days: Day[];
 declare const regions: Region[];
+declare const nextQuarter: Region[];
 /** Plot's rows, which its marks bind by index. */
 declare const rows: Player[];
 declare const svg: SVGSVGElement;

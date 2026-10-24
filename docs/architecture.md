@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the design. Code that doesn't exist yet is marked as planned. [plan.md](plan.md) has the roadmap and the reasoning behind the decisions.
+This document describes the design. Code that doesn't exist yet is marked as planned. [api.md](api.md) is the reference for every export, and [plan.md](plan.md) has the roadmap and the reasoning behind the decisions.
 
 ## Layers
 
@@ -872,6 +872,7 @@ How many marks stay smooth, measured on `demo/stress.html` by `scripts/bench.mjs
 - **Types** need TypeScript 5.4 or newer, since they use `NoInfer`. The repository builds with TypeScript 5.9.3, pinned exactly. TypeScript 7 waits until after 0.1.0, since tsup's declaration build uses TypeScript's JS API.
 - **Releases** are published by `.github/workflows/release.yml` when a GitHub release whose tag is `v` and the version is published, with npm's provenance statement (`publishConfig` asks for it, with public access). It runs CI's checks first. CONTRIBUTING.md's Releasing has the steps and the authentication: a token for 0.1.0, then trusted publishing.
 - **The 0.x promise** in CHANGELOG.md names every value and type it covers. `src/promise.test.ts` names them all too, so a rename or a removal fails `typecheck`, and it checks that its list and CHANGELOG's match.
+- **The API reference** is [api.md](api.md), with README as npm's landing page (M6 decision 5). `src/api-docs.test.ts` reads every entry's exports, values and types, with TypeScript's compiler API, and fails when one has no entry in api.md, an entry names no export, or the entries api.md marks as under the promise aren't CHANGELOG's. It type-checks every code example in README, and every example in api.md that imports the package, against the source with the repository's compiler options, declaring the page's own names (its rows, its D3 selections) in one place. README's links must be absolute, since npm shows it away from the repository, and the links in both must find their files and headings.
 
 ### Bundle size
 

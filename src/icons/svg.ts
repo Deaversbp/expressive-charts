@@ -16,7 +16,7 @@ export type SvgIconSpec = Omit<IconSpec, "shapes" | "box">;
 
 /** Elements whose children are drawn. Every other element that isn't a shape is dropped with its children. */
 const CONTAINERS = new Set(["svg", "g", "a"]);
-const SHAPES = new Set(["path", "circle", "rect", "ellipse", "line", "polygon"]);
+const SHAPES = new Set(["path", "circle", "rect", "ellipse", "line", "polyline", "polygon"]);
 // No part of a tag can contain "<" (XML doesn't allow it in attribute values), so a scan never runs
 // past the next tag and unclosed tags can't make matching slow.
 const TAG = /<![^<>]*>|<(\/?)([A-Za-z][\w:.-]*)((?:\s+[^\s=/<>]+(?:\s*=\s*(?:"[^"<]*"|'[^'<]*'|[^\s"'<>]+))?)*)\s*(\/?)>/g;
@@ -34,11 +34,13 @@ interface Inherited {
 }
 
 /**
- * Converts `path`, `circle`, `rect`, `ellipse`, `line` and `polygon` elements into shapes, with their
- * fill, stroke, stroke width, line caps and joins (as attributes or in `style`, inherited from `<g>`)
- * and transforms applied. Everything else is dropped: scripts, event handlers, `<use>`, text, images,
- * and what's inside `<defs>`, `<clipPath>` and the like. Gradients, patterns, opacity and CSS classes
- * aren't kept; a shape painted with one falls back to its inherited colour.
+ * Converts `path`, `circle`, `rect`, `ellipse`, `line`, `polyline` and `polygon` elements into shapes,
+ * with their fill, stroke, stroke width, line caps and joins (as attributes or in `style`, inherited
+ * from `<g>`) and transforms applied. `currentColor` becomes the theme's `text` colour, so an icon
+ * from an icon set follows the chart's theme. Everything else is dropped: scripts, event handlers,
+ * `<use>`, text, images, and what's inside `<defs>`, `<clipPath>` and the like. Gradients, patterns,
+ * opacity, fill rules and CSS classes aren't kept; a shape painted with a gradient or pattern falls
+ * back to its inherited colour.
  */
 export function iconFromSvg(markup: string, spec: SvgIconSpec): Icon {
   if (typeof markup !== "string") throw new TypeError("iconFromSvg needs SVG markup as a string.");
@@ -84,7 +86,7 @@ export function iconFromSvg(markup: string, spec: SvgIconSpec): Icon {
   }
 
   if (!box) fail("needs an <svg> element");
-  if (shapes.length === 0) fail("has nothing to draw: no path, circle, rect, ellipse, line or polygon with a fill or stroke");
+  if (shapes.length === 0) fail("has nothing to draw: no path, circle, rect, ellipse, line, polyline or polygon with a fill or stroke");
   const sized: Rect = { x: box!.x * scale, y: box!.y * scale, width: box!.width * scale, height: box!.height * scale };
   const at = (point: Point): Point => (point && typeof point === "object" ? { x: point.x * scale, y: point.y * scale } : point);
   return defineIcon({
@@ -159,7 +161,10 @@ function hidden(attributes: Map<string, string>): boolean {
 function inherit(parent: Inherited, attributes: Map<string, string>): Inherited {
   const paint = (name: string, current: string): string => {
     const value = attributes.get(name)?.trim();
-    return value !== undefined && COLOR.test(value) && value !== "inherit" ? value : current;
+    if (value === undefined || !COLOR.test(value)) return current;
+    // Keywords are any case. currentColor would follow the page's `color`; the text token follows the chart's theme.
+    const keyword = value.toLowerCase();
+    return keyword === "inherit" ? current : keyword === "currentcolor" ? "text" : keyword === "none" ? keyword : value;
   };
   const width = Number.parseFloat(attributes.get("stroke-width") ?? "");
   const linecap = attributes.get("stroke-linecap")?.trim();
@@ -215,6 +220,7 @@ function outline(tag: string, attributes: Map<string, string>): PathCommand[] {
         { op: "M", to: { x: num("x1"), y: num("y1") } },
         { op: "L", to: { x: num("x2"), y: num("y2") } }
       ];
+    case "polyline":
     case "polygon": {
       const values = (attributes.get("points") ?? "").trim().split(/[\s,]+/).filter(Boolean).map(Number);
       const points: Point[] = [];
@@ -222,7 +228,9 @@ function outline(tag: string, attributes: Map<string, string>): PathCommand[] {
         points.push({ x: values[i]!, y: values[i + 1]! });
       }
       if (points.length < 2) return [];
-      return [...points.map((to, i): PathCommand => ({ op: i === 0 ? "M" : "L", to })), { op: "Z", to: points[0]! }];
+      const lines = points.map((to, i): PathCommand => ({ op: i === 0 ? "M" : "L", to }));
+      // A polyline is a polygon left open: no closing segment, and filled as any open path is.
+      return tag === "polygon" ? [...lines, { op: "Z", to: points[0]! }] : lines;
     }
     case "rect":
       return rect(num("x"), num("y"), num("width"), num("height"), attributes);

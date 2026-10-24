@@ -4,7 +4,7 @@ const spec = { name: "test", anchor: { x: 12, y: 12 } };
 const svg = (body: string, root = 'viewBox="0 0 24 24"'): string => `<svg xmlns="http://www.w3.org/2000/svg" ${root}>${body}</svg>`;
 
 describe("iconFromSvg", () => {
-  it("converts path, circle, rect, ellipse, line and polygon into absolute path data", () => {
+  it("converts path, circle, rect, ellipse, line, polyline and polygon into absolute path data", () => {
     const icon = iconFromSvg(
       svg(`
         <path d="m2 2h4v4z"/>
@@ -13,7 +13,8 @@ describe("iconFromSvg", () => {
         <rect x="0" y="0" width="10" height="6" rx="2"/>
         <ellipse cx="5" cy="5" rx="4" ry="2"/>
         <line x1="0" y1="0" x2="4" y2="3" stroke="red"/>
-        <polygon points="0,0 4,0 2 3"/>`),
+        <polygon points="0,0 4,0 2 3"/>
+        <polyline points="0,0 4,0 2 3"/>`),
       spec
     );
     expect(icon.shapes.map((shape) => shape.d)).toEqual([
@@ -23,7 +24,9 @@ describe("iconFromSvg", () => {
       "M2,0L8,0A2,2 0 0 1 10,2L10,4A2,2 0 0 1 8,6L2,6A2,2 0 0 1 0,4L0,2A2,2 0 0 1 2,0Z",
       "M9,5A4,2 0 0 1 1,5A4,2 0 0 1 9,5Z",
       "M0,0L4,3",
-      "M0,0L4,0L2,3Z"
+      "M0,0L4,0L2,3Z",
+      // A polyline is a polygon left open.
+      "M0,0L4,0L2,3"
     ]);
     // SVG's default fill is black; here it's explicit, since an unset fill draws none.
     expect(icon.shapes[0]).toEqual({ d: "M2,2L6,2L6,6Z", fill: "#000000" });
@@ -54,8 +57,67 @@ describe("iconFromSvg", () => {
   });
 
   it("never passes input through: path data is rewritten from numbers, and unsafe colours are dropped", () => {
-    const icon = iconFromSvg(svg(`<path d="M0,0 L4,4 &quot;/&gt;&lt;script&gt;" fill="red;background:url(x)" stroke="expression(x)"/>`), spec);
-    expect(icon.shapes).toEqual([{ d: "M0,0L4,4", fill: "#000000" }]);
+    const icon = iconFromSvg(
+      svg(`
+        <path d="M0,0 L4,4 &quot;/&gt;&lt;script&gt;" fill="red;background:url(x)" stroke="expression(x)"/>
+        <polyline points="0,0 4,4 &quot;/&gt;&lt;script&gt; 9,9" fill="none" stroke="blue"/>`),
+      spec
+    );
+    expect(icon.shapes).toEqual([
+      { d: "M0,0L4,4", fill: "#000000" },
+      { d: "M0,0L4,4", stroke: "blue", width: 1 }
+    ]);
+  });
+
+  it("reads a polyline as an open path: filled as one, and drawn only with two points or more", () => {
+    const icon = iconFromSvg(svg(`<polyline points="0 0 4 0 2 3" fill="red"/><polyline points="0,0 4,0 2" stroke="red"/><polyline points="5,5" stroke="red"/>`), spec);
+    expect(icon.shapes).toEqual([
+      { d: "M0,0L4,0L2,3", fill: "red" },
+      // An odd number left over is dropped, as SVG draws up to the error.
+      { d: "M0,0L4,0", fill: "#000000", stroke: "red", width: 1 }
+    ]);
+  });
+
+  it("reads a stroked 24×24 icon in the style of Lucide, Heroicons and Tabler, in the theme's text colour", () => {
+    // Drawn for this test in those sets' style: a rising line with an arrowhead, the stroke set on the root.
+    const icon = iconFromSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-rising" aria-hidden="true">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+        <polyline points="3 18 9 12 13 15 20 7"/>
+        <polyline points="15 7 20 7 20 12"/>
+      </svg>`,
+      { name: "rising", size: 18, anchor: { x: 12, y: 12 } }
+    );
+    const stroke = { stroke: "text", width: 1.5, linecap: "round", linejoin: "round" };
+    expect(icon.shapes).toEqual([
+      { d: "M2.25,13.5L6.75,9L9.75,11.25L15,5.25", ...stroke },
+      { d: "M11.25,5.25L15,5.25L15,9", ...stroke }
+    ]);
+    expect(icon.size).toBe(18);
+  });
+
+  it("makes currentColor the text token in any case, set on the root, a group or the shape, as an attribute or in style", () => {
+    const icon = iconFromSvg(
+      svg(
+        `<path d="M0,0L4,4"/>
+        <g stroke="currentcolor"><path d="M0,0L4,4"/></g>
+        <path d="M0,0L4,4" style="fill: CURRENTCOLOR; stroke: currentColor"/>
+        <g fill="red"><path d="M0,0L4,4" fill="INHERIT"/><path d="M0,0L4,4" fill="None" stroke="#00f"/></g>
+        <path d="M0,0L4,4" fill="none" stroke="surface" stroke-width="4"/>`,
+        'viewBox="0 0 24 24" fill="CurrentColor"'
+      ),
+      spec
+    );
+    expect(icon.shapes).toEqual([
+      { d: "M0,0L4,4", fill: "text" },
+      { d: "M0,0L4,4", fill: "text", stroke: "text", width: 1 },
+      { d: "M0,0L4,4", fill: "text", stroke: "text", width: 1 },
+      { d: "M0,0L4,4", fill: "red" },
+      { d: "M0,0L4,4", stroke: "#00f", width: 1 },
+      // Theme tokens pass through, so a halo can be drawn in the surface colour.
+      { d: "M0,0L4,4", stroke: "surface", width: 4 }
+    ]);
   });
 
   it("inherits paint from groups and the root, with style beating attributes", () => {
@@ -71,7 +133,7 @@ describe("iconFromSvg", () => {
       spec
     );
     expect(icon.shapes).toEqual([
-      { d: "M0,0L4,4", stroke: "currentColor", width: 2, linecap: "round", linejoin: "round" },
+      { d: "M0,0L4,4", stroke: "text", width: 2, linecap: "round", linejoin: "round" },
       { d: "M0,0L4,4", stroke: "#00ff00", width: 3, linecap: "round", linejoin: "round" }
     ]);
   });
@@ -115,7 +177,7 @@ describe("iconFromSvg", () => {
   it("says what's wrong", () => {
     expect(() => iconFromSvg(`<path d="M0,0L1,1"/>`, spec)).toThrow(/"test" needs an <svg> element/);
     expect(() => iconFromSvg(svg(`<path d="M0,0L1,1"/>`, 'width="50%"'), spec)).toThrow(/needs a viewBox/);
-    expect(() => iconFromSvg(svg(`<path d="M0,0L1,1" fill="none"/><text>x</text>`), spec)).toThrow(/has nothing to draw/);
+    expect(() => iconFromSvg(svg(`<path d="M0,0L1,1" fill="none"/><text>x</text>`), spec)).toThrow(/has nothing to draw: no path, .*polyline/);
     expect(() => iconFromSvg(svg(`<path d="M0,0"/>`), { ...spec, size: -1 })).toThrow(/size must be more than 0/);
     expect(() => iconFromSvg(42 as unknown as string, spec)).toThrow(TypeError);
   });

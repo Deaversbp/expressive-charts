@@ -11,7 +11,7 @@ Every idea is meant to pass the project's Principles:
 Effect names refer to the existing and planned vocabulary: `travel`, `trace`, `flash`, `pulse`, `wiggle`, `threshold`, `delta`, `morph`, `stagger`, and staged transitions. A few terms need care:
 
 - **`threshold`** colours the parts of a mark's path where its values are below a reference by default; `when: "above"` colours the parts above it.
-- **`delta`** shows the change *since the last update* (a custom effect in [sketches/examples/06-custom-effects.ts](../sketches/examples/06-custom-effects.ts), as is `trace`).
+- **`delta`** shows the change *since the last update*. It's a built-in since M7, as are `label` and `trace`; smaller versions of `delta` and `trace` are the effects guide's worked examples, in [sketches/examples/effects](../sketches/examples/effects/), which [06-custom-effects.ts](../sketches/examples/06-custom-effects.ts) uses.
 - **`label`** is new: text computed from the mark's own data, such as last value minus first value, or a field like `vsLastMonth`. Effects can't see neighbouring marks, so a comparison between marks (funnel stage to stage) has to be computed into the row first.
 - **Linked hover** is new (see the end).
 

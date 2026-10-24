@@ -135,6 +135,7 @@ describe.arc({ key: "Saved", cx: 0, cy: 0, inner: 70, outer: 116, start: d.start
 - **They follow.** A mark whose boxes moved counts as changed, so its runs hear `onChange` even when the mark itself didn't move: a line's end label pushed aside by another's, or one whose text changed.
 - **The builders** take `labelBounds` and pass it through as given. A box with a coordinate that isn't finite, or a negative size, throws a `RangeError` that names the builder and the field.
 - **Host marks.** The library doesn't know where a host's labels are, so marks `expressive()` reads from rects, and `fromVegaView()`'s, have none. A page's `geometry` can give them, and `expressive()` keeps them; a `refresh()` that moves them counts as a change.
+- **Who reads them.** [`delta` and `label`](#delta-and-label) put their text past them.
 
 ### Geometry helpers
 
@@ -174,7 +175,7 @@ barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("so
 
 ## Effects
 
-The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The effects [`travel`](#travel), [`flash`](#flash), [`wiggle`](#wiggle), [`pulse`](#pulse) and [`trace`](#trace), the data effect [`threshold`](#threshold), the transition effect [`morph`](#morph), and the combinators `sequence`, `parallel`, `only` and [`stagger`](#stagger), are in `src/effects/`.
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The effects [`travel`](#travel), [`flash`](#flash), [`wiggle`](#wiggle), [`pulse`](#pulse) and [`trace`](#trace), the data effects [`threshold`](#threshold), [`delta` and `label`](#delta-and-label), the transition effect [`morph`](#morph), and the combinators `sequence`, `parallel`, `only` and [`stagger`](#stagger), are in `src/effects/`.
 
 There are three kinds, distinguished by a `kind` field:
 
@@ -285,6 +286,29 @@ trace({ color?, width?, opacity?, duration? })   // on: { hover: trace() }
 - **Geometry changes.** The stroke follows `onChange` and keeps its progress, so it stays on the mark through a transition or a resize. While the walk is under 0.5 px it's removed, and drawn again when the walk is back.
 - **End state: the whole stroke.** Reduced motion shows what a full run ends with. The path is made when the run starts, at progress 0 a lone moveto that SVG doesn't stroke, so in a combination it stacks where `end()` puts it.
 - It isn't a preset. `color` must be a non-empty string; `width` and `duration` finite numbers, 0 or more; and `opacity` a number from 0 to 1. Anything else throws a `RangeError` when it's made.
+
+### delta and label
+
+```ts
+delta({ value?, format?, color? })          // on: { update: delta() }
+label((data, mark) => text, { color? })     // on: { decorate: label((data) => …) }
+```
+
+`delta` and `label` are data effects that put text past the end of a mark, clear of its own labels. `delta` says the change since the last update ("+2"); `label` says whatever the page works out from the mark's data. They place and rise through one internal helper, `src/effects/caption.ts`, so they behave the same way. `delta` is the effects guide's [worked example](effects-guide.md#delta), grown.
+
+- **Where the text goes.** From the end of the walk, along its heading: 10 px past the end, or 6 px past the farthest of the mark's [`labelBounds`](#the-marks-own-labels) the heading meets, whichever is further. The heading meets a box when it passes within 6 px of it: the text has height, and a heading that just missed a label would put the text on it. So the text is past a bar's value label, centred above a column's, past a negative bar's name, and past a line's end label when the line heads at it or close by.
+- **When the heading meets none of them** but the mark has some, it goes up from the mark's centre (`angle(0.5) − π/2`), 6 px past the farthest of them that way meets. A slice's heading runs along the ring, so it never meets the slice's label outside it; its up side goes out through that label. If neither way meets one, it's 10 px past the end, as on a mark with none: a host mark, unless the page's `geometry` gives its boxes.
+- **How it's anchored.** By the way it was placed: at its start reading rightwards, its end leftwards, and its middle within 45° of vertical. Its baseline is below the placed point by a share of the overlay's 12.5 px text: 0.36 em read sideways, so "20 +2" share a baseline, as the charts centre their labels; none read upwards, so it stands on the point; 0.8 em read downwards, so it hangs from it, as a negative column's value label does. The text itself isn't measured: the drawing API is renderer-neutral.
+- **The rise.** It starts 8 px across the way it was placed, on that way's down side, unseen, and rises into place as it fades in, over 400 ms base with `effect` timing, eased in and out (140 ms in Analysis). Rising across, it never crosses the labels it's placed past.
+- **It stays, and follows.** The text follows `onChange` wherever the mark and its labels go. `delta`'s text is this update's change, so it keeps it until the next update clears the run. `label` works its text out again from each change's data.
+- **End state: the text in place**, so reduced motion shows it.
+- **`delta`'s change** is `value(data) − value(data.previous)`, by default the last sample's value: a bar's total, a line's value at its revealed end, a slice's share. No `previous`, a change that isn't a finite number, or one within 1e-9 of the values (float noise: 0.1 + 0.2 against 0.3) draws nothing. The default `format` is `Intl.NumberFormat` in the page's locale with `signDisplay: "always"` and at most two decimals, so it never reads "+0.30000000000000004", and a change too small to show reads "+0".
+- **`label`** calls `text(data, mark)` when the run starts and on each change, not every frame. `undefined`, `null` or `""` draws nothing, and the text comes back when a change gives some. Its row type comes from `text`, as `defineDataEffect<D>`'s does.
+- **Screen readers.** The overlay is `aria-hidden`, so a page that relies on the text says the same in its table or its announcement.
+- **Line charts.** `update` and `decorate` run on a line's points too, so a change or a label meant for the line goes in `only((mark) => mark.length > 0, …)`.
+- **Only the mark's own labels.** A mark knows where its own labels are, not its neighbours'. Two lines that end close together have their end labels pushed apart, and one line's text can land on the other's label.
+- **The chart's edge.** The layouts leave room for their own labels, not for these, so text past the outermost labels reaches past the chart's edge, where it's drawn: the `<svg>` is `overflow: visible`. Measured in Chrome at 320 px wide, with a bar at the end of its scale: a bar's text reaches 19.7 px past the right edge, the tallest column's 17.6 px above the top, and a negative bar's, past its name, 20 px past the left edge. Negative columns, lines and slices stay inside. A page leaves that much room beside the chart, or it may scroll sideways at 320 px. `src/captions.test.ts` measures the same with jsdom's estimate of the text.
+- Neither is a preset. `value`, `format` and `text` that aren't functions throw a `TypeError`, and a `color` that isn't a non-empty string a `RangeError`.
 
 ### threshold
 

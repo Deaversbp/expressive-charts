@@ -12,10 +12,12 @@ import { select } from "d3-selection";
 import { arc, line, pie, type PieArcDatum } from "d3-shape";
 import {
   barChart,
+  delta,
   describe as build,
   donutChart,
   expressive,
   flash,
+  label,
   lineChart,
   parallel,
   pulse,
@@ -230,11 +232,31 @@ const effects: Record<string, AnyMarkEffect> = {
   trace: trace(),
   "trace while the ball rolls": parallel(trace(), travel(soccerBall)),
   // checkEffect's default data runs from 0 to 1 along each walk, so this colours the last 40%.
-  "threshold past a target": threshold({ compareTo: 0.6, when: "above" })
+  "threshold past a target": threshold({ compareTo: 0.6, when: "above" }),
+  "delta with a flash": parallel(flash(), delta()),
+  "label from the mark's last value": label((data) => `${data.samples[data.samples.length - 1]?.value ?? ""}`)
 };
 
-/** More than the defaults, where an effect needs it: a later mark of a batch. */
-const options: Record<string, CheckEffectOptions> = { "staggered flash, third of five": { batch: { index: 2, count: 5 } } };
+/** A mark's data after an update: from 0 to 1 along the walk, up from 0.75 before. */
+const updated = (): MarkData => ({
+  datum: undefined,
+  samples: [
+    { t: 0, value: 0 },
+    { t: 1, value: 1 }
+  ],
+  related: () => undefined,
+  previous: {
+    datum: undefined,
+    samples: [
+      { t: 0, value: 0 },
+      { t: 1, value: 0.75 }
+    ],
+    related: () => undefined
+  }
+});
+
+/** More than the defaults, where an effect needs it: a later mark of a batch, or the values before an update. */
+const options: Record<string, CheckEffectOptions> = { "staggered flash, third of five": { batch: { index: 2, count: 5 } }, "delta with a flash": { data: updated } };
 
 /** A source's marks, or with `true` the same marks moved. */
 type Source = (moved?: boolean) => readonly MarkGeometry[];
@@ -369,6 +391,20 @@ describe.each(Object.entries(sources))("effects on marks from %s", (_source, mar
       const ctx = testContext();
       trace().end(mark, ctx);
       expect(ctx.layer.drawn.map((drawn) => (drawn.kind === "path" ? drawn.d : drawn.kind)), mark.key).toEqual(mark.length >= 0.5 ? [mark.slice(0, 1)] : []);
+    }
+  });
+
+  it("delta and label put their text outside every mark's own labels", () => {
+    for (const mark of marksOf()) {
+      for (const effect of [delta(), label(() => "+0.25")]) {
+        const ctx = testContext();
+        effect.end(mark, updated(), ctx);
+        const texts = ctx.layer.drawn.filter((drawn) => drawn.kind === "text");
+        expect(texts.map((text) => text.content), mark.key).toEqual(["+0.25"]);
+        const { at } = texts[0]!.style;
+        const inside = (mark.labelBounds ?? []).some((box) => at.x >= box.x && at.x <= box.x + box.width && at.y >= box.y && at.y <= box.y + box.height);
+        expect(inside, mark.key).toBe(false);
+      }
     }
   });
 

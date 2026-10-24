@@ -25,6 +25,14 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+### Changed
+
+- **Hover dims the other marks' bodies, not their labels**, on the bar and donut charts and in a chart switch. The names and values of the marks that aren't hovered stay at full strength, so they keep 4.5:1 (WCAG 1.4.3); they used to dim with their marks, to 2.0:1 in the light theme. `--ec-dim-opacity` keeps its default, 0.3, and an effect's `opacity` on a dimmed mark still multiplies with it. `expressive()`'s `dim` doesn't change. To dim the labels too, as before, add this to the page's CSS: `.ec-chart.ec-hovering .ec-mark:not(.ec-hot) :is(.ec-label, .ec-value) { opacity: var(--ec-dim-opacity, 0.3); }`.
+
 ## 0.1.0 (24 October 2026)
 
 The first release, published to npm from CI with provenance. Everything in it is new. [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) documents every export.

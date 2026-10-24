@@ -2,8 +2,9 @@
 // axe-core, a pinned dev dependency, runs its WCAG 2.2 A and AA rules on every demo page: in light and
 // dark, at 320 px wide, under forced colours, and on morph.html mid-switch. Beside it, DOM checks for
 // what axe can't see: the tab order with a visible focus at every stop, no sideways scroll at 320 px,
-// the tooltip clear of the focus ring and dismissed by Escape, nothing moving by itself after 5 s,
-// and legends keeping their colours under forced colours. There are no screenshots here, so every
+// the tooltip clear of the focus ring and dismissed by Escape, every label at 4.5:1 while another
+// mark is hovered, nothing moving by itself after 5 s, and legends keeping their colours under
+// forced colours. There are no screenshots here, so every
 // browser runs all of it.
 
 import axe from "axe-core";
@@ -305,6 +306,71 @@ test.describe("content on hover", () => {
         await page.clock.runFor(REST);
       }
     });
+  }
+});
+
+test.describe("contrast on hover", () => {
+  // WCAG 1.4.3 while a mark is hovered, which axe never sees: the other marks dim, and every text in
+  // the chart keeps 4.5:1 against the card behind it. A text's colour is its fill at the opacity it's
+  // drawn with (its own and every ancestor's), over that card.
+  for (const { name, demo, charts } of demos) {
+    for (const colorScheme of ["light", "dark"] as const) {
+      test(`${name}.html, ${colorScheme}: every label keeps 4.5:1 while another mark is hovered`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme });
+        await openAtRest(page, demo);
+        for (const { chart, shape } of charts) {
+          await hoverShape(page, page.locator(`${chart} ${shape}`));
+          await page.clock.runFor(REST);
+          const { dimmed, texts } = await page.evaluate((selector) => {
+            // The hover's CSS transitions run on the browser's own time, not the fake clock: to their end.
+            for (const animation of document.getAnimations()) animation.finish();
+            const root = document.querySelector(selector)!;
+            const rgb = (color: string): number[] | undefined => {
+              const match = /^rgba?\(([\d.]+),? ([\d.]+),? ([\d.]+)(?:,? \/? ?([\d.]+))?\)$/.exec(color);
+              return match ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === undefined ? 1 : Number(match[4])] : undefined;
+            };
+            const opacity = (element: Element): number => {
+              let product = 1;
+              for (let at: Element | null = element; at; at = at.parentElement) product *= Number(getComputedStyle(at).opacity);
+              return product;
+            };
+            const luminance = ([r, g, b]: number[]): number => {
+              const linear = (c: number): number => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+              return 0.2126 * linear(r!) + 0.7152 * linear(g!) + 0.0722 * linear(b!);
+            };
+            let card: number[] = [255, 255, 255];
+            for (let at: Element | null = root; at; at = at.parentElement) {
+              const background = rgb(getComputedStyle(at).backgroundColor);
+              if (background && background[3]! > 0) {
+                card = background;
+                break;
+              }
+            }
+            const hovering = root.querySelector(".ec-chart.ec-hovering");
+            const parts = hovering ? [...hovering.querySelectorAll(".ec-mark:not(.ec-hot) > .ec-body > *")] : [];
+            return {
+              dimmed: parts.length > 0 && parts.every((part) => opacity(part) < 0.5),
+              texts: [...root.querySelectorAll("svg text")]
+                .filter((text) => text.textContent?.trim() && !text.closest(".ec-icon") && getComputedStyle(text).visibility === "visible" && text.getBoundingClientRect().width > 0)
+                .map((text) => {
+                  const style = getComputedStyle(text);
+                  const fill = rgb(style.fill) ?? [0, 0, 0, 0];
+                  const alpha = fill[3]! * Number(style.fillOpacity) * opacity(text);
+                  const drawn = card.map((c, i) => alpha * fill[i]! + (1 - alpha) * c);
+                  const [light, dark] = [luminance(drawn), luminance(card)].sort((a, b) => b - a);
+                  return { text: text.textContent!.trim(), ratio: Math.round(((light! + 0.05) / (dark! + 0.05)) * 100) / 100 };
+                })
+            };
+          }, chart);
+          // The line chart doesn't dim; the others do, or this checks nothing.
+          if ((await page.locator(`${chart} .ec-mark`).count()) > 0) expect(dimmed, `${chart}: the other marks dimmed`).toBe(true);
+          expect(texts.length, `${chart}: text to check`).toBeGreaterThan(0);
+          expect(texts.filter(({ ratio }) => ratio < 4.5), `${chart}: text under 4.5:1`).toEqual([]);
+          await page.mouse.move(2, 2);
+          await page.clock.runFor(REST);
+        }
+      });
+    }
   }
 });
 

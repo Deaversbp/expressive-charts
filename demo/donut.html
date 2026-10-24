@@ -62,9 +62,9 @@
 <body>
 <main class="wrap">
   <header>
-    <p class="eyebrow">Milestone 3 · one effect, any chart</p>
+    <p class="eyebrow">Donut, columns and a D3 pie · one effect, any chart</p>
     <h1>Shot outcomes, three ways</h1>
-    <p class="lede">The prototype's third card without its morph: the season's shots on the library's <code>donutChart</code> and <code>barChart</code>, and on a pie drawn with D3. The same effects play on all three with no change to their code. Pick a hover effect, hover or Tab into a chart, then add the next match.</p>
+    <p class="lede">A season's shots on the library's <code>donutChart</code> and <code>barChart</code>, and on a pie drawn with D3. The same effects play on all three with no change to their code. Pick a hover effect, hover or Tab into a chart, then add the next match.</p>
   </header>
 
   <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
@@ -102,19 +102,17 @@
 
   <section class="card" aria-labelledby="columns-title">
     <h2 id="columns-title">Shot outcomes as columns</h2>
-    <p class="note">The same data and effects on <code>barChart</code>. The columns are one colour: a bar chart colours by series, and this one has a single series, shots. Matching each outcome's colour to the donut comes with the morph (milestone 5).</p>
+    <p class="note">The same data and effects on <code>barChart</code>. The columns are one colour: a bar chart colours by series, and this one has a single series, shots. With <code>colorBy: "category"</code> and a shared <code>colorAssignment</code>, each column would take its outcome's colour from the donut, as the morph demo's columns do.</p>
     <div id="columns"></div>
   </section>
 
-  <section class="card" aria-labelledby="check-title">
-    <h2 id="check-title">Milestone 3: done when</h2>
+  <section class="card" aria-labelledby="try-title">
+    <h2 id="try-title">Things to try</h2>
     <ul class="checklist">
-      <li>The donut is the lab's card 3 on the library: slices with separators, outside labels, the centre total, a legend, the tooltip, a data table with a Share column and a total row, keyboard order round the ring, and staged updates. Light and dark come from the library's defaults.</li>
-      <li>The same ball rolls round slices on the donut and on the D3 pie (<code>expressive({ geometry })</code>), with no change to <code>travel</code> or its gaits during the milestone.</li>
-      <li><b>Wiggle</b> and <b>Pulse</b> work on the donut, the columns and the D3 pie. A wiggle moves no part of a mark more than 3 px, pulses end within 5 s, and in Analysis and Off the flashes after a match don't stagger.</li>
-      <li><code>checkEffect</code> passes for every built-in effect on every fixture, and on real marks from <code>barChart</code>, <code>donutChart</code>, <code>expressive()</code> bars and D3 pies. The effect API isn't experimental, <code>expressive-charts/testing</code> is exported, and <code>CHANGELOG.md</code> states the 0.x promise.</li>
-      <li>Keyboard focus plays the stories: Tab into a chart, then the arrow keys, Home and End; Escape stops. Picking another effect keeps focus on the picker.</li>
-      <li>The donut screen-reader check in <code>docs/a11y-check.md</code> passes; the donut screenshots are green in CI, and the bar baselines haven't changed.</li>
+      <li>Pick an effect, then hover a slice of the donut, a slice of the D3 pie and a column: the same effect plays on all three. The ball rolls round a slice the way it rolls along a bar.</li>
+      <li>Press <b>Next match</b> in Presentation, then in Analysis: the flashes come one after another, then all at once.</li>
+      <li>Tab into the donut, then use the arrow keys, Home and End: focus goes round the ring clockwise from 12 o'clock. Escape stops.</li>
+      <li>Open the donut's data table: it has a Share column and a total row.</li>
     </ul>
   </section>
 </main>

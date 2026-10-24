@@ -1,7 +1,7 @@
-// M3: the prototype's third card without its morph (step 6). The lab's shot outcomes as a donutChart,
-// as columns on barChart, and as a pie drawn with D3 through expressive(). One picker sets the hover
-// effect on all three; "Next match" adds a seeded match's shots and flashes, one after another, the
-// slices and columns whose counts changed; the order control shows the donut's staged turn.
+// The prototype's shot outcomes as a donutChart, as columns on barChart, and as a pie drawn with D3
+// through expressive(). One picker sets the hover effect on all three; "Next match" adds a seeded
+// match's shots and flashes, one after another, the slices and columns whose counts changed; the order
+// control shows the donut's staged turn.
 import {
   barChart,
   describe,
@@ -82,8 +82,8 @@ function build(): void {
     on
   });
 
-  // One colour: a bar chart colours by series, and this one has one, shots. Colouring by category,
-  // to match the donut, comes with the morph (M5).
+  // One colour: a bar chart colours by series, and this one has one, shots. morph.ts colours its
+  // columns by category instead (colorBy: "category"), to match the donut.
   columns = barChart<Outcome>("#columns", {
     label: "Shot outcomes as columns",
     data: outcomes,

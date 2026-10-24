@@ -1,7 +1,7 @@
-// M5: the prototype's third card with its morph (step 4). The lab's shot outcomes as a donutChart and
-// as category columns on barChart, in one chartSwitch: each slice morphs into its own column and back
-// (morph()), its labels moving with it. A toggle button switches, and a click mid-way reverses; the
-// align control rebuilds the switch with the other mapping, so the two can be compared.
+// The prototype's shot outcomes as a donutChart and as category columns on barChart, in one
+// chartSwitch: each slice morphs into its own column and back (morph()), its labels moving with it. A
+// toggle button switches, and a click mid-way reverses; the align control rebuilds the switch with the
+// other mapping, so the two can be compared.
 import { barChart, chartSwitch, donutChart, morph, motionSwitch, type ChartSwitch, type ColorAssignment, type MorphAlign } from "../src/index";
 
 interface Outcome {

@@ -4,7 +4,7 @@ Composable motion and expressive effects for web charts. Hover, update and morph
 
 > **Status: 0.1.0, the first release (October 2026).** The effect-author API is under [the 0.x promise](#the-0x-promise); the charts, adapters, built-in effects and motion core can still change in a minor release. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#010-24-october-2026) lists what's in it.
 
-- **Effects first.** `travel`, `flash`, `wiggle`, `pulse`, the data effect `threshold` and the transition `morph`, put together with `sequence`, `parallel`, `only` and `stagger`. An effect reads only a shared description of the mark, so one effect works on every chart, and effects of your own work everywhere the built-in ones do.
+- **Effects first.** The mark effects `travel`, `flash`, `wiggle`, `pulse` and the data effect `threshold`, put together with `sequence`, `parallel`, `only` and `stagger`; and the transition effect `morph`, which `chartSwitch` plays to turn each mark of one chart into its mark in the next (a transition can't go into a combinator). An effect reads only a shared description of the mark, so one effect works on every chart, and effects of your own work everywhere the built-in ones do.
 - **Charts and adapters.** Bar, donut and line charts, a switch that morphs one into another, and adapters that bring the same effects to SVG marks drawn by other code.
 - **Motion that stays readable.** One clock and three modes: Presentation (staged, about a second), Analysis (at most about 200 ms) and Off. The device's reduced-motion setting is followed unless the viewer picks a mode on the page, and every effect has an end state, which is what reduced motion shows.
 - **Accessible.** Keyboard focus, a name for every mark, a data table, announcements and a pause control for anything that plays, checked against WCAG 2.2 AA.
@@ -196,10 +196,10 @@ From 0.1.0 the library follows semantic versioning. While it's 0.x, the effect-a
 - [API reference](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md): every export of every entry.
 - [Architecture](https://github.com/Deaversbp/expressive-charts/blob/main/docs/architecture.md): how the layers fit together, and how each part behaves.
 - [Writing effects](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md): the guide for effect authors.
-- [Examples](https://github.com/Deaversbp/expressive-charts/tree/main/docs/sketches/examples): pages written against the API, which `npm run typecheck` checks: the prototype's three cards, D3 charts, effects of your own and presets.
-- [Changelog](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md) and [the plan](https://github.com/Deaversbp/expressive-charts/blob/main/docs/plan.md).
+- [Examples](https://github.com/Deaversbp/expressive-charts/tree/main/docs/sketches/examples): pages written against the API, which `npm run typecheck` checks: ball-and-cleat bars, a goals vs xG line with playback, a donut that morphs into columns, D3 charts, effects of your own and presets.
+- [Changelog](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md), and [the development log](https://github.com/Deaversbp/expressive-charts/blob/main/docs/plan.md): the plan the library was built to, milestone by milestone, with the reasoning behind each decision.
 - [Accessibility audit](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-audit.md) and [screen-reader scripts](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-check.md).
-- [Demos](https://github.com/Deaversbp/expressive-charts/tree/main/demo): `npm run dev` serves them. `bars.html`, `donut.html`, `line.html` and `morph.html` are the cards of `lab.html`, the prototype the library grew out of, on the library, with D3, Vega-Lite and hand-written charts beside its own; `stress.html` is the limits above.
+- [Demos](https://github.com/Deaversbp/expressive-charts/tree/main/demo): `npm run dev` serves them. `bars.html`, `donut.html`, `line.html` and `morph.html` put the library's charts beside D3, Vega-Lite and hand-written ones, with the same effects on each; `stress.html` is the limits above; and `lab.html` is the single-file prototype the library grew out of.
 - [Contributing](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md) and [issues](https://github.com/Deaversbp/expressive-charts/issues).
 
 ## Development

@@ -1,24 +1,15 @@
 /**
- * Proposed public API for expressive-charts, as declarations only.
+ * The public API of expressive-charts, as the examples in ./examples import it ("expressive-charts").
  *
- * Design sketch from the October 2026 design session. What's built is re-exported from src, so
- * the sketch builds on the real thing: the motion core, the shared contracts (MarkGeometry,
- * MarkData, the drawing API, EffectContext, the effect kinds, Icon, the effect slots), the geometry
- * (describe.bar, .arc, .line, .point, matrix, offset), the preset and icon registries
- * (registerPreset, registerIcon, registerIcons), the reference charts (barChart, donutChart and
- * lineChart, with their options, mark events, accessors, colorAssignment and handles, LineChart's with
- * reveal), the icons (defineIcon, iconFromSvg, icons), the first
- * effects (travel with its gaits, flash, wiggle, pulse, threshold, morph, sequence, parallel, only, stagger),
- * chartSwitch with its types, the
- * effect-author helpers (defineEffect, defineDataEffect), the viewer's motionSwitch, playback with its
- * playButton, and the adapters, expressive() with its types (MarkSource, Attachment, ExpressiveOptions) and
- * fromVegaView() with its own (VegaOptions, VegaViewLike, VegaAttachment). The conformance suite is ./testing.ts.
- * Everything still declared here is planned. Lines marked NEW were
- * added because writing the examples in ./examples exposed a gap in docs/plan.md.
+ * It began as a design sketch, declarations only, in the October 2026 design session. Everything in
+ * it is built now and re-exported from src, so the examples are checked against the real thing. The
+ * comments below say where the built API differs from the sketch. Lines marked NEW were added because
+ * writing the examples exposed a gap in the plan (docs/plan.md). The conformance suite is ./testing.ts,
+ * and the sport icons are ./icons-sport.ts.
  */
 
 export * from "../../src/index";
-import type { ChartOptions as BuiltChartOptions, describe as builders, MarkGeometry, Sample } from "../../src/index";
+import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 
 // ── Shared contracts and drawing API: built, in src/core/contracts ───────────
 // MarkGeometry, Outline, Sample, MarkData (with previous), Paint, MarkStyle, MarkHandle, IconHandle,
@@ -71,11 +62,8 @@ import type { ChartOptions as BuiltChartOptions, describe as builders, MarkGeome
 // ── Geometry builders: public, shared by reference charts and adapters ───────
 
 // describe.bar, .arc, .line and .point are built, in src/core/geometry (with the Baseline type and
-// NEW: an optional `gap` between bar segments). Only .shape is still planned.
-export declare const describe: typeof builders & {
-  /** Browser only: walks any SVG shape with getPointAtLength. */
-  shape(element: SVGGeometryElement, spec: { readonly key: string; readonly series?: string; readonly thickness?: number }): MarkGeometry;
-};
+// NEW: an optional `gap` between bar segments). The sketch's describe.shape, which would walk any SVG
+// shape with getPointAtLength, isn't built: architecture.md lists it as planned.
 
 // NEW: samplesAlong(mark, points) projects data points (in mark coordinates) onto a mark's walk,
 // giving data effects their samples. Built in M4 step 4 (src/core/geometry), with the SamplePoint type

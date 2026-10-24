@@ -1,8 +1,8 @@
-# Accessibility audit: WCAG 2.2 AA (M6 step 7)
+# Accessibility audit: WCAG 2.2 AA
 
-This is the written WCAG 2.2 AA pass of every demo page, which M6's decisions 2 and 12 ask for before 0.1.0 ([plan §9](plan.md#m6-hardening-and-010)). It covers `bars.html`, `donut.html`, `line.html` and `morph.html`: the library's charts, its controls, and the D3, Vega-Lite and hand-written charts that `expressive()` and `fromVegaView()` drive there. `stress.html` joins once M6 step 6 has landed. `index.html` (a list of links) and `lab.html` (the prototype) aren't part of it.
+This is a written WCAG 2.2 AA pass of the demo pages, made before the first release. It covers `bars.html`, `donut.html`, `line.html` and `morph.html`: the library's charts, its controls, and the D3, Vega-Lite and hand-written charts that `expressive()` and `fromVegaView()` drive there. `stress.html` has no table yet. axe and the DOM checks below run on it as on the others, but its criteria haven't been written up. `index.html` (a list of links) and `lab.html` (the single-file prototype the library grew out of, which doesn't use it) aren't part of it.
 
-It was done on 23 October 2026, on main at `26e8fa5` with this step's fixes. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
+It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
 
 ## How it was checked
 
@@ -17,26 +17,26 @@ It was done on 23 October 2026, on main at `26e8fa5` with this step's fixes. Eac
   - **forced**: under forced colours, each legend's swatches keep their own colours, and a pressed toggle shows in the viewer's selection colours.
 - **The rest of the visual suite**: reduced motion and Off on each page, Play and Pause, the scrubber, the switch's timing, and what a screen reader can reach mid-switch (Chrome's accessibility tree, read over CDP).
 - **Contrast of SVG text and marks**, which axe reports as "incomplete" rather than judging: worked out from the theme's tokens ([Contrast](#contrast)), and validated for the marks by `src/charts/render/theme.test.ts`.
-- **NVDA + Chrome**, by you, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before this step. **Section C and section E's steps 13 and 14 are pending**: they couldn't be run on 23 October 2026. Where a row cites them, its result rests on axe and Chrome's tree until they're heard. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog (decision 2).
+- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. **Section C and section E's steps 13 and 14 are pending**: they couldn't be run on 23 October 2026. Where a row cites them, its result rests on axe and Chrome's tree until they're heard. Section G, the stress page's date line, hasn't been run either. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
 - **By hand**, in headless Chromium: the pages at 320 px, with the text spacing, and under forced colours, looked at as pictures; the tooltip's place against every focused mark; the target sizes of every control and mark; and Chrome's accessibility tree for each chart.
 
 ## What it found
 
-Six problems, five fixed in this step, each in its own commit, and one in the backlog. Two judgement calls are listed after them.
+Six problems: five fixed as part of the audit, and one in the backlog. Two judgement calls are listed after them.
 
 **Fixed:**
 
-1. **Light text under 4.5:1 on the demo pages (1.4.3).** axe found the pages' muted text (#7d7b75) at 3.9:1 on the page background, the motion switch's hint (`--ec-text-muted`, #75736d) at 4.37:1 there, the bars page's link (#2a78d6) at 4.3:1, and the morph page's "Morph" label. Muted text is now #6f6d67 (4.78:1 on the page, 5.04:1 on a card), the motion switch takes it as its `--ec-text-muted`, since it sits on the page rather than a chart's surface, and links are #226dc7 (5.01:1). Dark already passed. The library's own tokens pass on its own surface, so they're unchanged; architecture.md now says a page should set `--ec-text-muted` darker on a darker background. *Changes the light page and motion switch screenshots; see [Screenshots](#screenshots).*
-2. **Vega's unnamed image role around each line (1.1.1, 4.1.2).** On `line.html`, Vega gives the group around each line `role="graphics-symbol"` with no name, and the groups above it `graphics-object`. axe flagged the first in every condition. Taking it off alone left Chrome naming the `graphics-object`s from their contents, so NVDA would have heard both lines' names again as a group. With `markLabel`, `expressive()` now takes those roles off any unnamed host element around a named mark, on every read, since Vega writes them again when it redraws. Chrome's tree for the Vega-Lite line is now the D3 line's: the group, then one image per line. This is what section E's step 13 listens for, which is pending.
+1. **Light text under 4.5:1 on the demo pages (1.4.3).** axe found the pages' muted text (#7d7b75) at 3.9:1 on the page background, the motion switch's hint (`--ec-text-muted`, #75736d) at 4.37:1 there, the bars page's link (#2a78d6) at 4.3:1, and the morph page's "Morph" label. Muted text is now #6f6d67 (4.78:1 on the page, 5.04:1 on a card), the motion switch takes it as its `--ec-text-muted`, since it sits on the page rather than a chart's surface, and links are #226dc7 (5.01:1). Dark already passed. The library's own tokens pass on its own surface, so they're unchanged; architecture.md says a page should set `--ec-text-muted` darker on a darker background. *Changes the light page and motion switch screenshots; see [Screenshots](#screenshots).*
+2. **Vega's unnamed image role around each line (1.1.1, 4.1.2).** On `line.html`, Vega gives the group around each line `role="graphics-symbol"` with no name, and the groups above it `graphics-object`. axe flagged the first in every condition. Taking it off alone left Chrome naming the `graphics-object`s from their contents, so NVDA would have heard both lines' names again as a group. With `markLabel`, `expressive()` takes those roles off any unnamed host element around a named mark, on every read, since Vega writes them again when it redraws. Chrome's tree for the Vega-Lite line is then the D3 line's: the group, then one image per line. This is what section E's step 13 listens for, which is pending.
 3. **The tooltip couldn't be dismissed under the pointer (1.4.13).** It covers the marks above the one it describes, and Escape ended a hover only with focus on a mark. Now Escape anywhere ends the hover, the pointer's too, as `leave()` does; an Escape the page has already handled is left alone.
 4. **The line page's own legends lost their colours under forced colours.** Windows contrast themes force border colours but not SVG strokes, so the D3 and Vega-Lite cards' swatches all turned the theme's text colour while their lines kept theirs. They opt out with `forced-color-adjust: none`, as the library's legend swatches already did.
 5. **Pressed toggles were told apart only by weight under forced colours.** Forced colours drop a button's background, so the motion switch's pressed mode, and the pages' own toggles, had only their bold left. They take `Highlight` and `HighlightText` there now.
 
-**In the backlog** ([plan §9](plan.md#backlog-after-01)):
+**In the backlog** ([the development log's backlog](plan.md#backlog-after-01)):
 
 6. **The tooltip can't be hovered (1.4.13, "hoverable").** It's `pointer-events: none`, so moving the pointer onto it hovers whatever is under it: another mark, whose tooltip replaces it, or nothing, which hides it. Making it hoverable would block the marks it covers, so it isn't a contained fix. The options: a tooltip that holds while the pointer crosses onto it, and gives way once the pointer settles on another mark; or the tooltip's text in a line of its own beside the chart, which covers nothing.
 
-**Judgement calls**, which you may want to decide otherwise:
+**Judgement calls**, which could reasonably go the other way:
 
 - **Dimmed marks while another is hovered (1.4.3, 1.4.11).** Hover dims every other mark to 30%, its labels with it: their names fall to 2.0:1 in light and 2.5:1 in dark, and their bars to 1.5:1. The values are all still in the tooltip, the names and the table, and leaving restores them, so this audit counts it as a pass at rest with the hover state noted, not a fail. Keeping text at full contrast while the bodies dim would change the dimming every hover screenshot shows, so it's in the backlog as a design question rather than fixed here.
 - **Target sizes of marks (2.5.8).** Every control passes (axe's `target-size` rule): each is 24 px tall or more, or spaced so a 24 px circle round it touches nothing. The line chart's weeks are columns 9.4 px wide, side by side, and the D3 and Vega-Lite lines take the pointer only on their 2.25 px strokes. The weeks' spacing is the data's own, which is the criterion's "essential" exception, and hovering a line only emphasises it, with nothing to activate or read. Both are reached by keyboard, and every value is in the names and the table.
@@ -74,11 +74,11 @@ So the library behaves the same in the three engines, as far as these checks go:
 
 Only the first fix changes pictures: the light pages' muted text and the motion switch's hint, a shade darker. The change is under the suite's 0.1 per-pixel threshold, so the old baselines still passed; these 11 were made again in Docker so they match exactly: `page-light`, `donut-page-light`, `line-page-light`, `morph-page-light`, `mode-presentation-switch`, `mode-analysis-switch`, `mode-off-switch`, `reduced-switch`, `line-play-week-20`, `morph-columns-light` and `morph-focus-columns`. Every other baseline is unchanged.
 
-Making them again also rewrote 13 others by a few levels on anti-aliased edges (the D3 pie, the hand-written chart, the Vega-Lite line), with nothing of this step's in them. Main's own code, rendered in the same image, rewrites the same 13, so they were left as they were.
+Making them again also rewrote 13 others by a few levels on anti-aliased edges (the D3 pie, the hand-written chart, the Vega-Lite line), with nothing of the fixes in them. The code from before the fixes, rendered in the same image, rewrites the same 13, so they were left as they were.
 
 ## Not covered
 
-- **VoiceOver + Safari**, on any page (decision 2: backlog). WebKit runs the DOM checks, which isn't the same as hearing them.
+- **VoiceOver + Safari**, on any page (in the backlog). WebKit runs the DOM checks, which isn't the same as hearing them.
 - **JAWS, Narrator, TalkBack** and other screen readers, and speech input such as Dragon. Names were checked to contain each control's visible label (2.5.3), which is what speech input needs.
 - **A real Windows contrast theme.** Forced colours were emulated in Chromium, the one browser whose emulation forces colours (Firefox's and WebKit's only match the media query, so the forced checks skip them). The emulation's palette is black on white, or white on black with the dark theme. A real theme has its own colours, and the charts take their light or dark tokens from `prefers-color-scheme`, as always, so their text is readable on a dark contrast theme only if the browser reports dark there. That wasn't tried on a real theme.
 - **Real devices.** Touch was checked as far as the visual suite taps; nothing ran on a phone.
@@ -129,8 +129,8 @@ The library's `barChart` with `travel`, and the hand-written chart through `expr
 | 2.3.1 Three flashes | Pass | `flash` blinks once per change; a metric switch flashes every bar once. |
 | 2.4.1 Bypass blocks | Pass | axe (`bypass`); headings and a `main` landmark. |
 | 2.4.2 Page titled | Pass | axe (`document-title`). |
-| 2.4.3 Focus order | Pass | tab order, pinned in the spec: the motion switch, metric, sort, Play next matchweek, the chart, its table, the hand-written chart, the link. |
-| 2.4.4 Link purpose | Pass | One link, "the prototype", in a sentence that says what it is. |
+| 2.4.3 Focus order | Pass | tab order, pinned in the spec: the motion switch, metric, sort, Play next matchweek, the chart, its table, the hand-written chart. |
+| 2.4.4 Link purpose | Not applicable | No links. (At the audit there was one, "the prototype", in a sentence that said what it was.) |
 | 2.4.5 Multiple ways | Pass | `index.html` links every demo. |
 | 2.4.6 Headings and labels | Pass | Each card's heading names its chart; each toggle group is named. |
 | 2.4.7 Focus visible | Pass | tab order checks every stop; `bars.spec.ts` pictures the ring on both charts. |
@@ -183,7 +183,7 @@ The library's `donutChart` and columns on `barChart`, and a D3 pie through `expr
 | 2.5.3 Label in name | Pass | Button text is its name; a slice's name starts with the outcome on its label. |
 | 2.5.8 Target size (minimum) | Pass | axe. The smallest slice is about 84 × 68 px. |
 | 3.1.1 Language of page | Pass | axe. |
-| 3.2.1, 3.2.2 | Pass | Focus plays the effect; the picker swaps effects in place, keeping focus (M6 step 4). |
+| 3.2.1, 3.2.2 | Pass | Focus plays the effect; the picker swaps effects in place with `update({ on })`, keeping focus. |
 | 3.2.3, 3.2.4 Consistency | Pass | The motion switch as on every page. |
 | 3.3.2 Labels or instructions | Pass | Every control's text is its label. |
 | 4.1.2 Name, role, value | Pass | axe. NVDA D. |

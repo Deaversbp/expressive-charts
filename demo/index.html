@@ -11,13 +11,14 @@
 </head>
 <body>
 <h1>expressive-charts demos</h1>
+<p>Each page puts the library's own charts beside charts drawn by other code, with the same effects on both. Switch your system between light and dark to see both themes, and turn on reduced motion to see where every effect ends.</p>
 <ul>
-  <li><a href="./bars.html">Ball and cleat</a>: the first card of the lab rebuilt on the real library, and the same story on a hand-written SVG chart through <code>expressive()</code> (milestone 1).</li>
-  <li><a href="./donut.html">Shot outcomes, three ways</a>: the lab's third card without its morph, on <code>donutChart</code>, <code>barChart</code> and a D3 pie through <code>expressive()</code>, with a hover effect picker and staggered flashes after each match (milestone 3).</li>
-  <li><a href="./line.html">Goals vs expected goals, two ways</a>: the lab's second card on <code>lineChart</code> and on a D3 line through <code>expressive()</code>, with the goals line red below xG, a ball riding its leading edge, and one Play button and scrubber driving both (milestone 4).</li>
-  <li><a href="./morph.html">Shot outcomes, as a donut and as columns</a>: the lab's third card with its morph, a <code>donutChart</code> and category columns on <code>barChart</code> in one <code>chartSwitch</code>, each slice turning into its own column and back with <code>morph()</code>, and a control to compare its two mappings (milestone 5).</li>
-  <li><a href="./stress.html">Stress cases</a>: each case at sizes up to past its limit, with a frame readout: bars that update, hover on a large chart, years of daily values on a date axis played through <code>playback()</code>, D3 columns followed with <code>watch</code>, a switch with many pairs, and the first draw (milestone 6).</li>
-  <li><a href="./lab.html">Expressive Chart Lab</a>: the original single-file prototype (bars with ball and cleat hover, goals vs xG line, donut-to-bar morph).</li>
+  <li><a href="./bars.html">Ball and cleat</a>: a ball rolls along each player's goals and a boot steps along their assists, on <code>barChart</code> and on a hand-written SVG chart through <code>expressive()</code>, with staged sorting and a flash on the bars that change.</li>
+  <li><a href="./donut.html">Shot outcomes, three ways</a>: the same effects on <code>donutChart</code>, <code>barChart</code> and a D3 pie through <code>expressive()</code>, with a hover effect picker and staggered flashes after each match.</li>
+  <li><a href="./line.html">Goals vs expected goals, three ways</a>: <code>lineChart</code>, a D3 line through <code>expressive()</code> and a Vega-Lite line through <code>fromVegaView()</code>, each with the goals line red below xG and a ball riding its leading edge. One Play button and scrubber drive the first two.</li>
+  <li><a href="./morph.html">Shot outcomes, as a donut and as columns</a>: a <code>donutChart</code> and category columns on <code>barChart</code> in one <code>chartSwitch</code>, each slice turning into its own column and back with <code>morph()</code>, and a control to compare its two mappings.</li>
+  <li><a href="./stress.html">Stress cases</a>: each case at sizes up to past its limit, with a frame readout: bars that update, hover on a large chart, years of daily values on a date axis played through <code>playback()</code>, D3 columns followed with <code>watch</code>, a switch with many pairs, and the first draw.</li>
+  <li><a href="./lab.html">Expressive Chart Lab</a>: the single-file prototype the library grew out of, written before it and without it. Its three cards are bars with ball and cleat hover, a goals vs xG line, and a donut that morphs into bars.</li>
 </ul>
 </body>
 </html>

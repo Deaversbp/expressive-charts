@@ -43,7 +43,7 @@ export interface DrawnLine {
 
 const HEIGHT = 300;
 const MARGIN = { top: 12, right: 16, bottom: 32, left: 36 };
-/** As wide as the lab's lines. */
+/** As wide as the prototype's lines. */
 const WIDTH = 2.25;
 const SERIES: readonly Series[] = ["goals", "xg"];
 

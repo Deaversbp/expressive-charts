@@ -4,6 +4,7 @@
 //   npm run test:visual:docker                     compare against the baselines
 //   npm run test:visual:update                     write new baselines (--update-snapshots)
 //   npm run test:visual:docker -- --grep focus     any other playwright test options
+//   npm run media                                  README's pictures (scripts/media/capture.ts)
 //
 // The image's tag follows @playwright/test in package.json, so the two can't drift apart.
 
@@ -17,13 +18,13 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) {
 }
 const image = `mcr.microsoft.com/playwright:v${version}-noble`;
 
-// Files the run writes (baselines, reports) go back to their owner on hosts where Docker runs as root.
+// Files the run writes (baselines, pictures, reports) go back to their owner on hosts where Docker runs as root.
 const owner = typeof process.getuid === "function" ? `${process.getuid()}:${process.getgid()}` : "";
 const script = [
   "npm ci --no-audit --no-fund --loglevel=error",
   'npx playwright test "$@"',
   "status=$?",
-  owner ? `chown -R ${owner} tests/visual test-results playwright-report 2>/dev/null` : ":",
+  owner ? `chown -R ${owner} tests/visual docs/media test-results playwright-report 2>/dev/null` : ":",
   "exit $status"
 ].join("; ");
 

@@ -46,6 +46,18 @@ Without Docker, run **Update visual baselines** from the repository's Actions ta
 
 The Docker image's tag follows `@playwright/test` in `package.json`. When you upgrade Playwright, pin the exact version, change the image tag in `.github/workflows/ci.yml` and `visual-baselines.yml` to match, and regenerate the baselines.
 
+## README's pictures and the demo site
+
+README's four pictures are GIFs in `docs/media/`, captured from the demo pages by `scripts/media/capture.ts`. The arrow comes from `scripts/media/quick-start.html`, which is README's first example. Remake them after a change that shows in them:
+
+```sh
+npm run media   # in Playwright's Docker image, like the visual tests
+```
+
+The capture runs on the fake clock, so a run draws the same frames each time, and writes each GIF with its own small encoder (`scripts/media/gif.ts`), so there's nothing to install. Each GIF plays once, has no loop, and stops on the effect's end state within 5 seconds (WCAG 2.2.2): npm can't pause a picture, and GitHub only does for a viewer who asks for reduced motion. `src/api-docs.test.ts` checks this, and keeps each under 1 MB. README links them by absolute URL on `raw.githubusercontent.com`, since npm shows README away from the repository. Look at a new GIF before committing it, since a test can't tell whether the right moment is in the picture.
+
+`.github/workflows/pages.yml` builds every page in `demo/` with Vite (`npm run build:site`, configured in `demo/vite.config.mjs`) on each pull request, and publishes it from `main` at <https://deaversbp.github.io/expressive-charts/>, once the repository's Pages source is GitHub Actions. To check the built site locally, run `npm run build:site`, then `npx vite preview demo --port 4173`: the visual suite (`npm run test:visual`) reuses a server on that port, so its DOM checks run against the built pages.
+
 ## Bundle size
 
 `npm run size` measures the build (run `npm run build` first) and fails when a size is over its budget in `scripts/size-budget.json`. CI runs it on Node 24 and puts its tables in the job's summary. It measures:

@@ -257,6 +257,19 @@ describe("lineChart: labelBounds", () => {
     expectHeld(resized.lines(), resized.chart.labels());
   });
 
+  it("words a part-way reveal's end labels the same at rest, after a resize, as when it was revealed", () => {
+    const resize = stubResizeObserver();
+    const { chart, lines, clock } = setup({ width: undefined });
+    // Half way from week 2 to 3: goals 2.5, in whole goals as its values are; xG 2.85, in tenths.
+    chart.reveal(2.5);
+    const revealed = chart.labels().map((label) => label.text);
+    expect(revealed).toEqual([`${Math.round(2.5)} goals`, `${(2.85).toFixed(1)} xg`]);
+    resize(400);
+    clock.advance(16);
+    expect(chart.labels().map((label) => label.text)).toEqual(revealed);
+    expectHeld(lines(), chart.labels());
+  });
+
   it("tells a line's effects when only its label moved", async () => {
     // xg's label stays the widest, so the plot keeps its size when goals' label goes.
     const wide = (value: number, series: string) => (series === "xg" ? `${value} expected goals` : `${value} g`);

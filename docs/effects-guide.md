@@ -1,6 +1,6 @@
 # Writing effects
 
-An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `trace`, `threshold`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: the library's bar, donut and line charts, SVG charts drawn by D3 or Observable Plot through `expressive()`, and Vega or Vega-Lite charts rendered as SVG, through `fromVegaView()`.
+An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `trace`, `threshold`, `delta`, `label`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: the library's bar, donut and line charts, SVG charts drawn by D3 or Observable Plot through `expressive()`, and Vega or Vega-Lite charts rendered as SVG, through `fromVegaView()`.
 
 This guide covers the contract an effect reads, the drawing API it writes through, how it keeps time, the rules that keep charts readable, data effects, composing, testing with `checkEffect`, and transition effects, which play between two views of a mark, with `checkTransition`. It ends with two worked examples and a review checklist.
 
@@ -433,6 +433,8 @@ function stroke(mark: MarkGeometry, ctx: EffectContext, color: Color): (p: numbe
 ### delta
 
 A data effect: "+2" just beyond the end of a mark whose value changed, in the `update` slot. It compares the last sample with the one before the update.
+
+It's a smaller version of the built-in [`delta`](api.md#delta), which puts its text past the mark's own labels (`labelBounds`, or outside a slice's label), words the change in the page's locale so 0.1 + 0.2 reads "+0.3", takes a `value` and a `color`, and counts float noise as no change. The built-in [`label`](api.md#label) places and rises the same way, with text worked out from the mark's data.
 
 ```ts
 import { defineDataEffect, offset, type EffectContext, type MarkData, type MarkGeometry, type TextStyle } from "expressive-charts";

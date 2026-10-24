@@ -7,7 +7,9 @@
 import type { AnyMarkEffect, Icon, MarkData, Sample, TransitionEffect } from "../core";
 import { checkEffect, checkTransition, type CheckEffectOptions } from "../testing";
 import { only, parallel, sequence, stagger } from "./combinators";
+import { delta } from "./delta";
 import { flash } from "./flash";
+import { label } from "./label";
 import { morph } from "./morph";
 import { pulse } from "./pulse";
 import { threshold } from "./threshold";
@@ -63,7 +65,14 @@ const effects: Record<string, AnyMarkEffect> = {
   "threshold below a constant": threshold({ compareTo: 0.5 }),
   "threshold above, in a colour": threshold({ compareTo: 0.25, when: "above", color: "series-1-strong" }),
   "threshold below a related series": threshold({ compareTo: "xg" }),
-  "threshold and a riding ball on goals": only("goals", parallel(threshold({ compareTo: "xg" }), travel(ball, { ride: "on" })))
+  "threshold and a riding ball on goals": only("goals", parallel(threshold({ compareTo: "xg" }), travel(ball, { ride: "on" }))),
+  delta: delta(),
+  "delta with no previous values": delta(),
+  "delta in a colour, worded": delta({ color: "text-muted", format: (change) => `${change} goals` }),
+  "delta with a flash": parallel(flash(), delta()),
+  label: label((data) => `${data.samples.length} samples`),
+  "label with no text": label(() => undefined),
+  "label in a colour, and a trace": parallel(trace(), label((data) => `+${data.samples[data.samples.length - 1]?.value ?? 0}`, { color: "series-2" }))
 };
 
 /** Week by week along any walk: goals cross xG four times, so threshold draws several runs. */
@@ -74,12 +83,18 @@ const season = (): MarkData => ({
   related: (series) => (series === "xg" ? { datum: undefined, samples: at([0, 0.5, 1], [1, 3, 5], [1, 3, 5]), related: () => undefined } : undefined)
 });
 
-/** More than the defaults, where an effect needs it: icons looked up by name, a later mark of a batch, or related series. */
+/** The season after a matchweek: each value 2 more than before, so delta has a change to label. */
+const updated = (): MarkData => ({ ...season(), previous: { datum: undefined, samples: at([0, 0.25, 0.5, 0.75, 1], [0, 3, 2, 6, 3], [1, 2, 3, 4, 5]), related: () => undefined } });
+
+/** More than the defaults, where an effect needs it: icons looked up by name, a later mark of a batch, related series, or the values before an update. */
 const options: Record<string, CheckEffectOptions> = {
   "roll, the icon by name": { icons: [ball] },
   "staggered flash, third of five": { batch: { index: 2, count: 5 } },
   "threshold below a related series": { data: season },
-  "threshold and a riding ball on goals": { data: season }
+  "threshold and a riding ball on goals": { data: season },
+  delta: { data: updated },
+  "delta in a colour, worded": { data: updated },
+  "delta with a flash": { data: updated }
 };
 
 describe.each(Object.entries(effects))("%s", (name, effect) => {

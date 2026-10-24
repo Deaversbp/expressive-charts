@@ -1260,6 +1260,67 @@ interface TraceOptions
 - `opacity`: `number`. Default 0.5. From 0 to 1.
 - `duration`: `number`. Default 500. Base ms to draw the stroke, before the motion mode scales it; 0 or more.
 
+#### `delta()`
+
+```ts
+delta<D = unknown>(options?: DeltaOptions<D>): DataEffect<D>
+```
+
+A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label, outside a slice's label. It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until the next update clears it, following the mark as it moves. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
+
+The text goes in the overlay, which screen readers don't read: a page that relies on it says the same in its table or its announcement. On a line chart, `update` runs on the points whose values changed too, so a change meant for the line goes in [`only()`](#only) with a filter on the mark's length:
+
+```ts
+import { barChart, delta, flash, lineChart, only, parallel } from "expressive-charts";
+
+barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { update: parallel(flash(), delta()) } });
+lineChart("#xg", {
+  label: "Goals vs expected goals", data: weeks, x: "week", series: ["goals", "xg"],
+  on: { update: only((mark) => mark.length > 0, delta()) } // the lines, not their points
+});
+```
+
+#### `DeltaOptions<D>`
+
+```ts
+interface DeltaOptions<D = unknown>
+```
+
+- `value`: `(data: MarkData<D>) => number`. The mark's value. Default: its last sample's, so a bar's total, a line's value at its revealed end, and a slice's share (from 0 to 1). Typed by the rows it reads, so `delta({ value: (data) => data.datum.goals })` fits a chart of rows with `goals`.
+- `format`: `(change: number) => string`. Words the change. Default: the page's locale, with its sign and at most two decimals (`+2`, `-0.3`). A page with its own units passes its own, such as a slice's share as `+5%`; `""` draws nothing.
+- `color`: `Color`. Default `"text"`.
+
+A `value` or `format` that isn't a function throws a `TypeError`, and a bad `color` a `RangeError`.
+
+#### `label()`
+
+```ts
+label<D = unknown>(text: (data: MarkData<D>, mark: MarkGeometry) => string | undefined, options?: LabelOptions): DataEffect<D>
+```
+
+A data effect, usually for `decorate`: text worked out from the mark's own data, past the end of the mark, as `delta` places it ([architecture.md](architecture.md#delta-and-label)). `text` returns the words, or `undefined` or `""` for none: the last value minus the first on a slope, a step's own signed value, or a field such as `vsLastMonth`. It's typed by the rows it reads, as [`defineDataEffect<D>`](#definedataeffect) is, so a `label` for one kind of row is a type error on a chart of another. It rises into place as `delta` does, then follows every change, its text worked out again from the new data. Its end state is the text in place.
+
+As with `delta`, the text isn't read by screen readers, and on a line chart `decorate` runs on the points too, so a label meant for the line goes in [`only()`](#only):
+
+```ts
+import { label, lineChart, only } from "expressive-charts";
+
+lineChart("#xg", {
+  label: "Goals vs expected goals", data: weeks, x: "week", series: ["goals", "xg"],
+  on: { decorate: only((mark) => mark.length > 0, label((data) => `${data.samples.length} weeks`)) }
+});
+```
+
+#### `LabelOptions`
+
+```ts
+interface LabelOptions {
+  readonly color?: Color;
+}
+```
+
+`color` defaults to `"text"`. A `text` that isn't a function throws a `TypeError`, and a bad `color` a `RangeError`.
+
 #### `threshold()`
 
 ```ts

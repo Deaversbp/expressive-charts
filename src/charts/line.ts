@@ -327,20 +327,22 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   }
 
   /**
-   * The end labels' wording for placeLines: counting between values while a change plays, or at
-   * rest (`counted` false) each value as it is. Undefined with `labels: false`.
+   * The end labels' wording for placeLines, each value rounded to its series' decimals in `given`:
+   * `counting` while a change plays, or a layout's own at rest, which `counting` becomes when it
+   * lands. So a line revealed part way between rows says the same at rest as in the frame before.
+   * Undefined with `labels: false`.
    */
-  function endLabels(counted: boolean): EndLabels | undefined {
+  function endLabels(given: Readonly<Record<string, number>>): EndLabels | undefined {
     const label = labeler(current);
     if (!label) return undefined;
-    return { text: counted ? (series, value) => label(series, round(value, counting[series] ?? decimals(value))) : label, measure };
+    return { text: (series, value) => label(series, round(value, given[series] ?? decimals(value))), measure };
   }
 
   /** Each line and point as laid out in `next`, at the reveal, the lines with their end labels. */
   function placedFor(next: LineLayout<D>): { readonly lines: Map<string, PlacedLine<D>>; readonly points: Map<string, PlacedPoint<D>> } {
     const states = next.rows.map(restState);
     return {
-      lines: new Map(placeLines(next.frame, states, next.series, drawnThrough(next), next.time, endLabels(false)).map((line) => [line.series, line])),
+      lines: new Map(placeLines(next.frame, states, next.series, drawnThrough(next), next.time, endLabels(next.decimals)).map((line) => [line.series, line])),
       points: new Map(states.flatMap((state) => placePoints(next.frame, state, next.series, next.time)).map((point) => [point.key, point]))
     };
   }
@@ -575,7 +577,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   function paintLines(frame: LineFrame, states: readonly RowState<D>[]): void {
     const drawnLines = [...lineOrder, ...leavingLines()];
     if (states.length === 0 || drawnLines.length === 0) return;
-    const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut), laidOut.time, endLabels(true));
+    const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut), laidOut.time, endLabels(counting));
     showAll(drawnLines.map((line, i) => ({ record: line, placed: placed[i]! })));
     paintLabels(new Map(drawnLines.map((line, i) => [line, placed[i]!])));
   }

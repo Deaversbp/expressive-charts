@@ -261,9 +261,12 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
     focusRing.draw(record && { outline: record.shown.geometry.outline, thickness: record.shown.geometry.thickness, transform: record.handle.style.transform });
   }
 
-  /** Draws the slice as `slice`. Its runs hear about it when its geometry changed, so decorations follow. */
+  /**
+   * Draws the slice as `slice`. Its runs hear about it when its geometry or its row changed, so
+   * decorations follow: a label from a field the slice doesn't plot too.
+   */
   function show(record: SliceRecord<D>, slice: DonutSlice<D>, label: SliceLabel | undefined): void {
-    const moved = geometryChanged(record.shown.geometry, slice.geometry);
+    const moved = geometryChanged(record.shown.geometry, slice.geometry) || record.shown.datum !== slice.datum;
     drawMark(record, slice, label);
     if (moved) runner.change(slice.geometry, slice.data);
     if (record.key === hover.key) showTooltip(record);

@@ -62,7 +62,7 @@ The modes are `presentation`, `analysis` and `off`. Every duration in the librar
 | --- | --- | --- | --- | --- |
 | `feedback` | hover colour and dimming | base | base | 0 |
 | `transition` (default) | data changes | base, staged | base × 0.35, max 200 ms | 0 |
-| `effect` | travel, wiggle, flash, pulse | base | base × 0.35, min 140 ms, max 300 ms | 0 |
+| `effect` | travel, wiggle, flash, pulse, trace | base | base × 0.35, min 140 ms, max 300 ms | 0 |
 | `playback` | auto-play such as "Play season" | base | base × 0.3 | 0 |
 | `stagger` | the wait before each mark of a [`stagger`](#stagger) | base | 0 | 0 |
 
@@ -164,7 +164,7 @@ barChart("#goals", { data, label, y: "name", x: "goals", on: { hover: travel("so
 
 ## Effects
 
-The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The effects [`travel`](#travel), [`flash`](#flash), [`wiggle`](#wiggle) and [`pulse`](#pulse), the data effect [`threshold`](#threshold), the transition effect [`morph`](#morph), and the combinators `sequence`, `parallel`, `only` and [`stagger`](#stagger), are in `src/effects/`.
+The effect interfaces and the drawing API are built as types (`src/core/contracts/`), and the [runner](#runner) drives them. The effects [`travel`](#travel), [`flash`](#flash), [`wiggle`](#wiggle), [`pulse`](#pulse) and [`trace`](#trace), the data effect [`threshold`](#threshold), the transition effect [`morph`](#morph), and the combinators `sequence`, `parallel`, `only` and [`stagger`](#stagger), are in `src/effects/`.
 
 There are three kinds, distinguished by a `kind` field:
 
@@ -208,7 +208,7 @@ sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists
 `travel` carries an icon along the mark's walk, or along one segment, and leaves it resting at the end. It reads only the walk, `thickness` and `segments`, so the same effect rolls a ball out a bar, around a donut slice and along a line.
 
 - **Where.** `along` names a segment's series; a mark with no segments counts as its own one segment. A missing segment, or a walk shorter than 0.5 px, makes it a no-op: nothing is drawn and it finishes at once. The icon is inset by its footprint so it stays inside the mark. If the walk is shorter than the footprint, the icon rests at the start without moving; on a very short walk it carries on past the end rather than covering the baseline.
-- **How long.** The base duration is `max(260 ms, distance ÷ 360 px/s)`, with `effect` timing, times the gait's `pace`. The easing is the gait's, or `easeOutCubic`.
+- **How long.** The base duration is `max(260 ms, distance ÷ 360 px/s)`, with `effect` timing, times the gait's `pace`, and at most 4 s. The cap comes after the pace, so past 1,440 px at pace 1 (about 1,250 px for a step) the icon goes faster, not longer. With `stagger`'s longest spread (500 ms) in front, a trip still ends within 5 s, so it never needs a pause control (WCAG 2.2.2). Analysis and Off scale it as any other `effect` duration. The easing is the gait's, or `easeOutCubic`.
 - **`size`** is the icon's length along the walk in px, or `"fit"`: scaled so the icon's box is 85% of the mark's thickness across the walk. Default: the icon's own size.
 - **`orient`.** `"follow"` turns the icon with the walk, `"level"` never turns it, and the default `"auto"` follows but mirrors an icon marked `upright` when the walk heads left, so a boot on a negative bar keeps its sole down.
 - **`ride`.** `"center"` (default) puts the icon's anchor on the walk; `"on"` sits the icon on top of it: half the mark's thickness plus the anchor's height above the icon's bottom, towards the icon's up side.
@@ -261,6 +261,20 @@ pulse({ times?, width?, color? })   // or the preset: on: { enter: "pulse" }
 - **Never a size change.** It only sets the halo, never a transform, so a value never looks bigger than it is.
 - **End state: nothing**, as for `flash`: a pulse is emphasis, and what it points at stays on the chart.
 - `times` is a whole number from 1 to 6, `width` a finite number more than 0, and `color` a non-empty string; anything else throws a `RangeError`.
+
+### trace
+
+```ts
+trace({ color?, width?, opacity?, duration? })   // on: { hover: trace() }
+```
+
+`trace` is a highlighter: an overlay stroke drawn along the mark's walk, from its start to its end, which stays. It's the effects guide's [worked example](effects-guide.md#trace), grown. The stroke is `mark.slice(0, p)` in `color` (default `"mark"`, the mark's own colour), `width` px (default 3) at `opacity` (default 0.5), with round caps. It's drawn in over `duration` (default 500 ms base) with `effect` timing, eased in and out, so about 175 ms in Analysis.
+
+- **The mark is untouched.** It only draws in the overlay, never through `mark.set()`, so it hides nothing and is safe in any slot. Drawing a mark itself in (a faint copy, then the mark at its own width and colour) is in the backlog: in the hover slot it would hide data, and a stack would draw in one colour.
+- **Any mark.** It reads only the walk. On a stack it runs the whole walk, across every segment, in the stack's `"mark"` colour (its first segment's). A walk under 0.5 px (a point) draws nothing, and a run on one finishes at once.
+- **Geometry changes.** The stroke follows `onChange` and keeps its progress, so it stays on the mark through a transition or a resize. While the walk is under 0.5 px it's removed, and drawn again when the walk is back.
+- **End state: the whole stroke.** Reduced motion shows what a full run ends with. The path is made when the run starts, at progress 0 a lone moveto that SVG doesn't stroke, so in a combination it stacks where `end()` puts it.
+- It isn't a preset. `color` must be a non-empty string; `width` and `duration` finite numbers, 0 or more; and `opacity` a number from 0 to 1. Anything else throws a `RangeError` when it's made.
 
 ### threshold
 
@@ -361,7 +375,7 @@ It imports no test runner: it resolves when everything passes, and otherwise rej
 - **Contexts** are `testContext()`s with `start`, so a page's own transition tests can make one the same way: `{ ...testContext(), start: 0.5 }`.
 - The report names the pair, which way, the check and what differed; for long path data, the place where the two parted.
 
-`src/effects/conformance.test.ts` runs `checkEffect` for every built-in effect (`travel` with each gait and option, and by icon name; `flash`; `wiggle`; `pulse`; a staggered `flash` on the third mark of five; `threshold` against a constant, above in a colour, against a related series, and with a riding ball; and combinations) on the fixtures, and `checkTransition` for `morph` with each `align`, and with 8 points, on the fixture pairs. `src/conformance.test.ts` runs it for the same effects on real marks: bars from `barChart`, from `expressive()` and from a stacked Observable Plot bar through `expressive()`, slices from `donutChart` and a D3 pie through `expressive()`, and lines from `lineChart` (with its points) and from a D3 line and a Plot line through `expressive()`, each drawn again at another size for check 5, with no change to the effects. `src/effects-guide.test.ts` runs it on the guide's worked examples.
+`src/effects/conformance.test.ts` runs `checkEffect` for every built-in effect (`travel` with each gait and option, and by icon name; `flash`; `wiggle`; `pulse`; a staggered `flash` on the third mark of five; `trace`, with its options and beside a rolling ball; `threshold` against a constant, above in a colour, against a related series, and with a riding ball; and combinations) on the fixtures, and `checkTransition` for `morph` with each `align`, and with 8 points, on the fixture pairs. `src/conformance.test.ts` runs it for the same effects on real marks: bars from `barChart`, from `expressive()` and from a stacked Observable Plot bar through `expressive()`, slices from `donutChart` and a D3 pie through `expressive()`, and lines from `lineChart` (with its points) and from a D3 line and a Plot line through `expressive()`, each drawn again at another size for check 5, with no change to the effects. `src/effects-guide.test.ts` runs it on the guide's worked examples.
 
 ## Runner
 

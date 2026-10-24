@@ -25,6 +25,16 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`trace`**, a built-in effect: a highlighter stroke drawn along a mark's walk, which stays. `trace({ color, width, opacity, duration })` draws in the overlay and leaves the mark itself untouched, so it's safe in any slot. On a stack it runs the whole walk, and on a point it draws nothing. Its end state is the whole stroke. It isn't a preset. The effects guide's `trace` stays as its worked example, a smaller version.
+
+### Changed
+
+- **`travel`'s trip lasts at most 4 s base**, after the gait's pace. A trip along more than 1,440 px (about 1,250 px for a step) is shorter than before: the icon goes faster rather than longer, so with `stagger` in front it still ends within 5 s. Analysis and Off scale it as before. Nothing needs to change in your code; for a long walk at the old speed, carry the icon in an effect of your own (`defineEffect`).
+
 ## 0.1.0 (24 October 2026)
 
 The first release, published to npm from CI with provenance. Everything in it is new. [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) documents every export.

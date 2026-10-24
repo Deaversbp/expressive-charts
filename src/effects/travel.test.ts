@@ -2,8 +2,9 @@ import type { GeometryEffect, Icon, MarkGeometry, Matrix, Point } from "../core"
 import { describe as build, matrix } from "../core";
 import { normalizeAngle } from "../core/geometry";
 import { play, testContext, type DrawnIcon, type TestContext } from "../core/testing";
+import { stagger } from "./combinators";
 import type { Gait, GaitState } from "./gaits";
-import { travel } from "./travel";
+import { travel, type TravelOptions } from "./travel";
 
 // Test icons, written out so the effect tests don't depend on src/icons.
 const ball: Icon = {
@@ -78,6 +79,51 @@ describe("travel", () => {
     expect(await runToEnd(travel(ball), bar(50), testContext({ mode: "analysis" }))).toBe(140);
     // A step takes 15% longer: 180 px is 500 ms, so 575 ms.
     expect(await runToEnd(travel(boot), bar(200), testContext())).toBe(580);
+  });
+
+  describe("on a long trip", () => {
+    /** A bar whose trip, inset by the icon's footprint, is `distance` px. */
+    const across = (icon: Icon, distance: number): MarkGeometry => bar(distance + icon.footprint[0] + icon.footprint[1]);
+    const paced = (pace: number): Gait => Object.assign((): ReturnType<Gait> => ({ lift: 0, spin: 0, tilt: 0 }), { pace });
+
+    it.each([
+      // 1,000 px ÷ 360 px/s is 2,778 ms; 1,440 px is 4 s.
+      ["rolls", ball, {}, 1000, 2780],
+      ["rolls", ball, {}, 1440, 4000],
+      ["rolls", ball, {}, 10_000, 4000],
+      ["slides", flag, {}, 1000, 2780],
+      ["slides", flag, {}, 10_000, 4000],
+      // A step's pace is 1.15: 3,194 ms, then 4,600 ms capped.
+      ["steps", boot, {}, 1000, 3200],
+      ["steps", boot, {}, 1440, 4000],
+      ["steps", boot, {}, 10_000, 4000],
+      // The cap comes after the pace: 13,889 ms at pace 0.5 is 6,944 ms, capped too.
+      ["moves at pace 0.5", flag, { gait: paced(0.5) }, 1440, 2000],
+      ["moves at pace 0.5", flag, { gait: paced(0.5) }, 10_000, 4000],
+      ["moves at pace 2", flag, { gait: paced(2) }, 1000, 4000]
+    ] as const)("lasts at most 4 s base when it %s %i px", async (_gait, icon, options: TravelOptions, distance, ms) => {
+      const mark = across(icon, distance);
+      const ctx = testContext();
+      expect(await runToEnd(travel(icon, options), mark, ctx)).toBe(ms);
+      // Faster, not shorter: it still ends at the end of the walk.
+      const end = icon.footprint[0] + distance;
+      expect(anchorOf(icon, only(ctx).transform).x).toBeCloseTo(end, 6);
+    });
+
+    it("is scaled by the motion mode as before", async () => {
+      // Analysis: 4,000 × 0.35 = 1,400 ms, held to its 300 ms ceiling.
+      expect(await runToEnd(travel(ball), across(ball, 10_000), testContext({ mode: "analysis" }))).toBe(300);
+      const off = testContext({ mode: "off" });
+      const running = travel(ball).run(across(ball, 10_000), off);
+      expect(off.clock.idle).toBe(true);
+      await running;
+      expect(anchorOf(ball, only(off).transform).x).toBeCloseTo(10_005, 6);
+    });
+
+    it("ends within 5 s behind stagger's longest spread", async () => {
+      const ctx = testContext({ batch: { index: 1, count: 2 } });
+      expect(await runToEnd(stagger(travel(ball), { delay: 500 }), across(ball, 10_000), ctx)).toBe(4500);
+    });
   });
 
   it("does nothing on a missing segment, a walk under 0.5 px, or a mark with no walk", async () => {

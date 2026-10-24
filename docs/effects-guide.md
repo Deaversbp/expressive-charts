@@ -1,6 +1,6 @@
 # Writing effects
 
-An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `threshold`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: the library's bar, donut and line charts, SVG charts drawn by D3 or Observable Plot through `expressive()`, and Vega or Vega-Lite charts rendered as SVG, through `fromVegaView()`.
+An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `trace`, `threshold`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: the library's bar, donut and line charts, SVG charts drawn by D3 or Observable Plot through `expressive()`, and Vega or Vega-Lite charts rendered as SVG, through `fromVegaView()`.
 
 This guide covers the contract an effect reads, the drawing API it writes through, how it keeps time, the rules that keep charts readable, data effects, composing, testing with `checkEffect`, and transition effects, which play between two views of a mark, with `checkTransition`. It ends with two worked examples and a review checklist.
 
@@ -384,6 +384,8 @@ Both are in [docs/sketches/examples/effects](sketches/examples/effects/), where 
 ### trace
 
 A highlighter stroke that draws itself along the walk and stays. It reads only the walk, so it works on any mark; on a point, whose walk has no length, it draws nothing.
+
+It's a smaller version of the built-in [`trace`](api.md#trace), which adds options for the stroke's width, opacity and duration, checks them, and draws nothing at all on a walk under 0.5 px.
 
 ```ts
 import { defineEffect, type Color, type EffectContext, type MarkGeometry } from "expressive-charts";

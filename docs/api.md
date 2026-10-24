@@ -141,7 +141,7 @@ What a duration is for, which decides how each mode scales it ([`defaultScaling`
 | --- | --- | --- | --- | --- |
 | `feedback` | hover colour and dimming | base | base | 0 |
 | `transition` | data changes (the default) | base | base × 0.35, at most 200 ms | 0 |
-| `effect` | `travel`, `wiggle`, `flash`, `pulse` | base | base × 0.35, from 140 to 300 ms | 0 |
+| `effect` | `travel`, `wiggle`, `flash`, `pulse`, `trace` | base | base × 0.35, from 140 to 300 ms | 0 |
 | `playback` | a play, such as a season's | base | base × 0.3 | 0 |
 | `stagger` | the wait before each mark of a `stagger` | base | 0 | 0 |
 
@@ -1018,7 +1018,7 @@ interface PointSpec {
 }
 ```
 
-A dot of radius `r`. Its walk has length 0, so `travel` does nothing on it, while `wiggle`, `pulse` and `flash` still work.
+A dot of radius `r`. Its walk has length 0, so `travel` and `trace` do nothing on it, while `wiggle`, `pulse` and `flash` still work.
 
 #### `matrix`
 
@@ -1095,7 +1095,7 @@ lineChart("#xg", {
 travel(icon: Icon | string, options?: TravelOptions): GeometryEffect
 ```
 
-Carries an icon along the mark's walk, or along one segment, and leaves it resting at the end: a ball rolling out a bar, round a donut slice or along a line ([architecture.md](architecture.md#travel)). `icon` is an [`Icon`](#icon) or a registered icon's name, looked up each time the effect runs; an unknown name throws then, and the chart reports it. The icon is inset by its footprint, so it stays inside the mark. A trip takes `max(260 ms, distance ÷ 360 px/s)` base, with `"effect"` timing, times its gait's pace, eased by the gait or `easeOutCubic`. A missing segment, or a walk under 0.5 px, makes it a no-op that finishes at once. Its end state is the icon resting at the end, and it follows the mark when the mark moves. Options: [`TravelOptions`](#traveloptions). A non-icon throws a `TypeError`.
+Carries an icon along the mark's walk, or along one segment, and leaves it resting at the end: a ball rolling out a bar, round a donut slice or along a line ([architecture.md](architecture.md#travel)). `icon` is an [`Icon`](#icon) or a registered icon's name, looked up each time the effect runs; an unknown name throws then, and the chart reports it. The icon is inset by its footprint, so it stays inside the mark. A trip takes `max(260 ms, distance ÷ 360 px/s)` base, with `"effect"` timing, times its gait's pace, and at most 4 s, eased by the gait or `easeOutCubic`. So past 1,440 px at pace 1 the icon goes faster, not longer, and a trip ends within 5 s even behind `stagger`. A missing segment, or a walk under 0.5 px, makes it a no-op that finishes at once. Its end state is the icon resting at the end, and it follows the mark when the mark moves. Options: [`TravelOptions`](#traveloptions). A non-icon throws a `TypeError`.
 
 #### `TravelOptions`
 
@@ -1229,6 +1229,31 @@ interface PulseOptions
 - `times`: `number`. Default 2. A whole number from 1 to 6.
 - `width`: `number`. Default 12. The halo's widest stroke in px.
 - `color`: `Color`. Default: the mark's own colour.
+
+#### `trace()`
+
+```ts
+trace(options?: TraceOptions): GeometryEffect
+```
+
+A highlighter: a stroke drawn along the mark's walk, from its start to its end, which stays ([architecture.md](architecture.md#trace)). It's drawn in over 500 ms base with `"effect"` timing, eased in and out, in the overlay, so the mark itself is untouched and it's safe in any slot. On a stack it runs the whole walk; on a point, whose walk has no length, it draws nothing and finishes at once. It follows the mark when the mark moves. Its end state is the whole stroke. It isn't a preset.
+
+```ts
+import { barChart, trace } from "expressive-charts";
+
+barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { hover: trace({ width: 4 }) } });
+```
+
+#### `TraceOptions`
+
+```ts
+interface TraceOptions
+```
+
+- `color`: `Color`. Default `"mark"`, the mark's own colour (a stack's first segment's).
+- `width`: `number`. Default 3. The stroke's width in px; 0 or more.
+- `opacity`: `number`. Default 0.5. From 0 to 1.
+- `duration`: `number`. Default 500. Base ms to draw the stroke, before the motion mode scales it; 0 or more.
 
 #### `threshold()`
 

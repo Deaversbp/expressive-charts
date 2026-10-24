@@ -23,6 +23,7 @@ import {
   sequence,
   stagger,
   threshold,
+  trace,
   travel,
   wiggle,
   type AnyMarkEffect,
@@ -226,6 +227,8 @@ const effects: Record<string, AnyMarkEffect> = {
   wiggle: wiggle(),
   pulse: pulse(),
   "staggered flash, third of five": stagger(flash()),
+  trace: trace(),
+  "trace while the ball rolls": parallel(trace(), travel(soccerBall)),
   // checkEffect's default data runs from 0 to 1 along each walk, so this colours the last 40%.
   "threshold past a target": threshold({ compareTo: 0.6, when: "above" })
 };
@@ -359,6 +362,14 @@ describe.each(Object.entries(sources))("effects on marks from %s", (_source, mar
     const twins = marksOf(true);
     expect(twins.map((twin) => twin.key)).toEqual(marks.map((mark) => mark.key));
     marks.forEach((mark, i) => expect(twins[i]!.slice(0, 1), mark.key).not.toBe(mark.slice(0, 1)));
+  });
+
+  it("trace draws the whole walk of every mark that has one, and nothing on a point", () => {
+    for (const mark of marksOf()) {
+      const ctx = testContext();
+      trace().end(mark, ctx);
+      expect(ctx.layer.drawn.map((drawn) => (drawn.kind === "path" ? drawn.d : drawn.kind)), mark.key).toEqual(mark.length >= 0.5 ? [mark.slice(0, 1)] : []);
+    }
   });
 
   it.each(Object.keys(effects))("%s passes the conformance checks on every mark", async (name) => {

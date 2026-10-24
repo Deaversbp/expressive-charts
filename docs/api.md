@@ -1815,7 +1815,7 @@ What every chart takes. The bar, donut and line charts add their own.
 - `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots (1 to 8) by series, pinned (`{ goals: 1, assists: 4 }`) or shared ([`colorAssignment()`](#colorassignment)). Colours follow the entity, never its rank. Default: slots in the order series are first seen.
 - `seriesLabels`: `Record<string, string>`. Names for people, by series: `{ xg: "Expected goals" }`, used as given wherever the chart names a series (the legend, the table's headers, the default tooltip and names, announcements). A series without one goes by its field's name, and a value read by a function is the series `"value"`.
 - `width`, `height`: `number`. Fixed size in px. Default: the container's width, followed as it changes, and each chart's own height.
-- `dim`: `boolean`. Default true. Dims the other marks while one is hovered (to `--ec-dim-opacity`). The hovered mark's emphasis stays either way.
+- `dim`: `boolean`. Default true. Dims the other marks' bodies while one is hovered (to `--ec-dim-opacity`), not their labels, which keep their contrast. The hovered mark's emphasis stays either way.
 - `legend`: `boolean | LegendOptions`. Default true: a swatch and a name for each series above the chart, when there are two entries or more. A donut, or bars with `colorBy: "category"`, list their categories instead, even one. `{ entries }` adds the page's own ([`LegendOptions`](#legendoptions)); `false` turns it off.
 - `tooltip`: `boolean | ((d: D) => string)`. Default true: the category, each value in `format` with its label, and a stack's total, beside the hovered or focused mark. A function gives a row's text instead, with `"\n"` for line breaks, set as text and never as HTML; an empty string shows none. Escape hides it.
 - `markLabel`: `(d: D, mark: MarkSummary) => string`. Words each mark's accessible name, which by default is the category and each value: "Okafor: 16 goals, 4 assists" ([`MarkSummary`](#marksummary)). An empty result, or a throw (reported), keeps the default, so a mark is never unnamed.
@@ -2775,6 +2775,6 @@ Every rule is inside `:where()`, so any rule of the page's wins. The colours are
 | `--ec-negative` | `threshold`'s default colour |
 | `--ec-ring` | hairline borders on the tooltip and controls |
 | `--ec-series-1` … `--ec-series-8`, each with `-strong` | the palette slots, and a hovered mark's stronger colour |
-| `--ec-dim-opacity` | the other marks' opacity while one is hovered (0.3) |
+| `--ec-dim-opacity` | the opacity of the other marks' bodies while one is hovered (0.3). Their labels keep theirs |
 
 `--ec-hover-duration` is set by each chart from its motion, so hover feedback is instant with motion off. The eight series colours are checked for 3:1 contrast and for colour-vision deficiencies in both themes. A page that puts a chart on a darker background than `--ec-surface` should set `--ec-text-muted` darker there too, since it's 4.6:1 on the light surface.

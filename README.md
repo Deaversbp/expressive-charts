@@ -2,7 +2,7 @@
 
 Composable motion and expressive effects for web charts. Hover, update and morph animations that work on bar, line and donut charts, including SVG charts you've already built with D3 or Observable Plot, and Vega or Vega-Lite charts rendered as SVG. Presentation, analysis and reduced-motion modes are built in.
 
-> **Status: not published yet.** 0.1.0 will be the first release on npm ([the plan](https://github.com/Deaversbp/expressive-charts/blob/main/docs/plan.md#m6-hardening-and-010)). Until then, build it from the repository: `npm install`, then `npm run build`.
+> **Status: 0.1.0, the first release (October 2026).** The effect-author API is under [the 0.x promise](#the-0x-promise); the charts, adapters, built-in effects and motion core can still change in a minor release. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#010-24-october-2026) lists what's in it.
 
 - **Effects first.** `travel`, `flash`, `wiggle`, `pulse`, the data effect `threshold` and the transition `morph`, put together with `sequence`, `parallel`, `only` and `stagger`. An effect reads only a shared description of the mark, so one effect works on every chart, and effects of your own work everywhere the built-in ones do.
 - **Charts and adapters.** Bar, donut and line charts, a switch that morphs one into another, and adapters that bring the same effects to SVG marks drawn by other code.

@@ -142,7 +142,8 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
    */
   function startHover(keys: readonly string[], source: HoverSource, segment?: string, effects = true): void {
     const marks = onScreen(marksFor(keys));
-    hovered = { keys, source, marks: marks.map((mark) => mark.key), effects };
+    const started: Hovered = { keys, source, marks: marks.map((mark) => mark.key), effects };
+    hovered = started;
     for (const { key: mark } of marks) markElement(mark)?.classList.add("ec-hot");
     if (options.dim()) svg.classList.add("ec-hovering");
     if (source !== "linked") {
@@ -150,7 +151,8 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       listenForEscape(true);
     }
     hoverMarks(marks, source, effects, segment);
-    if (source !== "linked") linked?.hover(marks.map(({ input }) => input));
+    // A listener may have ended it (leave()) or started another, which told the link itself.
+    if (source !== "linked" && hovered === started) linked?.hover(marks.map(({ input }) => input));
   }
 
   function endHover(): void {

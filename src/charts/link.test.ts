@@ -238,6 +238,25 @@ describe("link: charts", () => {
     expect(document.activeElement).toBe(column("1"));
   });
 
+  it("links nothing when a hover listener ends the hover it hears", () => {
+    const { bars, line, bar, hot } = season();
+    link([bars, line]);
+    let cancel = true;
+    bars.on("hover", (event) => {
+      if (event.source === "pointer" && cancel) bars.leave();
+    });
+    pointer("pointerover", bar("2").querySelector(".ec-segment")!);
+    expect(hot(bars)).toEqual([]);
+    expect(hot(line)).toEqual([]);
+    // The link has no origin left over: the next hover links as usual, and its leave ends it.
+    cancel = false;
+    pointer("pointerleave", bars.element);
+    pointer("pointerover", bar("3").querySelector(".ec-segment")!);
+    expect(hot(line)).toEqual(["goals@3", "xg@3"]);
+    bars.leave();
+    expect(hot(line)).toEqual([]);
+  });
+
   it("leaves a linked chart's hover with its leave(), the origin's going on", () => {
     const { bars, line, bar, hot } = season();
     link([bars, line]);
@@ -450,6 +469,21 @@ describe("link: attachments", () => {
     expect(press(shots.rect(1), "Escape").defaultPrevented).toBe(true);
     expect(hot(bars)).toEqual([]);
     expect(shots.rect(1).classList.contains("ec-dimmed")).toBe(false);
+  });
+
+  it("links the attachment's newer hover when a hover listener starts one", () => {
+    const { bars, hot } = season();
+    const shots = d3Shots();
+    const fx = expressive(shots.selection(), { key: (d) => String(d.week), keyboard: true }, environment());
+    link([bars, fx]);
+    fx.on("hover", (event) => {
+      if (event.source === "pointer") fx.focus("1");
+    });
+    pointer("pointerover", shots.rect(3));
+    // Focus on week 1 is the newest hover: the bars show it, not week 3.
+    expect(hot(bars)).toEqual(["1"]);
+    expect(press(shots.rect(1), "Escape").defaultPrevented).toBe(true);
+    expect(hot(bars)).toEqual([]);
   });
 
   it("follows an attachment's refresh: a linked mark that left is left", () => {

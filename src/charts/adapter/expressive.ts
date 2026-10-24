@@ -543,11 +543,13 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
   /** Pointer, keyboard and link hover share this; the attachment's own tells its link. */
   function startHover(marks: readonly MarkRecord<D>[], from: HoverSource, segment?: string, effects = true): void {
-    hovered = { keys: marks.map((record) => record.key), source: from, effects };
+    const started: Hovered = { keys: marks.map((record) => record.key), source: from, effects };
+    hovered = started;
     applyDim();
     if (effects) runner.hover(marks.map(input));
     marks.forEach((record, index) => emit("hover", { ...input(record), batch: { index, count: marks.length }, source: from, ...(segment === undefined ? {} : { segment }) }));
-    if (from !== "linked") linked?.hover(marks.map(input));
+    // A listener may have ended it (a refresh() that removed the mark) or started another (focus()), which told the link itself.
+    if (from !== "linked" && hovered === started) linked?.hover(marks.map(input));
   }
 
   function endHover(): void {

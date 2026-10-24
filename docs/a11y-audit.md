@@ -2,7 +2,7 @@
 
 This is a written WCAG 2.2 AA pass of the demo pages, made before the first release. It covers `bars.html`, `donut.html`, `line.html` and `morph.html`: the library's charts, its controls, and the D3, Vega-Lite and hand-written charts that `expressive()` and `fromVegaView()` drive there. `stress.html` has no table yet. axe and the DOM checks below run on it as on the others, but its criteria haven't been written up. `index.html` (a list of links) and `lab.html` (the single-file prototype the library grew out of, which doesn't use it) aren't part of it.
 
-It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
+It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. And in M7 (24 October 2026), hover stopped dimming the other marks' labels, with a check that they keep 4.5:1 (**contrast on hover**, below); the rows for 1.4.3 and the judgement call on dimming describe it as it is now. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
 
 ## How it was checked
 
@@ -11,6 +11,7 @@ It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since 
   - **tab order**: every tab stop in order, each showing its focus (the chart's ring, or the control's outline), then Shift+Tab back through every one;
   - **ring**: the tooltip never covers the focus ring, at any mark of each library chart;
   - **hover**: the tooltip stays while the pointer does, Escape hides it without the pointer moving, and it stays hidden until the pointer moves off and onto a mark;
+  - **contrast on hover**: while a mark of each library chart is hovered, in light and dark, every text in the chart keeps 4.5:1 against the card behind it, at the opacity it's drawn with (added in M7);
   - **spacing**: with WCAG 1.4.12's spacing added after load, no chart's text overlaps other text or leaves its card;
   - **5 s**: nothing on the page moves by itself 5 s after load;
   - **reflow**: at 320 px the page doesn't scroll sideways;
@@ -38,7 +39,7 @@ Six problems: five fixed as part of the audit, and one in the backlog. Two judge
 
 **Judgement calls**, which could reasonably go the other way:
 
-- **Dimmed marks while another is hovered (1.4.3, 1.4.11).** Hover dims every other mark to 30%, its labels with it: their names fall to 2.0:1 in light and 2.5:1 in dark, and their bars to 1.5:1. The values are all still in the tooltip, the names and the table, and leaving restores them, so this audit counts it as a pass at rest with the hover state noted, not a fail. Keeping text at full contrast while the bodies dim would change the dimming every hover screenshot shows, so it's in the backlog as a design question rather than fixed here.
+- **Dimmed marks while another is hovered (1.4.11).** Hover dims the other marks' bodies to 30%: their bars fall to 1.5:1. The values are all still in the tooltip, the names and the table, and leaving restores them, so this audit counts it as a pass at rest with the hover state noted, not a fail. At the audit their labels dimmed with them, to 2.0:1 in light and 2.5:1 in dark, which made 1.4.3 a judgement call too. Since M7 the labels stay at full strength, so 1.4.3 passes while a mark is hovered (contrast on hover).
 - **Target sizes of marks (2.5.8).** Every control passes (axe's `target-size` rule): each is 24 px tall or more, or spaced so a 24 px circle round it touches nothing. The line chart's weeks are columns 9.4 px wide, side by side, and the D3 and Vega-Lite lines take the pointer only on their 2.25 px strokes. The weeks' spacing is the data's own, which is the criterion's "essential" exception, and hovering a line only emphasises it, with nothing to activate or read. Both are reached by keyboard, and every value is in the names and the table.
 
 ## Contrast
@@ -115,7 +116,7 @@ The library's `barChart` with `travel`, and the hand-written chart through `expr
 | 1.3.3 Sensory characteristics | Pass | The page's instructions name controls and keys, not shapes or places. |
 | 1.3.4 Orientation | Pass | Nothing locks orientation; reflow. |
 | 1.4.1 Use of colour | Pass | Goals and assists in a stack differ by colour, with a legend, but each bar's name, the tooltip and the table give both values. A pressed toggle is bold too. |
-| 1.4.3 Contrast (minimum) | Pass (fixed) | axe, light and dark, after fix 1; [Contrast](#contrast). While a bar is hovered the others' labels dim to 2.0:1 (judgement call). |
+| 1.4.3 Contrast (minimum) | Pass (fixed) | axe, light and dark, after fix 1; [Contrast](#contrast); contrast on hover: while a bar is hovered, the others' labels keep 4.5:1. |
 | 1.4.4 Resize text | Pass | reflow covers 400%. |
 | 1.4.5 Images of text | Pass | All text is text. |
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px. The library's chart lays out again at the width; the hand-written one scales. |
@@ -162,7 +163,7 @@ The library's `donutChart` and columns on `barChart`, and a D3 pie through `expr
 | 1.3.3 Sensory characteristics | Pass | Instructions name controls. "Clockwise" describes the order; the keys don't depend on seeing it. |
 | 1.3.4 Orientation | Pass | reflow. |
 | 1.4.1 Use of colour | Pass | Each slice is labelled with its outcome and share round the ring; the legend's colours repeat those words. |
-| 1.4.3 Contrast (minimum) | Pass (fixed) | axe after fix 1; [Contrast](#contrast). Dimming: judgement call. |
+| 1.4.3 Contrast (minimum) | Pass (fixed) | axe after fix 1; [Contrast](#contrast); contrast on hover, on the donut and the columns. |
 | 1.4.4 Resize text | Pass | reflow. |
 | 1.4.5 Images of text | Pass | All text is text. |
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px. |
@@ -203,7 +204,7 @@ The library's `lineChart` with `threshold` and a riding ball, a D3 line through 
 | 1.3.3 Sensory characteristics | Pass | "Turns red" describes the chart; the Difference column and the tooltip say the same in words. |
 | 1.3.4 Orientation | Pass | reflow. |
 | 1.4.1 Use of colour | Pass | The threshold's red has a legend entry, "Goals below xG", and the Difference column and the tooltip's "vs expected" line say it. xG is dashed as well as grey. |
-| 1.4.3 Contrast (minimum) | Pass (fixed) | axe after fix 1; [Contrast](#contrast). The line chart doesn't dim. |
+| 1.4.3 Contrast (minimum) | Pass (fixed) | axe after fix 1; [Contrast](#contrast); contrast on hover. The line chart doesn't dim. |
 | 1.4.4 Resize text | Pass | reflow. |
 | 1.4.5 Images of text | Pass | All text is text. |
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px: the cards stack, the line chart lays out again, the D3 and Vega-Lite lines scale. |
@@ -245,7 +246,7 @@ The donut and the columns in one `chartSwitch`, with `morph()`, the V key and th
 | 1.3.3 Sensory characteristics | Pass | Instructions name controls and the V key. |
 | 1.3.4 Orientation | Pass | reflow. |
 | 1.4.1 Use of colour | Pass | Labels round the ring and under the columns name every outcome. |
-| 1.4.3 Contrast (minimum) | Pass (fixed) | axe after fix 1, which included the Morph label. Dimming: judgement call. |
+| 1.4.3 Contrast (minimum) | Pass (fixed) | axe after fix 1, which included the Morph label; contrast on hover. |
 | 1.4.4 Resize text | Pass | reflow. |
 | 1.4.5 Images of text | Pass | All text is text. |
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px. |

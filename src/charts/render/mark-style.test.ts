@@ -1,4 +1,8 @@
-import { matrix } from "../../core";
+import { createMotion, manualClock, matrix, type GeometryEffect } from "../../core";
+import { createRegistry, type PresetFactory } from "../../core/registry";
+import { barChart } from "../bar";
+import { donutChart } from "../donut";
+import type { ChartEnv } from "../shell/setup";
 import { svgMarkHandle, type StyledPart, type StyleTarget } from "./mark-style";
 import { svgElement } from "./svg";
 import { seriesColors, stylesheet } from "./theme";
@@ -84,8 +88,9 @@ describe("svgMarkHandle", () => {
     expect(stylesheet).toContain(":where(.ec-chart .ec-hot .ec-stroke) { stroke: var(--ec-mark-strong); }");
     // No stroke width: the chart's own attribute sets it, as its geometry's thickness says.
     expect(stylesheet).not.toMatch(/\.ec-stroke\) \{[^}]*stroke-width/);
-    // Dimming is the other marks' opacity, so it fades a stroked mark as it does a filled one.
-    expect(stylesheet).toContain(":where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot)) { opacity: var(--ec-dim-opacity, 0.3); }");
+    // Dimming is the parts' opacity, so it fades a stroked part as it does a filled one, over the hover duration.
+    expect(stylesheet).toContain(":where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot) > .ec-body > *) { opacity: var(--ec-dim-opacity, 0.3); }");
+    expect(stylesheet).toMatch(/:where\(\.ec-chart \.ec-stroke\) \{[^}]*transition: stroke [^;]*, opacity var\(--ec-hover-duration, 100ms\) ease-out; \}/);
   });
 
   it("strokes an open part's halo behind it at the line's width plus the halo's, round its ends", () => {
@@ -104,6 +109,79 @@ describe("svgMarkHandle", () => {
     // A closed part's halo is as it was.
     expect(bar!.getAttribute("stroke-width")).toBe("8");
     expect(bar!.hasAttribute("stroke-linecap")).toBe(false);
+  });
+
+  describe("hover dimming, from the stylesheet the charts inject", () => {
+    const env = (): ChartEnv => ({
+      presets: createRegistry<PresetFactory>({ kind: "preset" }),
+      icons: { get: () => undefined },
+      motion: createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } }),
+      clock: manualClock()
+    });
+    const container = () => document.body.appendChild(document.createElement("div"));
+    const hover = (target: Element) => target.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+    /** What the stylesheet sets, as jsdom cascades it: "1" where no rule sets an opacity. */
+    const opacity = (element: Element | null) => getComputedStyle(element!).opacity;
+    const DIM = "var(--ec-dim-opacity, 0.3)";
+    const players = [
+      { name: "Okafor", goals: 16, assists: 4 },
+      { name: "Tanaka", goals: 6, assists: 10 }
+    ];
+
+    it("dims the parts of the other bars' bodies, and not their labels, so text keeps its contrast", () => {
+      const chart = barChart(container(), { label: "Goals and assists", data: players, y: "name", x: "goals", stack: ["goals", "assists"], width: 600 }, env());
+      const mark = (key: string) => chart.element.querySelector(`.ec-mark[data-key="${key}"]`)!;
+      hover(mark("Okafor").querySelector(".ec-segment")!);
+      expect(chart.element.classList.contains("ec-hovering")).toBe(true);
+      const other = mark("Tanaka");
+      expect(Array.from(other.querySelectorAll(".ec-segment"), opacity)).toEqual([DIM, DIM]);
+      expect([other, other.querySelector(".ec-body"), other.querySelector(".ec-label"), other.querySelector(".ec-value")].map(opacity)).toEqual(["1", "1", "1", "1"]);
+      // The hovered bar is as it was.
+      expect(Array.from(mark("Okafor").querySelectorAll(".ec-segment"), opacity)).toEqual(["1", "1"]);
+      chart.element.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" }));
+      expect(Array.from(other.querySelectorAll(".ec-segment"), opacity)).toEqual(["1", "1"]);
+      chart.destroy();
+    });
+
+    it("dims the other slices, and not their labels outside the ring", () => {
+      const shots = [
+        { outcome: "Goal", shots: 58 },
+        { outcome: "Saved", shots: 112 },
+        { outcome: "Off target", shots: 149 }
+      ];
+      const chart = donutChart(container(), { label: "Shot outcomes", data: shots, category: "outcome", value: "shots", width: 640 }, env());
+      const mark = (key: string) => chart.element.querySelector(`.ec-mark[data-key="${key}"]`)!;
+      hover(mark("Saved").querySelector(".ec-slice")!);
+      for (const key of ["Goal", "Off target"]) {
+        const other = mark(key);
+        expect(opacity(other.querySelector(".ec-slice"))).toBe(DIM);
+        expect([other, other.querySelector(".ec-body"), ...other.querySelectorAll("text")].map(opacity)).toEqual(["1", "1", "1", "1"]);
+      }
+      expect(opacity(mark("Saved").querySelector(".ec-slice"))).toBe("1");
+      chart.destroy();
+    });
+
+    it("leaves an effect's opacity on a dimmed body, so the two multiply", () => {
+      // An effect that holds every bar at half opacity.
+      const fade: GeometryEffect = {
+        kind: "geometry",
+        run(_mark, ctx) {
+          ctx.mark.set({ opacity: 0.5 });
+          return new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve()));
+        },
+        end() {},
+        clear() {}
+      };
+      const chart = barChart(container(), { label: "Goals", data: players, y: "name", x: "goals", width: 600, on: { decorate: fade } }, env());
+      const mark = (key: string) => chart.element.querySelector(`.ec-mark[data-key="${key}"]`)!;
+      hover(mark("Okafor").querySelector(".ec-segment")!);
+      const body = mark("Tanaka").querySelector(".ec-body")!;
+      // No rule overrides the body's attribute; its segment dims inside it: 0.5 × 0.3 on screen.
+      expect(body.getAttribute("opacity")).toBe("0.5");
+      expect(opacity(body)).toBe("1");
+      expect(opacity(body.querySelector(".ec-segment"))).toBe(DIM);
+      chart.destroy();
+    });
   });
 
   it("repaints onto redrawn parts, and reset() restores the mark's own style", () => {

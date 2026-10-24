@@ -20,7 +20,7 @@ export interface Theme {
   readonly negative: string;
   /** Hairline borders on controls and the tooltip. */
   readonly ring: string;
-  /** Opacity of the other marks while one is hovered: a number, not a colour. */
+  /** Opacity of the other marks' bodies while one is hovered: a number, not a colour. Their labels keep theirs. */
   readonly "dim-opacity": string;
   /** Slots 1–8: the mark colour, and its -strong variant for hover emphasis. */
   readonly series: readonly (readonly [color: string, strong: string])[];
@@ -146,6 +146,9 @@ ${declarations(themes.dark, "    ")}
 ${declarations(themes.dark, "  ")}
 }`;
 
+// Hover dims the parts in each other mark's body, not the whole mark, so its labels keep their
+// contrast. Not the body itself either: an effect's opacity is an attribute there, which a rule would
+// override. On the parts, the two multiply.
 const STYLES = `/* expressive-charts: theme tokens and default styles. Every rule has zero specificity, so your CSS wins. */
 ${TOKEN_RULES}
 :where(.ec-chart) { display: block; max-width: 100%; height: auto; overflow: visible; touch-action: pan-y; -webkit-tap-highlight-color: transparent; }
@@ -160,10 +163,10 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-focus) { pointer-events: none; }
 :where(.ec-chart .ec-focus-ring) { fill: none; stroke: var(--ec-focus, ${TOKENS.focus}); }
 :where(.ec-chart .ec-focus-gap) { fill: var(--ec-surface, ${TOKENS.surface}); stroke: var(--ec-surface, ${TOKENS.surface}); }
-:where(.ec-chart .ec-mark) { transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
-:where(.ec-chart .ec-segment) { fill: var(--ec-mark); transition: fill var(--ec-hover-duration, 100ms) ease-out; }
+:where(.ec-chart .ec-body > *) { transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
+:where(.ec-chart .ec-segment) { fill: var(--ec-mark); transition: fill var(--ec-hover-duration, 100ms) ease-out, opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-segment) { fill: var(--ec-mark-strong); }
-:where(.ec-chart .ec-stroke) { fill: none; stroke: var(--ec-mark); stroke-linejoin: round; transition: stroke var(--ec-hover-duration, 100ms) ease-out; }
+:where(.ec-chart .ec-stroke) { fill: none; stroke: var(--ec-mark); stroke-linejoin: round; transition: stroke var(--ec-hover-duration, 100ms) ease-out, opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-stroke) { stroke: var(--ec-mark-strong); }
 :where(.ec-chart .ec-end) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; }
 :where(.ec-chart .ec-dot) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; opacity: 0; transition: opacity var(--ec-hover-duration, 100ms) ease-out, fill var(--ec-hover-duration, 100ms) ease-out; }
@@ -171,11 +174,11 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-crosshair) { stroke: var(--ec-axis, ${TOKENS.axis}); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
 :where(.ec-chart .ec-column:focus) { outline: none; }
 :where(.ec-chart .ec-lines, .ec-chart .ec-points) { pointer-events: none; }
-:where(.ec-chart .ec-slice) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; stroke-linejoin: round; transition: fill var(--ec-hover-duration, 100ms) ease-out; }
+:where(.ec-chart .ec-slice) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; stroke-linejoin: round; transition: fill var(--ec-hover-duration, 100ms) ease-out, opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-slice) { fill: var(--ec-mark-strong); }
 :where(.ec-chart .ec-center-value) { fill: var(--ec-text, ${TOKENS.text}); font-size: 26px; font-weight: 600; }
 :where(.ec-chart .ec-center-label) { fill: var(--ec-text-muted, ${TOKENS["text-muted"]}); font-size: 12.5px; }
-:where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot)) { opacity: var(--ec-dim-opacity, 0.3); }
+:where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot) > .ec-body > *) { opacity: var(--ec-dim-opacity, 0.3); }
 :where(.ec-chart.ec-morphing .ec-marks) { visibility: hidden; }
 :where(.ec-switch) { display: grid; grid-template-columns: minmax(0, 1fr); position: relative; }
 :where(.ec-switch-view) { grid-area: 1 / 1; min-width: 0; }

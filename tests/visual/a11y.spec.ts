@@ -9,7 +9,7 @@
 
 import axe from "axe-core";
 import { expect, test, type Page } from "@playwright/test";
-import { barsDemo, donutDemo, FRAME, hoverShape, lineDemo, morphDemo, openDemo, pickMetric, REST, stressDemo, tabInto, type Demo } from "./demo";
+import { barsDemo, donutDemo, FRAME, hoverShape, lineDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, stressDemo, tabInto, type Demo } from "./demo";
 
 /** axe's rules for WCAG 2.0, 2.1 and 2.2 at levels A and AA. */
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -53,6 +53,22 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
     demo: morphDemo,
     stops: [...MOTION, "Show as columns", "Drop", "Unroll", "Goal: 58 shots, 14%", "Data table"],
     charts: [{ chart: "#shots", shape: '.ec-switch-view[data-view="donut"] .ec-mark[data-key="Off target"] .ec-slice' }]
+  },
+  {
+    name: "season",
+    demo: seasonDemo,
+    stops: [
+      ...MOTION,
+      ...["Play next matchweek", "Full hover", "Emphasis only", "Matchweek 1: 2 goals", "Data table", "Matchweek 1: 7 shots", "Matchweek 1: 2 goals, 0.6 xG", "Data table"],
+      ...["Okafor: 14 goals", "Data table", "Okafor: 1 goal at matchweek 1, 14 goals after matchweek 24, +13"]
+    ],
+    // A linked hover dims the other charts too: "contrast on hover" measures the chart hovered, and
+    // season.spec.ts the two linked to it.
+    charts: [
+      { chart: "#goals", shape: '.ec-mark[data-key="13"] .ec-segment' },
+      { chart: "#line", shape: '.ec-column[data-key="13"] .ec-hit' },
+      { chart: "#players", shape: '.ec-mark[data-key="Okafor"] .ec-segment' }
+    ]
   },
   {
     name: "stress",

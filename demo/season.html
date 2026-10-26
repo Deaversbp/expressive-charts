@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The season so far · expressive-charts</title>
+<style>
+  /* Page chrome only, as on bars.html. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d67;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6; --link: #226dc7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5; --link: #3987e5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 20px; margin: 0; }
+  h3 { font-size: 15px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
+  .note { font-size: 14px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; justify-self: start; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
+  .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+  /* Forced colours drop the wash, which leaves only the weight: the pressed button takes the viewer's selection colours, as the motion switch does. */
+  @media (forced-colors: active) { .seg button[aria-pressed="true"] { background: Highlight; color: HighlightText; } }
+  .seg button:hover { background: var(--wash); }
+  .btn { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  .btn:hover:not(:disabled) { background: var(--wash); }
+  .btn:disabled { color: var(--muted); cursor: default; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+  .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  a { color: var(--link); }
+  /* The motion switch sits on the page, darker than the charts' surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
+  #motion { --ec-text-muted: var(--muted); }
+
+  /* The linked charts: the two weekly columns one above the other, and the line beside them where there's room. */
+  .linked { display: grid; gap: 20px; min-width: 0; }
+  .linked > div { display: grid; gap: 8px; align-content: start; min-width: 0; }
+  @media (min-width: 860px) {
+    .linked { grid-template-columns: 1fr 1fr; grid-template-areas: "goals line" "shots line"; }
+    .linked > .goals { grid-area: goals; }
+    .linked > .shots { grid-area: shots; }
+    .linked > .line { grid-area: line; }
+  }
+  /* The players' bars and the slope chart side by side where there's room. */
+  .pair { display: grid; gap: 20px; min-width: 0; }
+  @media (min-width: 860px) { .pair { grid-template-columns: 1fr 1fr; } }
+  #goals, #line, #players, .d3-box { min-width: 0; }
+  /* The week under every column would crowd: the first and every fifth, as an axis would. Each column's name and the table have every week. */
+  #goals .ec-mark:not([data-key="1"]):not([data-key$="5"]):not([data-key$="0"]) .ec-label { display: none; }
+  /* Where a column is too narrow for its value, the axis, the names, the tooltip and the table still have it. */
+  @media (max-width: 599px) { #goals .ec-value { display: none; } }
+  /* delta() writes each change past its bar's value, which past the longest bar is past the chart's edge. The chart leaves itself that room. */
+  #players { padding-right: 28px; }
+  /* The tooltip functions' text is plain; their first line is bold, as on line.html. */
+  #goals .ec-tooltip::first-line, #line .ec-tooltip::first-line { font-weight: 600; }
+  /* xG is a dashed grey, as on line.html: it's what goals are read against. */
+  #line { --ec-series-2: var(--ec-text-muted, #75736d); --ec-series-2-strong: var(--ink-2); }
+  #line .ec-line[data-key="totalXg"] .ec-stroke { stroke-dasharray: 6 4; }
+  #line .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
+  #line .ec-legend-item[data-series="totalXg"] .ec-legend-swatch { border-top-style: dashed; }
+  /* The D3 charts' own styles: they're someone else's charts, so the page styles them, not the library. */
+  .d3-box svg { display: block; max-width: 100%; height: auto; overflow: visible; }
+  .d3-box .tick { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
+  .d3-box .grid { stroke: var(--ec-grid, #e1e0d9); }
+  .d3-box .baseline, .d3-box .edge { stroke: var(--ec-axis, #c3c2b7); }
+  #shots .column { fill: var(--ec-series-3, #02a471); }
+  #slope .slope { fill: none; stroke: var(--ec-series-1, #2a78d6); stroke-linejoin: round; stroke-linecap: round; }
+  #slope .name { font-size: 12.5px; fill: var(--ink-2); }
+  /* The text label() writes, in the overlay expressive() adds: sized as our charts size theirs, since a host <svg> takes the page's font size. */
+  #slope .ec-text { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Linked hover · change labels</p>
+    <h1>The season so far</h1>
+    <p class="lede">Harbor City FC after 24 matchweeks, on the library's charts and on two drawn with D3. Hover a matchweek in any of the first three charts and the others show the same week, with <code>link()</code>. Play the next matchweek to see each player's change rise past their bar with <code>delta()</code>, and hover a line in the slope chart to <code>trace()</code> it.</p>
+  </header>
+
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
+
+  <div class="bar">
+    <button type="button" class="btn" id="next-matchweek">Play next matchweek</button>
+    <!-- Not a live region: the players' chart announces each matchweek itself (announce). -->
+    <span class="status" id="matchweek-status">After matchweek 24</span>
+  </div>
+
+  <section class="card" aria-labelledby="linked-title">
+    <h2 id="linked-title">Linked by matchweek</h2>
+    <p class="note">Three charts in one <code>link()</code>: the library's <code>barChart</code> and <code>lineChart</code>, and columns drawn with D3 through <code>expressive()</code>. Hover a week in any of them, or Tab in and use the arrow keys, and the same week lights up in the other two, with their own hover effects: a ball up the goals column, a pulse round the line's points and the shots column. Only the chart you're on shows a tooltip or takes focus.</p>
+    <div class="seg" id="linked-marks" role="group" aria-label="Linked marks">
+      <button type="button" data-value="full" aria-pressed="true">Full hover</button>
+      <button type="button" data-value="emphasis" aria-pressed="false">Emphasis only</button>
+    </div>
+    <div class="linked">
+      <div class="goals">
+        <h3 id="goals-title">Goals per matchweek</h3>
+        <div id="goals"></div>
+      </div>
+      <div class="shots">
+        <h3 id="shots-title">Shots per matchweek, drawn with D3</h3>
+        <div class="d3-box">
+          <!-- A group, not an image: screen readers skip what's inside an image, and its columns take focus. -->
+          <svg id="shots" role="group" aria-label="Shots per matchweek on D3 columns"></svg>
+        </div>
+      </div>
+      <div class="line">
+        <h3 id="line-title">Goals vs expected goals, season to date</h3>
+        <div id="line"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="pair">
+    <section class="card" aria-labelledby="players-title">
+      <h2 id="players-title">Since the last matchweek</h2>
+      <p class="note">The library's <code>barChart</code>, with <code>flash()</code> and <code>delta()</code> in its <code>update</code> slot. Play the next matchweek: each player who scored flashes, and their change rises past their bar and stays until the next one. The table's Change column and the announcement say the same, since screen readers don't read what effects draw.</p>
+      <div id="players"></div>
+    </section>
+
+    <section class="card" aria-labelledby="slope-title">
+      <h2 id="slope-title">The season so far</h2>
+      <p class="note">Each player's goals at matchweek 1 and now, on a slope chart drawn with D3. <code>label()</code> writes each change past the player's name, which the page gives as the line's own label (<code>labelBounds</code>), and follows it every matchweek. Hover a line, or Tab in, to <code>trace()</code> it.</p>
+      <div class="d3-box">
+        <svg id="slope" role="group" aria-label="Goals by player at matchweek 1 and now, on a D3 slope chart"></svg>
+      </div>
+    </section>
+  </div>
+
+  <section class="card" aria-labelledby="try-title">
+    <h2 id="try-title">Things to try</h2>
+    <ul class="checklist">
+      <li>Hover a week on the line: its goals column and its shots column light up too. Then pick <b>Emphasis only</b>, and the linked weeks keep their emphasis and dimming without the ball or the pulse.</li>
+      <li>Tab into the goals per matchweek and use the arrow keys: the other two charts follow the focused week, and focus stays where it is. Escape ends all three.</li>
+      <li>Press <b>Play next matchweek</b>: a week is added to every chart, the players who scored flash with their change past their bar, and the slope chart's changes follow.</li>
+      <li>Pick Off, or turn on reduced motion: the changes and the slope chart's labels show at once, and a trace is drawn whole.</li>
+      <li>Open the players' data table: its Change and Since matchweek 1 columns say what the charts write over the bars and the lines.</li>
+    </ul>
+  </section>
+</main>
+<script type="module" src="./season.ts"></script>
+</body>
+</html>

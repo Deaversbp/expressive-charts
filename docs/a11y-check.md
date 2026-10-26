@@ -2,7 +2,7 @@
 
 These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`, and [section H](#h-the-season-page-linked-hover-and-change-labels) checks linked hover and the change labels on `demo/season.html`. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
 
-**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026, and section H, the season page, on 26 October 2026. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
 
 A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to paste into an issue.
 
@@ -398,6 +398,16 @@ The switch's names, roles, announcement and V key stay as built. The Speech View
 - nothing was read that can't be seen.
 
 The date axis's names, the keyboard and the table stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
+
+**The season page (section H), NVDA + Chrome on Windows, 26 October 2026: passed.** The tester reported that script H passed, so every "Listen for" item passed:
+- a focused week was read once, from the chart with focus, and nothing was announced as it moved, though the other two charts showed it;
+- focus stayed in the chart it was in;
+- each matchweek was announced once, with each player who scored, their change and their total;
+- the players' table read its Change and Since matchweek 1 columns with their headers;
+- each slope line was read once, with both ends and its change;
+- nothing was read that can't be seen, and the changes drawn past the bars and names weren't read on their own.
+
+So linked hover is visual only, and the page's announcement, table and names say what `delta()` and `label()` draw. They stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
 
 Template for the next run:
 

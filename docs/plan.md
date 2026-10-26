@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M6 are complete (§9). **0.1.0 is on npm**, published from CI with provenance on 24 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.1.0)), with its demo pages at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes after 0.1, are in the backlog at the end of §9. M7, for 0.2.0, is planned (§9, 24 October 2026): six steps in three waves, from the built-in `trace`, `delta` and `label` and linked hover to publishing 0.2.0 last. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M7 are complete (§9). **0.2.0 is on npm**, published from CI through npm's trusted publishing with provenance on 26 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.2.0)), after 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -1962,7 +1962,7 @@ Each step's session reads its siblings' hand-over notes first, and writes its ow
 
 **Status: complete (24 October 2026).** Every item on the list holds. The last two came on release day: your NVDA runs of sections C, E 13–14 and G passed, so M4 has its ✅, and 0.1.0 is on npm with provenance, with its release on GitHub (step 9).
 
-### M7: Effects that explain, and linked hover (0.2.0)
+### M7: Effects that explain, and linked hover (0.2.0) ✅
 
 Built-in effects that draw a path and label a change, a way for their text to keep clear of the charts' own labels, linked hover across charts, two fixes from the backlog, and last, 0.2.0 on npm.
 
@@ -2178,12 +2178,25 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 
 **Wave 3:**
 
-6. **Publish 0.2.0** (decisions 6 and 7). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.2.0 entry, README's status, `release.yml`'s comment, CONTRIBUTING's Releasing, and this plan's status line and M7's ✅.
+6. ✅ **Publish 0.2.0** (decisions 6 and 7). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.2.0 entry, README's status, `release.yml`'s comment, CONTRIBUTING's Releasing, and this plan's status line and M7's ✅.
    - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you) and `npm publish --dry-run`. The PR has its results.
    - **You,** within 2 days before the release, add the trusted publisher on npmjs.com: GitHub Actions, user `Deaversbp`, repository `expressive-charts`, workflow `release.yml`, with direct `npm publish` allowed.
    - **Then, on your go-ahead in that session:** the `v0.2.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
    - **After:** check npm (the version, README, provenance), install 0.2.0 in a fresh project, and check jsDelivr. You set the package's publishing access to require 2FA and disallow tokens. Deprecating `0.0.0-stage` is optional, with your npm account.
    - **If npm refuses a direct publish,** the fallback is staging, as CONTRIBUTING says: the workflow's last step changed in its own PR, with a check for npm 11.15 or newer, and your approval with 2FA.
+   - **Built** (26 October 2026): [0.2.0 is on npm](https://www.npmjs.com/package/expressive-charts/v/0.2.0) through trusted publishing with provenance, and [its release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.2.0) is on GitHub. The fallback wasn't needed.
+     - **The release PR** (#79): 0.2.0 in `package.json`, the lockfile and `VERSION`; CHANGELOG's 0.2.0 entry, the Unreleased lists under a short summary, each Changed entry keeping what to write instead; README's status; `release.yml`'s comments; and CONTRIBUTING's Releasing for trusted publishing, with 0.1.0's token in the past tense.
+     - **Two more lines in README,** since npm's copy is fixed at publish: the script tag at `expressive-charts@0.2` (api.md's too), since `@0.1` keeps serving 0.1.x, which has none of M7; and the sizes as measured, a bar chart about 29 KB gzipped and everything 68 KB.
+     - **The dry run** passed on `0e81dd7` with the PR: `typecheck`, 1,771 tests, the build, every size within its budget (`barChart` 28.9 KB, the line page's set 34.7, everything 68.1 and the script-tag bundle 74.5), `pack-check`, `npm pack` (35 files, the same as 0.1.0's, 1.3 MB packed and 4.9 MB unpacked, most of it source maps) and `npm publish --dry-run`.
+     - **The workflow didn't change** (decision 7). Read in npm's own code (11.7 here, 11.19 in CI): npm trades GitHub's OIDC token for one of its own before it looks for credentials, and the publish step's empty `NODE_AUTH_TOKEN` counts as none. So with no secret, a publish that trusted publishing doesn't allow stops with `ENEEDAUTH` and publishes nothing.
+     - **You** set up two-factor authentication on npm, with a security key, which npm asked for before it would save the trusted publisher. Then you added it: GitHub Actions, `Deaversbp/expressive-charts`, `release.yml`, no environment, with `npm publish` allowed.
+     - **The release.** Main's CI was green on `21a24a1`. On your go-ahead, `v0.2.0` was created there at 20:23 UTC. Its first run passed every check, then stopped at the publish with `ENEEDAUTH`, publishing nothing: the trusted publisher was saved at 20:27, after the two-factor set-up, three minutes after the run tried it. Its failed job was run again on the same release, and published with provenance at 20:29 ([Sigstore's log](https://search.sigstore.dev/?logIndex=3496166767)).
+     - **After.** npm shows 0.2.0 as `latest`, with README, its four GIFs, and "Built and signed on GitHub Actions" from `21a24a1` and `release.yml`. Its provenance is SLSA v1, from `refs/tags/v0.2.0`. A fresh project installs it with no dependencies, `npm audit signatures` verifies its registry signature and its attestation, and all three entries load as ES modules and as CommonJS, with the same names both ways, `VERSION` 0.2.0 and the stylesheet. jsDelivr serves the script tag at `expressive-charts@0.2`. No placeholder version came this time.
+   - **Where the plan and npm differ:**
+     - **Two-factor authentication first.** npm wouldn't save a trusted publisher until the account had two-factor authentication. It offered only a security key, which can be the computer's own sign-in, such as Windows Hello.
+     - **The connection must be saved before the release's run.** One saved later doesn't help that run, which fails with `ENEEDAUTH`; running the failed job again publishes. CONTRIBUTING says so now.
+     - **npm's form** has an optional label, and its allowed actions are "npm publish" and "npm dist-tag", both unticked to start with; `npm stage publish` is always allowed. The connection shows "Pending validation" until a publish uses it, with the time it expires.
+   - **Left for you:** set the package's publishing access to "Require two-factor authentication and disallow bypass 2fa tokens". Deprecating `0.0.0-stage` is optional.
 
 **Done when:**
 - **Effects.** `trace`, `delta` and `label` are built-ins, each passing `checkEffect` on every kind of mark and every conformance source, with end states that keep their information.
@@ -2193,6 +2206,8 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **The demo.** `demo/season.html` shows all of it, with its screenshots, its place in the axe checks and the written audit, and script H passed with NVDA + Chrome.
 - **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise is unchanged except for `labelBounds`.
 - **0.2.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M7 is done.
+
+**Status: complete (26 October 2026).** Every item on the list holds. Steps 1 to 5 built and checked the first six, and 0.2.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 6).
 
 ### Backlog (after 0.1)
 

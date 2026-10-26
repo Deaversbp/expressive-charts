@@ -1,8 +1,8 @@
 # Accessibility audit: WCAG 2.2 AA
 
-This is a written WCAG 2.2 AA pass of the demo pages, made before the first release. It covers `bars.html`, `donut.html`, `line.html` and `morph.html`: the library's charts, its controls, and the D3, Vega-Lite and hand-written charts that `expressive()` and `fromVegaView()` drive there. `stress.html` has no table yet. axe and the DOM checks below run on it as on the others, but its criteria haven't been written up. `index.html` (a list of links) and `lab.html` (the single-file prototype the library grew out of, which doesn't use it) aren't part of it.
+This is a written WCAG 2.2 AA pass of the demo pages, made before the first release. It covers `bars.html`, `donut.html`, `line.html` and `morph.html`, and since M7 `season.html`: the library's charts, its controls, and the D3, Vega-Lite and hand-written charts that `expressive()` and `fromVegaView()` drive there. `stress.html` has no table yet. axe and the DOM checks below run on it as on the others, but its criteria haven't been written up. `index.html` (a list of links) and `lab.html` (the single-file prototype the library grew out of, which doesn't use it) aren't part of it.
 
-It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. And in M7 (24 October 2026), hover stopped dimming the other marks' labels, with a check that they keep 4.5:1 (**contrast on hover**, below); the rows for 1.4.3 and the judgement call on dimming describe it as it is now. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
+It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. And in M7 (24 October 2026), hover stopped dimming the other marks' labels, with a check that they keep 4.5:1 (**contrast on hover**, below); the rows for 1.4.3 and the judgement call on dimming describe it as it is now. `season.html` came in M7 step 5, and its table was written then (26 October 2026), from the same checks. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
 
 ## How it was checked
 
@@ -18,7 +18,7 @@ It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since 
   - **forced**: under forced colours, each legend's swatches keep their own colours, and a pressed toggle shows in the viewer's selection colours.
 - **The rest of the visual suite**: reduced motion and Off on each page, Play and Pause, the scrubber, the switch's timing, and what a screen reader can reach mid-switch (Chrome's accessibility tree, read over CDP).
 - **Contrast of SVG text and marks**, which axe reports as "incomplete" rather than judging: worked out from the theme's tokens ([Contrast](#contrast)), and validated for the marks by `src/charts/render/theme.test.ts`.
-- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
+- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. Section H, the season page's linked hover and change labels, is written for M7 step 5 and not yet heard. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
 - **By hand**, in headless Chromium: the pages at 320 px, with the text spacing, and under forced colours, looked at as pictures; the tooltip's place against every focused mark; the target sizes of every control and mark; and Chrome's accessibility tree for each chart.
 
 ## What it found
@@ -274,3 +274,44 @@ The donut and the columns in one `chartSwitch`, with `morph()`, the V key and th
 | 4.1.3 Status messages | Pass | The new view's name is announced when a switch lands (NVDA F, steps 3, 5, 6, 9). |
 | Reduced motion | Pass | `morph.spec.ts`: a switch lands at once until the viewer picks a mode. |
 | Forced colours | Pass | forced. Fix 5. |
+
+### season.html
+
+The library's `barChart`, twice (goals per matchweek, and goals by player), and `lineChart`, with columns and a slope chart drawn with D3 through `expressive()`. Three of them are in one `link()`; the players' bars have `delta()`, the slope chart `label()` and `trace()`, and Play next matchweek moves every chart on a week.
+
+| Criterion | Result | Evidence |
+| --- | --- | --- |
+| 1.1.1 Non-text content | Pass | axe. Each chart is a named group and each mark one named image ("Matchweek 13: 4 goals", "Matchweek 1: 7 shots", "Okafor: 1 goal at matchweek 1, 14 goals after matchweek 24, +13"). The ball, the pulses, the trace and the text `delta()` and `label()` draw are in `aria-hidden` overlays; what the text says is in the announcement, the players' table and the slope lines' names (M7 decision 16). NVDA H. |
+| 1.3.1 Info and relationships | Pass | axe. The goals and line tables have the matchweek as row header, and the players' table its Change and Since matchweek 1 columns (NVDA H, steps 9–11). The toggles are a group named Linked marks, and each chart has a heading. |
+| 1.3.2 Meaningful sequence | Pass | The two column charts come before the line in the DOM, as they're stacked on the left; the bars follow their sort, and the slope lines are in the players' order. |
+| 1.3.3 Sensory characteristics | Pass | The instructions name controls and keys. "Lights up" describes what's seen; the names and tables don't depend on it. |
+| 1.3.4 Orientation | Pass | reflow. |
+| 1.4.1 Use of colour | Pass | A linked week is told by its emphasis and by every other mark dimming, and it's visual only: each value is in the names and the tables. xG is dashed as well as grey. The slope lines share one colour, each named at its end. |
+| 1.4.3 Contrast (minimum) | Pass | axe, light and dark; [Contrast](#contrast); contrast on hover, on the goals chart, the line and the players' bars. `season.spec.ts`: a linked chart's labels stay at full strength while its columns dim. The D3 charts' names are the page's `--ink-2` (7.73:1 light, 9.72:1 dark), their ticks `--ec-text-muted`, and the text `label()` draws `--ec-text`. |
+| 1.4.4 Resize text | Pass | reflow. |
+| 1.4.5 Images of text | Pass | All text is text. |
+| 1.4.10 Reflow | Pass | reflow and axe at 320 px. `season.spec.ts`: after a matchweek at 320 px, with Okafor's bar at the end of its scale, every change stays inside its card's padding, with no sideways scroll; the players' chart leaves 28 px beside itself for them (M7 decision 12). The goals chart shows the first week and every fifth under its columns, and below 600 px leaves out their values: each is in the names, the tooltip and the table. |
+| 1.4.11 Non-text contrast | Pass | [Contrast](#contrast): the marks, the ring. Marks dimmed by a hover, linked or not: judgement call. |
+| 1.4.12 Text spacing | Pass | spacing. The slope chart draws itself again when its names grow, so each change stays clear of its name. |
+| 1.4.13 Content on hover or focus | **Fail** (hoverable; backlog) | hover, on the three library charts. Finding 6. A linked chart shows no tooltip. |
+| 2.1.1 Keyboard | Pass | tab order; `season.spec.ts`: the arrow keys in one linked chart, the others following, and Escape ending all three. Every control is a button. NVDA H. |
+| 2.1.2 No keyboard trap | Pass | tab order, both ways. |
+| 2.1.4 Character key shortcuts | Pass | None. |
+| 2.2.2 Pause, stop, hide | Pass | 5 s. Nothing plays by itself: the slope chart's labels rise once at load, in 400 ms, and a matchweek, a hover and a trace each end within 2 s. |
+| 2.3.1 Three flashes | Pass | `flash` blinks once for each player who scored. A pulse rings twice in 1.2 s, round one mark in each chart. |
+| 2.4.1, 2.4.2 | Pass | axe. |
+| 2.4.3 Focus order | Pass | tab order: the motion switch, Play next matchweek, Linked marks, the goals chart, its table, the D3 columns, the line, its table, the players' bars, their table, the slope chart. A linked hover never moves focus (`season.spec.ts`; NVDA H, steps 2 and 4). |
+| 2.4.6 Headings and labels | Pass | Each card and each linked chart has a heading; the toggles are a group named Linked marks. |
+| 2.4.7 Focus visible | Pass | tab order checks every stop. |
+| 2.4.11 Focus not obscured | Pass | ring, on the three library charts. |
+| 2.5.1, 2.5.2, 2.5.7 | Pass | Pointing and clicking only; buttons act on release. |
+| 2.5.3 Label in name | Pass | Each button's name is its text. Each mark's name starts with what's shown beside it: its week, or its player. |
+| 2.5.8 Target size (minimum) | Pass | axe. The weeks of the goals chart and the D3 columns are as wide as their weeks, side by side (17.6 px at matchweek 24 on a 1,000 px page, 11 px at matchweek 38), and the slope lines take the pointer on their 2.25 px strokes: judgement call, as for the line page's weeks. All are reached by keyboard, and every value is in the names and the tables. |
+| 3.1.1 Language of page | Pass | axe. |
+| 3.2.1, 3.2.2 | Pass | Focus plays the hover, in the chart focused and the two linked to it, and nothing else changes. Play next matchweek changes every chart, which the cards say; the toggles change only how linked weeks show. |
+| 3.2.3, 3.2.4 Consistency | Pass | The motion switch as on every page. |
+| 3.3.2 Labels or instructions | Pass | Every control's text is its label. |
+| 4.1.2 Name, role, value | Pass | axe; the toggles are `aria-pressed`. NVDA H. |
+| 4.1.3 Status messages | Pass | Each matchweek is announced once, by the players' chart, with each player who scored, their change and their total (`season.spec.ts`; NVDA H, steps 6 and 7). A linked hover announces nothing. |
+| Reduced motion | Pass | `season.spec.ts`: with reduced motion and with Off, the changes and the slope chart's labels show at once, and a trace is whole. |
+| Forced colours | Pass | forced; axe under forced colours. The line's legend keeps its colours. |

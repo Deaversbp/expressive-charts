@@ -1,6 +1,6 @@
 # Screen-reader checks
 
-These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, and [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
+These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`, and [section H](#h-the-season-page-linked-hover-and-change-labels) checks linked hover and the change labels on `demo/season.html`. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
 
 **Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
 
@@ -298,6 +298,49 @@ If the announcement in steps 3, 5, 6 or 9 isn't heard, or is heard before the sw
 | 11 | NVDA+Space (focus mode), Right arrow, then End. | "Jan 2, 2016: 838 Visits, 938 28-day average, graphic", then "Dec 31, 2025: 565 Visits, 503 28-day average, graphic". | |
 
 Ten years are 3,653 days, and the arrow keys go a day at a time, so step 11 uses End. If you'd want a larger step (Page Up and Page Down by a month, say), say so: the charts have none yet.
+
+## H. The season page: linked hover and change labels
+
+`demo/season.html` shows Harbor City FC's season after 24 matchweeks. Its first three charts are in one `link()`: goals per matchweek on `barChart`, shots per matchweek on columns the page draws with D3, and goals against expected goals on `lineChart`. A week hovered or focused in one of them shows in the other two. "Play next matchweek" adds a week to every chart. The players' bars show each change since the last matchweek past the bar, with `delta()`, and a slope chart drawn with D3 shows each player's change since matchweek 1 past their name, with `label()`. This script covers what linked hover and the change labels add; otherwise the bars read as in [section A](#a-nvda--chrome-windows) and the line as in [section E](#e-the-line-page-linechart-and-a-d3-line).
+
+- **Linked hover is visual only.** When focus moves week by week in one of the three charts, the other two show the same week, with no focus ring or tooltip there, and nothing is announced. Focus stays where it is.
+- **Goals per matchweek.** The `<svg>` is `role="group"`, named "Goals per matchweek". Each week is one focus stop, `role="img"`, named by its goals ("Matchweek 13: 4 goals") and described by its xG and shots ("1.2 xG, 15 shots"). Its data table has Matchweek, Goals, xG and Shots: the D3 columns have no table of their own.
+- **The D3 columns.** The page's `<svg>` is `role="group"`, named "Shots per matchweek on D3 columns", and its axes are hidden. `markLabel` names each column ("Matchweek 1: 7 shots"), and the arrow keys go week by week.
+- **The line chart** reads as on the line page: each week named by both totals ("Matchweek 1: 2 goals, 0.6 xG") and described by the gap ("+1.4 vs expected").
+- **The changes.** The text `delta()` draws past a bar ("+1") and `label()` past a name ("+13") is in an overlay that screen readers don't read, so the page says it in words too. The players' chart announces each matchweek: each player who scored, their change and their total ("Matchweek 25: Okafor +1, 15 goals; Lindqvist +1, 7 goals."), or "no goals". The players' table has a Change column, the last matchweek's, and a Since matchweek 1 column. Each slope line is named by both ends and its change ("Okafor: 1 goal at matchweek 1, 14 goals after matchweek 24, +13").
+
+**Setup.** Run `npm run dev` and open `season.html` at the address Vite prints, for example `http://localhost:5173/season.html`. **Reload before you start**, so the page is after matchweek 24. The page's tab order: the three motion buttons, "Play next matchweek", the two Linked marks buttons (Full hover, Emphasis only), the goals per matchweek (one stop), its "Data table", the D3 columns (one stop), the line chart (one stop), its "Data table", the players' bars (one stop), their "Data table", then the slope chart (one stop). Use NVDA + Chrome, with the setup from [A](#a-nvda--chrome-windows), and keep the pointer off the charts: a chart under the pointer shows its own hover.
+
+**Listen for:**
+
+1. A focused week is read **once**, from the chart that has focus: never another chart's name for the same week, and nothing is announced as you move.
+2. Focus stays in the chart you're in. The other two charts show the week, but NVDA+Tab still reads the week you're on.
+3. Each matchweek is announced once, after the button press, with each player who scored, their change and their total, or "no goals".
+4. The players' table reads its Change and Since matchweek 1 columns with their headers, and they say what's drawn past the bars and the names.
+5. Each slope line is read once, as one item, with both ends and its change.
+6. Nothing is read that you can't see, and the changes drawn past the bars and names are never read on their own: they're in the announcement, the table and the lines' names.
+
+**Known, no need to report:** "+1" may be read "plus 1", and "xG" "x g". A matchweek adds a week to the goals chart, the D3 columns and the line without announcing it there: the players' announcement covers the matchweek, and the new week is in each chart's names and tables.
+
+**NVDA + Chrome**, starting in browse mode:
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 7 times from the top of the page, until focus reaches the first week of "Goals per matchweek". | On the way: "Play next matchweek, button", "Linked marks, grouping, Full hover, toggle button, pressed", "Emphasis only, toggle button, not pressed". Then "Goals per matchweek, grouping", "Matchweek 1: 2 goals, graphic", then "0.6 xG, 7 shots". Week 1 lights up on the D3 columns and the line too, with no ring or tooltip there. | |
+| 2 | NVDA+Space (focus mode), then Right arrow twice, then NVDA+Tab. | "Matchweek 2: 0 goals, graphic, 1.9 xG, 14 shots", "Matchweek 3: 1 goal, graphic, 2.5 xG, 19 shots", then "Matchweek 3: 1 goal, graphic" again: focus stayed. Week 3 lights up on the other two charts, and nothing of theirs is read. | |
+| 3 | Escape, then NVDA+Space (browse mode). Tab twice. | Nothing for Escape: all three charts go back to rest. Then "Data table, button, collapsed", then "Shots per matchweek on D3 columns, grouping", "Matchweek 1: 7 shots, graphic". Week 1 lights up on the goals chart and the line. | |
+| 4 | Focus mode, then End, then NVDA+Tab. | "Matchweek 24: 10 shots, graphic", then the same again: focus stayed on the D3 columns. Week 24 lights up on the other two, and nothing of theirs is read. | |
+| 5 | Escape, browse mode, then Tab. | "Goals vs expected goals, season to date, grouping", perhaps with "Goals scored and expected goals so far, week by week.", then "Matchweek 1: 2 goals, 0.6 xG, graphic", then "+1.4 vs expected". Week 1 lights up on the two column charts. | |
+| 6 | Escape, browse mode. Shift+Tab 6 times, to "Play next matchweek". Press Space. | On the way, each chart's week where you left it. Then "Play next matchweek, button", and the announcement "Matchweek 25: Okafor +1, 15 goals; Lindqvist +1, 7 goals." "+1" rises past Okafor's and Lindqvist's bars. | |
+| 7 | Press Space again. | "Matchweek 26: Lindqvist +1, 8 goals." Okafor's "+1" goes: only this matchweek's changes are drawn. | |
+| 8 | Tab 9 times, to the players' "Data table". Press Space. | On the way, "Goals by player, grouping", "Okafor: 15 goals, graphic", "Forward". Then "Data table, button, collapsed", then "expanded". | |
+| 9 | Press T (next table). If nothing happens, press NVDA+Space until NVDA says "Browse mode", then T. | "Goals by player, table with 9 rows and 5 columns", then "row 1, column 1, Player". | |
+| 10 | Ctrl+Alt+Down, then Ctrl+Alt+Right 4 times. | "row 2, Okafor". Then "Position, column 2, Forward", "Goals, column 3, 15", "Change, column 4, 0", "Since matchweek 1, column 5, +14". | |
+| 11 | Ctrl+Alt+Down, then Ctrl+Alt+Left. | "Lindqvist, row 3, +8", then "Change, column 4, +1": the change drawn past his bar. | |
+| 12 | Press Tab, to the slope chart. | "Goals by player at matchweek 1 and now, on a D3 slope chart, grouping", then "Okafor: 1 goal at matchweek 1, 15 goals after matchweek 26, +14, graphic". Okafor's line is traced, and the others dim. | |
+| 13 | Focus mode, then Right arrow, then End. | "Lindqvist: 0 goals at matchweek 1, 8 goals after matchweek 26, +8, graphic", then "Castillo: 0 goals at matchweek 1, 0 goals after matchweek 26, no change, graphic". Never "+8" or a name on its own. | |
+
+If a linked chart's week is read in step 2 or 4, or the announcement in step 6 or 7 isn't heard, say so: linked hover would then not be visual only, or the changes would be drawn but not said.
 
 ## Re-check: each bar's description
 

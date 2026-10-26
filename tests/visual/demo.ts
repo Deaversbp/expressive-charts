@@ -67,6 +67,19 @@ export const morphDemo: Demo = {
   }
 };
 
+/** demo/season.html: the three linked charts, the players' bars and the D3 slope chart, after matchweek 24. */
+export const seasonDemo: Demo = {
+  path: "/season.html",
+  async ready(page) {
+    await expect(page.locator("#goals .ec-mark")).toHaveCount(24);
+    await expect(page.locator("#line .ec-column")).toHaveCount(24);
+    await expect(page.locator("#players .ec-mark")).toHaveCount(8);
+    // expressive() has named the D3 columns and the slope chart's lines, so both are attached.
+    await expect(page.locator('#shots rect.column[role="img"]')).toHaveCount(24);
+    await expect(page.locator('#slope path.slope[role="img"]')).toHaveCount(8);
+  }
+};
+
 /** demo/stress.html: every case drawn at its smallest size. */
 export const stressDemo: Demo = {
   path: "/stress.html",

@@ -2196,7 +2196,7 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
      - **Two-factor authentication first.** npm wouldn't save a trusted publisher until the account had two-factor authentication. It offered only a security key, which can be the computer's own sign-in, such as Windows Hello.
      - **The connection must be saved before the release's run.** One saved later doesn't help that run, which fails with `ENEEDAUTH`; running the failed job again publishes. CONTRIBUTING says so now.
      - **npm's form** has an optional label, and its allowed actions are "npm publish" and "npm dist-tag", both unticked to start with; `npm stage publish` is always allowed. The connection shows "Pending validation" until a publish uses it, with the time it expires.
-   - **Left for you:** set the package's publishing access to "Require two-factor authentication and disallow bypass 2fa tokens". Deprecating `0.0.0-stage` is optional.
+   - **Then you** set the package's publishing access to "Require two-factor authentication and disallow bypass 2fa tokens", so no token can publish it. Deprecating `0.0.0-stage` is optional, and left for you.
 
 **Done when:**
 - **Effects.** `trace`, `delta` and `label` are built-ins, each passing `checkEffect` on every kind of mark and every conformance source, with end states that keep their information.

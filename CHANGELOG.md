@@ -25,7 +25,9 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
-## Unreleased
+## 0.2.0 (26 October 2026)
+
+Built-in effects that explain a change, text that keeps clear of a mark's own labels, and hover linked across charts. Nothing in the effect-author API breaks: its one change, `labelBounds`, is an addition. The other changes are outside the promise, and each says what to write instead, if anything.
 
 ### Added
 

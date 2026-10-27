@@ -13,6 +13,8 @@
 //
 // A link (../link.ts) hovers marks too, as "linked": the dimming and emphasis with `dim`, and their
 // hover runs, with no focus ring or focus. It hears the attachment's own hovers.
+//
+// update({ on }) swaps effects through the runner, as a chart's does, and leave() ends the hover.
 
 import type { Baseline, MarkData, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
 import { defaultClock, matrix } from "../../core";
@@ -20,7 +22,7 @@ import { invert } from "../../core/geometry";
 import { goesRound } from "../../core/geometry/ring";
 import { EFFECT_SLOTS, resolveEffects } from "../../core/registry";
 import { report } from "../../core/report";
-import { createRunner, type RunInput } from "../../core/runner";
+import { createRunner, type RunInput, type SlotEffects } from "../../core/runner";
 import type { ChartEnv } from "../bar";
 import { pointerHover, type PointerHover } from "../interaction";
 import { keyboardFocus } from "../keyboard";
@@ -30,6 +32,7 @@ import { maskedRing } from "../render/outside";
 import { svgSurface } from "../render/surface";
 import { setAttributes, setStyles, transformAttribute } from "../render/svg";
 import { injectStyles } from "../render/theme";
+import { nextEffects } from "../shell/setup";
 import { labelsMoved } from "../shell/transitions";
 import type { MarkEvents } from "../types";
 import { baselines, describeRects, isBaseline, union, visualOrder, type RectPart } from "./bars";
@@ -136,7 +139,9 @@ const WRAPPING_ROLES = new Set(["img", "image", "graphics-symbol", "graphics-obj
 export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<D>, env: ChartEnv): Attachment<D> {
   checkOptions(options);
   const motion = chartMotion(options.motion, env.motion);
-  const effects = resolveEffects(options.on, env.presets);
+  /** The effects, and the `on` they're from, which update({ on }) swaps. */
+  let effects = resolveEffects(options.on, env.presets);
+  let given = options.on;
   const clock = env.clock ?? defaultClock;
   const dim = options.dim === true;
   const edits = hostEdits();
@@ -177,14 +182,14 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
     if (options.geometry) {
       const marks = keys.map((key, index) => named(shapeMark(key, groups.get(key)!, index, at)));
-      return { root: svg, ancestor: common, marks: checkNeeds(withData(ringOrder(marks, (mark) => mark.geometry))) };
+      return { root: svg, ancestor: common, marks: checkNeeds(withData(ringOrder(marks, (mark) => mark.geometry)), effects) };
     }
 
     const rects = keys.map((key) => groups.get(key)!.map((piece) => rectPiece(key, piece, at)));
     const boxes = rects.map((pieces) => union(pieces.map((p) => p.rect.box)));
     const edges = baselines(boxes, options.baseline ?? "auto");
     const marks = visualOrder(boxes, edges).map((i) => named(rectMark(keys[i]!, rects[i]!, edges[i]!, i, at)));
-    return { root: svg, ancestor: common, marks: checkNeeds(withData(marks)) };
+    return { root: svg, ancestor: common, marks: checkNeeds(withData(marks), effects) };
   }
 
   /** A mark described with `geometry`, from its elements in source order. */
@@ -259,11 +264,11 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
    * Data effects name the series they read through `needs.related`, and the marks must have them, so
    * a missing series throws instead of the effect drawing nothing. With no marks yet, there's nothing to check.
    */
-  function checkNeeds(marks: ReadMark<D>[]): ReadMark<D>[] {
+  function checkNeeds<M extends Drawn<D>>(marks: M[], by: SlotEffects<D>): M[] {
     if (marks.length === 0) return marks;
     const series = new Set(marks.flatMap((mark) => [...(mark.geometry.series === undefined ? [] : [mark.geometry.series]), ...ownSeries(mark)]));
     for (const slot of EFFECT_SLOTS) {
-      const effect = effects[slot];
+      const effect = by[slot];
       if (effect?.kind !== "data") continue;
       for (const name of effect.needs?.related ?? []) {
         if (series.has(name)) continue;
@@ -611,13 +616,15 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
   const unsubscribeMotion = dim ? motion.subscribe(applyDim) : undefined;
 
-  /** The series data effects read through `related`, maybe from other marks. */
-  const needed = new Set(
-    EFFECT_SLOTS.flatMap((slot) => {
-      const effect = effects[slot];
-      return effect?.kind === "data" ? (effect.needs?.related ?? []) : [];
-    })
-  );
+  /** The series data effects read through `related`, maybe from other marks: found again when update() swaps them. */
+  const neededBy = (by: SlotEffects<D>): Set<string> =>
+    new Set(
+      EFFECT_SLOTS.flatMap((slot) => {
+        const effect = by[slot];
+        return effect?.kind === "data" ? (effect.needs?.related ?? []) : [];
+      })
+    );
+  let needed = neededBy(effects);
 
   // ── Keyboard ───────────────────────────────────────────────────────────────
 
@@ -880,6 +887,24 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       });
     },
 
+    async update(next) {
+      if (destroyed) return;
+      if (typeof next !== "object" || next === null) throw new TypeError('expressive: update() needs options, such as { on: { hover: "lift" } }.');
+      const other = Object.keys(next).find((name) => name !== "on");
+      if (other !== undefined) throw new TypeError(`expressive: \`${other}\` can't be changed by update() yet. Only \`on\` can.`);
+      if (!("on" in next)) return;
+      // Throws on an effect it can't resolve, or a series a data effect needs that the marks don't
+      // have, before anything changes.
+      const swapped = nextEffects(effects, given, next.on, env.presets);
+      checkNeeds(order.map((record) => record.mark), swapped);
+      given = next.on;
+      effects = swapped;
+      needed = neededBy(swapped);
+      // New effects start where the old ones were: decorate on every live mark, a held hover at once
+      // (an attachment has no change to settle), and enter, update and exit at their end state.
+      runner.swap(swapped, order.map(input));
+    },
+
     on(type, listener) {
       const set = listeners[type] as Set<typeof listener> | undefined;
       if (!set) throw new TypeError(`expressive: unknown event "${String(type)}". Use one of: ${Object.keys(listeners).join(", ")}.`);
@@ -893,6 +918,10 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 
     focus(key) {
       if (records.has(key) && !destroyed) keyboard?.focus(key);
+    },
+
+    leave() {
+      if (!destroyed) link.leave();
     },
 
     destroy() {

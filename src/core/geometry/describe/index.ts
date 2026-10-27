@@ -6,7 +6,12 @@ import { describeBar } from "./bar";
 import { describeLine } from "./line";
 import { describePoint } from "./point";
 
-export const describe = {
+export const describe: {
+  bar: typeof describeBar;
+  arc: typeof describeArc;
+  line: typeof describeLine;
+  point: typeof describePoint;
+} = {
   bar: describeBar,
   arc: describeArc,
   line: describeLine,

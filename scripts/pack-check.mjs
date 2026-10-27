@@ -124,8 +124,8 @@ try {
   }
   if (empty.length + differ.length === 0) ok(`each entry has the same names both ways (${entries.map((entry) => `${entry}: ${esm.names[entry].length}`).join(", ")})`);
 
-  // 3. Types, with each TypeScript the repository has: `typescript` (6, which builds the declarations)
-  //    and the ones under other names (`typescript-5.4`, `typescript-7`, which runs `typecheck`).
+  // 3. Types, with each TypeScript the repository has: `typescript` (7, which runs `typecheck`) and the
+  //    ones under other names (`typescript-5.4`, and `typescript-6`, which runs the API docs test).
   const fromRoot = createRequire(join(root, "package.json"));
   const compilers = Object.keys(pkg.devDependencies)
     .filter((name) => name === "typescript" || name.startsWith("typescript-"))

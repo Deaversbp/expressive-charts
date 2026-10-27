@@ -16,15 +16,17 @@ npm run pack-check # after a build: the packed tarball, installed and used as a 
 
 Three TypeScripts are dev dependencies, each pinned exactly:
 
-- `typescript-7` (`npm:typescript@7.0.2`), the native compiler, runs `typecheck`.
-- `typescript` (6.0.3) builds the declarations, through tsup, and runs `src/api-docs.test.ts`. Both need TypeScript's JS API, which 7.0 doesn't have, so `typescript` stays a 6 until tsup supports 7.
+- `typescript` (7.0.2), the native compiler, runs `typecheck`.
+- `typescript-6` (`npm:typescript@6.0.3`) runs `src/api-docs.test.ts`, which reads the entries with TypeScript's JS API, which 7.0 doesn't have.
 - `typescript-5.4` (`npm:typescript@5.4.5`), the oldest README promises, is for `pack-check`.
 
-Each has a `tsc`, so `npx tsc` could run any of them: run TypeScript through the npm scripts, or by its path (`node node_modules/typescript-7/bin/tsc`).
+Each has a `tsc`, so `npx tsc` could run any of them: run TypeScript through the npm scripts, or by its path (`node node_modules/typescript/bin/tsc`).
+
+The build uses none of them. tsdown (`tsdown.config.ts`) bundles the package with Rolldown, whose oxc writes the declarations from each file alone, so **a new export needs an explicit type** wherever TypeScript would have to look at another file to infer it. `typecheck` says so (`isolatedDeclarations` in `tsconfig.json`): `export const describe = { bar: describeBar }` fails, and `export const describe: { bar: typeof describeBar } = { bar: describeBar }` passes. An exported function needs its return type.
 
 `pack-check` (`scripts/pack-check.mjs`) packs the package, installs the tarball in a new project in the system's temporary folder, imports every entry in Node as ES modules and as CommonJS with no DOM, and typechecks a small consumer against it with each of the three TypeScripts, under `bundler`, `node16` (ES module) and `node16` (CommonJS) resolution. Each must read its own declarations: `.d.ts` for `import`, `.d.cts` for `require`, the stylesheet's included. CI runs it after the build. `-- --keep` keeps the temporary project.
 
-Node.js 22 or newer is required (CI tests 22 and 24).
+Working on the library needs Node.js 22.18 or newer, or 24.11 or newer on 24, as tsdown asks (CI tests 22 and 24). The package itself needs Node.js 22 or newer.
 
 ## Visual tests
 

@@ -9,9 +9,9 @@
 import { View, parse } from "vega";
 import { compile, type TopLevelSpec } from "vega-lite";
 import { fromVegaView, type ChartEnv, type VegaOptions } from "./charts";
-import { createMotion, manualClock, matrix, type DataEffect, type MarkData, type MarkGeometry, type MotionMode, type Point } from "./core";
+import { createMotion, manualClock, matrix, type DataEffect, type GeometryEffect, type MarkData, type MarkGeometry, type MotionMode, type Point } from "./core";
 import { parseTransform } from "./core/geometry";
-import { measurePath } from "./core/testing";
+import { drawnInGaps, measurePath, type Drawn } from "./core/testing";
 import { flash, only, parallel, pulse, stagger, threshold, travel, wiggle } from "./effects";
 import { cleat, soccerBall, sport } from "./icons/sport";
 import { iconRegistry, presetRegistry, registerIcons } from "./registries";
@@ -335,6 +335,252 @@ describe("fromVegaView: a Vega-Lite line", () => {
       const all = new Map<MarkGeometry, MarkData>([...marks, ...twins.marks].map((mark) => [mark, (marks.includes(mark) ? data : twins.data).get(mark.key)!]));
       await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: (mark) => all.get(mark)! });
     });
+  });
+});
+
+describe("fromVegaView: a Vega-Lite line with missing values", () => {
+  /** A row whose value nobody recorded is null. */
+  interface PatchyRow {
+    week: number;
+    series: Series;
+    value: number | null;
+  }
+  /** Goals with weeks 3, 6 and 7 missing: three runs, weeks 1–2, 4–5 and 8–10. xG has every week. */
+  const PATCHY = GOALS.map((goals, i) => ([3, 6, 7].includes(i + 1) ? null : goals));
+  const rowsOf = (goals: readonly (number | null)[]): PatchyRow[] =>
+    goals.flatMap((value, i) => [
+      { week: i + 1, series: "goals" as const, value },
+      { week: i + 1, series: "xg" as const, value: XG[i]! }
+    ]);
+  /**
+   * Below xG within each run, worked out from the data: from where goals cross below it in week 1 to
+   * the run's end in week 2, all of weeks 4–5, and from week 8 to where they cross back above it.
+   */
+  const BELOW: [number, number][] = [
+    [1 + 0.2 / 1.1, 2],
+    [4, 5],
+    [8, 8 + 0.6 / 1.1]
+  ];
+  /** Vega-Lite's modes that break a line at a missing value: its default, and the three it names. */
+  const BREAKING: readonly (readonly [name: string, invalid: string | undefined])[] = [
+    ["the default", undefined],
+    ...["break-paths-show-path-domains", "break-paths-show-domains", "break-paths-filter-domains"].map((mode) => [mode, mode] as const)
+  ];
+
+  function patchySpec(goals: readonly (number | null)[], invalid?: string | null, scale = 1): TopLevelSpec {
+    const spec = lineSpec(scale) as TopLevelSpec & { data: object; mark: object };
+    return { ...spec, data: { name: "season", values: rowsOf(goals) }, mark: { type: "line", strokeWidth: WIDTH, ...(invalid === undefined ? {} : { invalid }) } } as TopLevelSpec;
+  }
+
+  /** A sample for a recorded week only: one Vega leaves out is never read, or this throws. */
+  const patchy: VegaOptions<PatchyRow> = { key: (d) => d.series, sample: (d) => ({ value: d.value as number, at: d.week }), keyboard: true };
+
+  /** The weeks at a mark's gaps' ends. */
+  const gapWeeks = (mark: MarkGeometry): number[][] => (mark.gaps ?? []).map(([from, to]) => [mark.path(from).x / 60 + 1, mark.path(to).x / 60 + 1]);
+
+  /** What the overlay draws on the goals line, as drawnInGaps reads it: the red paths, and the ball where it's placed. */
+  function drawnOnGoals(svg: SVGSVGElement): Drawn[] {
+    const paths: Drawn[] = runPaths(svg).map((path, id) => ({ kind: "path", id, d: path.getAttribute("d")!, paint: {} }));
+    const transform = overlayOf(svg).querySelector('.ec-run[data-key="goals"] .ec-icon')?.getAttribute("transform");
+    return transform ? [...paths, { kind: "icon", id: paths.length, icon: soccerBall, size: undefined, transform: parseTransform(transform) }] : paths;
+  }
+
+  it.each(BREAKING)("in %s mode, breaks the line where a week is missing, its samples marking each gap", async (_name, invalid) => {
+    const { view, svg } = await render(patchySpec(PATCHY, invalid));
+    const seen = new Map<string, MarkData>();
+    const fx = fromVegaView(view, { ...patchy, on: { decorate: recorder(seen) } }, env());
+    const goals = goalsOf(fx);
+    gapWeeks(goals).forEach((weeks, k) => weeks.forEach((week, end) => expect(week).toBeCloseTo([[2, 4], [5, 8]][k]![end]!, 6)));
+    expect(goals.gaps).toHaveLength(2);
+    // The vertices Vega drew, run by run.
+    const path = linePaths(svg).find((p) => seriesOf(p) === "goals")!;
+    expect(measurePath(goals.outline.d).points).toEqual(measurePath(path.getAttribute("d")!).points);
+    const { samples } = seen.get("goals")!;
+    expect(samples.map((s) => s.at)).toEqual([1, 2, 4, 5, 8, 9, 10]);
+    expect(samples.map((s) => s.gapBefore === true)).toEqual([false, false, true, false, true, false, false]);
+    expect(fx.marks().find((mark) => mark.key === "xg")!.gaps).toBeUndefined();
+  });
+
+  it.each(BREAKING.flatMap(([name, invalid]) => (["presentation", "off"] as const).map((mode) => [name, mode, invalid] as const)))(
+    "in %s mode and %s, threshold colours goals below xG within each run, and nothing it or the riding ball draws is inside a gap",
+    async (_name, mode, invalid) => {
+      const { view, svg } = await render(patchySpec(PATCHY, invalid));
+      const e = env(mode);
+      const fx = fromVegaView(view, { ...patchy, on: { decorate: story() } }, e);
+      const goals = goalsOf(fx);
+      let frames = 0;
+      for (; frames < 400 && !e.clock.idle; frames++) {
+        expect(drawnInGaps(goals, drawnOnGoals(svg)), `frame ${frames}`).toEqual([]);
+        e.clock.advance(16);
+      }
+      expect(e.clock.idle).toBe(true);
+      if (mode === "presentation") expect(frames).toBeGreaterThan(10);
+      expect(drawnInGaps(goals, drawnOnGoals(svg))).toEqual([]);
+      expectClose(runs(svg), BELOW);
+      // Resting at the last week, past both gaps.
+      expect(goals.end.x - ball(svg)!.x).toBeLessThan(2 * soccerBall.radius!);
+    }
+  );
+
+  it("with weeks missing at its start and end, draws a shorter line, with no gap", async () => {
+    const { view } = await render(patchySpec(GOALS.map((goals, i) => (i === 0 || i === 9 ? null : goals))));
+    const seen = new Map<string, MarkData>();
+    const goals = goalsOf(fromVegaView(view, { ...patchy, on: { decorate: recorder(seen) } }, env()));
+    expect(goals.gaps).toBeUndefined();
+    expect(goals.start.x).toBeCloseTo(x(2), 6);
+    expect(goals.end.x).toBeCloseTo(x(9), 6);
+    expect(seen.get("goals")!.samples.map((s) => s.at)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(seen.get("goals")!.samples.some((s) => s.gapBefore)).toBe(false);
+  });
+
+  it.each([...BREAKING, ["filter", "filter"] as const])("in %s mode, has no mark for a line with every week missing, as Vega draws none", async (_name, invalid) => {
+    const { view, svg } = await render(patchySpec(GOALS.map(() => null), invalid));
+    const fx = fromVegaView(view, patchy, env());
+    expect(fx.marks().map((mark) => mark.key)).toEqual(["xg"]);
+    // The xG line is the tab stop; whatever Vega left for goals is the host's.
+    const xg = linePaths(svg).find((path) => seriesOf(path) === "xg")!;
+    expect(xg.getAttribute("tabindex")).toBe("0");
+    expect(linePaths(svg).filter((path) => path.hasAttribute("tabindex"))).toEqual([xg]);
+  });
+
+  it('in "filter" mode, joins the weeks either side of a gap, as Vega draws it', async () => {
+    const { view, svg } = await render(patchySpec(PATCHY, "filter"));
+    const seen = new Map<string, MarkData>();
+    const goals = goalsOf(fromVegaView(view, { ...patchy, on: { decorate: recorder(seen) } }, env()));
+    expect(goals.gaps).toBeUndefined();
+    const path = linePaths(svg).find((p) => seriesOf(p) === "goals")!;
+    expect(measurePath(goals.outline.d).points).toEqual(measurePath(path.getAttribute("d")!).points);
+    expect(seen.get("goals")!.samples.map((s) => s.at)).toEqual([1, 2, 4, 5, 8, 9, 10]);
+    expect(seen.get("goals")!.samples.some((s) => s.gapBefore)).toBe(false);
+  });
+
+  it.each([["show", "show"] as const, ["null", null] as const])("in %s mode, draws a missing week at zero, which the page's sample says too", async (_name, invalid) => {
+    const { view, svg } = await render(patchySpec(PATCHY, invalid));
+    // Vega shows the missing weeks, so they're read, and a sample that gives no value throws.
+    expect(() => fromVegaView(view, patchy, env())).toThrow(new RangeError('fromVegaView: sample must give a finite number, or { value, at }, got {"value":null,"at":3}.'));
+    const seen = new Map<string, MarkData>();
+    const goals = goalsOf(fromVegaView(view, { ...patchy, sample: (d) => ({ value: d.value ?? 0, at: d.week }), on: { decorate: recorder(seen) } }, env()));
+    expect(goals.gaps).toBeUndefined();
+    const path = linePaths(svg).find((p) => seriesOf(p) === "goals")!;
+    expect(measurePath(goals.outline.d).points).toEqual(measurePath(path.getAttribute("d")!).points);
+    expect(goals.path(seen.get("goals")!.samples[2]!.t).y).toBeCloseTo(y(0), 6);
+  });
+
+  it("follows a render that opens gaps and one that closes them, each an update", async () => {
+    const { view, svg } = await render(patchySpec(GOALS));
+    const e = env("off");
+    const fx = fromVegaView(view, { ...patchy, on: { decorate: story() } }, e);
+    const events: string[] = [];
+    fx.on("update", (event) => events.push(`update ${event.mark.key}`));
+    expect(goalsOf(fx).gaps).toBeUndefined();
+    expectClose(runs(svg), expectedRuns());
+
+    await view.data("season", rowsOf(PATCHY)).runAsync();
+    await delivered();
+    e.clock.advance(16);
+    expect(goalsOf(fx).gaps).toHaveLength(2);
+    expectClose(runs(svg), BELOW);
+    expect(drawnInGaps(goalsOf(fx), drawnOnGoals(svg))).toEqual([]);
+
+    await view.data("season", rowsOf(GOALS)).runAsync();
+    await delivered();
+    e.clock.advance(16);
+    expect(goalsOf(fx).gaps).toBeUndefined();
+    expectClose(runs(svg), expectedRuns());
+    expect(events).toEqual(["update goals", "update goals"]);
+  });
+
+  describe("every built-in effect passes checkEffect on the View's line with gaps", () => {
+    const effects = {
+      "ball rolling": travel(soccerBall),
+      "ball riding on": travel(soccerBall, { ride: "on" }),
+      "cleat stepping": travel(cleat),
+      flash: flash(),
+      wiggle: wiggle(),
+      pulse: pulse(),
+      "threshold above the middle": threshold({ compareTo: 0.5 })
+    };
+
+    async function lines(scale = 1): Promise<{ marks: readonly MarkGeometry[]; data: Map<string, MarkData> }> {
+      const { view } = await render(patchySpec(PATCHY, undefined, scale));
+      const data = new Map<string, MarkData>();
+      const fx = fromVegaView(view, { ...patchy, on: { decorate: recorder(data) } }, env("off"));
+      return { marks: fx.marks(), data };
+    }
+
+    // With checkEffect's default data, which marks the gaps.
+    it.each(Object.keys(effects))("%s", async (name) => {
+      const { marks } = await lines();
+      const twins = await lines(0.8);
+      const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+      await checkEffect(effects[name as keyof typeof effects], { name, marks, moved });
+    });
+
+    it("threshold below xG, with the View's own samples", async () => {
+      const { marks, data } = await lines();
+      const twins = await lines(0.8);
+      const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+      const all = new Map<MarkGeometry, MarkData>([...marks, ...twins.marks].map((mark) => [mark, (marks.includes(mark) ? data : twins.data).get(mark.key)!]));
+      await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: (mark) => all.get(mark)! });
+    });
+  });
+});
+
+describe("fromVegaView: update({ on }) and leave()", () => {
+  /** An effect that logs its runs. */
+  function logged() {
+    const log: string[] = [];
+    const effect: GeometryEffect = { kind: "geometry", run: async (mark) => void log.push(`run ${mark.key}`), end: (mark) => void log.push(`end ${mark.key}`), clear: () => void log.push("clear") };
+    return { effect, log };
+  }
+
+  it("swaps the line's effects in place: threshold finds xG, focus and the tab stop stay, and Vega's renders are followed", async () => {
+    const { view, svg } = await render(lineSpec());
+    const e = env("off");
+    const fx = fromVegaView(view, { ...lineOptions, on: { decorate: only("goals", travel("soccer-ball", { ride: "on" })) } }, e);
+    expect(ball(svg)).toBeDefined();
+    fx.focus("xg");
+    await fx.update({ on: { decorate: only("goals", threshold({ compareTo: "xg" })) } });
+    expect(ball(svg)).toBeUndefined();
+    expectClose(runs(svg), expectedRuns());
+    expect(seriesOf(document.activeElement)).toBe("xg");
+    expect(linePaths(svg).map((path) => path.getAttribute("tabindex"))).toEqual(["-1", "0"]);
+
+    await view.data("season", rowsUpTo(5)).runAsync();
+    await delivered();
+    e.clock.advance(16);
+    expectClose(runs(svg), expectedRuns(5));
+    expect(seriesOf(document.activeElement)).toBe("xg");
+
+    await expect(fx.update({ on: { decorate: "nope" } })).rejects.toThrow(/Unknown preset "nope"/);
+    expectClose(runs(svg), expectedRuns(5));
+  });
+
+  it("replays a hover held by the pointer or the keyboard with the new hover effect, and leave() ends either", async () => {
+    const { view, svg } = await render(lineSpec());
+    const hover = logged();
+    const fx = fromVegaView(view, { ...lineOptions, on: { hover: hover.effect } }, env());
+    const events: string[] = [];
+    fx.on("hover", (event) => events.push(`hover ${event.mark.key} ${event.source}`));
+    fx.on("leave", (event) => events.push(`leave ${event.mark.key}`));
+    const [goals] = linePaths(svg);
+
+    goals!.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+    const next = logged();
+    await fx.update({ on: { hover: next.effect } });
+    expect(hover.log).toEqual(["run goals", "clear"]);
+    expect(next.log).toEqual(["run goals"]);
+    fx.leave();
+    expect(next.log).toEqual(["run goals", "clear"]);
+
+    fx.focus("xg");
+    await fx.update({ on: { hover: hover.effect } });
+    expect(next.log).toEqual(["run goals", "clear", "run xg", "clear"]);
+    expect(hover.log).toEqual(["run goals", "clear", "run xg"]);
+    fx.leave();
+    expect(seriesOf(document.activeElement)).toBe("xg");
+    fx.leave();
+    expect(events).toEqual(["hover goals pointer", "leave goals", "hover xg keyboard", "leave xg"]);
   });
 });
 

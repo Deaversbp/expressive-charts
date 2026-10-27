@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
+    "isolatedDeclarations": false,
     "types": [],
     "paths": {
       "expressive-charts": ["./api.ts"],

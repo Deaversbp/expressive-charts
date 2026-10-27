@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M7 are complete (§9). **0.2.0 is on npm**, published from CI through npm's trusted publishing with provenance on 26 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.2.0)), after 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M7 are complete (§9). M8, for 0.3.0, is planned in §9: a tooltip that can be hovered, change labels that hold up, gaps in lines, long axes, the icon sets' fills and TypeScript 7. **0.2.0 is on npm**, published from CI through npm's trusted publishing with provenance on 26 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.2.0)), after 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -2208,6 +2208,221 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **0.2.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M7 is done.
 
 **Status: complete (26 October 2026).** Every item on the list holds. Steps 1 to 5 built and checked the first six, and 0.2.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 6).
+
+### M8: A tooltip that can be hovered, change labels that hold up, and gaps in lines (0.3.0)
+
+The audit's one failing criterion fixed, the season page's workarounds made the library's own, lines that skip missing values, long axes, the icon sets' fills, TypeScript 7, and last, 0.3.0 on npm.
+
+**Demo:** no new page. The line page gets a card with missing values, the season page loses its workarounds, the stress page shows its labels thinned and Page Up and Page Down, and every page's tooltip can be hovered.
+
+**Where M8 starts** (checked against main at c3786fb while planning, 26 October 2026):
+
+- **Already built.**
+  - **0.2.0** is npm's `latest`, published through trusted publishing with provenance. 0.2.0's publish used the trusted publisher, so it doesn't expire, and the package requires two-factor authentication and disallows tokens. npm lists `0.0.0-stage`, `0.1.0` and `0.2.0`.
+  - **Effects.** `travel`, `flash`, `wiggle`, `pulse`, `trace`, `threshold`, `delta`, `label` and `morph`, with `sequence`, `parallel`, `only` and `stagger`; and `link()` across charts and attachments.
+  - **The tooltip** (`src/charts/tooltip.ts`) is an HTML box beside the hovered mark or the crosshair, never over the mark, with `pointer-events: none`. Pointer hover is `pointerHover` in `src/charts/interaction.ts`, shared by the charts and `expressive()`: `pointerover` and `pointerleave` on the `<svg>`. Escape anywhere ends a hover (the audit's fix 3). `expressive()` draws no tooltip, and a linked chart shows none. `tests/visual/a11y.spec.ts` has a "content on hover" check.
+  - **The update slot** runs "until it re-triggers, or the mark exits" (architecture.md's slot table). An update starts runs only on the marks it changes. An update run's `data.previous` is the last data the runner saw for the key, which while a change plays is the values part way (`src/core/runner.ts`).
+  - **Overlay text** is sized by `:where(.ec-chart .ec-value, .ec-chart .ec-text)` in `theme.ts`, so only inside our charts. An attachment's overlay is a `.ec-overlay` group on the host's `<svg>`.
+  - **The keyboard** (`src/charts/keyboard.ts`, shared by the charts and `expressive()`): the arrows, Home, End and Escape.
+  - **Bar labels.** Every bar draws its category and value labels, whatever its size. The line chart's axis and the donut's labels already make room: ticks are spaced, and a slice's label that would overlap is dropped.
+  - **Lines.** `lineChart`'s `series` are fields of numbers (`NumericKey<D>`), and a value that isn't a finite number throws ("Lines can't skip a value yet"). A bar counts a missing value as 0, and a donut's `value` already takes `number | null | undefined`. `describe.line` takes at least one point, every one finite. `MarkGeometry`'s walk is continuous, and an open outline's `d` is the whole stroke. `expressive()` reads only `<rect>`s, so a page describes a D3 line with `describe.line`.
+  - **Data.** A `Sample` has `t`, `value` and `at`. `threshold` interpolates a reference series between its samples.
+  - **Testing.** `FixtureName` is `"bar" | "negative bar" | "column" | "stacked" | "short bar" | "slice" | "line" | "point"`, under the promise, and `checkEffect` runs an effect on every one.
+  - **Icons.** `IconShape` has `d`, `fill`, `stroke`, `width`, `linecap` (`"butt"` or `"round"`), `linejoin` (`"miter"` or `"round"`) and `clip`. `iconFromSvg` drops fill rules, so an even-odd hole fills in, and opacity, square caps and bevel joins.
+  - **TypeScript** is pinned at 5.9.3. npm's `latest` is 7.0.2, with 7.1 in beta.
+    - 7.0.2's package has a native `tsc` but no compiler API: its main export is its version, and its API is under `unstable/`.
+    - tsup 9 builds the declarations with its bundled rollup-plugin-dts, which needs the compiler API. When `typescript` has none, it loads `@typescript/typescript6` instead (6.0.2 on npm).
+    - `pack-check` checks the packed types with the repository's TypeScript only, so README's "TypeScript 5.4 or newer" isn't tested.
+  - **Sizes** (gzip, against their budgets, on `c3786fb`, the same code as 0.2.0): everything 68.1 KB of 69, `barChart` 28.9 of 30.5, the line page's set 34.7 of 35, the switch's set 38.5 of 41, `expressive` and `travel` 25.4 of 27, the script-tag bundle 74.5 of 75.5, and the stylesheet 2.3 of 2.5.
+  - **Tests.** 1,771 unit tests in 96 files. The visual suite ran 487 tests in Docker at M7 step 5, in Chromium, Firefox and WebKit.
+- **Gaps.**
+  - **The tooltip can't be hovered** (WCAG 1.4.13): the audit's one fail, on every page with a library chart (finding 6). Moving the pointer onto it hovers whatever is under it, or nothing.
+  - **The season page's workarounds** (M7 step 5):
+    - it empties the `update` slot before each matchweek, since a `delta` stays until its own mark's next update;
+    - it reads its rows for `delta`'s value, since the default counted from where a moving bar was ("+1.88");
+    - it sizes the slope chart's overlay text itself;
+    - it leaves 28 px beside the players' chart, since a bar's change reaches about 20 px past the chart at 320 px;
+    - and it thins its goals chart's labels with CSS.
+  - **Long axes.** Past about 40 bars, a bar chart's labels overlap. Ten years of days on the stress page is 3,653 presses of an arrow key.
+  - **Missing values** throw on a line.
+- **Out of date** (each fixed by the step named):
+  - README's `arrow-on-hover.gif` shows hover before M7 step 3, with the other bars' labels dimmed (step 7).
+  - a11y-audit.md's Browsers paragraph says "114 tests in each", an older count (step 7).
+  - §10's open question 7 says TypeScript 7 comes after 0.1.0 (step 5).
+
+**What M8 takes from the backlog, and what stays:**
+
+| Item | Goes to |
+| --- | --- |
+| A tooltip that can be hovered | Decisions 4 and 9, step 1 |
+| A change that outlives its update, `delta`'s default value mid-change, overlay text on host charts, and room for change labels | Decisions 6 and 10, step 2 |
+| Line chart extras: gaps for missing values | Decisions 5 and 11–13, step 3 |
+| More of the icon sets' SVG: the fill rule and opacity | Decision 14, step 4 |
+| TypeScript 7 | Decisions 7 and 15, step 5 |
+| Thinning a bar chart's labels, and larger steps on a long axis | Decision 16, step 6 |
+| The icon sets' square caps and bevel joins | Stay: they'd widen unions under the promise |
+| Change labels on a neighbour's label, a negative column's value label on its name, a line's `curve` and nearest-point hover, a written audit table for `stress.html`, VoiceOver + Safari, and the rest | Stay in the backlog |
+
+When a step lands, it marks its backlog item as built in M8.
+
+**Decided while planning M8 (26 October 2026):** decisions 1–7 are yours, and 8–17 follow from them and the code.
+
+1. **M8 builds two things first:** a tooltip that can be hovered, then change labels that hold up, with the season page's workarounds made the library's own.
+2. **Four backlog items join them:** gaps for missing values on a line, long axes (thinning a bar chart's labels, and Page Up and Page Down), the icon sets' fill rule and opacity, and TypeScript 7. Gaps are the largest, so they start in wave 1.
+3. **One release, 0.3.0, when M8 is done.** Trusted publishing is set up, so it needs only your go-ahead.
+4. **The tooltip holds while the pointer is on it.** It takes the pointer, and the hover stays while the pointer is on it; leaving it for a mark hovers that mark. It looks the same. The marks it covers are reached round it, since a mark's target is its whole row or column, or by keyboard.
+5. **A line's gaps are on one walk.** One mark per series, as now. `MarkGeometry` gets an optional field, `gaps`. The walk runs straight across each gap, so `path` and `angle` work as before, and `slice()` and the stroke leave the gaps out. `travel` jumps across.
+6. **A `delta` goes at its chart's next update.** An update ends the `update` runs of the marks it leaves alone.
+7. **TypeScript 7 checks, TypeScript 6 builds the declarations.** `typescript` 7 runs `typecheck`, `@typescript/typescript6` is a dev dependency for tsup's declaration build, and `pack-check` also checks the packed types on TypeScript 5.4.
+8. **What's an addition and what isn't** (the 0.x promise). 0.3.0 is a minor release. In the effect-author API, four changes are additions and one is a change, with a migration note.
+
+   | Change | Under the promise? | Kind |
+   | --- | --- | --- |
+   | `gaps` on `MarkGeometry`, with `slice()` and an open outline's `d` leaving them out | Yes | An optional field: an addition. Code that builds a `MarkGeometry` needs no change, and no mark has gaps until a line skips a value. An effect that draws its own path from `path(t)` would draw across a gap, so the effects guide says to draw along a walk with `slice()` |
+   | `gapBefore` on `Sample` | Yes | An optional field: an addition |
+   | `breaks` on `LineSpec` | Yes | An optional field: an addition |
+   | `fillRule` and `opacity` on `IconShape` | Yes | Optional fields: additions. `iconFromSvg` now keeps them, so an icon from an SVG with an even-odd hole or opacity draws as its SVG does: listed under Fixed |
+   | `"gapped line"` in `FixtureName` and `fixtures` | Yes | A change: `checkEffect` runs every effect on it too, and code that maps every name (a `Record<FixtureName, …>`) needs one more entry. Listed under Changed, with what to write |
+   | The tooltip held while the pointer is on it | No: the charts' behaviour | A fix: the pointer on the tooltip no longer hovers the mark under it |
+   | `update` runs ending at the chart's next update | No: the runner's lifecycle | A change: an update effect that stays, a `delta` or one of your own, goes when its chart next updates. Listed under Changed: to keep something past that, put it in `decorate` |
+   | `data.previous` from the last update's values | Its type is; the values the runner gives it aren't | A fix: when an update replaces one still moving, `previous` holds the values the last update gave, not the values part way |
+   | Overlay text sized on attachments | No: the stylesheet | A change: `delta`'s and `label`'s text on an attachment is the charts' 12.5 px, not the page's size. Listed under Changed, with the CSS for the page's own |
+   | `room` on `barChart` | No: a chart option | A new option: an addition |
+   | Missing values on `lineChart` | No: a chart | Wider types: an addition. A missing value no longer throws |
+   | Thinned bar labels | No: the charts' look | A change: labels that would overlap are thinned |
+   | Page Up and Page Down | No: the keyboard | An addition |
+   | TypeScript 7 | The published types | Nothing changes while the packed types still check on TypeScript 5.4, which `pack-check` now tests. A type that doesn't is fixed before the release |
+
+   For later: square caps and bevel joins would widen unions on `IconShape` and `Paint`, so they'd be breaking.
+9. **The tooltip** (decision 4).
+   - It takes the pointer (`pointer-events: auto`) while it shows. `pointerHover` counts the pointer on the tooltip as on the hovered target: leaving the `<svg>` for the tooltip keeps the hover, leaving the tooltip for a mark hovers that mark, and leaving it for anything else ends the hover, as leaving the chart does now.
+   - A line chart's crosshair keeps its x the same way. A touch tap on the tooltip keeps the hover: it isn't a tap elsewhere.
+   - Escape and `leave()` end it as now. Its text can be selected. A linked chart shows no tooltip, so links don't change.
+   - If a change moves the tooltip from under the pointer, the pointer hovers whatever it's on then.
+   - It looks the same, so no screenshot should change. The audit's finding 6 is fixed, and its 1.4.13 rows pass.
+10. **Change labels that hold up** (decision 6, and the season page's other workarounds).
+    - **The update slot.** When an update starts, the runner ends the `update` runs of the marks it doesn't change, as a re-trigger would, before it starts the changed marks' runs.
+      - An update is a chart's `update()` with `data`, or an attachment's `refresh()` that finds a new row, a new value, or a mark entering or leaving. So a Vega render that changes nothing keeps them. An `update({ on })` alone isn't one.
+      - A `flash` still playing from the update before, on a mark this one leaves alone, stops there.
+      - The slot table's "Until" becomes "it re-triggers, the chart's next update, or the mark exits".
+    - **The values before.** The runner keeps, for each key, the data its last `enter` or `update` gave, beside the latest frame's, and an update run's `data.previous` is that. So an update that replaces one still moving says "+1" with `delta`'s default `value`, not "+1.88". The `previous` geometry, and an `update` event's `from`, stay the geometry on screen, which a transition starts from.
+    - **Overlay text on attachments.** The stylesheet sizes `.ec-overlay .ec-text` as it sizes `.ec-chart .ec-text`: 12.5 px, 600, with tabular digits, in the theme's text colour, which is the size `caption.ts` places for. It stays in `:where()`, so a page's own CSS wins.
+    - **Room.** `barChart({ room })`: px the layout keeps clear past the value labels at each end of the value axis that bars reach, for text an effect draws there.
+      - Default 0, so nothing moves and no screenshot changes. The chart doesn't know which effect it's for (CLAUDE.md rule 2).
+      - At 320 px a bar's `delta` reached 19.7 px past the chart's right edge, a column's 17.6 px above its top, and a negative bar's 20 px past its left edge (M7 step 1). The season page leaves 28 px, so `room: 28` keeps it inside.
+      - Lines and slices stayed inside, so they get none for now.
+11. **Gaps in the contract** (decision 5).
+    - `readonly gaps?: readonly (readonly [from: number, to: number])[]`: the stretches of the walk with no data, as values of t, in order, apart and inside (0, 1). Unset means none.
+    - The walk runs straight across each gap, from the last value before it to the first after, so `start`, `end`, `length`, `path(t)` and `angle(t)` work as on any walk. `slice(t0, t1)` leaves the gaps out, with a moveto across each, and so does an open outline's `d`. `outline.sample(n)` still runs along the whole walk.
+    - Gaps are only between values. A missing value before a line's first or after its last isn't on its walk.
+    - **`describe.line({ breaks })`:** the indices of the points that start a new run, so there's a gap from `points[i - 1]` to `points[i]`. Each is a whole number from 1 to the last index, in order, with no repeats; anything else throws a `RangeError` naming the field. A page describes a D3 line drawn with `.defined()` by its defined points and where they break.
+    - **`Sample.gapBefore`:** `true` on the first sample after a gap, so a data effect doesn't join it to the one before. `samplesAlong()` sets it from the mark's `gaps`.
+    - **The fixture.** `"gapped line"`, the line fixture with a gap, in `fixtures` and `movedFixtures`, so `checkEffect` runs every effect on it.
+12. **Effects on a gap.**
+    - `trace`, `pulse`, `flash` and `wiggle` draw with `slice()` or the outline, so they skip gaps unchanged.
+    - `threshold` draws with `slice()` too, and doesn't interpolate across a `gapBefore`, in the mark's samples or the reference's. Where either has no value, nothing is coloured.
+    - `travel` jumps: its icon isn't drawn inside a gap, and goes from the gap's start to its end at once. The trip's time counts only the walk it's drawn on. Riding a revealed tip, it rests at the last value until the next one comes.
+    - `delta` and `label` read `end` and `angle(1)`, the last value's, so they don't change.
+    - No built-in effect draws inside a gap, and both conformance sweeps check it.
+13. **Gaps on the line chart.**
+    - `series` take fields of `number | null | undefined`. `null` and `undefined` are missing. `NaN` and the infinities still throw, since they're usually a mistake.
+    - A missing value is a gap in its line, with no point. The x stays a target, since it's a row: the crosshair stops there, and the tooltip, the x's name and the table say the series has no value there.
+    - A value alone between two gaps has no stroke, so its point shows at rest.
+    - A line revealed into a gap ends at its last value, with its end label there. A line with no values is empty, as one revealed before its first x is.
+    - A line's samples are its values, the missing ones left out, with `gapBefore` after each gap.
+14. **The icon sets' fills** (decision 2).
+    - `IconShape.fillRule?: "nonzero" | "evenodd"`, default `"nonzero"`, and `opacity?: number`, from 0 to 1, default 1, for the whole shape. `defineIcon` checks them, with a `RangeError` naming the shape and the field.
+    - `iconFromSvg` keeps `fill-rule` and `opacity`, from attributes and inline styles, inherited through groups, with the groups' opacities multiplied in. `fill-opacity` and `stroke-opacity` are still dropped.
+    - The SVG layer draws them. Square caps and bevel joins stay in the backlog.
+15. **TypeScript 7** (decision 7).
+    - Exact versions, as dev dependencies only: `typescript` 7.0.x; `@typescript/typescript6` 6.0.2 for tsup's declaration build; and TypeScript 5.4 under another name for `pack-check` (`"typescript-5.4": "npm:typescript@5.4.5"`).
+    - `typecheck` runs TypeScript 7's `tsc` on its four projects. Vitest and Vite don't use `tsc`, so the tests and the demo build don't change.
+    - **The declarations** are built by TypeScript 6. The step compares `dist`'s `.d.ts` files before and after, and explains any difference.
+    - **`pack-check`** checks the packed types on TypeScript 5.4 and on the repository's, under each resolution it checks now. So README's "5.4 or newer" is tested.
+    - A type error that TypeScript 7 finds and 5.9 didn't is fixed in the code. A fix that would change a public type stops the step to ask you.
+    - If tsup can't build the declarations with `@typescript/typescript6`, the step stops and reports, and the 5.4 check lands on its own.
+16. **Long axes** (decision 2).
+    - **Thinning.** When a bar chart's category labels would overlap, it draws every nth, from the first, with n the smallest of 1, 2, 5, 10, 20, 50 and so on that leaves none overlapping. When its value labels would overlap, it draws none of them.
+      - The tooltip, the marks' names and the table keep every name and value, and `labelBounds` has only the labels drawn.
+      - There's no option: overlapping labels help nobody.
+      - Only charts whose labels overlapped change: of the demos' bars, the stress page's.
+    - **Page Up and Page Down** move focus by a page, and stop at the ends, as the arrows do.
+      - On a line's time axis a page is a month, in the axis's time zone: focus goes to the first x a calendar month or more on, or back. The line chart gives the keyboard that x.
+      - Elsewhere a page is a tenth of the marks, rounded up. `expressive()` gets it too.
+17. **The rest.**
+    - **Accessibility.** A gapped line's names, its table and the crosshair at a missing value, and Page Up and Page Down, are heard in a new script, I, for NVDA + Chrome. You run it. The tooltip is visual.
+    - **Docs.** Each step adds its exports to api.md (`src/api-docs.test.ts` fails otherwise), its sections to architecture.md, and its entries to CHANGELOG, under a new `## Unreleased` above 0.2.0 with Added, Changed and Fixed lists. Each Changed entry says what to write instead, as a migration note would. The effects guide says how to draw along a walk with gaps.
+    - **Sizes.** The line page's set has 0.3 KB of room, and steps 1, 3 and 6 add to it. A step that takes a set past its budget raises the budget in the same PR and says why (CONTRIBUTING's Bundle size).
+    - **The release** goes as CONTRIBUTING's Releasing says, through trusted publishing. Nothing is published, tagged or released without your go-ahead in that session.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `package.json`, `src/index.ts`, `src/effects/index.ts`, `src/charts/index.ts`, `src/charts/types.ts`, `src/core/contracts/index.ts`, `src/charts/render/theme.ts`, `src/charts/bar.ts`, `src/charts/donut.ts`, `src/charts/line.ts`, `src/charts/adapter/expressive.ts`, `src/effects/conformance.test.ts`, `src/conformance.test.ts`, `scripts/size-budget.json`, `src/core/README.md`, `src/charts/README.md`, `src/effects/README.md`, `docs/architecture.md`, `docs/api.md`, `docs/effects-guide.md`, `README.md`, `CHANGELOG.md` and this plan. Step 3's second PR owns the line chart's missing values in `line.ts`; steps 2 and 6 make small edits there. The first step to land adds CHANGELOG's Unreleased.
+
+Each step's session reads the hand-over notes in its notes folder first, `plan-0-3.md` from planning among them, and writes its own there: commits, files, decisions beyond the brief, where the plan and the code differ, and follow-ups.
+
+**Wave 1** (parallel):
+
+1. **A tooltip that can be hovered** (decisions 4 and 9). Owns `src/charts/tooltip.ts`, `src/charts/interaction.ts`, the tooltip's paths in `src/charts/shell/hover.ts`, `.ec-tooltip`'s rule in `theme.ts`, their tests, the "content on hover" check in `tests/visual/a11y.spec.ts`, and the audit's finding 6 and 1.4.13 rows in `docs/a11y-audit.md`.
+   - Tests: on bars, a donut, a line's crosshair and a chart switch's views, the pointer from a mark onto the tooltip and across it keeps the hover and its text; off it onto another mark hovers that one; off it onto nothing ends the hover. A touch tap on it, Escape and `leave()`, a change that moves it from under the pointer, and a linked chart, unchanged. The visual check moves a real pointer onto the tooltip on every demo page, in the three browsers.
+   - **Done when** every existing test and baseline passes unchanged, and the audit's 1.4.13 rows pass.
+   - Docs: architecture.md (hover and the tooltip), api.md, a11y-audit.md, CHANGELOG (Fixed).
+2. **Change labels that hold up** (decisions 6 and 10). Owns the update slot's end and the values before in `src/core/runner.ts`, with `runner.test.ts`; how `bar.ts`, `donut.ts`, `line.ts` and `expressive()` tell it an update started (small edits); the `.ec-overlay .ec-text` rule in `theme.ts`; and `room` in `bar-layout.ts` and `bar.ts`.
+   - Tests: a `delta` on bars, a donut, a line and an attachment going at the next update that leaves its mark alone, and staying through an attachment's `refresh()` that changes nothing (a Vega render); "+1" from an update that replaces one still moving; `update({ on })` alone keeping it; Off; the overlay text's size on an attachment; and `room` at each end, with negative bars and columns, and a `delta` inside the card at 320 px with `room: 28`.
+   - **Done when** every existing test and baseline passes, except tests that pinned the old lifetime, each named in the PR with why it changed.
+   - Docs: architecture.md (the slot table, the runner, `delta` and `label`, the bar chart), api.md, CHANGELOG (the update slot and overlay text under Changed, `previous` under Fixed, `room` under Added).
+3. **Gaps in lines** (decisions 5 and 11–13). In two PRs.
+   - **The contract and the effects** (the first PR). Owns `gaps` in `src/core/contracts/geometry.ts` and `gapBefore` in `data.ts`; `slice()` and the open outline across gaps in `src/core/geometry/`; `breaks` in `describe/line.ts`; `samplesAlong()`; the `"gapped line"` fixture in `src/testing/fixtures.ts`; `travel`'s jump in `travel.ts`; and `threshold`'s gaps in `threshold.ts`.
+     - Tests: `slice()` and the outline across one gap and several, with ends at and inside them; `breaks`' `RangeError`s; `gapBefore` from `samplesAlong()`; every built-in effect on the fixture through `checkEffect`, with nothing drawn inside a gap; `travel`'s jump, rolling and riding, and its trip's time; and `threshold` with a gap in the mark and in the reference.
+     - **Done when** every existing test passes unchanged, and every built-in effect passes `checkEffect` on the new fixture.
+   - **The line chart** (the second PR). Owns missing values in `line-layout.ts` and `line.ts`, `series`' type in `src/charts/types.ts`, and the words for a missing value in the tooltip, the names and `src/charts/table.ts`.
+     - Tests: a missing value inside a line, at its start and at its end; two in a row; a value alone between gaps; a line with no values; a reveal into a gap and past it; a transition that opens a gap and one that closes it; the crosshair, the names, the tooltip and the table at a missing x; `threshold`, `travel` and `delta` on a gapped line; a time axis; `link()` at a missing x; and the types, with a field of `number | null` accepted.
+     - **Done when** every existing test and baseline passes unchanged.
+   - Docs: architecture.md (Mark geometry, the line chart, `travel` and `threshold`), the effects guide (drawing along a walk with gaps, and the new fixture), api.md, README, CHANGELOG (gaps, `breaks`, `gapBefore` and missing values under Added; the fixture under Changed).
+4. **The icon sets' fills** (decision 14). Owns `fillRule` and `opacity` in `src/core/contracts/icon.ts`, `src/icons/define.ts`, `src/icons/svg.ts`, the icons in `src/charts/render/layer.ts`, and their tests.
+   - Tests: an icon with an even-odd hole and a duotone pair, both written for the tests rather than copied from a set, through `iconFromSvg` and `defineIcon`; inheritance through groups; the `RangeError`s; and the SVG as drawn.
+   - **Done when** every existing test and baseline passes unchanged.
+   - Docs: architecture.md (Icons), api.md, `src/icons/README.md`, CHANGELOG (the fields under Added, `iconFromSvg` under Fixed).
+5. **TypeScript 7** (decisions 7 and 15). Owns the dev dependencies in `package.json` and the lockfile, the tsconfigs, `scripts/pack-check.mjs`, README's TypeScript line, CONTRIBUTING's toolchain lines, and §10's open question 7.
+   - Checks: `typecheck`, timed before and after; the build; the `.d.ts` comparison; `pack-check` on 5.4 and 7; and CI on Node 22 and 24.
+   - **Done when** `npm run typecheck && npm test && npm run build`, `npm run size` and `npm run pack-check` pass with TypeScript 7, and the packed types check on 5.4.
+   - Docs: architecture.md (Build outputs), README, CONTRIBUTING, and CHANGELOG only if the published types change.
+
+**Wave 2** (after steps 2 and 3 land):
+
+6. **Long axes** (decision 16). Owns thinning in `bar-layout.ts` and `bar.ts`, Page Up and Page Down in `src/charts/keyboard.ts`, a month on a time axis in `line.ts` (a small edit), their tests, and the baselines it changes.
+   - Tests: 10 to 1,000 bars and columns, at 320 px and wide, with no two labels overlapping; the steps of n, the first label kept, and value labels all or none; `labelBounds` without the labels not drawn; the names, the tooltip and the table keeping every value; and Page Up and Page Down on bars, a line on numbers, a line on dates (across a month's end, and in each time zone) and an attachment, stopping at the ends.
+   - The baselines it changes are made again in Docker, and you see each one before it's committed.
+   - Docs: architecture.md (the bar chart, the keyboard), api.md (the keys), CHANGELOG (Page Up and Page Down under Added, thinning under Changed).
+
+**Wave 3** (after the other steps land):
+
+7. **The demos, their screenshots, the audit and script I.** Owns `demo/line.*`, `demo/season.*` and `demo/stress.*`, their visual specs and baselines, README's `arrow-on-hover.gif`, `docs/a11y-audit.md`, and section I of `docs/a11y-check.md`.
+   - **The line page** gets a card with missing values: our `lineChart`, and a D3 line drawn with `.defined()` and described with `breaks`, both with `threshold` and a riding `travel`, so the uncoloured gap and the jump show.
+   - **The season page** drops its workarounds: emptying the `update` slot, `delta`'s `value`, the slope chart's overlay CSS, the players' padding (for `room: 28`), and its goals chart's label CSS (for the chart's own thinning).
+   - **The stress page** says to try Page Up and Page Down, and its bars show their labels thinned.
+   - **README's `arrow-on-hover.gif`** is made again (`npm run media`), with M7's dimming.
+   - **Screenshots,** made in Docker: the line page's new card, and every page whose picture changed. Reduced motion and Off are checked in the DOM: a gap stays a gap.
+   - **Script I,** for NVDA + Chrome: a gapped line's names, the crosshair at a missing value and its table; Page Up and Page Down on the stress page; and the season page heard as before. You run it.
+   - **The walk:** you look at the pages in the browser, at 320 px too.
+   - Docs: a11y-audit.md (the line page's new card, the Browsers count), a11y-check.md (section I and its results).
+
+**Wave 4:**
+
+8. **Publish 0.3.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.3.0 entry, README's status, its script tag (`@0.3`, and api.md's) and its sizes, and this plan's status line and M8's ✅.
+   - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you) and `npm publish --dry-run`. The PR has its results.
+   - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com. Nothing else needs setting up.
+   - **Then, on your go-ahead in that session:** the `v0.3.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
+   - **After:** check npm (the version, README, provenance), install 0.3.0 in a fresh project, and check jsDelivr's `@0.3`.
+
+**Done when:**
+- **The tooltip.** Every library chart's tooltip can be hovered, and the audit's 1.4.13 rows pass.
+- **Change labels.** A `delta` goes at its chart's next update and says the change from the last update's values; overlay text is sized on attachments; and `barChart({ room })` keeps a change inside the chart at 320 px. The season page has none of its workarounds.
+- **Gaps.** `lineChart` skips missing values. `MarkGeometry.gaps`, `Sample.gapBefore` and `describe.line`'s `breaks` describe them; every built-in effect passes `checkEffect` on the `"gapped line"` fixture, and none draws inside a gap.
+- **Long axes.** A bar chart's labels never overlap, and Page Up and Page Down move by a page.
+- **Icons.** `iconFromSvg` keeps even-odd fills and opacity.
+- **TypeScript 7** checks the code, TypeScript 6 builds the declarations, and `pack-check` checks the packed types on 5.4 and 7.
+- **The demos** show all of it, with their screenshots and the audit, and script I passed with NVDA + Chrome.
+- **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise changes only by `gaps`, `gapBefore`, `breaks` and the icon fields, which are additions, and by the new fixture, with its migration note.
+- **0.3.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M8 is done.
 
 ### Backlog (after 0.1)
 

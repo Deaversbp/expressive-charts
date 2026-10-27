@@ -9,7 +9,9 @@
 // time axis an x is its Date's time in ms, and only its ticks, its wording and the samples' `at` know.
 // A missing value (null or undefined) is a gap in its line: the line runs on from the value after it.
 
-import { describe, type MarkData, type MarkGeometry, type Rect, type Sample } from "../core";
+import type { MarkData, MarkGeometry, Rect, Sample } from "../core";
+import { describeLine } from "../core/geometry/describe/line";
+import { describePoint } from "../core/geometry/describe/point";
 import { clean, niceDomain, niceStep, type Tick } from "./bar-layout";
 import { textBox, type TextPlacement } from "./render/text";
 import { decimals } from "./shell/format";
@@ -319,7 +321,7 @@ export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], se
     const label = labels ? (placed[named.findIndex((line) => line.name === name)] ?? { x: tip.x + LABEL_GAP, y: tip.y + VALUE_SIZE * CENTRE, anchor: "start", text: "" }) : undefined;
     const labelBounds = labels ? (label && label.text !== "" ? [textBox(label, labels.measure, "ec-value", VALUE_SIZE)] : []) : undefined;
     const breaks = vertices.flatMap((v, j) => (v.gapBefore ? [j] : []));
-    const geometry = describe.line({ key: name, series: name, points, width: LINE_WIDTH, ...(breaks.length > 0 ? { breaks } : {}), ...(labelBounds ? { labelBounds } : {}) });
+    const geometry = describeLine({ key: name, series: name, points, width: LINE_WIDTH, ...(breaks.length > 0 ? { breaks } : {}), ...(labelBounds ? { labelBounds } : {}) });
     // By distance, as the walk measures it, gaps and all; the last is exactly 1.
     let distance = 0;
     const samples: Sample[] = vertices.map((v, j) => {
@@ -369,7 +371,7 @@ export function placePoints<D>(frame: LineFrame, row: RowState<D>, series: reado
     const key = pointKey(name, row.key);
     const data: MarkData<D> = { datum: row.datum, samples: [{ t: 0, value, at: sampleAt(row.x, time) }], related: (other) => (other === name ? undefined : datas.get(other)) };
     datas.set(name, data);
-    return { key, series: name, geometry: describe.point({ key, series: name, x, y: at.y(value), r: DOT_RADIUS }), data };
+    return { key, series: name, geometry: describePoint({ key, series: name, x, y: at.y(value), r: DOT_RADIUS }), data };
   });
 }
 

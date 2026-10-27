@@ -1044,7 +1044,7 @@ How many marks stay smooth, measured on `demo/stress.html` by `scripts/bench.mjs
 
 ### Bundle size
 
-`npm run size` (`scripts/size.mjs`) measures the build, and fails when a size is over its budget in `scripts/size-budget.json`. CI runs it on Node 24 after the build, and puts its tables in the job's summary. Budgets are gzip sizes, set at the measured size plus about 10%, rounded up to 0.5 KB; [CONTRIBUTING.md](../CONTRIBUTING.md#bundle-size) says when to raise one. The sizes below are tsdown's build of 0.3.0's code (M9 step 5), beside 0.3.0's gzip sizes, built by tsup and measured again on its code, and the budgets today's. M9 step 3 raised six budgets for `describe.shape`: `describe` is one object, so its path reading and flattening come with every page that imports it, the charts too, and with the testing entry, whose fixtures are built with it. KB is 1,024 bytes, gzip is at level 9 and brotli at 11.
+`npm run size` (`scripts/size.mjs`) measures the build, and fails when a size is over its budget in `scripts/size-budget.json`. CI runs it on Node 24 after the build, and puts its tables in the job's summary. Budgets are gzip sizes, set at the measured size plus about 10%, rounded up to 0.5 KB; [CONTRIBUTING.md](../CONTRIBUTING.md#bundle-size) says when to raise one. The sizes below are tsdown's build of 0.3.0's code (M9 step 5), beside 0.3.0's gzip sizes, built by tsup and measured again on its code, and the budgets today's. M9 step 3 raised six budgets for `describe.shape`: `describe` is one object, so its path reading and flattening come with every page that imports it, and with the testing entry, whose fixtures are built with it. The charts' layouts and the adapters then took the builders by name (`describeBar`, `describeArc`, `describeLine` and `describePoint`, from `src/core/geometry/describe/`), so a chart page carries only the builders it calls. Measured with M9's steps 1 to 5 merged: `barChart` went from 33.9 to 30.3 KB gzip, the line page's set from 40.7 to 36.8, the switch's set from 43.0 to 40.5, and `expressive` and `travel` from 29.9 to 26.2, under the 27.0 it was before step 3, since each set had carried every builder. Those three sets' budgets came down to their sizes plus 10%; `barChart`'s was never raised. KB is 1,024 bytes, gzip is at level 9 and brotli at 11.
 
 Each published JS file and the stylesheet:
 
@@ -1067,10 +1067,10 @@ What a page pays once its bundler has tree-shaken the package. Each import set i
 | --- | ---: | ---: | ---: | ---: |
 | `motion`, `animated` | 5.4 KB | 2.4 KB | 1.7 KB | 3 KB |
 | `describe`, `matrix` | 10.2 KB | 4.3 KB | 3.6 KB | 8 KB |
-| `expressive`, `travel` | 77.0 KB | 26.7 KB | 26.7 KB | 33 KB |
+| `expressive`, `travel` | 77.0 KB | 26.7 KB | 26.7 KB | 29 KB |
 | `barChart` | 89.8 KB | 31.1 KB | 31.1 KB | 34 KB |
-| `lineChart`, `threshold`, `playback`, `playButton` | 109.6 KB | 37.8 KB | 37.8 KB | 45 KB |
-| `chartSwitch`, `donutChart`, `barChart` | 121.7 KB | 40.7 KB | 40.8 KB | 47 KB |
+| `lineChart`, `threshold`, `playback`, `playButton` | 109.6 KB | 37.8 KB | 37.8 KB | 41 KB |
+| `chartSwitch`, `donutChart`, `barChart` | 121.7 KB | 40.7 KB | 40.8 KB | 45 KB |
 | everything | 217.5 KB | 72.1 KB | 72.2 KB | 76.5 KB |
 
 **tsdown's sizes.** Rolldown bundles differently from esbuild, which tsup used. The script-tag bundle is 6.6 KB smaller gzipped, and the ES module entries share less: `sport.js` loads 4.0 KB, not 9.0, and `testing.js` 17.5, not 20.7. The two smallest import sets grew by 0.7 KB each. `animated` and `matrix` are now in `index.js` itself rather than a shared chunk, so a page that imports them keeps `index.js`'s top-level tables too (the stylesheet's text and the theme's tokens, the time axis's steps, the gaits' still pose), which a bundler can't prove free of side effects. Their budgets went up to 3 and 5 KB, and the script-tag bundle's, `sport.js`'s and `testing.js`'s came down to their sizes plus 10%.

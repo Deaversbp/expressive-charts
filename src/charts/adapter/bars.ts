@@ -2,7 +2,7 @@
 // described with describe.bar. Pure: the rectangles are already in the marks' common coordinates.
 
 import type { Baseline, MarkGeometry, Rect } from "../../core";
-import { describe } from "../../core";
+import { describeBar } from "../../core/geometry/describe/bar";
 
 /** One `<rect>` of a mark, in the marks' common coordinates. */
 export interface RectPart {
@@ -65,7 +65,7 @@ export function describeRects(key: string, parts: readonly RectPart[], baseline:
 
   const tip = parts[order[order.length - 1]!.index]!;
   const single = parts.length === 1 ? parts[0]!.series : undefined;
-  const geometry = describe.bar({
+  const geometry = describeBar({
     key,
     ...(single === undefined ? {} : { series: single }),
     ...box,

@@ -8,7 +8,8 @@
 // Labels that would overlap are thinned: every nth category label is drawn, and the value labels all
 // or none. The frame keeps room for every label, so thinning moves nothing.
 
-import { describe, type MarkData, type MarkGeometry, type Rect } from "../core";
+import type { MarkData, MarkGeometry, Rect } from "../core";
+import { describeBar } from "../core/geometry/describe/bar";
 import { textBox, type TextPlacement } from "./render/text";
 import type { Accessor, BarChartOptions } from "./types";
 
@@ -334,7 +335,7 @@ export function placeRow<D>(frame: BarFrame, row: BarRowState<D>, measure: Measu
   const boxes = (): Rect[] => [...boxesOf([label], measure, "ec-label", LABEL_SIZE), ...boxesOf([value], measure, "ec-value", VALUE_SIZE)];
 
   if (frame.orientation === "horizontal") {
-    const geometry = describe.bar({
+    const geometry = describeBar({
       ...bar,
       x: Math.min(zero, tip),
       y: band + (bands.band - bands.thickness) / 2,
@@ -354,7 +355,7 @@ export function placeRow<D>(frame: BarFrame, row: BarRowState<D>, measure: Measu
   }
 
   const centre = band + bands.band / 2;
-  const geometry = describe.bar({
+  const geometry = describeBar({
     ...bar,
     x: centre - bands.thickness / 2,
     y: Math.min(zero, tip),

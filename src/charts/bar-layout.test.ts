@@ -164,6 +164,57 @@ describe("layoutBars, vertical", () => {
   });
 });
 
+describe("layoutBars, room", () => {
+  type Row = { k: string; v: number };
+  const rows = (...values: number[]): Row[] => values.map((v, i) => ({ k: `r${i}`, v }));
+  /** The px outside the value axis on each side, and where the category labels sit. */
+  function margins(options: Omit<BarChartOptions<Row>, "label">, room?: number) {
+    const { frame, width, height } = layout(options, room === undefined ? {} : { room });
+    const { from, extent, label } = frame.scale;
+    if (frame.orientation === "horizontal") return { start: from, end: width - (from + extent), label };
+    // Columns: lo sits at the bottom, `from`, and the axis runs up.
+    return { start: height - from, end: from + extent, label };
+  }
+  /** What `room` adds on each side, and how far it moves the category labels. */
+  function added(options: Omit<BarChartOptions<Row>, "label">) {
+    const without = margins(options);
+    const with28 = margins(options, 28);
+    return { start: with28.start - without.start, end: with28.end - without.end, label: with28.label - without.label };
+  }
+
+  it("is 0 by default, so nothing moves", () => {
+    for (const options of [{ data: rows(6, -3), y: "k", x: "v" }, { data: rows(6, -3), x: "k", y: "v" }] as const) {
+      expect(layout(options, { room: 0 }).frame).toEqual(layout(options).frame);
+    }
+  });
+
+  it("keeps it past the value labels at a bar's tip, and not at the other end when no bar is negative", () => {
+    expect(added({ data: rows(16, 6, 10), y: "k", x: "v" })).toEqual({ start: 0, end: 28, label: 0 });
+    // The labels the bars had stay where they were against the tip.
+    const okafor = layout({ data: players, y: "name", x: "goals" }, { room: 28 }).rows[0]!;
+    expect(okafor.value.x).toBeCloseTo(okafor.geometry.end.x + 6, 6);
+    expect(600 - okafor.geometry.end.x).toBeGreaterThanOrEqual(6 + 14 + 4 + 28);
+  });
+
+  it("keeps it past the names on a negative bar's side, where its text goes past them too", () => {
+    expect(added({ data: rows(6, -3), y: "k", x: "v" })).toEqual({ start: 28, end: 28, label: 28 });
+    // Only negative bars: the positive end, which no bar reaches, gets none.
+    expect(added({ data: rows(-6, -3), y: "k", x: "v" })).toEqual({ start: 28, end: 0, label: 28 });
+    const [b] = layout({ data: rows(-6, -3), y: "k", x: "v" }, { room: 28 }).rows;
+    // The name's left edge 28 px in from the chart's.
+    expect(b!.label.x - 2 * 7).toBe(28);
+  });
+
+  it("keeps it above columns, and below negative columns, past the names under them", () => {
+    expect(added({ data: rows(16, 6, 10), x: "k", y: "v" })).toEqual({ start: 0, end: 28, label: 0 });
+    // The names hang from the axis, so they rise with it, and the room is under them.
+    expect(added({ data: rows(6, -3), x: "k", y: "v" })).toEqual({ start: 28, end: 28, label: -28 });
+    expect(added({ data: rows(-6, -3), x: "k", y: "v" })).toEqual({ start: 28, end: 0, label: -28 });
+    const negative = layout({ data: rows(-6, -3), x: "k", y: "v" }, { room: 28 });
+    expect(negative.height - negative.rows[0]!.label.y).toBeGreaterThanOrEqual(28);
+  });
+});
+
 describe("layoutBars, data", () => {
   it("sorts by value, by key, by a comparator or not at all, keeping keys", () => {
     const keys = (sort: BarChartOptions<Player>["sort"]) => layout({ data: players, y: "name", x: "goals", sort }).rows.map((r) => r.key);

@@ -1162,6 +1162,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
           leaving,
           input,
           onScreen,
+          data: "data" in next,
           ...(swapping
             ? {
                 swap: (diff: Diff<D>) => {

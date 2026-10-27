@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M8 are complete (§9). M8 built a tooltip that can be hovered, change labels that hold up, gaps in lines, long axes, the icon sets' fills and TypeScript 7. **0.3.0 is on npm**, published from CI through npm's trusted publishing with provenance on 27 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.3.0)), after 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M8 are complete (§9). M8 built a tooltip that can be hovered, change labels that hold up, gaps in lines, long axes, the icon sets' fills and TypeScript 7. M9, for 0.4.0, is planned in §9: attachments on a par with charts, circles and shapes, Vega lines with gaps, the icon sets' faded parts, and TypeScript 7 building the declarations. **0.3.0 is on npm**, published from CI through npm's trusted publishing with provenance on 27 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.3.0)), after 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -2550,6 +2550,231 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **0.3.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M8 is done.
 
 **Status: complete (27 October 2026).** Every item on the list holds. Steps 1 to 7 built and checked the first eight, and 0.3.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 8).
+
+### M9: Attachments on a par with charts, and circles and shapes (0.4.0)
+
+Effects on more of what other libraries draw: attachments that change their effects and end their hover as charts do, a chart switch in a link, circles and any SVG shape read by `expressive()`, Vega lines with gaps, the icon sets' faded parts, TypeScript 7 building the declarations, and last, 0.4.0 on npm.
+
+**Demo:** a new page, `shapes.html`, with a D3 scatter, an Observable Plot dot chart, a D3 curved line and a D3 area, each attached with only a key, and a picker that swaps their effects in place. The donut page's D3 pie swaps its effects without being attached again, and the morph page's switch is linked with a chart beside it.
+
+**Where M9 starts** (checked against main at `2a54df3` while planning, 27 October 2026):
+
+- **Already built.**
+  - **0.3.0** is npm's `latest`, published through trusted publishing with provenance. npm lists `0.0.0-stage`, `0.1.0`, `0.2.0` and `0.3.0`. GitHub has no open issues or pull requests.
+  - **Attachments.** `expressive()` and `fromVegaView()` return `refresh()`, `on()`, `marks()`, `focus()` and `destroy()`. A chart's handle also has `update()`, `leave()` and `labels()`, and `update({ on })` swaps its effects in place through the runner's `swap()`.
+    - An attachment's effects are fixed when it's made, so `donut.html` attaches its D3 pie again when the picker changes, and the pie's tab stop goes back to its first slice.
+    - A page can't end an attachment's hover: the port each attachment registers for links (`src/charts/link.ts`) has a `leave()`, but the handle has none.
+  - **Links.** `link()` finds each source's port by its handle. It throws on a `chartSwitch` ("A chartSwitch can't be linked yet"). A switch's handle has `current`, `show()`, `chart(view)` and `destroy()`, but no `marks()` or `on()`, which `LinkSource` needs. Its views' charts can each be linked, but the hidden one would hover unseen.
+  - **What `expressive()` reads.** Only `<rect>`s. Any other element throws, and a page describes it with the `geometry` option. The design session's sketch read `<rect>` as a bar, `<circle>` as a point and anything else with `describe.shape`. `watch` notes `d`, `x`, `y`, `width`, `height`, `cx`, `cy`, `r`, `points` and `transform`.
+  - **`describe`** has `bar`, `arc`, `line` and `point`, all under the promise. architecture.md lists `describe.shape(element, spec)` as planned, walking a shape with the browser's `getPointAtLength`, which jsdom doesn't have.
+    - The core already reads any path data, every command and arcs too: `parsePath`, `transformPath` and `formatPath` in `src/core/geometry/path.ts`, which `iconFromSvg` and the chart switch use.
+    - `iconFromSvg` turns `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>` and `<rect>` into path commands (`outline()` in `src/icons/svg.ts`).
+    - A walk is made of straight pieces and circular arcs (`src/core/geometry/segment.ts`).
+  - **`fromVegaView()`** reads rects as bars, arcs as slices, symbols as points, and lines. A line throws on a curve (an `interpolate` other than `"linear"`) and on a point Vega leaves out (`defined: false`): "Lines with gaps can't be read yet". Vega-Lite 6.5.0 breaks a line at a missing value by default: compiled, a line's default `invalid` gives the mark a `defined` encoding. So any Vega-Lite line with a `null` throws today, not only one with `invalid: null`, as M8 step 3's note thought.
+  - **Testing.** `checkEffect`'s default data is two samples, 0 at the start and 1 at the end, on every fixture, the `"gapped line"` too, so a data effect never sees its gap. 2,059 unit tests in 102 files pass. The visual suite ran 553 tests at M8 step 7, with 50 skipped, in Chromium, Firefox and WebKit (201 in each).
+  - **Icons.** `IconShape` has `fillRule` and `opacity`. `iconFromSvg` drops `fill-opacity` and `stroke-opacity`. Its `pixels()` reads a root's `width` and `height` with `\d*\.?\d+`, which backtracks on a long run of digits followed by junk.
+  - **The build.** tsup 9.0.0, still the latest, builds the JavaScript with esbuild and the declarations with TypeScript 6.0.3, through TypeScript's JS API, which TypeScript 7.0 doesn't have. TypeScript 7.0.2 runs `typecheck` (as `typescript-7`); 7.1 is in beta.
+    - tsdown 0.23.2, on Rolldown, builds declarations three ways, through rolldown-plugin-dts 0.29.0-beta.2: with TypeScript 5 or 6's API, with TypeScript 7.1's, or with Rolldown's oxc. oxc needs no TypeScript, but the code must pass `isolatedDeclarations`.
+    - On main, `isolatedDeclarations` finds 18 errors: seven exports in six files whose types are inferred (`describe`, `matrix`, `gaits`, `TAU`, `stylesheet`, `presetRegistry` and `iconRegistry`), and the default exports of `tsup.config.ts` and `vitest.config.ts`.
+    - The size check bundles its import sets from `dist/index.js`, so another bundler moves every size.
+  - **Sizes** (gzip, against their budgets, on `2a54df3`, the same code as 0.3.0): everything 72.2 KB of 76.5, `barChart` 31.1 of 34, the line page's set 37.8 of 39, the switch's set 40.8 of 41, `expressive` and `travel` 26.7 of 27, `describe` and `matrix` 3.6 of 4, the script-tag bundle 78.6 of 83.5, the stylesheet 2.4 of 2.5, and `dist/index.js` 105.1 of 111.
+- **Gaps.**
+  - An attachment can't change its effects, and a page can't end its hover.
+  - A chart switch can't be in a link.
+  - Scatter plots, curves and areas from D3 and Plot need the `geometry` option, and a curve can only be described roughly, by points the page takes from it.
+  - A Vega-Lite line with a missing value throws.
+  - An icon whose SVG fades a part with `fill-opacity` or `stroke-opacity` draws it at full strength.
+  - TypeScript 7 can't build the declarations.
+- **Out of date** (each fixed by the step named):
+  - README's `ball-and-boot.gif` was made on the morning of 24 October, before M7 step 3's dimming merged that afternoon. `threshold-line.gif` and `donut-to-columns.gif` are as old (step 7).
+  - architecture.md's sizes are 0.2.0's (step 5, then step 8 for 0.4.0's).
+  - architecture.md's Builders, and the sketch, plan `describe.shape` from an element with `getPointAtLength` (step 3).
+  - `vega.ts` says lines can't have gaps yet, and §10's open question 14 says attachments can't change their effects (step 1).
+  - `demo/donut.ts` says an attachment's effects can't change (step 7).
+
+**What M9 takes from the backlog, and what stays:**
+
+| Item | Goes to |
+| --- | --- |
+| Changing an attachment's effects, as `update({ on })` changes a chart's | Decisions 1 and 9, step 1 |
+| A chart switch in a link | Decisions 1 and 10, step 2 |
+| `describe.shape`, and the adapter reading circles | Decisions 1, 4, 5, 11 and 12, steps 3 and 6 |
+| `fill-opacity` and `stroke-opacity` in `iconFromSvg`, with `pixels()` (M8 step 4) | Decisions 2 and 14, step 4 |
+| TypeScript 7 for the declarations | Decisions 2, 6 and 15, step 5 |
+| `fromVegaView()` reading lines with gaps, and `checkEffect`'s default data on a gap (M8 step 3's notes) | Decisions 2 and 13, step 1 |
+| The API docs test's link check timing out under load, architecture.md's sizes, and README's other three GIFs (M8's notes) | Decisions 2 and 15, steps 5 and 7 |
+| A curved Vega line read through `describe.shape` | Stays: new, and an addition for later |
+| Lines as switch views, `morph` across gaps, a line's `curve` and nearest-point hover, change labels on a neighbour's label, a negative column's value label on its name, square caps and bevel joins, VoiceOver + Safari, a written audit table for `stress.html`, the other follow-ups in M8's notes (linking an x with every value missing, a `table.missing` wording, a fade when a change thins labels, the hidden value labels' margin), and the rest | Stay: in the backlog, or in M8's notes |
+
+When a step lands, it marks its backlog item as built in M9.
+
+**Decided while planning M9 (27 October 2026):** decisions 1–7 are yours, and 8–16 follow from them and the code.
+
+1. **M9 builds two things:** attachments on a par with charts (`update({ on })` and `leave()` on `expressive()` and `fromVegaView()`, and a chart switch in a link), and circles and shapes (`expressive()` reading `<circle>` and other shapes, and `describe.shape`).
+2. **Four smaller items join them:** Vega lines with gaps, with `checkEffect`'s default data marking a gap; the icon sets' faded parts, with `pixels()`; TypeScript 7 building the declarations; and a tidy: the API docs test's link check, architecture.md's sizes measured again, and README's other three GIFs.
+3. **One release, 0.4.0, when M9 is done.**
+4. **`describe.shape` reads path data,** `describe.shape({ key, d })`, not an element. The library follows the path itself, so it works in Vitest and Node, and the same in every browser.
+5. **`expressive()` reads circles and every shape by itself:** `<rect>` as a bar, as now, `<circle>` as a point, and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` through `describe.shape`. `geometry` still wins.
+6. **TypeScript 7 builds through tsdown, with isolated declarations.** Rolldown's oxc writes the declarations with no TypeScript, the code gives its exports explicit types, and `typescript` goes to 7. It starts as a spike, which stops if a published type differs.
+7. **A new demo page, `shapes.html`.** `donut.html`'s D3 pie swaps its effects in place, and `morph.html`'s switch joins a link.
+8. **What's an addition and what isn't** (the 0.x promise). 0.4.0 is a minor release. In the effect-author API, `describe.shape`, `ShapeSpec` and the icon fields are additions, and `checkEffect`'s data on a gap is a fix.
+
+   | Change | Under the promise? | Kind |
+   | --- | --- | --- |
+   | `describe.shape` and `ShapeSpec` | Yes | Additions: new names in the promise's list, which its test imports |
+   | `fillOpacity` and `strokeOpacity` on `IconShape` | Yes | Optional fields: additions. `iconFromSvg` now keeps them, so an icon whose SVG fades a part with them draws as its SVG does: listed under Fixed |
+   | `checkEffect`'s default data marking a gap | Yes | A fix: on the `"gapped line"` fixture, a data effect now gets `gapBefore` after the gap, as on a line chart. An effect that leaves the gap alone passes as before; one that joins across it can now fail, as it should |
+   | `update({ on })` and `leave()` on attachments | No: the adapters | Additions |
+   | A chart switch's `marks()`, `on()` and `leave()`, and `link()` taking one | No: the charts | Additions. `link()` no longer throws on a switch |
+   | `expressive()` reading circles and shapes | No: the adapters | An addition: elements that threw are read. A page's `geometry` still wins, so no page changes |
+   | Vega lines with gaps | No: the adapters | An addition: a line that threw is read |
+   | tsdown and oxc for the build | The published types | Nothing changes while every exported name has the same type, which the spike checks and `pack-check` tests on TypeScript 5.4, 6 and 7. A difference stops the step |
+   | `isolatedDeclarations` | No: the repository | New exports need explicit types. CONTRIBUTING says so |
+
+9. **Attachments' `update()` and `leave()`** (decision 1).
+   - **`update({ on })`** on `expressive()`'s attachment and `fromVegaView()`'s swaps the effects of the slots it changes, as a chart's does, through the runner's `swap()`.
+     - A slot given the same effect or preset name keeps its runs. A changed slot's runs are cleared and the new effect starts where they were: `decorate` again on every mark, and a held hover replayed with the new hover effect. `enter`, `update` and `exit` draw the new effect's end state where theirs were, so nothing enters again.
+     - Focus stays on its mark, and the tab stop where it was.
+     - The series the new effects read (`needs`) are found again, so a data effect that reads another series follows it.
+     - It returns a promise, as a chart's does, which resolves once the swap is done: at once, since an attachment has no change to settle. It rejects, changing nothing, on an `on` it can't resolve (an unknown preset name), and on any other option, which can't change yet.
+   - **`leave()`** ends the hover, pointer or keyboard, as a chart's does: the emphasis, the dimming and the hover effects end, `leave` fires for each mark that was hovered, and focus stays. It ends a link's hover too. It does nothing when nothing is hovered.
+   - `refresh()`, `watch` and links work as before.
+10. **A chart switch in a link** (decision 1).
+    - `link()` takes a `chartSwitch` as a source. It links the view on show: hovering it hovers the others, and their hovers hover it.
+    - While a switch plays, both views' marks are hidden and can't be reached, as now, so it neither starts a link's hover nor shows one. When it lands, the link's hover, if there is one, shows in the new view. A hover in the view it leaves ends as the switch starts, as now, and the link hears it end.
+    - The switch gets `marks()`, `on()` and `leave()`, each the view on show's, so it's a `LinkSource` and a page can call them as on a chart. `on()` hears only the view on show. `link()`'s types read a switch's rows from its views' charts.
+    - A source is in one link at a time: a switch whose view's chart is in a link throws, as a source in two links does, and so does a view's chart whose switch is in one.
+11. **`describe.shape`** (decision 4).
+    - **The spec:** `describe.shape({ key, series, d, matrix, width, labelBounds })`.
+      - `d` is SVG path data in the shape's own px, read as SVG reads it, up to its first error, by the core's `parsePath`.
+      - `matrix` moves it into the marks' px, as an element's transform does, arcs too. Default none.
+      - `width` is an open shape's stroke width. Default 1, as `describe.line`'s.
+    - **Open or closed.** A shape is closed when every subpath ends with `Z`; otherwise it's open.
+    - **An open shape is a line.** Its walk runs along the path from its first point.
+      - Each move after the first starts a new run after a gap, so a D3 line drawn with `.defined()` comes with its gaps, with no `breaks`.
+      - Straight pieces stay straight, and a circular arc (an `A` whose radii are equal after `matrix`) stays an arc. Béziers and other arcs become straight pieces within 0.1 px of the curve.
+      - Its outline is open: the stroke, with the gaps left out. Its `thickness`, `bounds`, `center` and `pivot` are as `describe.line`'s.
+    - **A closed shape has no direction,** like a point. Its walk is its centre, with length 0, so `travel` and `trace` do nothing on it, and `flash`, `pulse`, `wiggle` and `morph` work on its outline.
+      - The outline's `d` is the whole path, holes too. Its `sample(n)` goes round the longest subpath, clockwise on screen, in four quarters of equal length from its upper left, so a circle samples as `describe.point`'s does.
+      - Its centre and pivot are its bounds' centre, and its `thickness` is the smaller of its width and height.
+    - **Errors.** Path data with nothing to draw throws a `RangeError` naming `d`. So does a `matrix` that isn't six finite numbers, and a `width` that isn't a number of px more than 0, each naming its field, as the other builders do.
+    - **The promise.** `describe.shape` and `ShapeSpec` join the effect-author API, as additions. No fixture is added, so `FixtureName` doesn't change: shapes are checked through `checkEffect` in the tests and in the top-level sweep (step 3).
+    - **No effect changes.** An open shape is a walk like a line's, gaps included, and a closed one is like a point.
+12. **What `expressive()` reads** (decision 5).
+    - **A `<circle>`** is a point: `describe.point` at its centre with its radius, through its transforms. Under a transform that stretches it unevenly or skews it, it's read as a shape, an ellipse.
+    - **A `<path>`, `<line>`, `<polyline>`, `<polygon>` or `<ellipse>`** is read through `describe.shape`, from its outline as path data, through its transforms.
+      - `iconFromSvg`'s conversion of these elements to path commands moves into the core (`src/core/geometry/path.ts`), so the two share it.
+      - An open shape's width is its stroke width as drawn, scaled by its transform.
+    - **One element a mark.** A key that a circle or a shape shares with another element throws a `TypeError` naming the key. Rects still group into segments by key.
+    - Anything else (`<text>`, `<g>`, `<use>`, `<image>`) throws, naming its tag, as now. `geometry` still wins over all of it.
+    - **Samples.** A circle with a numeric `value` gets one sample, `{ t: 0, value }`, as a Vega symbol does. Shapes get none: a page gives a curve's with `samples` and `samplesAlong()`.
+    - **Order.** Circles and shapes keep document order, as marks described with `geometry` do, and marks round one pivot still go clockwise.
+    - **`watch`** notes `x1`, `y1`, `x2`, `y2`, `rx` and `ry` too.
+    - `dim`, `keyboard` and `markLabel` work on them as on any mark: a dot takes focus and is named.
+13. **Vega lines with gaps, and `checkEffect`'s data** (decision 2).
+    - A Vega line's items with `defined: false` are left out, and the next defined item starts a new run: the line is described with `breaks`, and its samples have `gapBefore` after each gap. Vega-Lite 6 breaks a line at a `null` by default, so such a line is now read; the step tests the other `invalid` modes too. A line with no defined item has no mark, as Vega draws nothing.
+    - A curve still throws.
+    - **`checkEffect`'s default data** on a mark with gaps has a sample at each end of each gap, with its `t` as its value and `gapBefore` on the one after, so a data effect sees the gap as on a line chart. On a mark without gaps it's as now.
+14. **The icon sets' faded parts** (decision 2).
+    - `IconShape.fillOpacity?: number` and `strokeOpacity?: number`, from 0 to 1, default 1: the fill's and the stroke's own opacity, inside the shape's `opacity`. `defineIcon` checks them, with a `RangeError` naming the shape and the field.
+    - `iconFromSvg` keeps `fill-opacity` and `stroke-opacity`, from attributes and inline styles.
+      - They're inherited as SVG inherits them: a shape's own value replaces its group's, and they don't multiply, as `opacity` does.
+      - Percentages are read, as for `opacity`.
+      - A shape gets each only under 1, so every icon it made before comes out the same.
+    - The SVG layer sets them as attributes on the shape's `<path>`.
+    - `pixels()` takes the unambiguous number pattern `alpha()` uses, so a long run of digits can't make it slow.
+15. **The build** (decision 6).
+    - **tsdown,** at an exact version, as a dev dependency, replaces tsup. Rolldown's oxc writes the declarations, so the build needs no TypeScript.
+    - **`isolatedDeclarations`** goes on in `tsconfig.json`, so TypeScript 7's typecheck requires explicit types on exports. The 18 errors on main are fixed by writing those types out; no published type changes. CONTRIBUTING says new exports need them.
+    - **The versions.** `typescript` goes to 7.0.2 and runs `typecheck`. TypeScript 6.0.3 stays as `typescript-6`, for `src/api-docs.test.ts`, which needs TypeScript's JS API, and for `pack-check`. 5.4.5 stays as `typescript-5.4`.
+    - **The outputs keep their names,** and `exports` doesn't change: ES modules and CommonJS for the three entries, their declarations (`.d.ts` and `.d.cts`), the stylesheet and its types, and the minified script-tag bundle that sets `ExpressiveCharts`, each with source maps.
+    - **The spike comes first.** The step builds with tsdown beside main's build and compares them: the file list, the names each entry exports as an ES module and as CommonJS, each exported name's type (read with TypeScript 6's API), and the sizes. If a published type or an entry's names differ, the step stops and reports to you.
+    - **Sizes.** Rolldown bundles and minifies differently from esbuild, so every size moves. A size that grows by more than 1 KB gzip stops the step to ask you. Smaller moves change the budgets, each explained.
+    - **The tidy.** Before the switch, architecture.md's size tables are measured again on main, the same code as 0.3.0, so they're 0.3.0's, and the switch is compared with them. The API docs test reads each linked file's anchors once, so its link check stops timing out under load.
+16. **The rest.**
+    - **Accessibility.** A new script, J, for NVDA + Chrome: the shapes page's dots and shapes heard by name and reached by the arrows, its picker swapping effects with focus kept, the D3 pie's picker on `donut.html` keeping its tab stop, and `morph.html`'s link across a switch. You run it.
+    - **Docs.** Each step adds its exports to api.md (`src/api-docs.test.ts` fails otherwise), its sections to architecture.md, and its entries to CHANGELOG, under a new `## Unreleased` above 0.3.0 with Added, Changed and Fixed lists. Each Changed entry says what to write instead. The effects guide says how to check an effect on a curve or an area with `describe.shape`.
+    - **Sizes.** `expressive` and `travel` have 0.3 KB of room, the switch's set 0.2, and `describe` and `matrix` 0.4. Steps 1, 2, 3 and 6 add to them. A step that takes a set past its budget raises the budget in the same PR and says why (CONTRIBUTING's Bundle size).
+    - **The release** goes as CONTRIBUTING's Releasing says, through trusted publishing. Nothing is published, tagged or released without your go-ahead in that session.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `package.json`, `src/index.ts`, `src/core/index.ts`, `src/core/geometry/index.ts`, `src/core/geometry/describe/index.ts`, `src/charts/index.ts`, `src/charts/adapter/expressive.ts`, `src/charts/adapter/types.ts`, `src/icons/svg.ts`, `src/charts/render/theme.ts`, `src/conformance.test.ts`, `src/promise.test.ts`, `scripts/size-budget.json`, `src/core/README.md`, `src/charts/README.md`, `src/icons/README.md`, `docs/architecture.md`, `docs/api.md`, `docs/effects-guide.md`, `docs/sketches/api.ts`, `README.md`, `CHANGELOG.md` and this plan. Step 1 owns the attachment's handle in `expressive.ts`, and step 6 its reading. Step 5's explicit types are small edits in files other steps own. Once step 5 lands, `typecheck` requires an explicit type on every new export. The first step to land adds CHANGELOG's Unreleased.
+
+Each step's session reads the hand-over notes in its notes folder first, `plan-0-4.md` from planning among them, and writes its own there: commits, files, decisions beyond the brief, where the plan and the code differ, and follow-ups.
+
+**Wave 1** (parallel):
+
+1. **Attachments on a par, and Vega lines with gaps** (decisions 9 and 13). Owns `update()` and `leave()` on the handle in `src/charts/adapter/expressive.ts`, `Attachment` in `src/charts/adapter/types.ts`, `src/charts/adapter/vega.ts`, the default data in `src/testing/check.ts`, their tests, and §10's open question 14.
+   - Tests:
+     - `update({ on })` on D3-style rects, a D3 pie and a Vega view: a hover slot swapped while a mark is hovered by the pointer and by the keyboard; `decorate` started again on every mark; `enter`, `update` and `exit` in their end state; an unchanged slot keeping its runs; focus and the tab stop kept; an unknown preset name, and another option, rejecting with nothing changed; Off; a data effect that reads another series, after a swap; and an attachment in a link.
+     - `leave()` after a pointer hover, a keyboard hover and a link's, and with nothing hovered.
+     - A Vega-Lite line with `null`s inside it, at its start and end, and all through, in each `invalid` mode, with `threshold` and a riding `travel` drawing nothing inside a gap.
+     - `checkEffect`'s default data on the `"gapped line"` fixture, and on a fixture without gaps.
+   - **Done when** every existing test passes unchanged, but any that pinned `checkEffect`'s old data on the gapped fixture, each named in the PR.
+   - Docs: architecture.md (Adapters, and Vega and Vega-Lite), api.md (`Attachment`, `VegaAttachment`, `checkEffect`), README's Adapters line, CHANGELOG (the methods and Vega's gaps under Added, `checkEffect`'s data under Fixed).
+2. **A chart switch in a link** (decision 10). Owns `src/charts/switch.ts`, `src/charts/link.ts`, and their tests.
+   - Tests: a switch linked with a bar chart, and with an attachment: hovering the view on show hovers the others and the other way round, by pointer and by keyboard; a switch started while it's hovered, and while a link's hover shows in it; a link's hover that comes mid-switch, shown when it lands; a switch back; `effects: false`; `marks()`, `on()` and `leave()` on the view on show; the hidden view never hovered; a switch and its view's chart in two links, throwing; the switch destroyed; and the types (`by` given the views' rows).
+   - **Done when** every existing test passes unchanged, but `link.test.ts`'s that pinned the throw on a switch, named in the PR.
+   - Docs: architecture.md (Linked hover, Switching between charts), api.md (`link()`, `ChartSwitch`), README's Charts line, CHANGELOG (Added).
+3. **`describe.shape`** (decision 11). Owns `src/core/geometry/describe/shape.ts` (new), the flattening of curves in `src/core/geometry/`, `shape` in `describe/index.ts`, `ShapeSpec`'s exports, `describe.shape` in the promise's list and `src/promise.test.ts`, the shape sources in `src/conformance.test.ts`, and the sketch's `describe.shape`.
+   - Tests:
+     - Every path command, relative and absolute; Béziers within 0.1 px of the true curve; circular arcs kept, and elliptical, rotated or skewed ones flattened; `matrix`; and each `RangeError`.
+     - A path with several moves, as d3's `.defined()` draws it, giving gaps.
+     - Open and closed shapes' walks, outlines, `sample(n)` in quarters, bounds, centres and thickness; a closed shape with a hole; and a path of 10,000 points, in good time.
+     - The geometry invariants on shapes.
+     - Every built-in effect through `checkEffect` on an open curve, a closed area and an area with a hole, and the top-level sweep's new sources: a D3 line drawn with `curveMonotoneX`, the same with `.defined()`, and a D3 area, each described with `geometry` and `describe.shape`, with nothing drawn inside a gap.
+   - **Done when** every existing test passes unchanged, and every built-in effect passes `checkEffect` on shapes.
+   - Docs: architecture.md (Mark geometry and its Builders), api.md (`describe.shape`, `ShapeSpec`), the effects guide (checking an effect on a curve), the sketch, CHANGELOG (Added, and the promise's list).
+4. **The icon sets' faded parts** (decision 14). Owns `fillOpacity` and `strokeOpacity` in `src/core/contracts/icon.ts`, `src/icons/define.ts`, `src/icons/svg.ts`, the icons in `src/charts/render/layer.ts`, and their tests.
+   - Tests: a shape with each, through `defineIcon` and `iconFromSvg`, in icons written for the tests; inheritance through groups, with a shape's own value replacing its group's; percentages; the `RangeError`s; the SVG as drawn; and `pixels()` given a long run of digits followed by junk, in good time.
+   - **Done when** every existing test and baseline passes unchanged.
+   - Docs: architecture.md (Icons), api.md, `src/icons/README.md`, CHANGELOG (the fields under Added, `iconFromSvg` under Fixed).
+5. **TypeScript 7 builds the declarations, and the tidy** (decisions 6 and 15). Owns the dev dependencies in `package.json` and the lockfile, `tsup.config.ts` (replaced by tsdown's config), `tsconfig.json`, the explicit types (small edits in `describe/index.ts`, `matrix.ts`, `segment.ts`, `gaits.ts`, `theme.ts` and `src/registries.ts`), `scripts/size.mjs` and `scripts/pack-check.mjs` as they need it, `src/api-docs.test.ts`, `src/package.test.ts`, architecture.md's Build outputs and Bundle size, and CONTRIBUTING's toolchain lines.
+   - Checks: architecture.md's sizes measured on main first; the spike's comparison; `typecheck`, timed; `build:site`; `pack-check` on 5.4, 6 and 7; and CI on Node 22 and 24.
+   - **Done when** `npm run typecheck && npm test && npm run build`, `npm run size` and `npm run pack-check` pass with tsdown, `typescript` is 7, and the published types are the same.
+   - Docs: architecture.md (Build outputs, Bundle size), CONTRIBUTING, README only if its TypeScript line changes, and CHANGELOG only if the published package changes.
+
+**Wave 2** (after steps 1, 3 and 4 land):
+
+6. **`expressive()` reads circles and shapes** (decision 12). Owns reading in `src/charts/adapter/expressive.ts`, the shapes' outlines moved from `src/icons/svg.ts` into `src/core/geometry/path.ts`, the attributes in `src/charts/adapter/watch.ts`, the `geometry` option's words in `types.ts`, and their tests.
+   - Tests:
+     - D3 scatters: `<circle>`s in a group with a transform, with `value`, `markLabel`, `keyboard` and `dim`; Observable Plot's dot mark; and a circle under an uneven scale.
+     - A D3 line drawn with `curveMonotoneX`, with `.defined()`, and followed by `watch` through a transition; a D3 area; `<line>`, `<polyline>`, `<polygon>` and `<ellipse>`; and a stroke width scaled.
+     - A key shared by a circle and another element; other tags throwing; and `geometry` still winning.
+     - The top-level sweep's sources read by tag, with no `geometry`. `iconFromSvg`'s tests pass unchanged with the conversion moved.
+   - **Done when** every existing test passes unchanged, but `expressive.test.ts`'s that pinned the throw on a `<path>`, named in the PR.
+   - Docs: architecture.md (Adapters), api.md (`expressive()` and its `geometry`), README's Adapters line, CHANGELOG (Added).
+
+**Wave 3** (after the other steps land):
+
+7. **The demos, their screenshots, the audit and script J.** Owns `demo/shapes.*` (new), its link in `demo/index.html`, `demo/donut.*`, `demo/morph.*`, their visual specs and baselines, README's GIFs, `docs/a11y-audit.md`, and section J of `docs/a11y-check.md`.
+   - **The shapes page:** a D3 scatter, an Observable Plot dot chart, a D3 curved line and a D3 area, each attached with a key and only what it needs (`value`, `samples`, `markLabel`, `keyboard`). A picker swaps their hover effects with `update({ on })`. The curved line has `threshold` and a riding `travel`. Design notes say what a closed shape does with `travel`.
+   - **The donut page:** the D3 pie's picker uses `update({ on })`, so the pie isn't attached again and its tab stop stays.
+   - **The morph page:** beside the switch, a second chart of the same shot outcomes, linked by outcome: hovering a slice or a column hovers its partner, in either view and after a switch.
+   - **README's GIFs:** `ball-and-boot.gif` made again (`npm run media`), with M7's dimming. `threshold-line.gif` and `donut-to-columns.gif` are compared with their pages, and made again if they differ.
+   - **Screenshots,** made in Docker: the shapes page, and every page whose picture changed. Reduced motion and Off are checked in the DOM.
+   - **Script J,** for NVDA + Chrome (decision 16). You run it.
+   - **The walk:** you look at the pages in the browser, at 320 px too.
+   - Docs: a11y-audit.md (a table for the shapes page, the morph page's link, the donut page's picker, the Browsers count), a11y-check.md (section J and its results), CONTRIBUTING's visual tests.
+
+**Wave 4:**
+
+8. **Publish 0.4.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.4.0 entry, README's status, its script tag (`@0.4`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.4.0's code, and this plan's status line and M9's ✅.
+   - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you, compared with 0.3.0's, since tsdown builds it) and `npm publish --dry-run`. The PR has its results.
+   - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com.
+   - **Then, on your go-ahead in that session:** the `v0.4.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
+   - **After:** check npm (the version, README, provenance), install 0.4.0 in a fresh project and load each entry as an ES module and as CommonJS, and check jsDelivr's `@0.4`.
+
+**Done when:**
+- **Attachments.** `expressive()` and `fromVegaView()` have `update({ on })` and `leave()`, and `donut.html`'s D3 pie swaps its effects without being attached again.
+- **Links.** A chart switch can be in a link, and its view on show hovers with the others.
+- **Circles and shapes.** `describe.shape` describes any path data. `expressive()` reads `<circle>` as a point, and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` as shapes. Every built-in effect passes `checkEffect` on shapes, and the sweep on D3 scatters, curves and areas.
+- **Vega.** `fromVegaView()` reads a Vega-Lite line with missing values, with its gaps, and `checkEffect`'s default data marks a gap.
+- **Icons.** `iconFromSvg` keeps `fill-opacity` and `stroke-opacity`.
+- **The build.** tsdown builds the package with no TypeScript, TypeScript 7 checks the code with `isolatedDeclarations`, `typescript` is 7, and `pack-check` checks the packed types on 5.4, 6 and 7.
+- **The tidy.** The API docs test's link check holds up under load, and architecture.md's sizes and README's GIFs are current.
+- **The demos** show all of it, with their screenshots and the audit, and script J passed with NVDA + Chrome.
+- **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise changes only by `describe.shape`, `ShapeSpec` and the icon fields, which are additions, and by `checkEffect`'s data on a gap, a fix.
+- **0.4.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M9 is done.
 
 ### Backlog (after 0.1)
 

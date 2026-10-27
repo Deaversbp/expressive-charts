@@ -1,13 +1,18 @@
 // A chart switch: views of the same data in one place, one shown at a time, and a transition effect
 // that turns each mark of one view into its own mark in the next, as the lab's donut turns into
-// columns. It reads only what a chart's handle reports (marks and labels by key, focus by key, and
-// its <svg>), so it never names a chart type, and it plays whatever transition effect it's given:
-// the composition root (src/index.ts) fills in morph() when the page leaves it out.
+// columns. It reads only what a chart's handle reports (marks and labels by key, focus by key, its
+// <svg>, its events and its hover for links), so it never names a chart type, and it plays whatever
+// transition effect it's given: the composition root (src/index.ts) fills in morph() when the page
+// leaves it out.
 //
 // A switch runs along one line, s, from 0 (the view it began in, `a`) to 1 (the view it went to,
 // `b`). The pairs morph at s; the labels move and swap their text, the unmatched marks fade, and the
 // views' other parts fade, each as a function of s, as the lab draws its centre and baseline from
 // its one `t`. So a switch back mid-way plays the same picture backwards from where it is.
+//
+// In a link (./link.ts), the switch's hover is the view on show's: its chart's own hovers go to the
+// link while it rests, and the link's hover shows in it. While a switch plays, neither view can be
+// reached, so a link's hover waits for it to land and shows in the new view.
 
 import { defaultClock, easeInOutCubic, linear, matrix, tween, type Clock, type MarkGeometry, type Matrix, type MotionEnv, type Point, type TransitionEffect, type Tween } from "../core";
 import { unease } from "../core/easing";
@@ -16,16 +21,19 @@ import { isTransitionEffect, playTransition, type Transition, type TransitionPai
 import { between, boxIn } from "./adapter/space";
 import { chartAnnouncer, type Announcer } from "./announce";
 import { toColorAssignment, type ColorAssignment } from "./colors";
+import { linkable, portOf, type LinkListener, type LinkPort, type RowsOf } from "./link";
 import { svgLayer } from "./render/layer";
 import { setAttributes, setStyles, svgElement } from "./render/svg";
 import { injectStyles, markColorStyles, seriesColors } from "./render/theme";
 import { resolveTarget, type ChartEnv } from "./shell/setup";
-import type { ChartLabel } from "./types";
+import type { ChartLabel, MarkEvents } from "./types";
 
 /**
  * What a chart switch uses of each view's chart. A reference chart's handle has all of it: its
  * `<svg>` (which takes `ec-morphing` while its marks morph in the switch's overlay), its marks and
- * labels as drawn, focus by key, leave() to end its hover, and destroy().
+ * labels as drawn, focus by key, leave() to end its hover, and destroy(). A reference chart also
+ * has on(), which the switch's on() hears, and a hover a link can drive; a view without them isn't
+ * heard and isn't linked.
  */
 export interface ChartSwitchView {
   readonly element: SVGSVGElement;
@@ -47,6 +55,9 @@ export type ChartSwitchViews = Readonly<Record<string, ChartSwitchViewFactory>>;
 
 /** A view's name. */
 export type ChartSwitchViewName<T extends ChartSwitchViews> = keyof T & string;
+
+/** The rows of the views' charts, as a union: what the switch's events carry, and what a link's `by` reads. A view that may be left out counts when it's there. */
+type ViewRows<T extends ChartSwitchViews> = RowsOf<ReturnType<NonNullable<T[ChartSwitchViewName<T>]>>>;
 
 export interface ChartSwitchOptions<T extends ChartSwitchViews> {
   /** The views by name. Each is drawn once, when the switch is created, in a container of its own; they share one grid cell. */
@@ -79,6 +90,20 @@ export interface ChartSwitch<T extends ChartSwitchViews> {
   show(view: ChartSwitchViewName<T>): Promise<void>;
   /** The chart a view's function returned: for update(), on() and the rest. */
   chart<K extends ChartSwitchViewName<T>>(view: K): ReturnType<T[K]>;
+  /**
+   * Listens for the mark events of the view on show (`current`), as its chart's on() does; returns
+   * the unsubscribe. The other views' events aren't heard. A switch makes the view it's heading for
+   * the one heard once the old view's hover has ended, so that hover's leave is heard too.
+   */
+  on<K extends keyof MarkEvents<ViewRows<T>>>(type: K, listener: (event: MarkEvents<ViewRows<T>>[K]) => void): () => void;
+  /** The marks of the view on show (`current`), as its chart's marks() gives them: while a switch plays, the view it's heading for's. */
+  marks(): readonly MarkGeometry[];
+  /**
+   * Ends the hover of the view on show (`current`), as its chart's leave() does: its own, or a
+   * link's. A link's hover then shows in the switch again with the link's next hover, not when a
+   * switch lands.
+   */
+  leave(): void;
   /** Ends any switch, destroys every view's chart and removes everything the switch added. */
   destroy(): void;
 }
@@ -94,6 +119,8 @@ interface View {
   readonly name: string;
   readonly container: HTMLDivElement;
   readonly chart: ChartSwitchView;
+  /** Its chart's hover as a link drives it: a reference chart's. */
+  readonly port: LinkPort | undefined;
 }
 
 /** Where focus was when a switch began, if it was in the view it left: on a mark (its key) or elsewhere. */
@@ -169,7 +196,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
         (chart as Partial<ChartSwitchView> | null)?.destroy?.();
         throw new TypeError(`chartSwitch: views.${name} must return the chart it draws in the container it's given (with element, marks(), labels(), focus(), leave() and destroy()), such as donutChart(container, { ... }).`);
       }
-      views.set(name, { name, container, chart });
+      views.set(name, { name, container, chart, port: portOf(chart) });
     }
   } catch (error) {
     for (const view of views.values()) view.chart.destroy();
@@ -202,6 +229,12 @@ export function chartSwitch<T extends ChartSwitchViews>(
   let current: string = options.initial;
   let active: Switch | undefined;
   let destroyed = false;
+  /** The link the switch is in, which hears the view on show's own hovers. */
+  let linked: LinkListener | undefined;
+  /** The view whose own hover the link heard last. */
+  let told: View | undefined;
+  /** Whether the link has a hover from another source for the switch: shown in the view on show, or once a switch lands. */
+  let held = false;
 
   // Turning motion off mid-switch lands it, as every animation jumps to its end.
   const stopMotion = motion.subscribe(() => {
@@ -256,16 +289,23 @@ export function chartSwitch<T extends ChartSwitchViews>(
     announcer?.say(to.chart.element.getAttribute("aria-label") ?? "");
   }
 
+  /** The view on show can be reached again: the link's hover, if it has one for the switch, shows in it. */
+  function reached(): void {
+    if (held) linked?.shown();
+  }
+
   function start(from: View, to: View, carried?: { readonly focus: FocusMemory | undefined }): Promise<void> {
-    current = to.name;
     const memory = carried ? carried.focus : readFocus(from);
-    // The old view's hover ends as the viewer's would. Focus stays where it is, already read, until
-    // the view turns inert, which takes it off in a browser.
+    // The old view's hover ends as the viewer's would, a link's too, while it's still the view on
+    // show, so the switch's on() and its link hear it end. Focus stays where it is, already read,
+    // until the view turns inert, which takes it off in a browser.
     from.chart.leave();
+    current = to.name;
     if (motion.mode === "off") {
       for (const each of views.values()) setActive(each.container, each === to);
       restoreFocus(to, memory);
       say(to);
+      reached();
       return Promise.resolve();
     }
     // Both views' marks and labels hide, and neither can be reached until the switch lands; the
@@ -356,6 +396,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
     if (settle) {
       restoreFocus(to, session.focus);
       say(to);
+      reached();
     }
     session.settle();
   }
@@ -456,6 +497,23 @@ export function chartSwitch<T extends ChartSwitchViews>(
       if (!found) throw new TypeError(`chartSwitch: there's no view ${JSON.stringify(name)}. The views are ${names.map((n) => JSON.stringify(n)).join(", ")}.`);
       return found.chart as ReturnType<T[typeof name]>;
     },
+    on(type, listener) {
+      const stops = Array.from(views.values(), (each) => {
+        const on = (each.chart as { readonly on?: unknown }).on;
+        if (typeof on !== "function") return undefined;
+        return (on as ViewOn).call(each.chart, type, (event) => {
+          if (each.name === current) (listener as (event: unknown) => void)(event);
+        });
+      });
+      return () => {
+        for (const stop of stops) stop?.();
+      };
+    },
+    marks: () => view(current).chart.marks(),
+    leave() {
+      held = false;
+      if (!destroyed) view(current).chart.leave();
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -471,12 +529,70 @@ export function chartSwitch<T extends ChartSwitchViews>(
       stopMotion();
       observer?.disconnect();
       announcer?.destroy();
+      // The link hears the switch go before its views' charts go, which it no longer hears.
+      const link = linked;
+      linked = undefined;
+      link?.gone();
       for (const each of views.values()) each.chart.destroy();
       wrapper.remove();
     }
   };
-  return api;
+
+  /** Whether the view is on show and can be reached: no switch is playing. */
+  const resting = (each: View): boolean => active === undefined && each.name === current;
+
+  /** What a view's chart tells the switch's link: the view on show's own hovers, while it rests. */
+  function relay(each: View): LinkListener {
+    const leave = (): void => {
+      if (told !== each) return;
+      told = undefined;
+      linked?.leave();
+    };
+    return {
+      hover(marks) {
+        if (!resting(each)) return;
+        told = each;
+        linked?.hover(marks);
+      },
+      leave,
+      dismiss() {
+        if (resting(each)) linked?.dismiss();
+      },
+      // Only the switch says it can be reached again.
+      shown() {},
+      // A view's chart destroyed on its own takes its hover with it.
+      gone: leave
+    };
+  }
+
+  // The switch's hover as a link drives it: the view on show's, while it rests. Mid-switch it has no
+  // targets, and a link's hover is held until it lands.
+  const port: LinkPort = {
+    targets: () => (active === undefined ? (view(current).port?.targets() ?? []) : []),
+    hover(keys, effects) {
+      held = true;
+      if (active === undefined) view(current).port?.hover(keys, effects);
+    },
+    unlink() {
+      held = false;
+      for (const each of views.values()) each.port?.unlink();
+    },
+    leave: () => api.leave(),
+    listen(listener) {
+      if (destroyed) return false;
+      linked = listener;
+      told = undefined;
+      held = false;
+      for (const each of views.values()) each.port?.listen(listener && relay(each));
+      return true;
+    },
+    parts: Array.from(views.values()).flatMap((each) => (each.port ? [each.port] : []))
+  };
+  return linkable(port, api);
 }
+
+/** A view's chart's on(), as a reference chart has it. */
+type ViewOn = (type: string, listener: (event: unknown) => void) => () => void;
 
 /**
  * A tween with morph's timing, from `begin` in the shapes' eased progress: 950 ms base with

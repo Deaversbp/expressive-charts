@@ -106,7 +106,8 @@ export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 // sketch: each view's function is given the switch's ColorAssignment beside its container, so a
 // switch that makes its own still shares it with every view; `transition` defaults to morph();
 // `announce` says the new view's label; the handle has chart(view), typed as that view's function
-// returns it; and ChartSwitch is typed by the views record rather than by their names.
+// returns it; and ChartSwitch is typed by the views record rather than by their names. Since M9 step
+// 2 the handle also has on(), marks() and leave(), the view on show's, so link() takes a switch.
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 

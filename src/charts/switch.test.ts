@@ -682,6 +682,64 @@ describe("chartSwitch: hover and focus", () => {
   });
 });
 
+describe("chartSwitch: the view on show", () => {
+  const hover = (chart: { readonly element: Element }, key: string) => pointer("pointerover", chart.element.querySelector(`.ec-mark[data-key="${key}"] :is(.ec-hit, .ec-segment)`)!);
+
+  it("gives the view on show's marks, and while a switch plays the marks of the view it's heading for", async () => {
+    const { switcher, donut, columns, clock } = setup();
+    expect(switcher.marks()).toEqual(donut.marks());
+    void switcher.show("columns");
+    clock.advance(300);
+    expect(switcher.marks()).toEqual(columns.marks());
+    clock.advance(650);
+    await flush();
+    expect(switcher.marks()).toEqual(columns.marks());
+  });
+
+  it("hears the view on show's events with on(), and only its", async () => {
+    const { switcher, donut, columns, clock } = setup();
+    const heard: string[] = [];
+    const stop = switcher.on("hover", (event) => heard.push(`hover ${event.mark.key} ${event.data.datum.outcome}`));
+    switcher.on("leave", (event) => heard.push(`leave ${event.mark.key}`));
+    hover(donut, "Saved");
+    // The hidden view's (jsdom doesn't make it inert, as a browser does).
+    hover(columns, "Goal");
+    expect(heard).toEqual(["hover Saved Saved"]);
+    pointer("pointerleave", columns.element);
+    // The donut's hover ends as the switch starts, while it's still the view on show.
+    void switcher.show("columns");
+    expect(heard).toEqual(["hover Saved Saved", "leave Saved"]);
+    clock.advance(950);
+    await flush();
+    hover(columns, "Blocked");
+    hover(donut, "Goal");
+    expect(heard.slice(2)).toEqual(["hover Blocked Blocked"]);
+    stop();
+    pointer("pointerleave", donut.element);
+    hover(columns, "Saved");
+    expect(heard.slice(3)).toEqual(["leave Blocked"]);
+  });
+
+  it("ends the view on show's hover with leave(), and only its", async () => {
+    const { switcher, donut, columns, clock } = setup();
+    const leaveDonut = vi.spyOn(donut, "leave");
+    const leaveColumns = vi.spyOn(columns, "leave");
+    hover(donut, "Goal");
+    switcher.leave();
+    expect(donut.element.querySelector(".ec-hot")).toBeNull();
+    expect(donut.element.classList.contains("ec-hovering")).toBe(false);
+    expect(leaveDonut).toHaveBeenCalledTimes(1);
+    expect(() => switcher.leave()).not.toThrow();
+    void switcher.show("columns");
+    clock.advance(950);
+    await flush();
+    leaveDonut.mockClear();
+    switcher.leave();
+    expect(leaveColumns).toHaveBeenCalledTimes(1);
+    expect(leaveDonut).not.toHaveBeenCalled();
+  });
+});
+
 describe("chartSwitch: announce", () => {
   it("says the new view's label in a polite live region after each switch", async () => {
     const { switcher, wrapper, clock } = setup({ announce: true });

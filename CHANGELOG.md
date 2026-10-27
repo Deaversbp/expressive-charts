@@ -25,6 +25,19 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **A `chartSwitch` in a `link()`.** `link()` takes a chart switch as a source, through its view on show: hovering that view hovers the other sources, and their hovers hover it. The hidden view is never hovered, and its hovers aren't linked. While a switch plays, neither view can be reached, so it neither starts a link's hover nor shows one. A hover in the view it leaves ends as it starts, and the link hears it end; when it lands, the link's hover, if there is one, shows in the new view. A source is in one link at a time, a switch's views' charts with it: a switch whose view's chart is in a link throws, and so does a view's chart whose switch is in one. `link()` no longer throws on a switch, and its types read a switch's rows from its views' charts.
+- **`on()`, `marks()` and `leave()` on `ChartSwitch`**, each the view on show's, as its chart's are. `on()` hears only the view on show, typed by the views' rows; `marks()` gives its marks, while a switch plays the marks of the view it's heading for; and `leave()` ends its hover. So a switch is a `LinkSource`, and a page can call them as on a chart.
+
+### Changed
+
+- **A chart switch ends the old view's hover before `current` changes**, so `leave` listeners on that view's chart read `current` as the view the switch is leaving, not the one it's heading for. A page that wants the new view there takes it from the `show(view)` that started the switch.
+
+### Fixed
+
 ## 0.3.0 (27 October 2026)
 
 A tooltip that can be hovered, change labels that hold up, lines that skip missing values, long axes, and more of the icon sets' SVG. In the effect-author API, `gaps` on `MarkGeometry`, `gapBefore` on `Sample`, `breaks` on `LineSpec`, and `fillRule` and `opacity` on `IconShape` are additions. Its one change is the `"gapped line"` fixture, with its migration note under Changed. The other changes are outside the promise, and each says what to write instead, if anything.

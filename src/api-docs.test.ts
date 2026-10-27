@@ -8,7 +8,8 @@
 // since npm shows it away from the repository, and the links in both find their files and headings.
 // README's pictures have alt text, and each plays once and stops within 5 s (WCAG 2.2.2).
 
-import ts from "typescript";
+// TypeScript 6, since 7.0's package has no compiler API.
+import ts from "typescript-6";
 
 /** Each JS entry of the package, by the name a page imports, and its source. */
 const ENTRIES: Readonly<Record<string, string>> = {
@@ -518,7 +519,7 @@ describe("README.md", () => {
     const html = blocks.filter((block) => block.lang === "html").map((block) => block.code).join("\n");
     expect(html).toMatch(new RegExp(`<script src="[^"]*/${pkg.name}@[^/"]+/dist/expressive-charts\\.global\\.js"></script>`));
     expect(pkg.files).toContain("dist");
-    expect(root.read("tsup.config.ts")).toContain('globalName: "ExpressiveCharts"');
+    expect(root.read("tsdown.config.ts")).toContain('globalName: "ExpressiveCharts"');
   });
 
   it("has absolute links, which find their files and headings", () => {

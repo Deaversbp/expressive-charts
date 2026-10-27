@@ -229,7 +229,7 @@ ${TOKEN_RULES}
 const MARKER = "data-expressive-charts";
 
 /** The stylesheet's text: what's injected, and what the build writes to dist/expressive-charts.css. */
-export const stylesheet = STYLES;
+export const stylesheet: string = STYLES;
 
 /** How the stylesheet reaches the page. */
 export interface StyleOptions {

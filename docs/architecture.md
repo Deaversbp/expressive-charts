@@ -995,13 +995,14 @@ How many marks stay smooth, measured on `demo/stress.html` by `scripts/bench.mjs
 - `dist/index.cjs` + `dist/index.d.cts`: CommonJS, under the `require` condition. The package is `"type": "module"`, so a `.d.ts` file describes an ES module: each entry's `require` condition has its own `.d.cts`, or a CommonJS project resolving with `node16` would be given ES module types for the `.cjs` file.
 - `dist/expressive-charts.global.js`: script-tag bundle exposing `window.ExpressiveCharts`.
 - `dist/expressive-charts.css`: the stylesheet the charts inject, as a file, exported as `expressive-charts/style.css` for pages that use `configure({ injectStyles: false })`. `package.json` lists CSS in `sideEffects`, so bundlers keep `import "expressive-charts/style.css"`, which imports no names; webpack would otherwise drop it. `src/package.test.ts` checks the patterns as bundlers read them, since the repo's own bundlers (Vite 8, esbuild) keep the import either way.
-- `dist/expressive-charts.css.d.ts` and `.d.cts`: the stylesheet's types, an empty module, under its export's `import` and `require` conditions. TypeScript 6 and later check that a side-effect import finds something (`noUncheckedSideEffectImports`), so without them `import "expressive-charts/style.css"` is error TS2882. The export ends with a plain `default` to the CSS, since resolvers for CSS's own `@import` match neither `import` nor `require` (css-loader resolves with `style` only, Sass with `sass` and `style`); `src/package.test.ts` resolves it under those conditions. They're built from `src/style.css.ts` as a declarations entry of their own (`dts.entry` in `tsup.config.ts`), not written in `onSuccess`, since tsup's declaration build deletes every `.d.ts` in `dist/` as it starts, alongside `onSuccess`.
+- `dist/expressive-charts.css.d.ts` and `.d.cts`: the stylesheet's types, an empty module, under its export's `import` and `require` conditions. TypeScript 6 and later check that a side-effect import finds something (`noUncheckedSideEffectImports`), so without them `import "expressive-charts/style.css"` is error TS2882. The export ends with a plain `default` to the CSS, since resolvers for CSS's own `@import` match neither `import` nor `require` (css-loader resolves with `style` only, Sass with `sass` and `style`); `src/package.test.ts` resolves it under those conditions. They're built from `src/style.css.ts` by a build of their own in `tsdown.config.ts`, which keeps only the declarations.
 - `dist/icons/sport.js`, `.cjs`, `.d.ts` and `.d.cts`: the optional sport icon pack, imported as `expressive-charts/icons/sport`. It's a separate entry, so the core build doesn't carry the ball and cleat. The script-tag bundle doesn't include it.
 - `dist/testing.js`, `.cjs`, `.d.ts` and `.d.cts`: the conformance suite for effect authors, imported as `expressive-charts/testing`. A separate entry, like the sport pack, and not in the script-tag bundle.
+- **The build** is tsdown (`tsdown.config.ts`), on Rolldown, since M9 step 5; tsup built 0.1.0 to 0.3.0. Rolldown's oxc writes the declarations from each file alone, with no TypeScript, so every export in `src` has an explicit type, which `isolatedDeclarations` in `tsconfig.json` makes `typecheck` require. The sketches, the visual tests and the media scripts aren't built, so their tsconfigs turn it off. The config keeps tsup's output: JSDoc is left out of the scripts, since the declarations carry it; the CommonJS files and the script-tag bundle are in strict mode and set `__esModule`; and each CommonJS entry is a file of its own, where Rolldown would share chunks between them. The step built both ways and compared them: the same files but the chunks' names, the same names from each entry as an ES module and as CommonJS, every exported type identical (read with TypeScript 6's compiler API, both ways), and the sizes in [Bundle size](#bundle-size). The tarball is 37 files, as 0.3.0's, 1.36 MB packed and 5.07 MB unpacked.
 - **The package** is `dist/` and `CHANGELOG.md` (`files` in `package.json`), with the README, the licence and `package.json`, which npm always adds. 0.3.0's is 37 files, 1.4 MB packed and 5.2 MB unpacked, most of that source maps, which stay because bundlers and debuggers use them. `scripts/pack-check.mjs` installs the packed tarball in a new project and uses it from there: every entry imported in Node as ES modules and as CommonJS with no DOM, and a consumer typechecked with each TypeScript below, under `bundler`, `node16` (ES module) and `node16` (CommonJS), each reading its own declarations, the stylesheet's included. CI runs it after the build.
-- **Types** need TypeScript 5.4 or newer, since they use `NoInfer`. The repository has three TypeScripts, dev dependencies pinned exactly (M8 step 5):
-  - `typescript-7` (`npm:typescript@7.0.2`), the native compiler, runs `typecheck`, by its path, since each of the three has a `tsc` and `npx tsc` could run any of them. The four projects take 1.1 s, against 6.8 s with 5.9.
-  - `typescript` (6.0.3) builds the declarations, through tsup, and runs `src/api-docs.test.ts`. Both need TypeScript's JS API, and 7.0's package has none (its main export is its version). tsup 9's bundled rollup-plugin-dts would fall back to `@typescript/typescript6`, but tsup itself also calls `typescript`'s API, so `typescript` stays a 6 until tsup supports 7. It builds the same declarations 5.9.3 did, byte for byte.
+- **Types** need TypeScript 5.4 or newer, since they use `NoInfer`. The repository has three TypeScripts, dev dependencies pinned exactly (M8 step 5, and M9 step 5):
+  - `typescript` (7.0.2), the native compiler, runs `typecheck`, by its path, since each of the three has a `tsc` and `npx tsc` could run any of them. The four projects take 1.1 to 1.5 s, against 6.8 s with 5.9.
+  - `typescript-6` (`npm:typescript@6.0.3`) runs `src/api-docs.test.ts`, which reads the entries with TypeScript's JS API, and 7.0's package has none (its main export is its version).
   - `typescript-5.4` (`npm:typescript@5.4.5`), the oldest README promises, and the two above check the packed types in `pack-check`.
 - **Releases** are published by `.github/workflows/release.yml` when a GitHub release whose tag is `v` and the version is published, with npm's provenance statement (`publishConfig` asks for it, with public access). It runs CI's checks first. CONTRIBUTING.md's Releasing has the steps and the authentication: a token for 0.1.0, and trusted publishing from 0.2.0.
 - **The 0.x promise** in CHANGELOG.md names every value and type it covers. `src/promise.test.ts` names them all too, so a rename or a removal fails `typecheck`, and it checks that its list and CHANGELOG's match.
@@ -1009,33 +1010,35 @@ How many marks stay smooth, measured on `demo/stress.html` by `scripts/bench.mjs
 
 ### Bundle size
 
-`npm run size` (`scripts/size.mjs`) measures the build, and fails when a size is over its budget in `scripts/size-budget.json`. CI runs it on Node 24 after the build, and puts its tables in the job's summary. Budgets are gzip sizes, set at the measured size plus about 10%, rounded up to 0.5 KB; [CONTRIBUTING.md](../CONTRIBUTING.md#bundle-size) says when to raise one. The sizes below are 0.3.0's (October 2026), measured again on its code in M9 step 5, and the budgets today's. KB is 1,024 bytes, gzip is at level 9 and brotli at 11.
+`npm run size` (`scripts/size.mjs`) measures the build, and fails when a size is over its budget in `scripts/size-budget.json`. CI runs it on Node 24 after the build, and puts its tables in the job's summary. Budgets are gzip sizes, set at the measured size plus about 10%, rounded up to 0.5 KB; [CONTRIBUTING.md](../CONTRIBUTING.md#bundle-size) says when to raise one. The sizes below are tsdown's build of 0.3.0's code (M9 step 5), beside 0.3.0's gzip sizes, built by tsup and measured again on its code, and the budgets today's. KB is 1,024 bytes, gzip is at level 9 and brotli at 11.
 
 Each published JS file and the stylesheet:
 
-| File | raw | gzip | brotli | gzip budget |
-| --- | ---: | ---: | ---: | ---: |
-| `dist/expressive-charts.css` | 10.6 KB | 2.4 KB | 2.0 KB | 2.5 KB |
-| `dist/expressive-charts.global.js` | 221.7 KB | 78.6 KB | 67.3 KB | 83.5 KB |
-| `dist/icons/sport.cjs` | 8.2 KB | 2.9 KB | 2.7 KB | 3.5 KB |
-| `dist/icons/sport.js` + 2 chunks | 28.1 KB | 9.0 KB | 8.2 KB | 10 KB |
-| `dist/index.cjs` | 416.7 KB | 104.7 KB | 82.3 KB | 110.5 KB |
-| `dist/index.js` + 3 chunks | 415.0 KB | 105.1 KB | 84.8 KB | 111 KB |
-| `dist/testing.cjs` | 48.4 KB | 13.3 KB | 11.7 KB | 14 KB |
-| `dist/testing.js` + 2 chunks | 77.8 KB | 20.7 KB | 18.6 KB | 21.5 KB |
+| File | raw | gzip | brotli | 0.3.0 gzip | gzip budget |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `dist/expressive-charts.css` | 10.6 KB | 2.4 KB | 2.0 KB | 2.4 KB | 2.5 KB |
+| `dist/expressive-charts.global.js` | 219.0 KB | 72.0 KB | 61.7 KB | 78.6 KB | 79.5 KB |
+| `dist/icons/sport.cjs` | 7.2 KB | 2.6 KB | 2.3 KB | 2.9 KB | 3.5 KB |
+| `dist/icons/sport.js` + 2 chunks | 10.7 KB | 4.0 KB | 3.6 KB | 9.0 KB | 4.5 KB |
+| `dist/index.cjs` | 396.2 KB | 102.5 KB | 80.9 KB | 104.7 KB | 110.5 KB |
+| `dist/index.js` + 3 chunks | 396.6 KB | 104.0 KB | 83.7 KB | 105.1 KB | 111 KB |
+| `dist/testing.cjs` | 45.6 KB | 12.8 KB | 11.3 KB | 13.3 KB | 14 KB |
+| `dist/testing.js` + 2 chunks | 62.3 KB | 17.5 KB | 15.6 KB | 20.7 KB | 19.5 KB |
 
-An ES module entry counts the chunks it imports, since loading it fetches them too, and tsup names chunks by a hash that changes with the code. The ES module files and the CommonJS ones aren't minified; the script-tag bundle is. The sport pack's chunks are shared with the main entry (`defineIcon`, and the geometry its icons are drawn with), so a page that loads both adds only `sport.js` itself, 2.7 KB (1.2 KB gzip).
+An ES module entry counts the chunks it imports, since loading it fetches them too, and tsdown names chunks by their first module and a hash that changes with the code. The ES module files and the CommonJS ones aren't minified; the script-tag bundle is. The sport pack's chunks are shared with the main entry (`defineIcon`, and the geometry its icons are drawn with), so a page that loads both adds only `sport.js` itself, 2.7 KB (1.1 KB gzip).
 
 What a page pays once its bundler has tree-shaken the package. Each import set is an entry that re-exports its names from `dist/index.js`, built with Vite's build API as an app is, minified, for ES2020. Not in lib mode, whose ES output keeps its whitespace.
 
-| A page that imports | min | gzip | gzip budget |
-| --- | ---: | ---: | ---: |
-| `motion`, `animated` | 3.7 KB | 1.7 KB | 2 KB |
-| `describe`, `matrix` | 8.6 KB | 3.6 KB | 4 KB |
-| `expressive`, `travel` | 77.2 KB | 26.7 KB | 27 KB |
-| `barChart` | 89.9 KB | 31.1 KB | 34 KB |
-| `lineChart`, `threshold`, `playback`, `playButton` | 109.8 KB | 37.8 KB | 39 KB |
-| `chartSwitch`, `donutChart`, `barChart` | 121.9 KB | 40.8 KB | 41 KB |
-| everything | 217.7 KB | 72.2 KB | 76.5 KB |
+| A page that imports | min | gzip | 0.3.0 gzip | gzip budget |
+| --- | ---: | ---: | ---: | ---: |
+| `motion`, `animated` | 5.4 KB | 2.4 KB | 1.7 KB | 3 KB |
+| `describe`, `matrix` | 10.2 KB | 4.3 KB | 3.6 KB | 5 KB |
+| `expressive`, `travel` | 77.0 KB | 26.7 KB | 26.7 KB | 27 KB |
+| `barChart` | 89.8 KB | 31.1 KB | 31.1 KB | 34 KB |
+| `lineChart`, `threshold`, `playback`, `playButton` | 109.6 KB | 37.8 KB | 37.8 KB | 39 KB |
+| `chartSwitch`, `donutChart`, `barChart` | 121.7 KB | 40.7 KB | 40.8 KB | 41 KB |
+| everything | 217.5 KB | 72.1 KB | 72.2 KB | 76.5 KB |
+
+**tsdown's sizes.** Rolldown bundles differently from esbuild, which tsup used. The script-tag bundle is 6.6 KB smaller gzipped, and the ES module entries share less: `sport.js` loads 4.0 KB, not 9.0, and `testing.js` 17.5, not 20.7. The two smallest import sets grew by 0.7 KB each. `animated` and `matrix` are now in `index.js` itself rather than a shared chunk, so a page that imports them keeps `index.js`'s top-level tables too (the stylesheet's text and the theme's tokens, the time axis's steps, the gaits' still pose), which a bundler can't prove free of side effects. Their budgets went up to 3 and 5 KB, and the script-tag bundle's, `sport.js`'s and `testing.js`'s came down to their sizes plus 10%.
 
 Bundlers keep only what a page imports, because `package.json`'s `sideEffects` names only CSS and `src/package.test.ts` checks that every JS entry is free of side effects. So the package has no `/core` or `/effects` entry: neither would make a page smaller. A change that breaks tree-shaking grows the small sets and fails the check.

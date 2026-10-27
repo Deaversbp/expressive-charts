@@ -25,6 +25,12 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Changed
+
+- **The package is built with tsdown, on Rolldown,** instead of tsup. Each entry has the same names, as an ES module and as CommonJS, with the same types, checked on TypeScript 5.4, 6 and 7. The files keep their names, but for the shared chunks, which are named by their first module. The script-tag bundle is 72 KB gzipped, 6.6 KB less, and `expressive-charts/icons/sport` loads 4 KB with its chunks, not 9. Nothing to write instead.
+
 ## 0.3.0 (27 October 2026)
 
 A tooltip that can be hovered, change labels that hold up, lines that skip missing values, long axes, and more of the icon sets' SVG. In the effect-author API, `gaps` on `MarkGeometry`, `gapBefore` on `Sample`, `breaks` on `LineSpec`, and `fillRule` and `opacity` on `IconShape` are additions. Its one change is the `"gapped line"` fixture, with its migration note under Changed. The other changes are outside the promise, and each says what to write instead, if anything.

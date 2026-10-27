@@ -2,7 +2,7 @@
 // or pairs of marks. They import no test runner: each runs every check on every mark, then throws one
 // Error that lists each failure, so `await checkEffect(effect)` works in Vitest, Jest, node:test or Mocha.
 
-import type { AnyMarkEffect, DataEffect, GeometryEffect, Icon, MarkData, MarkGeometry, TransitionContext, TransitionEffect } from "../core";
+import type { AnyMarkEffect, DataEffect, GeometryEffect, Icon, MarkData, MarkGeometry, Sample, TransitionContext, TransitionEffect } from "../core";
 import { describeValue, isMarkEffect } from "../core/registry";
 import { flush, play, testContext, type Picture, type TestContext, type TestContextOptions } from "../core/testing";
 import { isTransitionEffect } from "../core/transition";
@@ -17,8 +17,10 @@ export interface CheckEffectOptions<D = unknown> {
   /** The icons the effect looks up by name, through `ctx.icons`. Default: none. */
   readonly icons?: readonly Icon[];
   /**
-   * For a data effect, each mark's data. Default: no datum, values from 0 to 1 along the walk, and no
-   * related series, so an effect that reads its rows or `needs` related series has to pass this.
+   * For a data effect, each mark's data. Default: no datum, values from 0 to 1 along the walk (each
+   * sample's value is its `t`), and no related series, so an effect that reads its rows or `needs`
+   * related series has to pass this. On a mark with gaps, there's a sample at each end of each gap,
+   * with `gapBefore` on the one after, as on a line chart's line with a missing value.
    */
   readonly data?: (mark: MarkGeometry) => MarkData<D>;
   /**
@@ -413,15 +415,25 @@ async function finish(ctx: TestContext): Promise<boolean> {
   return true;
 }
 
-/** No datum, values 0 to 1 along the walk, no related series. */
-const defaultData = (): MarkData<unknown> => ({
-  datum: undefined,
-  samples: [
-    { t: 0, value: 0 },
-    { t: 1, value: 1 }
-  ],
-  related: () => undefined
-});
+/**
+ * No datum, values 0 to 1 along the walk, no related series. On a mark with gaps, a sample at each
+ * end of each gap too, with `gapBefore` on the one after, as a line chart gives a line with a missing
+ * value; samples at one `t` (a gap from 0, or gaps either side of a value alone) are one.
+ */
+const defaultData = (mark: MarkGeometry): MarkData<unknown> => {
+  const samples: Sample[] = [{ t: 0, value: 0 }];
+  const add = (t: number, gapBefore: boolean): void => {
+    const last = samples[samples.length - 1]!;
+    if (t === last.t) samples[samples.length - 1] = gapBefore ? { ...last, gapBefore } : last;
+    else samples.push(gapBefore ? { t, value: t, gapBefore } : { t, value: t });
+  };
+  for (const [from, to] of mark.gaps ?? []) {
+    add(from, false);
+    add(to, true);
+  }
+  add(1, false);
+  return { datum: undefined, samples, related: () => undefined };
+};
 
 function named(marks: Readonly<Record<string, MarkGeometry>> | readonly MarkGeometry[]): [string, MarkGeometry][] {
   if (!Array.isArray(marks)) return Object.entries(marks as Readonly<Record<string, MarkGeometry>>).map(([name, mark]) => [`the ${name}`, mark]);

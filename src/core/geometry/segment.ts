@@ -5,7 +5,7 @@
 
 import type { Point, Rect } from "../contracts/geometry";
 
-export const TAU = 2 * Math.PI;
+export const TAU: number = 2 * Math.PI;
 
 export interface LineSegment {
   readonly kind: "line";

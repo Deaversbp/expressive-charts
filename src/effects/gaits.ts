@@ -76,7 +76,7 @@ function slide(): Gait {
   return () => STILL;
 }
 
-export const gaits = { roll, step, slide };
+export const gaits: { roll: typeof roll; step: typeof step; slide: typeof slide } = { roll, step, slide };
 
 /** The gaits icons and options name. */
 export type GaitName = keyof typeof gaits;

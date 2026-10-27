@@ -2,7 +2,8 @@
 // its scenegraph rather than from the DOM. Each item Vega renders is bound to its element as
 // `__data__` (an internal the adapter spike found, so the tests pin Vega's version), the row is
 // `item.datum`, and the item's numbers give the geometry: rects become bars, arcs slices, symbols
-// points and lines lines, whose items give each vertex with its row, so samples come with them.
+// points and lines lines, whose items give each vertex with its row, so samples come with them. A
+// line breaks where Vega leaves a point out, as Vega-Lite does at a missing value.
 // Duck-typed on the View: nothing here imports Vega, so it stays a dev dependency.
 
 import type { Baseline, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
@@ -50,6 +51,7 @@ export interface VegaItem {
   readonly size?: number;
   readonly strokeWidth?: number;
   readonly cornerRadius?: number;
+  /** False for a line's point Vega leaves out, which breaks the line there. */
   readonly defined?: boolean;
   /** How a line is drawn between its points: only "linear" (or unset) can be read. */
   readonly interpolate?: string;
@@ -162,8 +164,9 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
     const empty: ViewRead = { root: root ?? undefined, elements: [], items: new Map(), geometry: new Map(), samples: new Map(), values: new Map() };
     if (!type || !root) return empty;
 
-    // The element Vega drew for each item: a line's one path is bound to its first item.
-    const wanted = new Set<unknown>(type === "line" ? marks.flatMap((mark) => (mark.items?.length ? [mark.items[0]] : [])) : marks.flatMap((mark) => mark.items ?? []));
+    // The element Vega drew for each item: a line's one path is bound to its first item, which may be
+    // one it leaves out. A line with nothing to draw has no mark.
+    const wanted = new Set<unknown>(type === "line" ? marks.flatMap((mark) => (mark.items?.[0] && drawsLine(mark.items[0]) ? [mark.items[0]] : [])) : marks.flatMap((mark) => mark.items ?? []));
     const items = new Map<Element, VegaItem>();
     for (const element of Array.from(root.querySelectorAll("*"))) {
       const bound = (element as Element & { __data__?: unknown }).__data__;
@@ -181,9 +184,10 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
 
     const read: Reading = { root: svg, items, elements, geometry: new Map(), samples: new Map(), values: new Map() };
     if (options.sample) {
+      // A line's every point, with a point left out as empty, so a value that goes missing changes it.
       for (const [element, item] of items) {
-        const points = type === "line" ? pointsOf(item).map((p) => p.item) : [item];
-        read.values.set(element, points.map((point) => valueOf(point).value).join(","));
+        const points = type === "line" ? lineItems(item) : [item];
+        read.values.set(element, points.map((point) => (point.defined === false ? "" : valueOf(point).value)).join(","));
       }
     }
     if (type === "rect") return readBars(read, toCommon, keyOf, seriesOf);
@@ -245,7 +249,7 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
     return sample.at === undefined ? { value: sample.value } : { value: sample.value, at: sample.at };
   }
 
-  /** A line's samples, one per point, where each point is along the walk its points drew. */
+  /** A line's samples, one per point it draws, where each point is along the walk, with `gapBefore` after each gap. */
   function lineSamples(geometry: MarkGeometry, first: VegaItem, m: Matrix): Sample[] {
     return samplesAlong(
       geometry,
@@ -308,9 +312,11 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
   // Linked through the attachment's hover.
   return linkable(portOf(attachment)!, {
     refresh,
+    update: attachment.update,
     on: attachment.on,
     marks: attachment.marks,
     focus: attachment.focus,
+    leave: attachment.leave,
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -375,32 +381,51 @@ function namesIn(root: VegaMark): string[] {
   return [...names];
 }
 
+/** A line's items, from the item its path is bound to: its first. */
+const lineItems = (first: VegaItem): readonly VegaItem[] => first.mark?.items ?? [first];
+
+/** Whether a line has a point to draw: Vega draws nothing for one whose every item is left out. */
+const drawsLine = (first: VegaItem): boolean => lineItems(first).some((item) => item.defined !== false);
+
 /**
  * A line's points, from its mark's items. Lines are straight between their points (M4 decision 5),
  * so a curve Vega interpolates (monotone, basis, step and the rest; it reads the first item's) would
- * be described as a different path from the one drawn, and throws instead. So does a point Vega
- * leaves out (`defined: false`), which would be a gap, which lines can't have yet.
+ * be described as a different path from the one drawn, and throws instead. A point Vega leaves out
+ * (`defined: false`, as Vega-Lite does for a missing value) is left out here too, and the next point
+ * Vega draws starts a new run after a gap (`gapBefore`). Points left out before the first or after the
+ * last only shorten the line.
  */
-function pointsOf(first: VegaItem): { item: VegaItem; point: Point }[] {
-  const items = first.mark?.items ?? [first];
+function pointsOf(first: VegaItem): { item: VegaItem; point: Point; gapBefore: boolean }[] {
+  const items = lineItems(first);
   const interpolate = items[0]?.interpolate;
   if (interpolate !== undefined && interpolate !== "linear") {
     throw new TypeError(
       `fromVegaView: a line is drawn with interpolate "${interpolate}", but only straight lines can be read. Use interpolate "linear" (the default), or describe the curve with expressive()'s geometry option.`
     );
   }
-  if (items.some((item) => item.defined === false)) {
-    throw new TypeError("fromVegaView: a line has a gap (a point with defined: false). Lines with gaps can't be read yet.");
+  const points: { item: VegaItem; point: Point; gapBefore: boolean }[] = [];
+  let gap = false;
+  for (const item of items) {
+    if (item.defined === false) {
+      gap = points.length > 0;
+      continue;
+    }
+    points.push({ item, point: { x: number(item.x), y: number(item.y) }, gapBefore: gap });
+    gap = false;
   }
-  return items.map((item) => ({ item, point: { x: number(item.x), y: number(item.y) } }));
+  return points;
 }
 
+/** A line through the points Vega draws, with a break where it leaves some out. */
 function lineOf(key: string, element: Element, first: VegaItem, m: Matrix): MarkGeometry {
   const width = first.strokeWidth ?? Number.parseFloat(element.getAttribute("stroke-width") ?? "1");
+  const points = pointsOf(first);
+  const breaks = points.flatMap((p, i) => (p.gapBefore ? [i] : []));
   return describe.line({
     key,
     series: key,
-    points: pointsOf(first).map(({ point }) => matrix.apply(m, point)),
+    points: points.map(({ point }) => matrix.apply(m, point)),
+    ...(breaks.length > 0 ? { breaks } : {}),
     width: (Number.isFinite(width) ? width : 1) * scaleOf(m)
   });
 }

@@ -4,17 +4,17 @@
 // wiggle and pulse: none combines effects, draws an icon or staggers.
 
 import type { Icon, MarkEffect } from "./core";
-import { createRegistry, type PresetFactory } from "./core/registry";
+import { createRegistry, type PresetFactory, type Registry } from "./core/registry";
 import { flash, pulse, wiggle } from "./effects";
 import { icons } from "./icons";
 
-export const presetRegistry = /* @__PURE__ */ createRegistry<PresetFactory>({
+export const presetRegistry: Registry<PresetFactory> = /* @__PURE__ */ createRegistry<PresetFactory>({
   kind: "preset",
   entries: { flash: () => flash(), wiggle: () => wiggle(), pulse: () => pulse() },
   hint: "Register custom presets with registerPreset(name, factory)."
 });
 
-export const iconRegistry = /* @__PURE__ */ createRegistry<Icon>({
+export const iconRegistry: Registry<Icon> = /* @__PURE__ */ createRegistry<Icon>({
   kind: "icon",
   entries: icons,
   hint: "Register icons with registerIcon(icon) or registerIcons(icons)."

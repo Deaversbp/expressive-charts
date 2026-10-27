@@ -2303,9 +2303,11 @@ interface Attachment<D>
 ```
 
 - `refresh(source?)`: reads the marks again, from `source` if it's given and from then on, and fires `enter`, `update` and `exit` by key. A mark that only moved follows without an event. A read that finds a new row, a new value, or a mark entering or leaving is an update, which ends the last one's `update` effects (a `delta`) on the marks it leaves alone; one that finds none keeps them. It throws, changing nothing, on marks it can't read.
+- `update({ on })`: `Promise<void>`. Swaps the effects for a new `on`, as a chart's `update({ on })` does ([architecture.md](architecture.md#adapters)): a slot given the same effect or preset name keeps its runs, and a slot left out is emptied. A changed slot's new effect starts where the old one's runs were: `decorate` again on every mark, a held hover replayed with the new hover effect, and `enter`, `update` and `exit` at their end state, so nothing enters again. Focus and the tab stop stay, nothing fires, and a data effect finds the series it reads (`needs`), following them from then on. It resolves once that's done, at once. It rejects, changing nothing, on an `on` it can't resolve (an unknown preset name), a series a data effect needs that the marks don't have, or any other option, which can't change yet.
 - `on(type, listener)`: listens for [`MarkEvents`](#markeventsd), and returns a function that stops it.
 - `marks()`: `readonly MarkGeometry[]`. The marks in visual order: bars top to bottom, columns left to right, a pie's slices clockwise from 12 o'clock, other marks described with `geometry` in document order.
 - `focus(key)`: with `keyboard`, moves focus to the mark, which plays its hover effects.
+- `leave()`: ends the hover, pointer or keyboard, as the viewer moving away would: the emphasis, the dimming and the hover effects end, and `leave` fires for each mark that was hovered. A link's hover shown on it ends too. Focus stays where it is, with its ring, as after Escape. It does nothing when nothing is hovered.
 - `destroy()`: clears every effect and puts back everything the adapter changed.
 
 #### `HostMark<D>`
@@ -2325,7 +2327,7 @@ What `markLabel` is given beside the row: the mark's key, and its parts from the
 fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, options: VegaOptions<D>): VegaAttachment<D>
 ```
 
-Attaches effects to a Vega or Vega-Lite chart rendered as SVG, which is vega-embed's default ([architecture.md](architecture.md#vega-and-vega-lite-fromvegaview)). It reads the marks from the View's scenegraph rather than the DOM: rects are bars (stacks included), arcs slices, symbols points and lines lines. It follows the View's own renders, new data or a resize, so there's no `refresh()` to call. The library imports nothing from Vega. A renderer other than SVG, a mark that isn't there, an unreadable mark type, a curved line and a line with a gap throw when attaching. Options: [`VegaOptions<D>`](#vegaoptionsd). Returns [`VegaAttachment<D>`](#vegaattachmentd).
+Attaches effects to a Vega or Vega-Lite chart rendered as SVG, which is vega-embed's default ([architecture.md](architecture.md#vega-and-vega-lite-fromvegaview)). It reads the marks from the View's scenegraph rather than the DOM: rects are bars (stacks included), arcs slices, symbols points and lines lines. It follows the View's own renders, new data or a resize, so there's no `refresh()` to call. The library imports nothing from Vega. A line breaks where Vega leaves a point out (`defined: false`), as Vega-Lite does at a missing value by default, so it has gaps, and a line with no point drawn has no mark. A renderer other than SVG, a mark that isn't there, an unreadable mark type and a curved line throw when attaching. Options: [`VegaOptions<D>`](#vegaoptionsd). Returns [`VegaAttachment<D>`](#vegaattachmentd).
 
 ```ts
 import { fromVegaView, only, parallel, threshold, travel } from "expressive-charts";
@@ -2351,7 +2353,7 @@ interface VegaOptions<D> extends Omit<ExpressiveOptions<D>, "datum" | "geometry"
 [`ExpressiveOptions`](#expressiveoptionsd) without `datum`, `geometry` and `watch`, which the View gives, and:
 
 - `mark`: `string`. Default `"marks"`, the name Vega-Lite gives a chart's data mark. The Vega mark to read, by name.
-- `sample`: `(row: D) => VegaSample`. Data effects' values: a line gets a sample at each point, a bar from 0 at its baseline to its value, a slice from 0 to its value, a point its value. Unless `value` is given, it's also what each element shows, so a resize isn't an update. `samples` replaces it.
+- `sample`: `(row: D) => VegaSample`. Data effects' values: a line gets a sample at each point it draws, with `gapBefore` after each gap, a bar from 0 at its baseline to its value, a slice from 0 to its value, a point its value. Unless `value` is given, it's also what each element shows, so a resize isn't an update. `samples` replaces it.
 
 `key` reads the row's fields: Vega-Lite derives its own rows, so they're new objects on every render.
 
@@ -2363,7 +2365,7 @@ interface VegaAttachment<D> extends Omit<Attachment<D>, "refresh"> {
 }
 ```
 
-An [`Attachment`](#attachmentd) whose `refresh()` reads the View again at once. It refreshes itself after each of the View's renders anyway.
+An [`Attachment`](#attachmentd) whose `refresh()` reads the View again at once. It refreshes itself after each of the View's renders anyway. Its `update({ on })` and `leave()` are the attachment's.
 
 #### `VegaViewLike`
 
@@ -2395,7 +2397,7 @@ A mark in Vega's scenegraph: its type, its name and its items.
 interface VegaItem
 ```
 
-An item of a Vega mark, as its encoders left it: `mark`, `datum` (the row), and the numbers the adapter reads (`x`, `y`, `width`, `height`, `startAngle`, `endAngle`, `innerRadius`, `outerRadius`, `size`, `strokeWidth`, `cornerRadius`, `defined`, `interpolate`). A group's `items` hold the marks inside it.
+An item of a Vega mark, as its encoders left it: `mark`, `datum` (the row), and the numbers the adapter reads (`x`, `y`, `width`, `height`, `startAngle`, `endAngle`, `innerRadius`, `outerRadius`, `size`, `strokeWidth`, `cornerRadius`, `defined`, `interpolate`). A group's `items` hold the marks inside it. A line's item with `defined: false` is a point Vega leaves out, where the line breaks.
 
 #### `VegaSample`
 
@@ -2626,7 +2628,7 @@ interface CheckEffectOptions<D = unknown>
 
 - `marks`: `Record<string, MarkGeometry> | readonly MarkGeometry[]`. The marks to check on, named, or a list such as a chart's `marks()`, each named by its key. Default: [`fixtures`](#fixtures).
 - `icons`: `readonly Icon[]`. The icons the effect looks up by name. Default: none.
-- `data`: `(mark: MarkGeometry) => MarkData<D>`. A data effect's data for each mark. Default: no datum, values from 0 to 1 along the walk, and no related series.
+- `data`: `(mark: MarkGeometry) => MarkData<D>`. A data effect's data for each mark. Default: no datum, values from 0 to 1 along the walk (each sample's value is its `t`), and no related series. On a mark with gaps, a sample at each end of each gap too, with `gapBefore` on the one after, as on a line chart's line.
 - `moved`: `(mark: MarkGeometry) => MarkGeometry | undefined`. The same mark moved, for check 5; `undefined` skips it. Default: each fixture's moved twin, and nothing for other marks, so a page's own marks pass this or skip the check.
 - `batch`: `{ index, count }`. The mark's place in its event, for a staggered effect. Default: the only one.
 - `name`: `string`. What the report calls the effect. Default "the effect".

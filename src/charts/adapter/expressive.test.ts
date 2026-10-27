@@ -15,6 +15,7 @@ import {
 import { createRegistry, type PresetFactory } from "../../core/registry";
 import { measurePath } from "../../core/testing";
 import type { ChartEnv } from "../bar";
+import { link } from "../link";
 import { expressive } from "./expressive";
 import type { Attachment, ExpressiveOptions, MarkSource } from "./types";
 
@@ -2031,6 +2032,311 @@ describe("expressive: watch", () => {
     await delivered();
     expect(clock.idle).toBe(true);
     expect(decoration.log).toEqual([]);
+  });
+});
+
+describe("expressive: update({ on })", () => {
+  const runs = (log: readonly string[]) => log.filter((entry) => !entry.startsWith("change"));
+  /** An effect whose runs go on until they're cleared. */
+  const held = (log: string[]): GeometryEffect => ({
+    kind: "geometry",
+    run(mark) {
+      log.push(`run ${mark.key}`);
+      return new Promise(() => {});
+    },
+    end: (mark) => void log.push(`end ${mark.key}`),
+    clear: () => void log.push("clear")
+  });
+  const tabStops = (elements: readonly Element[]) => elements.map((element) => element.getAttribute("tabindex"));
+
+  it.each(["pointer", "keyboard"] as const)(
+    "swaps the effects with a mark hovered by the %s: decorate starts again on every mark, the hover replays with the new effect, and nothing enters",
+    async (by) => {
+      const host = d3Stack();
+      const decorate = recorder();
+      const hover = recorder();
+      const enter = recorder();
+      const { fx } = setup(host.selection(), { ...stacked, keyboard: true, dim: true, on: { decorate: decorate.effect, hover: hover.effect, enter: enter.effect } });
+      if (by === "pointer") pointer("pointerover", host.rect("Tanaka", "assists"));
+      else fx.focus("Tanaka");
+      const stops = tabStops(host.rects());
+      const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!.getAttribute("visibility");
+      const events: string[] = [];
+      for (const type of ["enter", "update", "exit", "hover", "leave"] as const) fx.on(type, (event) => events.push(`${type} ${event.mark.key}`));
+      for (const each of [decorate, hover, enter]) each.log.length = 0;
+
+      const nextDecorate = recorder();
+      const nextHover = recorder();
+      const done = fx.update({ on: { decorate: nextDecorate.effect, hover: nextHover.effect, enter: enter.effect } });
+      // At once: an attachment has no change to settle.
+      expect(runs(nextDecorate.log)).toEqual(["run Okafor", "run Tanaka", "run Lindqvist"]);
+      await expect(done).resolves.toBeUndefined();
+      expect(runs(decorate.log)).toEqual(["clear", "clear", "clear"]);
+      expect(runs(hover.log)).toEqual(["clear"]);
+      expect(runs(nextHover.log)).toEqual(["run Tanaka"]);
+      // The same enter effect keeps its runs.
+      expect(enter.log).toEqual([]);
+      expect(events).toEqual([]);
+      // Still hovered, with focus and the tab stop where they were.
+      expect(host.rect("Okafor", "goals").classList.contains("ec-dimmed")).toBe(true);
+      expect(host.rect("Tanaka", "goals").classList.contains("ec-dimmed")).toBe(false);
+      expect(document.activeElement).toBe(by === "keyboard" ? host.rect("Tanaka", "goals") : document.body);
+      expect(tabStops(host.rects())).toEqual(stops);
+      expect(overlayOf(host.svg).querySelector(".ec-focus-ring")!.getAttribute("visibility")).toBe(ring);
+
+      // The new hover plays from then on, and leaves as the old one did.
+      if (by === "pointer") pointer("pointerleave", host.svg);
+      else key(host.rect("Tanaka", "goals"), "Escape");
+      expect(runs(nextHover.log)).toEqual(["run Tanaka", "clear"]);
+      expect(events).toEqual(["leave Tanaka"]);
+      if (by === "pointer") pointer("pointerover", host.rect("Lindqvist", "goals"));
+      else key(host.rect("Tanaka", "goals"), "ArrowDown");
+      expect(runs(nextHover.log)).toEqual(["run Tanaka", "clear", "run Lindqvist"]);
+      expect(hover.log).toEqual(["clear"]);
+    }
+  );
+
+  it("draws a new enter, update or exit effect's end state where the old one's runs were, and an exit still ends", async () => {
+    const host = d3Stack();
+    const log: string[] = [];
+    const enter = recorder();
+    const { fx } = setup(host.selection(), { ...stacked, value: (d) => d[1] - d[0], on: { enter: enter.effect, update: held(log), exit: held(log) } });
+    // Tanaka's goals change and Lindqvist leaves: an update run and an exit run, both still going.
+    host.redraw([players[0]!, { ...players[1]!, goals: 8 }]);
+    fx.refresh(host.selection());
+    expect(log).toEqual(["run Lindqvist", "run Tanaka"]);
+    const exits: string[] = [];
+    fx.on("exit", (e) => exits.push(e.mark.key));
+    // Lindqvist's enter run ended with its exit.
+    expect(runs(enter.log)).toEqual(["run Okafor", "run Tanaka", "run Lindqvist", "clear"]);
+    enter.log.length = 0;
+
+    const nextEnter = recorder();
+    const nextUpdate = recorder();
+    const nextExit = recorder();
+    await fx.update({ on: { enter: nextEnter.effect, update: nextUpdate.effect, exit: nextExit.effect } });
+    expect(runs(enter.log)).toEqual(["clear", "clear"]);
+    expect(nextEnter.log).toEqual(["end Okafor", "end Tanaka"]);
+    expect(runs(nextUpdate.log)).toEqual(["end Tanaka"]);
+    // Its exit ends with the new effect's end state, and the mark is gone.
+    expect(runs(nextExit.log)).toEqual(["end Lindqvist", "clear"]);
+    expect(log).toEqual(["run Lindqvist", "run Tanaka", "clear", "clear"]);
+    expect(exits).toEqual([]);
+    expect(fx.marks().map((mark) => mark.key)).toEqual(["Okafor", "Tanaka"]);
+    // Lindqvist's exit is done: back mid-way, it would keep its record and enter again.
+    host.redraw(players);
+    fx.refresh(host.selection());
+    expect(nextEnter.log).toEqual(["end Okafor", "end Tanaka", "run Lindqvist"]);
+  });
+
+  it("keeps a slot given the same effect or preset name, clears a slot left out, and does nothing with no on", async () => {
+    const presets = createRegistry<PresetFactory>({ kind: "preset" });
+    let made = 0;
+    presets.register("probe", () => {
+      made++;
+      return recorder().effect;
+    });
+    const host = d3Stack();
+    const decorate = recorder();
+    const { fx } = setup(host.selection(), { ...stacked, on: { hover: "probe", decorate: decorate.effect } }, { presets });
+    await fx.update({ on: { hover: "probe", decorate: decorate.effect } });
+    expect(made).toBe(1);
+    expect(runs(decorate.log)).toEqual(["run Okafor", "run Tanaka", "run Lindqvist"]);
+    await fx.update({});
+    expect(runs(decorate.log)).toEqual(["run Okafor", "run Tanaka", "run Lindqvist"]);
+    await fx.update({ on: { hover: "probe" } });
+    expect(runs(decorate.log)).toEqual(["run Okafor", "run Tanaka", "run Lindqvist", "clear", "clear", "clear"]);
+    expect(made).toBe(1);
+  });
+
+  it("rejects an unknown preset name, a series the marks don't have, or another option, changing nothing", async () => {
+    const host = d3Stack();
+    const hover = recorder();
+    const { fx } = setup(host.selection(), { ...stacked, on: { hover: hover.effect } });
+    const next = recorder();
+    await expect(fx.update({ on: { hover: "nope" } })).rejects.toThrow(/Unknown preset "nope"/);
+    await expect(fx.update({ on: { hover: next.effect, decorate: dataRecorder(["xg"]).effect } })).rejects.toThrow(
+      /^expressive: on\.decorate needs the series "xg", but the marks' series are "goals", "assists"\./
+    );
+    // @ts-expect-error only `on` can change.
+    await expect(fx.update({ on: { hover: next.effect }, dim: true })).rejects.toThrow(new TypeError("expressive: `dim` can't be changed by update() yet. Only `on` can."));
+    // @ts-expect-error update() takes options.
+    await expect(fx.update(null)).rejects.toThrow(/update\(\) needs options/);
+    pointer("pointerover", host.rect("Okafor", "goals"));
+    expect(hover.log).toEqual(["run Okafor"]);
+    expect(next.log).toEqual([]);
+  });
+
+  it("with motion off, draws the new effects' end state, with no frames", async () => {
+    const host = d3Stack();
+    const { fx, clock } = setup(host.selection(), { ...stacked, keyboard: true, on: { decorate: recorder().effect } }, { motion: quietMotion("off") });
+    fx.focus("Okafor");
+    const decorate = recorder();
+    const hover = recorder();
+    await fx.update({ on: { decorate: decorate.effect, hover: hover.effect } });
+    expect(runs(decorate.log)).toEqual(["end Okafor", "end Tanaka", "end Lindqvist"]);
+    expect(runs(hover.log)).toEqual(["end Okafor"]);
+    expect(clock.idle).toBe(true);
+  });
+
+  it("finds the series a new data effect reads, and follows it, and stops when the effect goes", async () => {
+    const later = season.map((row) => ({ ...row, xg: row.xg + 1 }));
+    const host = d3Lines();
+    const plain = dataRecorder();
+    const { fx } = setup<Trace>(host.paths, { ...traced, on: { decorate: plain.effect } });
+    const needsXg = dataRecorder(["xg"]);
+    await fx.update({ on: { decorate: needsXg.effect } });
+    expect(needsXg.seen.map((entry) => entry.key)).toEqual(["goals", "xg"]);
+    expect(needsXg.last("goals")!.related("xg")!.samples.map((s) => s.value)).toEqual(season.map((row) => row.xg));
+    // The host redraws xG alone: the goals line is told too, with data that sees it.
+    needsXg.seen.length = 0;
+    host.draw(later, [host.paths[1]!]);
+    fx.refresh();
+    expect(needsXg.seen.map((entry) => entry.key)).toEqual(["xg", "goals"]);
+    expect(needsXg.last("goals")!.related("xg")!.samples.map((s) => s.value)).toEqual(later.map((row) => row.xg));
+
+    // Swapped back: the goals line isn't told when xG alone changes.
+    await fx.update({ on: { decorate: plain.effect } });
+    plain.seen.length = 0;
+    host.draw(season, [host.paths[1]!]);
+    fx.refresh();
+    expect(plain.seen.map((entry) => entry.key)).toEqual(["xg"]);
+  });
+
+  it("swaps a D3 pie's effects in place: the slice in focus keeps it, and the tab stop stays", async () => {
+    type Slice = { outcome: string; start: number; end: number };
+    const svg = el("svg", {}, document.body);
+    const g = el("g", { transform: "translate(120,120)" }, svg);
+    const slices: Slice[] = [
+      { outcome: "Goal", start: 0, end: 0.9 },
+      { outcome: "Saved", start: 0.9, end: 2.6 },
+      { outcome: "Off target", start: 2.6, end: 4.9 },
+      { outcome: "Blocked", start: 4.9, end: 2 * Math.PI }
+    ];
+    const paths = slices.map((d) => Object.assign(el("path", { d: "M0,0L1,1", fill: "#2a78d6" }, g), { __data__: d }));
+    const hover = recorder();
+    const { fx } = setup<Slice>(paths, {
+      key: (d) => d.outcome,
+      keyboard: true,
+      geometry: (_el, d, k) => build.arc({ key: k, cx: 0, cy: 0, inner: 70, outer: 116, start: d.start, end: d.end }),
+      on: { hover: hover.effect }
+    });
+    fx.focus("Off target");
+    expect(tabStops(paths)).toEqual(["-1", "-1", "0", "-1"]);
+    const next = recorder();
+    await fx.update({ on: { hover: next.effect } });
+    expect(document.activeElement).toBe(paths[2]);
+    expect(tabStops(paths)).toEqual(["-1", "-1", "0", "-1"]);
+    expect(runs(hover.log)).toEqual(["run Off target", "clear"]);
+    expect(runs(next.log)).toEqual(["run Off target"]);
+    key(paths[2]!, "ArrowRight");
+    expect(document.activeElement).toBe(paths[3]);
+    expect(runs(next.log)).toEqual(["run Off target", "clear", "run Blocked"]);
+  });
+
+  it("swaps the hover effect of an attachment showing a link's hover, which replays with it", async () => {
+    const first = d3Stack();
+    const second = d3Stack();
+    const a = setup(first.selection(), stacked).fx;
+    const hover = recorder();
+    const b = setup(second.selection(), { ...stacked, on: { hover: hover.effect } }).fx;
+    link([a, b]);
+    const events = hoverLog(b);
+    pointer("pointerover", first.rect("Tanaka", "goals"));
+    expect(events).toEqual(["hover Tanaka linked"]);
+    const next = recorder();
+    await b.update({ on: { hover: next.effect } });
+    expect(runs(hover.log)).toEqual(["run Tanaka", "clear"]);
+    expect(runs(next.log)).toEqual(["run Tanaka"]);
+    pointer("pointerleave", first.svg);
+    expect(events).toEqual(["hover Tanaka linked", "leave Tanaka"]);
+    expect(runs(next.log)).toEqual(["run Tanaka", "clear"]);
+    // Its own hover tells the link as before.
+    const aEvents = hoverLog(a);
+    pointer("pointerover", second.rect("Okafor", "goals"));
+    expect(aEvents).toEqual(["hover Okafor linked"]);
+  });
+
+  it("resolves, changing nothing, once destroyed", async () => {
+    const host = d3Stack();
+    const { fx } = setup(host.selection(), stacked);
+    fx.destroy();
+    const before = host.svg.outerHTML;
+    await expect(fx.update({ on: { hover: "nope" } })).resolves.toBeUndefined();
+    expect(host.svg.outerHTML).toBe(before);
+  });
+});
+
+describe("expressive: leave()", () => {
+  it("ends a pointer hover as the pointer leaving would: emphasis, dimming, hover effects and their leave events", () => {
+    const host = d3Stack();
+    const hover = recorder();
+    const { fx } = setup(host.selection(), { ...stacked, dim: true, on: { hover: hover.effect } });
+    const events = hoverLog(fx);
+    pointer("pointerover", host.rect("Tanaka", "goals"));
+    expect(host.rect("Tanaka", "goals").style.getPropertyValue("fill")).toMatch(BLUE);
+    fx.leave();
+    expect(events).toEqual(["hover Tanaka pointer", "leave Tanaka"]);
+    expect(hover.log).toEqual(["run Tanaka", "clear"]);
+    expect(host.rects().some((rect) => rect.classList.contains("ec-dimmed"))).toBe(false);
+    expect(host.rect("Tanaka", "goals").style.getPropertyValue("fill")).toBe("");
+    // The pointer hovers again when it next moves onto a mark, the same one too.
+    pointer("pointerover", host.rect("Tanaka", "goals"));
+    expect(hover.log).toEqual(["run Tanaka", "clear", "run Tanaka"]);
+  });
+
+  it("ends a keyboard hover, with focus and its ring kept, as after Escape", () => {
+    const host = d3Stack();
+    const hover = recorder();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true, dim: true, on: { hover: hover.effect } });
+    const events = hoverLog(fx);
+    fx.focus("Tanaka");
+    fx.leave();
+    expect(events).toEqual(["hover Tanaka keyboard", "leave Tanaka"]);
+    expect(hover.log).toEqual(["run Tanaka", "clear"]);
+    expect(host.rect("Okafor", "goals").classList.contains("ec-dimmed")).toBe(false);
+    expect(document.activeElement).toBe(host.rect("Tanaka", "goals"));
+    expect(overlayOf(host.svg).querySelector(".ec-focus-ring")!.getAttribute("visibility")).toBeNull();
+    // The arrows hover again.
+    key(host.rect("Tanaka", "goals"), "ArrowDown");
+    expect(events.slice(2)).toEqual(["hover Lindqvist keyboard"]);
+  });
+
+  it("ends a link's hover shown on it, and tells the link when it ends its own", () => {
+    const first = d3Stack();
+    const second = d3Stack();
+    const a = setup(first.selection(), { ...stacked, dim: true }).fx;
+    const b = setup(second.selection(), { ...stacked, dim: true }).fx;
+    link([a, b]);
+    const aEvents = hoverLog(a);
+    const bEvents = hoverLog(b);
+    pointer("pointerover", first.rect("Tanaka", "goals"));
+    // b shows the link's hover: leave() ends it there, and a's own goes on.
+    b.leave();
+    expect(bEvents).toEqual(["hover Tanaka linked", "leave Tanaka"]);
+    expect(second.rect("Okafor", "goals").classList.contains("ec-dimmed")).toBe(false);
+    expect(aEvents).toEqual(["hover Tanaka pointer"]);
+    expect(first.rect("Okafor", "goals").classList.contains("ec-dimmed")).toBe(true);
+    // a ends its own: the link hears it.
+    pointer("pointerover", first.rect("Okafor", "goals"));
+    expect(bEvents.slice(2)).toEqual(["hover Okafor linked"]);
+    a.leave();
+    expect(aEvents.slice(1)).toEqual(["leave Tanaka", "hover Okafor pointer", "leave Okafor"]);
+    expect(bEvents.slice(3)).toEqual(["leave Okafor"]);
+  });
+
+  it("does nothing with nothing hovered, or once destroyed", () => {
+    const host = d3Stack();
+    const hover = recorder();
+    const { fx } = setup(host.selection(), { ...stacked, keyboard: true, on: { hover: hover.effect } });
+    const events = hoverLog(fx);
+    fx.leave();
+    expect(events).toEqual([]);
+    pointer("pointerover", host.rect("Okafor", "goals"));
+    fx.destroy();
+    expect(() => fx.leave()).not.toThrow();
+    expect(events).toEqual(["hover Okafor pointer"]);
+    expect(hover.log).toEqual(["run Okafor", "clear"]);
   });
 });
 

@@ -111,6 +111,18 @@ export interface Attachment<D> {
    * one. Throws, changing nothing, on marks it can't read.
    */
   refresh(source?: MarkSource<D>): void;
+  /**
+   * Swaps the effects for a new `on`, as a chart's update({ on }) does, and resolves once that's done:
+   * at once, since an attachment has no change to settle. A slot given the same effect or preset name
+   * keeps its runs, and a slot left out is cleared. A changed slot's runs are cleared and the new effect
+   * starts where they were: `decorate` again on every mark, and a held hover replays with the new hover
+   * effect. `enter`, `update` and `exit` draw the new effect's end state where theirs were, so nothing
+   * enters again. Focus stays on its mark, and the tab stop where it was. A data effect finds the series
+   * it reads (`needs`), so it follows a mark of that series as before. Rejects, changing nothing, on an
+   * `on` it can't resolve (an unknown preset name), a series a data effect needs that the marks don't
+   * have, or any other option, which can't change yet.
+   */
+  update(next: { readonly on?: EffectSlots<D> }): Promise<void>;
   /** Listens for mark events; returns the unsubscribe. */
   on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void;
   /**
@@ -123,6 +135,13 @@ export interface Attachment<D> {
   marks(): readonly MarkGeometry[];
   /** With `keyboard: true`, moves focus to the mark, which plays its hover effects. Does nothing for an unknown key. */
   focus(key: string): void;
+  /**
+   * Ends the hover, pointer or keyboard, as the viewer moving away would: the emphasis, the dimming and
+   * the hover effects end, and `leave` fires for each mark that was hovered. A link's hover shown here
+   * ends too. Focus stays where it is, with its ring, as after Escape; the pointer hovers again when it
+   * next moves onto a mark. Does nothing when nothing is hovered.
+   */
+  leave(): void;
   /** Clears every effect and removes everything the adapter added, leaving the host's DOM as it was. */
   destroy(): void;
 }

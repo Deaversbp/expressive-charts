@@ -236,6 +236,20 @@ function dataRecorder(needs?: string[]) {
 const strongOf = (hex: string, rgb: string): RegExp => new RegExp(`^color-mix\\(in oklab, (${hex}|rgb\\(${rgb}\\)), var\\(--ec-text, #0b0b0b\\) 25%\\)$`);
 const BLUE = strongOf("#2a78d6", "42, 120, 214");
 const ORANGE = strongOf("#eb6834", "235, 104, 52");
+const BLACK = strongOf("#000000", "0, 0, 0");
+
+/**
+ * Computed styles as a browser gives them, which jsdom's aren't: presentation attributes are read,
+ * after inline styles, and `css` is what the page's style sheets, or inheritance, give an element.
+ */
+function browserStyles(css: ReadonlyMap<Element, Readonly<Record<string, string>>>): void {
+  const computed = window.getComputedStyle.bind(window);
+  vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
+    const style = computed(element, pseudo);
+    const value = (name: string): string => css.get(element)?.[name] ?? ((element as SVGElement).style?.getPropertyValue(name) || element.getAttribute(name)) ?? style.getPropertyValue(name);
+    return Object.assign(Object.create(style) as CSSStyleDeclaration, { getPropertyValue: value });
+  });
+}
 
 afterEach(() => {
   document.body.textContent = "";
@@ -1093,6 +1107,27 @@ describe("expressive: hover colour", () => {
     fx.refresh(host.selection());
     expect(host.rect("Okafor", "goals").style.getPropertyValue("fill")).toMatch(BLUE);
     expect(old.getAttribute("style")).toBeNull();
+  });
+
+  it("starts from the colour a browser computes, black from the page's CSS too, where jsdom's black gives way to the attributes", () => {
+    // jsdom computes every fill as black, so the series group's fill attribute is taken.
+    const jsdom = d3Stack();
+    setup(jsdom.selection(), { ...stacked, dim: true });
+    pointer("pointerover", jsdom.rect("Okafor", "goals"));
+    expect(jsdom.rect("Okafor", "goals").style.getPropertyValue("fill")).toMatch(BLUE);
+
+    // A browser computes the group's blue on each rect, and a style sheet's black on one.
+    const browser = d3Stack();
+    browserStyles(
+      new Map(
+        players.map((p): [Element, Record<string, string>] => [browser.rect(p.name, "goals"), { fill: p.name === "Okafor" ? "rgb(0, 0, 0)" : "rgb(42, 120, 214)" }])
+      )
+    );
+    setup(browser.selection(), { ...stacked, dim: true });
+    pointer("pointerover", browser.rect("Okafor", "goals"));
+    expect(browser.rect("Okafor", "goals").style.getPropertyValue("fill")).toMatch(BLACK);
+    pointer("pointerover", browser.rect("Tanaka", "goals"));
+    expect(browser.rect("Tanaka", "goals").style.getPropertyValue("fill")).toMatch(BLUE);
   });
 
   it("leaves the host's colours alone without dim", () => {
@@ -2477,33 +2512,33 @@ describe("expressive: circles and shapes", () => {
     ]);
   });
 
-  it("keeps a computed width of 1 px where the page's CSS sets it, over an attribute a browser has read", () => {
-    const { elements } = host((plot) => {
-      const group = el("g", { "stroke-width": 6 }, plot);
-      return [
-        ["thin", el("path", { class: "thin", d: "M0,0L100,0" }, group)],
-        ["plain", el("path", { d: "M0,10L100,10" }, group)],
-        ["inline", el("path", { d: "M0,20L100,20", "stroke-width": 5, style: "stroke-width: 1px" }, plot)]
-      ];
-    });
-    const [thin, plain] = elements as SVGElement[] as [SVGElement, SVGElement];
-    const group = thin.parentElement!;
-    // jsdom reads no presentation attribute: the group's 6 px and the inline style's 1 px.
-    expect(setup<string>(elements, named).fx.marks().map((mark) => mark.thickness)).toEqual([6, 6, 1]);
-    // A browser reads them: a style sheet's 1 px on the thin path, and the group's 6 px inherited by the plain one.
-    const computed = window.getComputedStyle.bind(window);
-    const browser = new Map<Element, string>([
-      [group, "6px"],
-      [thin, "1px"],
-      [plain, "6px"]
-    ]);
-    vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
-      const style = computed(element, pseudo);
-      const width = browser.get(element);
-      return width === undefined ? style : Object.assign(Object.create(style) as CSSStyleDeclaration, { getPropertyValue: (name: string) => (name === "stroke-width" ? width : style.getPropertyValue(name)) });
-    });
-    document.querySelectorAll(".ec-overlay").forEach((overlay) => overlay.remove());
-    expect(setup<string>(elements, named).fx.marks().map((mark) => mark.thickness)).toEqual([1, 6, 1]);
+  it("takes the width a browser computes, a 1 px the page's CSS sets over the attributes too", () => {
+    /** Paths thinned by a style sheet in a group 6 px wide and with 6 px of their own, a plain one in the group, and an inline 1 px over 5. */
+    const draw = () =>
+      host((plot) => {
+        const group = el("g", { "stroke-width": 6 }, plot);
+        return [
+          ["thin", el("path", { class: "thin", d: "M0,0L100,0" }, group)],
+          ["thin of its own", el("path", { class: "thin", d: "M0,10L100,10", "stroke-width": 6 }, plot)],
+          ["plain", el("path", { d: "M0,20L100,20" }, group)],
+          ["inline", el("path", { d: "M0,30L100,30", "stroke-width": 5, style: "stroke-width: 1px" }, plot)]
+        ];
+      });
+    // jsdom reads no presentation attribute, so the attributes are taken, and the inline style, which it reads.
+    expect(setup<string>(draw().elements, named).fx.marks().map((mark) => mark.thickness)).toEqual([6, 6, 6, 1]);
+    // A browser reads them all: the style sheet's 1 px on the thin paths, and the group's 6 px inherited by the plain one.
+    const { elements } = draw();
+    const [thin, own, plain] = elements as SVGElement[] as [SVGElement, SVGElement, SVGElement];
+    browserStyles(
+      new Map([
+        [thin, { "stroke-width": "1px" }],
+        [own, { "stroke-width": "1px" }],
+        [plain, { "stroke-width": "6px" }]
+      ])
+    );
+    expect(setup<string>(elements, named).fx.marks().map((mark) => mark.thickness)).toEqual([1, 1, 6, 1]);
+    // The probe that found it out is gone.
+    expect(document.querySelector("[stroke-miterlimit]")).toBeNull();
   });
 
   it("names a circle's or a shape's series with segment, so a data effect can read it", () => {

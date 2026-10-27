@@ -197,11 +197,10 @@ let linked: Link = link(linkedCharts);
 // ── Since the last matchweek ─────────────────────────────────────────────────
 
 /**
- * Each player who scored flashes, and their change rises past their bar and stays. The change is read
- * from the rows, not the bar: a matchweek played while the last is still moving would otherwise count
- * from the bar part way there ("+1.88").
+ * Each player who scored flashes, and their change rises past their bar and stays until the chart's
+ * next update, so each matchweek shows only its own changes, as the table's Change column does.
  */
-const changes = parallel(flash(), delta<Player>({ value: (data) => data.datum.goals }));
+const changes = parallel(flash(), delta());
 /** Set while a matchweek updates the players' chart, so its announcement can say what changed. */
 let announcing: string | undefined;
 
@@ -213,6 +212,9 @@ const playersChart = barChart<Player>("#players", {
   sort: "value",
   colors: { goals: 1 },
   seriesLabels: { goals: "Goals" },
+  // delta() writes each change past its bar's value, which past the longest bar is past the plot: the
+  // chart keeps that room inside itself, about 20 px for "+1" at 320 px.
+  room: 28,
   markLabel: (d) => `${d.name}: ${goals(d.goals)}`,
   tooltip: (d) => `${d.name} · ${d.pos}\n${goals(d.goals)}`,
   markDescription: (d) => d.pos,
@@ -311,10 +313,6 @@ function playMatchweek(): void {
   if (status) status.textContent = `After matchweek ${now}`;
   if (nextButton && now >= LAST) nextButton.disabled = true;
   const rows = players();
-  // A change delta() draws stays until its bar's next update, so a player who didn't score this
-  // matchweek would keep the last one's. Emptying the slot first clears them all: each matchweek
-  // shows only its own changes, as the table's Change column does.
-  void playersChart.update({ on: {} });
   // update() announces as the change starts, before it returns.
   announcing = said(rows);
   void playersChart.update({ data: rows, on: { update: changes } });

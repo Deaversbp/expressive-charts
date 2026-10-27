@@ -1,8 +1,9 @@
 // The prototype's season, goals against expected goals over 38 matchweeks, on the library's
 // lineChart, on a line drawn with D3 through expressive(), and on a Vega-Lite line through
-// fromVegaView(). All three carry the same decoration: the goals line red wherever it's below xG, and
-// a ball riding its leading edge. One playback() drives the first two, with its playButton(), the
-// page's scrubber and the motion switch.
+// fromVegaView(); and the same season as a weekly data feed recorded it, with weeks missing, on
+// lineChart and on a D3 line drawn with .defined(). All five carry the same decoration: the goals line
+// red wherever it's below xG, and a ball riding its leading edge. One playback() drives the four that
+// play, with its playButton(), the page's scrubber and the motion switch.
 import {
   describe,
   expressive,
@@ -19,6 +20,7 @@ import {
   travel
 } from "../src/index";
 import { sport } from "../src/icons/sport/index";
+import { drawGaps, type FeedWeek, type Trace as FeedTrace } from "./d3-gaps";
 import { drawLine, type Week } from "./d3-line";
 import { drawVegaLine, type Row, type VegaLine } from "./vega-line";
 
@@ -130,6 +132,100 @@ const d3Effects = expressive(host.paths, {
   on: { decorate: story() }
 });
 
+// ── With missing weeks ───────────────────────────────────────────────────────
+
+/** The weeks the feed missed altogether, and the weeks it has goals but no xG for. */
+const NO_FEED = [9, 10];
+const NO_XG = [4, 5];
+/** The same season as the feed recorded it: null where it has no value, which is a gap, not a zero. */
+const feed: FeedWeek[] = weeks.map((w) => ({
+  week: w.week,
+  goals: NO_FEED.includes(w.week) ? null : w.goals,
+  xg: NO_FEED.includes(w.week) || NO_XG.includes(w.week) ? null : w.xg
+}));
+/** "18 goals", "goals missing". */
+const feedGoals = (d: FeedWeek): string => (d.goals === null ? "goals missing" : goals(d.goals));
+/** "19.0 xG", "xG missing". */
+const feedXg = (d: FeedWeek): string => (d.xg === null ? "xG missing" : `${d.xg.toFixed(1)} xG`);
+/** The gap, or nothing where the feed has no goals or no xG to compare. */
+const feedVersus = (d: FeedWeek): string => (d.goals === null || d.xg === null ? "" : versus({ week: d.week, goals: d.goals, xg: d.xg }));
+
+const gapsChart = lineChart<FeedWeek>("#gaps", {
+  label: "Goals vs expected goals, with missing weeks",
+  description: "Cumulative goals scored and expected goals over 38 matchweeks, from a weekly feed. It has no values for matchweeks 9 and 10, and no xG for matchweeks 4 and 5. The goals line is red wherever goals are below xG.",
+  data: feed,
+  x: "week",
+  series: ["goals", "xg"],
+  colors: { goals: 1, xg: 2 },
+  seriesLabels: { goals: "Goals scored", xg: "Expected goals (xG)" },
+  labels: (value, series) => (series === "xg" ? `${value.toFixed(1)} xG` : goals(Math.round(value))),
+  legend: { entries: [{ label: "Goals below xG", color: "negative" }] },
+  // As the first chart's, with what's missing said where a value would be, and no gap without both.
+  tooltip: (d) => [`Matchweek ${d.week}`, `${feedGoals(d)} · ${feedXg(d)}`, feedVersus(d)].filter(Boolean).join("\n"),
+  markLabel: (d) => `Matchweek ${d.week}: ${feedGoals(d)}, ${feedXg(d)}`,
+  markDescription: feedVersus,
+  table: {
+    category: "Matchweek",
+    columns: [
+      {
+        label: "Difference",
+        field: (d) => (d.goals === null || d.xg === null ? null : d.goals - d.xg),
+        // As the chart's own cells say a missing value.
+        format: (value) => (value === null ? "missing" : signed(value as number)),
+        after: "values"
+      }
+    ]
+  },
+  on: { decorate: story() }
+});
+
+// The D3 line skips the missing weeks with .defined(); expressive() describes each path by the weeks
+// it has, and the indices among them where a run starts after a missing week, its `breaks`.
+const gapsSvg = document.querySelector<SVGSVGElement>("#d3-gaps");
+if (!gapsSvg) throw new Error("demo/line.html has no #d3-gaps.");
+const gapsHost = drawGaps(gapsSvg, feed);
+/** A path's weeks with a value, as points for describe.line(), and where they break. */
+function runsOf(d: FeedTrace): { points: { x: number; y: number; value: number; at: number }[]; breaks: number[] } {
+  const points: { x: number; y: number; value: number; at: number }[] = [];
+  const breaks: number[] = [];
+  d.rows.forEach((w, i) => {
+    const value = w[d.series];
+    if (value === null) return;
+    if (points.length > 0 && d.rows[i - 1]?.[d.series] === null) breaks.push(points.length);
+    points.push({ x: gapsHost.x(w.week), y: gapsHost.y(value), value, at: w.week });
+  });
+  return { points, breaks };
+}
+/** "matchweeks 4, 5, 9 and 10". */
+function weeksList(list: readonly number[]): string {
+  return `matchweek${list.length === 1 ? "" : "s"} ${list.length === 1 ? list[0] : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`}`;
+}
+const missingFrom = (series: "goals" | "xg"): number[] => feed.filter((w) => w[series] === null).map((w) => w.week);
+const feedEnd = feed[feed.length - 1]!;
+const gapsEffects = expressive(gapsHost.paths, {
+  key: (d) => d.series,
+  // The last value the line shows, so a refresh() after a resize isn't taken for a change.
+  value: (d) => {
+    const { points } = runsOf(d);
+    return points[points.length - 1]!.value;
+  },
+  geometry: (_element, d, key) => {
+    const { points, breaks } = runsOf(d);
+    return describe.line({ key, series: d.series, points, breaks, width: gapsHost.width });
+  },
+  // Sampled at the weeks it has, so threshold matches xG by week and joins nothing across a gap.
+  samples: (d, mark) => samplesAlong(mark, runsOf(d).points),
+  keyboard: true,
+  // Named for the whole season, with the weeks it's missing.
+  markLabel: (d) =>
+    d.series === "goals"
+      ? `Goals scored: ${goals(feedEnd.goals!)} by matchweek ${feedEnd.week}, ${weeksList(missingFrom("goals"))} missing`
+      : `Expected goals (xG): ${feedEnd.xg!.toFixed(1)} by matchweek ${feedEnd.week}, ${weeksList(missingFrom("xg"))} missing`,
+  dim: true,
+  watch: true,
+  on: { decorate: story() }
+});
+
 // The Vega-Lite line shows the whole season. Vega draws new elements on every data change, so
 // playing it frame by frame would replace a focused line 60 times a second and fire an update each
 // frame. fromVegaView() reads the View's line mark, "marks", from its scenegraph, and follows the
@@ -159,11 +255,13 @@ const vegaReady = attachVega(vegaBox);
 window.addEventListener("resize", () => {
   host.resize();
   d3Effects.refresh(host.paths);
+  gapsHost.resize();
+  gapsEffects.refresh(gapsHost.paths);
   void vegaReady.then((vegaLine) => vegaLine.resize());
 });
 
-// One playback drives both charts: the prototype's 6.5 s season in Presentation, about 2 s in
-// Analysis, and at once in Off. It rests at the end, so the whole season shows until something
+// One playback drives the four charts that play: the prototype's 6.5 s season in Presentation, about
+// 2 s in Analysis, and at once in Off. It rests at the end, so the whole season shows until something
 // reveals less.
 const slider = document.querySelector<HTMLInputElement>("#week");
 const status = document.getElementById("week-status");
@@ -182,6 +280,8 @@ const seasonPlayback = playback({
   onFrame(x) {
     chart.reveal(x);
     host.reveal(x);
+    gapsChart.reveal(x);
+    gapsHost.reveal(x);
     const week = weekAt(x);
     if (status) status.textContent = `Through matchweek ${week}`;
     // Only while it plays: a seek's frames would pull the thumb back while the viewer drags it.

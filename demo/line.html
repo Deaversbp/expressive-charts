@@ -43,23 +43,23 @@
   /* The page's own controls only: the charts draw their own focus rings. */
   button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
-  #line, .d3-box { min-width: 0; }
+  #line, #gaps, .d3-box { min-width: 0; }
   .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
   a { color: var(--link); }
   /* The motion switch sits on the page, darker than the charts' surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
   #motion { --ec-text-muted: var(--muted); }
   /* The tooltip function's text is plain; its first line, the week, is bold, as in the prototype (lab.html). */
-  #line .ec-tooltip::first-line { font-weight: 600; }
-  /* xG is what goals are read against: a dashed grey on both charts, so it can't be mistaken for the
-     red below it, whatever the viewer's colour vision. It's xG's palette slot on these two charts, so
+  :is(#line, #gaps) .ec-tooltip::first-line { font-weight: 600; }
+  /* xG is what goals are read against: a dashed grey on every chart, so it can't be mistaken for the
+     red below it, whatever the viewer's colour vision. It's xG's palette slot on these charts, so
      its end dot, hover point and legend swatch follow. */
-  #line, .d3-box, .vega-box { --ec-series-2: var(--ec-text-muted, #75736d); --ec-series-2-strong: var(--ink-2); }
-  #line .ec-line[data-key="xg"] .ec-stroke, #d3-line .line-xg { stroke-dasharray: 6 4; }
+  #line, #gaps, .d3-box, .vega-box { --ec-series-2: var(--ec-text-muted, #75736d); --ec-series-2-strong: var(--ink-2); }
+  :is(#line, #gaps) .ec-line[data-key="xg"] .ec-stroke, :is(#d3-line, #d3-gaps) .line-xg { stroke-dasharray: 6 4; }
   /* Legend swatches as short lines, so xG's shows its dash. */
-  #line .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
-  #line .ec-legend-item[data-series="xg"] .ec-legend-swatch { border-top-style: dashed; }
-  /* The D3 line's own styles: it's someone else's chart, so the page styles it, not the library. Its
-     series take the line chart's palette slots, and its legend copies the line chart's. */
+  :is(#line, #gaps) .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
+  :is(#line, #gaps) .ec-legend-item[data-series="xg"] .ec-legend-swatch { border-top-style: dashed; }
+  /* The D3 lines' own styles: they're someone else's charts, so the page styles them, not the library.
+     Their series take the line chart's palette slots, and their legends copy the line chart's. */
   .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   /* Under forced colours (Windows contrast themes), keep the swatches' colours, as the library's legend does: the lines keep theirs. */
@@ -67,14 +67,15 @@
   .legend .swatch-goals { border-top-color: var(--ec-series-1, #2a78d6); }
   .legend .swatch-xg { border-top: 3px dashed var(--ec-series-2); }
   .legend .swatch-below { border-top-color: var(--ec-negative, #d03b3b); }
-  #d3-line { display: block; max-width: 100%; height: auto; overflow: visible; }
-  #d3-line .tick { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
-  #d3-line .grid { stroke: var(--ec-grid, #e1e0d9); }
-  #d3-line .baseline { stroke: var(--ec-axis, #c3c2b7); }
-  /* Butt caps, so a red run ends where its data does, as on the line chart. */
-  #d3-line .line { fill: none; stroke-linejoin: round; stroke-linecap: butt; }
-  #d3-line .line-goals { stroke: var(--ec-series-1, #2a78d6); }
-  #d3-line .line-xg { stroke: var(--ec-series-2); }
+  :is(#d3-line, #d3-gaps) { display: block; max-width: 100%; height: auto; overflow: visible; }
+  :is(#d3-line, #d3-gaps) .tick { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
+  :is(#d3-line, #d3-gaps) .grid { stroke: var(--ec-grid, #e1e0d9); }
+  :is(#d3-line, #d3-gaps) .baseline { stroke: var(--ec-axis, #c3c2b7); }
+  /* Butt caps, so a red run ends where its data does, as on the line chart, and a line stops at the
+     last week before a gap. */
+  :is(#d3-line, #d3-gaps) .line { fill: none; stroke-linejoin: round; stroke-linecap: butt; }
+  :is(#d3-line, #d3-gaps) .line-goals { stroke: var(--ec-series-1, #2a78d6); }
+  :is(#d3-line, #d3-gaps) .line-xg { stroke: var(--ec-series-2); }
   /* The Vega-Lite line: Vega writes the colours it's given as attributes (vega-line.ts), so the page
      maps those two to the theme, and styles its axes as the D3 line's. Its legend is the page's. */
   .vega-box { min-width: 0; }
@@ -91,13 +92,13 @@
   <header>
     <p class="eyebrow">Line charts · data effects</p>
     <h1>Goals vs expected goals, three ways</h1>
-    <p class="lede">A season of goals against expected goals on <code>lineChart</code>, on a line drawn with D3, and on a Vega-Lite line. One Play button, one scrubber and the motion switch drive the first two. Each carries one decoration, <code>only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" })))</code>, with no change to effect code.</p>
+    <p class="lede">A season of goals against expected goals on <code>lineChart</code>, on a line drawn with D3, and on a Vega-Lite line. One Play button, one scrubber and the motion switch drive the first four. Each carries one decoration, <code>only("goals", parallel(threshold({ compareTo: "xg" }), travel("soccer-ball", { ride: "on" })))</code>, with no change to effect code.</p>
   </header>
 
   <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
   <div id="motion"></div>
 
-  <!-- The scrubber and both charts: what plays together. -->
+  <!-- The scrubber and the four charts: what plays together. -->
   <div class="season" id="season">
     <div class="bar">
       <span class="slot" id="play"></span>
@@ -123,6 +124,24 @@
         </div>
       </section>
     </div>
+
+    <div class="pair">
+      <section class="card" aria-labelledby="gaps-title">
+        <h2 id="gaps-title">With missing weeks</h2>
+        <p class="note">The same season as a weekly data feed recorded it, on <code>lineChart</code>. The feed missed matchweeks 9 and 10, and has no xG for matchweeks 4 and 5, so those values are <code>null</code>: a gap in the line, not a zero. Nothing turns red where either line has no value, and as the season plays, the ball waits at matchweek 8, then jumps to 11. A missing week keeps its place: hover it, or reach it with the arrow keys, and it says what's missing.</p>
+        <div id="gaps"></div>
+      </section>
+
+      <section class="card" aria-labelledby="d3-gaps-title">
+        <h2 id="d3-gaps-title">The same gaps on a D3 line</h2>
+        <p class="note">D3 leaves a missing week out with <code>line().defined()</code>, which breaks the path there. <code>expressive()</code> describes each path by the weeks it has and where they break, with <code>describe.line({ breaks })</code>, so the same decoration leaves the same gaps.</p>
+        <div class="d3-box">
+          <div class="legend"><span><i class="swatch-goals"></i>Goals scored</span><span><i class="swatch-xg"></i>Expected goals (xG)</span><span><i class="swatch-below"></i>Goals below xG</span></div>
+          <!-- A group, not an image, as the first D3 line is. -->
+          <svg id="d3-gaps" role="group" aria-label="Goals and expected goals with missing weeks on a D3 line"></svg>
+        </div>
+      </section>
+    </div>
   </div>
 
   <div class="pair free">
@@ -143,6 +162,8 @@
         <li>The goals line's end dot and hover dot keep their series colour, since <code>threshold</code> draws nothing on a dot. The tooltip's "vs expected" line and the table's Difference column still say when goals are below xG.</li>
         <li>"Goals below xG" comes after the series in the legend, since a page's entries follow the chart's own.</li>
         <li>The table's headers are the series' names, "Goals scored" and "Expected goals (xG)", and its values share the chart's one format, so an xG of 20.0 reads "20".</li>
+        <li>A missing week is <code>null</code>, never 0: a zero would pull the season-to-date line down to the axis and back. The names, the tooltip and the table say "missing", since "no goals" reads as none scored.</li>
+        <li>Matchweeks 3 to 6 have goals below xG, but no red: with no xG for weeks 4 and 5, there's nothing to compare, so <code>threshold</code> colours nothing rather than guess.</li>
       </ul>
     </section>
   </div>
@@ -154,6 +175,8 @@
       <li>Play in each mode: the season takes about 6.5 s in Presentation and 2 s in Analysis, and Off goes straight to the end, with the red still showing.</li>
       <li>Tab into the line chart, then use the arrow keys to read both lines and the gap week by week.</li>
       <li>Open the line chart's data table: its Difference column says how far goals are above or below xG each week.</li>
+      <li>Play the season and watch the charts with missing weeks: the ball waits at matchweek 8 while 9 and 10 are revealed, then jumps across the gap.</li>
+      <li>Hover matchweek 9 on the chart with missing weeks, or reach it with the arrow keys: the crosshair stops there, and the tooltip and the week's name say both values are missing.</li>
     </ul>
   </section>
 </main>

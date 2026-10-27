@@ -45,7 +45,14 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
   {
     name: "line",
     demo: lineDemo,
-    stops: [...MOTION, "Play season", "Matchweek", "Matchweek 1: 0 goals, 0.6 xG", "Data table", "Goals scored: 56 goals by matchweek 38", "Goals scored: 56 goals by matchweek 38"],
+    stops: [
+      ...MOTION,
+      ...["Play season", "Matchweek", "Matchweek 1: 0 goals, 0.6 xG", "Data table", "Goals scored: 56 goals by matchweek 38"],
+      ...["Matchweek 1: 0 goals, 0.6 xG", "Data table", "Goals scored: 56 goals by matchweek 38, matchweeks 9 and 10 missing"],
+      "Goals scored: 56 goals by matchweek 38"
+    ],
+    // Not #gaps, the same line chart with missing weeks: at a week with no values its focus is the
+    // crosshair, with no point to ring, so line.spec.ts checks it there.
     charts: [{ chart: "#line", shape: '.ec-column[data-key="12"] .ec-hit', other: '.ec-column[data-key="30"] .ec-hit' }]
   },
   {

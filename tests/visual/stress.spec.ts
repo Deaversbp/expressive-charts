@@ -1,8 +1,9 @@
 // Screenshots of demo/stress.html on a stopped clock: the page at its smallest sizes in light and dark,
 // and the date line at rest, part way through its play, and with its tooltip. Beside them, DOM checks:
 // nothing plays by itself; each start button runs its case and its readout reports the run; with
-// reduced motion, or Off picked, every case jumps to its end; and the date line's names, arrow keys and
-// table, which listening script G hears. The readouts are masked in pictures, since they measure the
+// reduced motion, or Off picked, every case jumps to its end; the date line's names, arrow keys and
+// table, which listening script G hears; and Page Up and Page Down on the date line and the bars, with
+// the bars' names thinned, which script I hears. The readouts are masked in pictures, since they measure the
 // machine. Names start with "stress-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
@@ -158,6 +159,57 @@ test.describe("the date line", () => {
     await expect(table.locator("tbody tr").first().locator("th")).toHaveText("Jan 1, 2025");
     await expect(table.locator("tbody tr").last().locator("th")).toHaveText("Dec 31, 2025");
   });
+
+  test("Page Up and Page Down go a month at a time, and stop at the ends", async ({ page }) => {
+    await openDemo(page, stressDemo);
+    await playButton(page).focus();
+    await tabInto(page, lineChart(page));
+    await expect(day(page, "2025-01-01")).toBeFocused();
+    await page.keyboard.press("PageDown");
+    await expect(day(page, "2025-02-01")).toBeFocused();
+    await page.keyboard.press("PageDown");
+    await expect(day(page, "2025-03-01")).toBeFocused();
+    await page.keyboard.press("PageUp");
+    await expect(day(page, "2025-02-01")).toBeFocused();
+    await page.keyboard.press("PageUp");
+    await page.keyboard.press("PageUp");
+    await expect(day(page, "2025-01-01")).toBeFocused();
+    // From the last day, a month back is the last day of November, and Page Down stays.
+    await page.keyboard.press("End");
+    await page.keyboard.press("PageDown");
+    await expect(day(page, "2025-12-31")).toBeFocused();
+    await page.keyboard.press("PageUp");
+    await expect(day(page, "2025-11-30")).toBeFocused();
+  });
+});
+
+test("on the bars, Page Up and Page Down go a tenth of the bars at a time, and every name and value stays in the names", async ({ page }) => {
+  await openDemo(page, stressDemo);
+  const hoverChart = page.locator("#hover-chart");
+  const barMark = (n: number): Locator => hoverChart.locator(`.ec-mark[data-key="Bar ${n}"]`);
+  // Every nth name is drawn under the 100 bars, from the first (n depends on the fonts: 20 in Docker),
+  // and no values; each bar's name has both.
+  const drawn = await hoverChart.locator(".ec-label").evaluateAll((labels) => labels.flatMap((label, i) => (/\S/.test(label.textContent ?? "") ? [i] : [])));
+  const every = drawn[1]! - drawn[0]!;
+  expect(every).toBeGreaterThan(1);
+  expect(drawn).toEqual(drawn.map((_, k) => k * every));
+  await expect(hoverChart.locator(".ec-value").filter({ hasText: /\S/ })).toHaveCount(0);
+  await expect(barMark(37)).toHaveAttribute("aria-label", /^Bar 37: \d+ points$/);
+
+  await card(page, "hover").locator("[data-start]").focus();
+  await tabInto(page, hoverChart);
+  await expect(barMark(1)).toBeFocused();
+  await page.keyboard.press("PageDown");
+  await expect(barMark(11)).toBeFocused();
+  await page.keyboard.press("PageDown");
+  await expect(barMark(21)).toBeFocused();
+  await page.keyboard.press("PageUp");
+  await expect(barMark(11)).toBeFocused();
+  await page.keyboard.press("End");
+  await page.keyboard.press("PageDown");
+  await expect(barMark(100)).toBeFocused();
+  await page.keyboard.press("PageUp");
+  await expect(barMark(90)).toBeFocused();
 });
 
 /** Attributes that say where every mark of a case is drawn, to compare a case's state at two times. */

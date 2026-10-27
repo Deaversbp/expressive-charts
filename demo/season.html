@@ -57,12 +57,6 @@
   .pair { display: grid; gap: 20px; min-width: 0; }
   @media (min-width: 860px) { .pair { grid-template-columns: 1fr 1fr; } }
   #goals, #line, #players, .d3-box { min-width: 0; }
-  /* The week under every column would crowd: the first and every fifth, as an axis would. Each column's name and the table have every week. */
-  #goals .ec-mark:not([data-key="1"]):not([data-key$="5"]):not([data-key$="0"]) .ec-label { display: none; }
-  /* Where a column is too narrow for its value, the axis, the names, the tooltip and the table still have it. */
-  @media (max-width: 599px) { #goals .ec-value { display: none; } }
-  /* delta() writes each change past its bar's value, which past the longest bar is past the chart's edge. The chart leaves itself that room. */
-  #players { padding-right: 28px; }
   /* The tooltip functions' text is plain; their first line is bold, as on line.html. */
   #goals .ec-tooltip::first-line, #line .ec-tooltip::first-line { font-weight: 600; }
   /* xG is a dashed grey, as on line.html: it's what goals are read against. */
@@ -78,8 +72,6 @@
   #shots .column { fill: var(--ec-series-3, #02a471); }
   #slope .slope { fill: none; stroke: var(--ec-series-1, #2a78d6); stroke-linejoin: round; stroke-linecap: round; }
   #slope .name { font-size: 12.5px; fill: var(--ink-2); }
-  /* The text label() writes, in the overlay expressive() adds: sized as our charts size theirs, since a host <svg> takes the page's font size. */
-  #slope .ec-text { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>

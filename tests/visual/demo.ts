@@ -22,6 +22,11 @@ export type Metric = "Goals" | "Assists" | "Goals + assists";
 /** A demo page, and how to tell that its charts are drawn. */
 export interface Demo {
   readonly path: string;
+  /**
+   * The viewport height a page taller than playwright.config.ts's needs, which openDemo grows the
+   * viewport to. The config's stays as it is, since a shorter page's full-page picture is the viewport's height.
+   */
+  readonly height?: number;
   ready(page: Page): Promise<void>;
 }
 
@@ -45,14 +50,19 @@ export const donutDemo: Demo = {
   }
 };
 
-/** demo/line.html: the library's line chart, the D3 line and the Vega-Lite line. */
+/** demo/line.html: the library's line chart, the D3 line, both again with missing weeks, and the Vega-Lite line. */
 export const lineDemo: Demo = {
   path: "/line.html",
+  // About 2,460 px at 1,000 px wide.
+  height: 2600,
   async ready(page) {
     await expect(page.locator("#line .ec-line")).toHaveCount(2);
     await expect(page.locator("#line .ec-column")).toHaveCount(38);
-    // expressive() has named the D3 line's paths, so it's attached.
+    await expect(page.locator("#gaps .ec-line")).toHaveCount(2);
+    await expect(page.locator("#gaps .ec-column")).toHaveCount(38);
+    // expressive() has named the D3 lines' paths, so it's attached to both.
     await expect(page.locator('#d3-line path.line[role="img"]')).toHaveCount(2);
+    await expect(page.locator('#d3-gaps path.line[role="img"]')).toHaveCount(2);
     // And fromVegaView() the Vega-Lite line's, once Vega has drawn it.
     await expect(page.locator('#vega-line .mark-line path[role="img"]')).toHaveCount(2);
   }
@@ -97,13 +107,15 @@ export const stressDemo: Demo = {
 
 /** Opens a demo, bars.html unless another is given, with time stopped at START. */
 export async function openDemo(page: Page, demo: Demo = barsDemo): Promise<void> {
+  const viewport = page.viewportSize();
+  if (demo.height && viewport && viewport.height < demo.height) await page.setViewportSize({ width: viewport.width, height: demo.height });
   await page.clock.install({ time: 0 });
   await page.clock.pauseAt(START);
   await page.goto(demo.path);
   await demo.ready(page);
   const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
   if (scrollHeight > (page.viewportSize()?.height ?? 0)) {
-    throw new Error(`The page (${scrollHeight} px) is taller than the viewport; raise its height in playwright.config.ts.`);
+    throw new Error(`The page (${scrollHeight} px) is taller than the viewport; give its Demo a height, or raise the one it has.`);
   }
   // The page's clock starts at the real time that passed between install() and pauseAt(), a few ms
   // that vary with the machine. Moving it to START puts every test's frames at the same times, so a

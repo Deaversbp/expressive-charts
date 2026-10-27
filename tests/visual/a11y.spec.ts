@@ -2,10 +2,9 @@
 // axe-core, a pinned dev dependency, runs its WCAG 2.2 A and AA rules on every demo page: in light and
 // dark, at 320 px wide, under forced colours, and on morph.html mid-switch. Beside it, DOM checks for
 // what axe can't see: the tab order with a visible focus at every stop, no sideways scroll at 320 px,
-// the tooltip clear of the focus ring and dismissed by Escape, every label at 4.5:1 while another
-// mark is hovered, nothing moving by itself after 5 s, and legends keeping their colours under
-// forced colours. There are no screenshots here, so every
-// browser runs all of it.
+// the tooltip clear of the focus ring, dismissed by Escape and hoverable, every label at 4.5:1 while
+// another mark is hovered, nothing moving by itself after 5 s, and legends keeping their colours under
+// forced colours. There are no screenshots here, so every browser runs all of it.
 
 import axe from "axe-core";
 import { expect, test, type Page } from "@playwright/test";
@@ -16,10 +15,11 @@ const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
 const MOTION = ["Presentation", "Analysis", "Off"];
 
-/** One of the library's charts, which show a tooltip, and a shape in it to hover. */
+/** One of the library's charts, which show a tooltip, a shape in it to hover, and another mark's, clear of that one's tooltip. */
 interface TooltipChart {
   readonly chart: string;
   readonly shape: string;
+  readonly other: string;
 }
 
 /**
@@ -31,28 +31,34 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
     name: "bars",
     demo: barsDemo,
     stops: [...MOTION, "Goals", "Assists", "Goals + assists", "Highest first", "A–Z", "Play next matchweek", "Okafor: 16 goals", "Data table", "Okafor: 16 goals"],
-    charts: [{ chart: "#chart", shape: '.ec-mark[data-key="Okafor"] .ec-segment' }]
+    charts: [{ chart: "#chart", shape: '.ec-mark[data-key="Okafor"] .ec-segment', other: '.ec-mark[data-key="Castillo"] .ec-segment' }]
   },
   {
     name: "donut",
     demo: donutDemo,
     stops: [...MOTION, "Ball", "Wiggle", "Pulse", "Data order", "Largest first", "Next match", "Goal: 58 shots, 14%", "Data table", "Goal: 58 shots, 14%", "Goal: 58 shots", "Data table"],
     charts: [
-      { chart: "#donut", shape: '.ec-mark[data-key="Off target"] .ec-slice' },
-      { chart: "#columns", shape: '.ec-mark[data-key="Saved"] .ec-segment' }
+      { chart: "#donut", shape: '.ec-mark[data-key="Off target"] .ec-slice', other: '.ec-mark[data-key="Goal"] .ec-slice' },
+      { chart: "#columns", shape: '.ec-mark[data-key="Saved"] .ec-segment', other: '.ec-mark[data-key="Blocked"] .ec-segment' }
     ]
   },
   {
     name: "line",
     demo: lineDemo,
     stops: [...MOTION, "Play season", "Matchweek", "Matchweek 1: 0 goals, 0.6 xG", "Data table", "Goals scored: 56 goals by matchweek 38", "Goals scored: 56 goals by matchweek 38"],
-    charts: [{ chart: "#line", shape: '.ec-column[data-key="12"] .ec-hit' }]
+    charts: [{ chart: "#line", shape: '.ec-column[data-key="12"] .ec-hit', other: '.ec-column[data-key="30"] .ec-hit' }]
   },
   {
     name: "morph",
     demo: morphDemo,
     stops: [...MOTION, "Show as columns", "Drop", "Unroll", "Goal: 58 shots, 14%", "Data table"],
-    charts: [{ chart: "#shots", shape: '.ec-switch-view[data-view="donut"] .ec-mark[data-key="Off target"] .ec-slice' }]
+    charts: [
+      {
+        chart: "#shots",
+        shape: '.ec-switch-view[data-view="donut"] .ec-mark[data-key="Off target"] .ec-slice',
+        other: '.ec-switch-view[data-view="donut"] .ec-mark[data-key="Goal"] .ec-slice'
+      }
+    ]
   },
   {
     name: "season",
@@ -65,9 +71,9 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
     // A linked hover dims the other charts too: "contrast on hover" measures the chart hovered, and
     // season.spec.ts the two linked to it.
     charts: [
-      { chart: "#goals", shape: '.ec-mark[data-key="13"] .ec-segment' },
-      { chart: "#line", shape: '.ec-column[data-key="13"] .ec-hit' },
-      { chart: "#players", shape: '.ec-mark[data-key="Okafor"] .ec-segment' }
+      { chart: "#goals", shape: '.ec-mark[data-key="13"] .ec-segment', other: '.ec-mark[data-key="3"] .ec-segment' },
+      { chart: "#line", shape: '.ec-column[data-key="13"] .ec-hit', other: '.ec-column[data-key="3"] .ec-hit' },
+      { chart: "#players", shape: '.ec-mark[data-key="Okafor"] .ec-segment', other: '.ec-mark[data-key="Castillo"] .ec-segment' }
     ]
   },
   {
@@ -84,7 +90,13 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
     ],
     // The switch's 20 bars: the tooltip test walks every mark of a chart, and the other charts here
     // have 100 or more (stress.spec.ts shows the date line's tooltip).
-    charts: [{ chart: "#switch-chart", shape: '.ec-switch-view[data-view="bars"] .ec-mark[data-key="Bar 2"] .ec-segment' }]
+    charts: [
+      {
+        chart: "#switch-chart",
+        shape: '.ec-switch-view[data-view="bars"] .ec-mark[data-key="Bar 2"] .ec-segment',
+        other: '.ec-switch-view[data-view="bars"] .ec-mark[data-key="Bar 15"] .ec-segment'
+      }
+    ]
   }
 ];
 
@@ -322,8 +334,176 @@ test.describe("content on hover", () => {
         await page.clock.runFor(REST);
       }
     });
+
+    test(`${name}.html: the pointer goes from a mark onto its tooltip and across it, then off it onto another mark or away`, async ({ page }) => {
+      // A large page, where WebKit in Docker takes a while over each move.
+      if (demo === stressDemo) test.setTimeout(300_000);
+      await openAtRest(page, demo);
+      for (const { chart, shape, other } of charts) {
+        for (const away of ["away", "another mark"] as const) {
+          const at = await hoverShape(page, page.locator(`${chart} ${shape}`));
+          await page.clock.runFor(REST);
+          const start = await hovered(page, chart);
+          expect(start.text, `${chart}: a tooltip`).toBeTruthy();
+          const { path, bridge } = await pathOntoTooltip(page, chart, at);
+          // Where the bridge's trapezoid leaves its box out, the pointer goes through to the chart.
+          expect(bridge.mismatched, `${chart}: points the bridge takes, or doesn't, against its shape`).toEqual([]);
+          // A pointer that lands on whole pixels, as Firefox's does: every move keeps the hover.
+          for (const point of path) {
+            await page.mouse.move(point.x, point.y);
+            expect(await hovered(page, chart), `${chart}: at ${point.x}, ${point.y}`).toEqual(start);
+          }
+          if (away === "away") {
+            await page.mouse.move(2, 2);
+            expect(await hovered(page, chart), `${chart}: off the tooltip, away`).toEqual({ text: undefined, hot: [] });
+          } else {
+            await hoverShape(page, page.locator(`${chart} ${other}`));
+            const next = await hovered(page, chart);
+            expect(next.text, `${chart}: off the tooltip, another mark's`).toBeTruthy();
+            expect(next.text).not.toBe(start.text);
+            expect(next.hot).not.toEqual(start.hot);
+            await page.mouse.move(2, 2);
+          }
+          await page.clock.runFor(REST);
+        }
+      }
+    });
   }
 });
+
+test.describe("content on hover, under the pointer", () => {
+  test("line.html: a tooltip that comes up under the pointer lets it through, until the pointer has been off it", async ({ page }) => {
+    await openAtRest(page, lineDemo);
+    // Week 12's column, half way down: its tooltip, above its highest point, comes up over the pointer.
+    const column = (await page.locator('#line .ec-column[data-key="12"] .ec-hit').boundingBox())!;
+    const start = { x: Math.round(column.x + column.width / 2), y: Math.round(column.y + column.height / 2) };
+    await page.mouse.move(start.x, start.y);
+    /** The x hovered, by its points, and the x under the pointer with the tooltip left out. */
+    const state = (x: number, y: number) =>
+      page.evaluate(
+        ({ x, y }) => {
+          const root = document.querySelector("#line")!;
+          const box = root.querySelector(".ec-tooltip.ec-tooltip-shown")?.getBoundingClientRect();
+          const under = document
+            .elementsFromPoint(x, y)
+            .find((element) => !element.closest(".ec-tooltip-layer"))
+            ?.closest(".ec-column")
+            ?.getAttribute("data-key");
+          const hot = root.querySelector(".ec-point.ec-hot")?.getAttribute("data-key")?.split("@")[1];
+          return { hot, under, covered: box !== undefined && x > box.left && x < box.right && y > box.top && y < box.bottom };
+        },
+        { x, y }
+      );
+    expect(await state(start.x, start.y)).toEqual({ hot: "12", under: "12", covered: true });
+    // Along the chart through the tooltip, 2 px a move: the crosshair follows the pointer.
+    const seen = new Set<string>();
+    for (let x = start.x + 2; x <= start.x + 40; x += 2) {
+      await page.mouse.move(x, start.y);
+      const now = await state(x, start.y);
+      expect(now.hot, `at ${x}`).toBe(now.under);
+      seen.add(now.hot!);
+    }
+    expect(seen.size, "the x's it went through").toBeGreaterThan(2);
+    // Off it, below, and back onto it: now it holds, and moving across it keeps the x.
+    const box = (await page.locator("#line .ec-tooltip").boundingBox())!;
+    const middle = Math.round(box.x + box.width / 2);
+    await page.mouse.move(middle, Math.round(box.y + box.height + 6));
+    const held = await state(middle, Math.round(box.y + box.height + 6));
+    await page.mouse.move(middle, Math.round(box.y + box.height - 4));
+    for (const x of [middle - 20, middle + 20]) {
+      await page.mouse.move(x, Math.round(box.y + box.height - 4));
+      expect((await state(x, Math.round(box.y + box.height - 4))).hot, `on the tooltip at ${x}`).toBe(held.hot);
+    }
+  });
+});
+
+/** What a chart shows as hovered: its tooltip's text, if it shows, and the keys of the marks and points emphasised. */
+function hovered(page: Page, chart: string): Promise<{ text: string | undefined; hot: (string | null)[] }> {
+  return page.evaluate((selector) => {
+    const root = document.querySelector(selector)!;
+    return {
+      text: root.querySelector(".ec-tooltip.ec-tooltip-shown")?.textContent ?? undefined,
+      hot: [...root.querySelectorAll(".ec-hot")].map((element) => element.getAttribute("data-key"))
+    };
+  }, chart);
+}
+
+/**
+ * A pointer's path from the hovered mark onto its tooltip, in whole pixels: from the mark's pixel
+ * nearest the box under it, straight across the gap and into the box's middle, 2 px a move, then across
+ * it to each side, 8 px a move. And a check of the bridge over the gap against its clip-path: points inside
+ * its trapezoid take the pointer and points outside don't, so it doesn't block more than it should.
+ */
+async function pathOntoTooltip(
+  page: Page,
+  chart: string,
+  at: { x: number; y: number }
+): Promise<{ path: { x: number; y: number }[]; bridge: { mismatched: string[] } }> {
+  return page.evaluate(
+    ({ selector, at }) => {
+      const root = document.querySelector(selector)!;
+      const tip = root.querySelector<HTMLElement>(".ec-tooltip.ec-tooltip-shown")!;
+      const box = tip.getBoundingClientRect();
+      const above = tip.getAttribute("data-side") === "above";
+      /** What the pointer would hit at a point without the tooltip there, and the mark or x it belongs to. */
+      const target = (x: number, y: number): Element | null | undefined =>
+        document
+          .elementsFromPoint(x, y)
+          .find((element) => !element.closest(".ec-tooltip-layer"))
+          ?.closest(".ec-mark, .ec-column");
+      const mine = target(at.x, at.y)!;
+      // The mark's pixel nearest the box's edge, under it, nearest its middle when several are as near.
+      const edge = Math.round(above ? box.bottom : box.top);
+      const middle = box.left + box.width / 2;
+      let best = { x: Math.round(at.x), y: Math.round(at.y), d: Infinity };
+      for (let x = Math.ceil(box.left + 6); x <= box.right - 6; x += 2) {
+        for (let d = 1; d <= Math.min(best.d, 200); d++) {
+          const y = above ? edge + d : edge - d;
+          if (target(x, y) !== mine) continue;
+          if (d < best.d || Math.abs(x - middle) < Math.abs(best.x - middle)) best = { x, y, d };
+          break;
+        }
+      }
+      const corner = { x: best.x, y: above ? edge + 1 : edge - 1 };
+      const centre = { x: Math.round(middle), y: Math.round(box.top + box.height / 2) };
+      const stops = [best, corner, centre, { x: Math.round(box.left + 4), y: centre.y }, { x: Math.round(box.right - 4), y: centre.y }];
+      const path: { x: number; y: number }[] = [{ x: best.x, y: best.y }];
+      for (let i = 1; i < stops.length; i++) {
+        const from = stops[i - 1]!;
+        const to = stops[i]!;
+        const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / (i < 3 ? 2 : 8)));
+        for (let step = 1; step <= steps; step++) path.push({ x: Math.round(from.x + ((to.x - from.x) * step) / steps), y: Math.round(from.y + ((to.y - from.y) * step) / steps) });
+      }
+      // The bridge, where there's one: every 3 px over its box, more than 1.5 px from its trapezoid's edges.
+      const mismatched: string[] = [];
+      const bridge = root.querySelector<HTMLElement>(".ec-tooltip-bridge");
+      if (bridge && !bridge.hidden) {
+        const rect = bridge.getBoundingClientRect();
+        const numbers = (getComputedStyle(bridge).clipPath.match(/-?[\d.]+(?=px)/g) ?? []).map(Number);
+        const corners = [0, 2, 4, 6].map((i) => ({ x: rect.left + numbers[i]!, y: rect.top + numbers[i + 1]! }));
+        // Signed distance inside each edge of the convex, clockwise trapezoid: the least is how far in the point is.
+        const inside = (x: number, y: number): number =>
+          Math.min(
+            ...corners.map((a, i) => {
+              const b = corners[(i + 1) % corners.length]!;
+              const length = Math.hypot(b.x - a.x, b.y - a.y);
+              return length === 0 ? Infinity : ((b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x)) / length;
+            })
+          );
+        for (let y = rect.top + 1.5; y < rect.bottom - 1; y += 3) {
+          for (let x = rect.left + 1.5; x < rect.right - 1; x += 3) {
+            const depth = inside(x, y);
+            if (Math.abs(depth) < 1.5) continue;
+            const taken = document.elementsFromPoint(x, y).includes(bridge);
+            if (taken !== depth > 0) mismatched.push(`${Math.round(x)}, ${Math.round(y)}: ${taken ? "taken" : "not taken"}`);
+          }
+        }
+      }
+      return { path, bridge: { mismatched } };
+    },
+    { selector: chart, at }
+  );
+}
 
 test.describe("contrast on hover", () => {
   // WCAG 1.4.3 while a mark is hovered, which axe never sees: the other marks dim, and every text in

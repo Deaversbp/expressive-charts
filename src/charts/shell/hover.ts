@@ -10,7 +10,7 @@
 //
 // The chart says which targets and marks there are and draws them: it finds a live target from an
 // event target, gives a target's marks, their elements and how they are on screen, draws the ring
-// and shows the tooltip.
+// and shows the tooltip. The pointer on the tooltip stays on the hovered target (../interaction.ts).
 //
 // A link (../link.ts) hovers targets too, as "linked": their marks' emphasis, the dimming and their
 // hover runs, with no tooltip, ring or focus. It hears the chart's own hovers, and Escape on a linked
@@ -54,6 +54,8 @@ export interface ChartHoverOptions<D> {
     /** Shows the tooltip for the live target `key` as it is on screen, or moves it there. */
     show(key: string): void;
     hide(): void;
+    /** The tooltip's element while it shows: the pointer on it stays on the hovered target. */
+    element?(): HTMLElement | undefined;
   };
 }
 
@@ -201,7 +203,9 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     leave() {
       // Focus holds a keyboard hover until blur or Escape, and a link holds its own.
       if (hovered?.source === "pointer" || hovered?.source === "touch") endHover();
-    }
+    },
+    // The pointer can move onto the tooltip of the chart's own hover. A link's has none.
+    tooltip: () => (own(hovered) ? { key: hovered.keys[0]!, element: options.tooltip.element?.() } : undefined)
   });
 
   const keyboard = keyboardFocus(() => svg, {

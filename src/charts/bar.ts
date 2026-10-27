@@ -592,7 +592,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
         const record = records.get(key);
         if (record) showTooltip(record);
       },
-      hide: () => tooltip.hide()
+      hide: () => tooltip.hide(),
+      element: () => tooltip.element()
     }
   });
 

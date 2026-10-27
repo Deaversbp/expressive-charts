@@ -198,7 +198,7 @@ The package lists its CSS under `sideEffects`, so bundlers keep that import. Cha
 - **Motion.** Reduced motion jumps every animation to its end state unless the viewer picks a mode on the page, with `motionSwitch()`. Nothing plays by itself, and a playback has its pause control in `playButton()` (WCAG 2.2.2).
 - **Other people's charts.** `expressive()` adds the same keyboard focus with `keyboard: true`, and one name per mark with `markLabel`.
 
-The demo pages with the library's charts on them have had a written WCAG 2.2 AA audit ([a11y-audit.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-audit.md)), and the test suite runs axe's WCAG rules on every demo page in Chromium, Firefox and WebKit, in light and dark, at 320 px wide and under forced colours. Screen-reader scripts for NVDA and Chrome, with their results, are in [a11y-check.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-check.md#results). Known gaps: the tooltip can't be hovered itself (it can be dismissed with Escape), and VoiceOver hasn't been run.
+The demo pages with the library's charts on them have had a written WCAG 2.2 AA audit ([a11y-audit.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-audit.md)), and the test suite runs axe's WCAG rules on every demo page in Chromium, Firefox and WebKit, in light and dark, at 320 px wide and under forced colours. Screen-reader scripts for NVDA and Chrome, with their results, are in [a11y-check.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-check.md#results). The tooltip can be hovered, and dismissed with Escape. Known gap: VoiceOver hasn't been run.
 
 ## Limits
 

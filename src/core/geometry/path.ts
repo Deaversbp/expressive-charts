@@ -1,6 +1,7 @@
-// Any SVG path data: read it, move it through a transform, and write it back out. iconFromSvg reads
-// icons' markup with it, and a chart switch moves marks' outlines between coordinate spaces. What's
-// written is built from numbers only, so nothing from the input passes through.
+// Any SVG path data: read it, move it through a transform, and write it back out, and the outline of
+// any shape element as path commands. iconFromSvg reads icons' markup with it, expressive() reads the
+// circles and shapes other libraries draw, and a chart switch moves marks' outlines between
+// coordinate spaces. What's written is built from numbers only, so nothing from the input passes through.
 
 import type { Matrix } from "../contracts/drawing";
 import type { Point } from "../contracts/geometry";
@@ -120,6 +121,82 @@ export function parsePath(d: string): PathCommand[] {
 
 const lastIs = (commands: readonly PathCommand[], op: PathCommand["op"]): boolean => commands[commands.length - 1]?.op === op;
 const reflect = (control: Point, about: Point): Point => ({ x: 2 * about.x - control.x, y: 2 * about.y - control.y });
+
+/** A shape element's attribute by name, as written: an element's getAttribute, or a map's get. */
+export type ShapeAttribute = (name: string) => string | null | undefined;
+
+/**
+ * A shape element's outline as path commands, in its own coordinates: `<path>`, `<circle>`,
+ * `<ellipse>`, `<line>`, `<polyline>`, `<polygon>` or `<rect>`, from its attributes. A shape SVG
+ * wouldn't draw (a radius of 0, a polyline of one point) has none, and so does any other tag.
+ */
+export function shapeOutline(tag: string, attribute: ShapeAttribute): PathCommand[] {
+  const num = (name: string): number => {
+    const value = Number.parseFloat(attribute(name) ?? "");
+    return Number.isFinite(value) ? value : 0;
+  };
+  switch (tag) {
+    case "path":
+      return parsePath(attribute("d") ?? "");
+    case "circle":
+      return ellipse(num("cx"), num("cy"), num("r"), num("r"));
+    case "ellipse":
+      return ellipse(num("cx"), num("cy"), num("rx"), num("ry"));
+    case "line":
+      return [
+        { op: "M", to: { x: num("x1"), y: num("y1") } },
+        { op: "L", to: { x: num("x2"), y: num("y2") } }
+      ];
+    case "polyline":
+    case "polygon": {
+      const values = (attribute("points") ?? "").trim().split(/[\s,]+/).filter(Boolean).map(Number);
+      const points: Point[] = [];
+      for (let i = 0; i + 1 < values.length && Number.isFinite(values[i]) && Number.isFinite(values[i + 1]); i += 2) {
+        points.push({ x: values[i]!, y: values[i + 1]! });
+      }
+      if (points.length < 2) return [];
+      const lines = points.map((to, i): PathCommand => ({ op: i === 0 ? "M" : "L", to }));
+      // A polyline is a polygon left open: no closing segment, and filled as any open path is.
+      return tag === "polygon" ? [...lines, { op: "Z", to: points[0]! }] : lines;
+    }
+    case "rect":
+      return rect(num("x"), num("y"), num("width"), num("height"), attribute);
+    default:
+      return [];
+  }
+}
+
+function ellipse(cx: number, cy: number, rx: number, ry: number): PathCommand[] {
+  if (!(rx > 0 && ry > 0)) return [];
+  const arc = (x: number): PathCommand => ({ op: "A", rx, ry, rotation: 0, large: false, sweep: true, to: { x, y: cy } });
+  return [{ op: "M", to: { x: cx + rx, y: cy } }, arc(cx - rx), arc(cx + rx), { op: "Z", to: { x: cx + rx, y: cy } }];
+}
+
+function rect(x: number, y: number, w: number, h: number, attribute: ShapeAttribute): PathCommand[] {
+  if (!(w > 0 && h > 0)) return [];
+  const corner = (name: string): number | undefined => {
+    const value = Number.parseFloat(attribute(name) ?? "");
+    return value >= 0 ? value : undefined;
+  };
+  // A missing rx or ry takes the other's value, and both are capped at half the side.
+  const rx = Math.min(corner("rx") ?? corner("ry") ?? 0, w / 2);
+  const ry = Math.min(corner("ry") ?? corner("rx") ?? 0, h / 2);
+  const line = (px: number, py: number): PathCommand => ({ op: "L", to: { x: px, y: py } });
+  if (!(rx > 0 && ry > 0)) return [{ op: "M", to: { x, y } }, line(x + w, y), line(x + w, y + h), line(x, y + h), { op: "Z", to: { x, y } }];
+  const arc = (px: number, py: number): PathCommand => ({ op: "A", rx, ry, rotation: 0, large: false, sweep: true, to: { x: px, y: py } });
+  return [
+    { op: "M", to: { x: x + rx, y } },
+    line(x + w - rx, y),
+    arc(x + w, y + ry),
+    line(x + w, y + h - ry),
+    arc(x + w - rx, y + h),
+    line(x + rx, y + h),
+    arc(x, y + h - ry),
+    line(x, y + ry),
+    arc(x + rx, y),
+    { op: "Z", to: { x: x + rx, y } }
+  ];
+}
 
 /** Moves path commands through an affine transform. Arcs stay arcs: their ellipse is transformed too. */
 export function transformPath(commands: readonly PathCommand[], m: Matrix): PathCommand[] {

@@ -86,7 +86,9 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // from the plan's fromVegaView(view, mark = "marks"): it takes expressive()'s options with `mark` among
 // them, plus `sample` for data effects' values, and returns the attachment, which follows the View's
 // renders itself. M9 step 1 gave both attachments update({ on }) and leave(), as the charts have, and
-// fromVegaView() reads a line Vega breaks at a missing value, with its gaps.
+// fromVegaView() reads a line Vega breaks at a missing value, with its gaps. M9 step 6 made expressive()
+// read <circle>s as points and <path>, <line>, <polyline>, <polygon> and <ellipse> as shapes, with
+// describe.shape, so `geometry` is only for other elements, or to say more than an element shows.
 
 // ── Reference charts ─────────────────────────────────────────────────────────
 

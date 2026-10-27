@@ -263,7 +263,7 @@ What it compares on each chart, from the samples the chart gives:
 | `barChart` | 0 at the baseline to the bar's total at the tip, so `compareTo: 10` colours the part past 10 | that series' segment of the stack, with samples over the segment's own walk |
 | `donutChart` | 0 to the slice's share of the total, so `compareTo: 0.25, when: "above"` colours the part past a quarter | its own series only |
 | `lineChart` | a line's value at each revealed row, with the row's x as `at`, plus its end part way to the next row, so `compareTo: "xg"` colours the goals line below xG and follows every frame of a reveal. Where either line is missing a value, nothing is coloured. A point has its one value, and draws nothing | the other line; for a point, the other series' point at the same x |
-| `expressive()` | the page's `samples` option: on a D3 line, `samplesAlong` on the points that drew it, so `compareTo: "xg"` colours it below the xG line. Without it, rects with a numeric `value` get `barChart`'s samples, and other marks none, so it draws nothing | the mark's own segment of that series, else the first other mark of that series (another line path) |
+| `expressive()` | the page's `samples` option: on a D3 line, `samplesAlong` on the points that drew it, so `compareTo: "xg"` colours it below the xG line. Without it, rects with a numeric `value` get `barChart`'s samples, circles with one get it as their one sample, and other marks none, so it draws nothing | the mark's own segment of that series, else the first other mark of that series (another line path) |
 
 ## Composing
 

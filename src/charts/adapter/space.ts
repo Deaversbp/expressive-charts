@@ -47,6 +47,24 @@ export function axisAligned(m: Matrix): boolean {
   return (Math.abs(b) <= tiny && Math.abs(c) <= tiny) || (Math.abs(a) <= tiny && Math.abs(d) <= tiny);
 }
 
+/**
+ * Whether the transform keeps circles round: an even scale, turns and flips, with any translation.
+ * Its columns are the same length and at right angles, to within a ten-thousandth of their length,
+ * so the rounding in a browser's CTMs doesn't make a circle an ellipse.
+ */
+export function keepsCircles(m: Matrix): boolean {
+  const [a, b, c, d] = m;
+  const u = a * a + b * b;
+  const v = c * c + d * d;
+  const tiny = 1e-4 * Math.max(u, v);
+  return Math.abs(u - v) <= tiny && Math.abs(a * c + b * d) <= tiny;
+}
+
+/** How much the transform scales lengths: exactly for an even scale, and on average for an uneven one. */
+export function scaleOf(m: Matrix): number {
+  return Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
+}
+
 /** The box a transformed rectangle covers, rounded to 0.001 px like path data. */
 export function boxIn(m: Matrix, rect: Rect): Rect {
   const corners: Point[] = [
@@ -64,13 +82,23 @@ export function boxIn(m: Matrix, rect: Rect): Rect {
 
 /** A `<rect>`'s rectangle in its own user space. A negative size draws nothing, so it counts as 0. */
 export function rectOf(element: Element): Rect {
+  const attribute = attributesOf(element);
   const read = (name: "x" | "y" | "width" | "height"): number => {
-    // Browsers resolve percentages and CSS geometry; jsdom has only the attribute.
-    const animated = (element as unknown as Record<string, { baseVal?: { value?: unknown } } | undefined>)[name];
-    const value = typeof animated?.baseVal?.value === "number" ? animated.baseVal.value : Number.parseFloat(element.getAttribute(name) ?? "");
+    const value = Number.parseFloat(attribute(name) ?? "");
     return Number.isFinite(value) ? value : 0;
   };
   return { x: read("x"), y: read("y"), width: Math.max(0, read("width")), height: Math.max(0, read("height")) };
+}
+
+/**
+ * Reads an element's attributes for its geometry. A length is as the browser resolves it
+ * (percentages, units), and anything else, or a length where there's no layout (jsdom), as written.
+ */
+export function attributesOf(element: Element): (name: string) => string | null {
+  return (name) => {
+    const animated = (element as unknown as Record<string, { baseVal?: { value?: unknown } } | undefined>)[name];
+    return typeof animated?.baseVal?.value === "number" ? String(animated.baseVal.value) : element.getAttribute(name);
+  };
 }
 
 function screenMatrix(element: Element): Matrix | undefined {

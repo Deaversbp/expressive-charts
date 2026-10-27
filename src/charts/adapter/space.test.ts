@@ -1,6 +1,6 @@
 import { invert, parseTransform } from "../../core/geometry";
 import { matrix } from "../../core";
-import { axisAligned, between, boxIn, rectOf, screenMatrices } from "./space";
+import { attributesOf, axisAligned, between, boxIn, keepsCircles, rectOf, scaleOf, screenMatrices } from "./space";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -79,6 +79,34 @@ describe("axisAligned", () => {
     expect(axisAligned(parseTransform("rotate(-90)"))).toBe(true);
     expect(axisAligned(parseTransform("rotate(30)"))).toBe(false);
     expect(axisAligned(parseTransform("skewX(10)"))).toBe(false);
+  });
+});
+
+describe("keepsCircles and scaleOf", () => {
+  it("accepts even scales, turns and flips, and refuses uneven scales and skews, past a browser's rounding", () => {
+    expect(keepsCircles(parseTransform("translate(60,10) rotate(30) scale(2)"))).toBe(true);
+    expect(keepsCircles(parseTransform("scale(-2,2) rotate(-75)"))).toBe(true);
+    expect(keepsCircles([1.0000001, 0, 0, 0.9999999, 0, 0])).toBe(true);
+    expect(keepsCircles([0, 0, 0, 0, 5, 5])).toBe(true);
+    expect(keepsCircles(parseTransform("scale(2,1)"))).toBe(false);
+    expect(keepsCircles(parseTransform("rotate(30) scale(1,1.01)"))).toBe(false);
+    expect(keepsCircles(parseTransform("skewX(1)"))).toBe(false);
+  });
+
+  it("scales lengths exactly by an even scale, and on average by an uneven one", () => {
+    expect(scaleOf(parseTransform("translate(5,5) rotate(40) scale(3)"))).toBeCloseTo(3, 12);
+    expect(scaleOf(parseTransform("scale(4,1)"))).toBe(2);
+    expect(scaleOf(parseTransform("scale(-2,2)"))).toBe(2);
+  });
+});
+
+describe("attributesOf", () => {
+  it("reads lengths as the browser resolves them where it can, and everything else as written", () => {
+    const svg = svgTree(`<svg xmlns="${SVG}"><circle cx="5" r="10%"/><polyline points="1,2 3,4"/></svg>`);
+    const [circle, polyline] = [svg.querySelector("circle")!, svg.querySelector("polyline")!];
+    Object.assign(circle, { r: { baseVal: { value: 12.5 } } });
+    expect(["cx", "r", "cy"].map(attributesOf(circle))).toEqual(["5", "12.5", null]);
+    expect(attributesOf(polyline)("points")).toBe("1,2 3,4");
   });
 });
 

@@ -1,19 +1,20 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// fourteen sources: bars from the reference barChart, from expressive() on bars drawn by other code and
+// twenty sources: bars from the reference barChart, from expressive() on bars drawn by other code and
 // from a stacked Observable Plot bar through expressive(), the slices of the reference donutChart, the
 // slices of a D3 pie through expressive(), the lines and points of the reference lineChart, on a full
 // season and on one with missing weeks, the lines of a D3 line chart, of a D3 line with missing
 // weeks and of a Plot line through expressive(), and shapes through expressive(), each described from
 // its own path data with describe.shape: a D3 curve, the same with missing weeks, a D3 area, and D3
-// rings, areas with holes,
-// with samples from samplesAlong. Each source also draws its marks at another size, as a resize would,
+// rings, areas with holes. And marks expressive() reads by tag, with no geometry: a D3 scatter's
+// circles and Plot's dots as points, the D3 curves and area again, and a line, a polyline, a polygon,
+// an ellipse, a D3 symbol and a stretched circle as shapes. Lines have samples from samplesAlong. Each source also draws its marks at another size, as a resize would,
 // for the check that effects follow onChange. On lines with gaps, no effect draws inside one, on any
 // frame. This test brings charts and effects together, so it lives beside src/index.ts, the only
 // module allowed to.
 
-import { barX, lineY, plot, type Plot } from "@observablehq/plot";
+import { barX, dot, lineY, plot, type Plot } from "@observablehq/plot";
 import { select } from "d3-selection";
-import { arc, area, curveMonotoneX, line, pie, type PieArcDatum } from "d3-shape";
+import { arc, area, curveMonotoneX, line, pie, symbol, symbolStar, type PieArcDatum } from "d3-shape";
 import {
   barChart,
   delta,
@@ -404,6 +405,105 @@ function d3RingMarks(moved = false): readonly MarkGeometry[] {
   return expressive(rings, { key: (d) => d.series, geometry: (el, d, key) => build.shape({ key, series: d.series, d: dOf(el), matrix: matrix.translate(d.cx, 0) }) }).marks();
 }
 
+/** A D3 scatter read by tag: a circle a player, at goals across and assists up, each a point with its goals as its one sample. Closer and smaller when moved. */
+function d3ScatterMarks(moved = false): readonly MarkGeometry[] {
+  const [unit, r] = moved ? [8, 4] : [10, 5];
+  const dots = select(document.body)
+    .append("svg")
+    .attr("width", 400)
+    .attr("height", 240)
+    .append("g")
+    .attr("transform", "translate(40,20)")
+    .selectAll<SVGCircleElement, Player>("circle")
+    .data(players)
+    .join("circle")
+    .attr("cx", (p) => unit * p.goals)
+    .attr("cy", (p) => 200 - unit * p.assists)
+    .attr("r", r);
+  return expressive(dots, { key: (p) => p.name, value: (p) => p.goals }).marks();
+}
+
+/** Plot's dots read by tag, each row by its index: points where Plot's scales put them. Smaller when moved. */
+function plotDotMarks(moved = false): readonly MarkGeometry[] {
+  const svg = plot({ document, width: moved ? 480 : 600, height: moved ? 200 : 240, marks: [dot(players, { x: "goals", y: "assists", r: moved ? 4 : 6 })] });
+  const circles = document.body.appendChild(svg).querySelectorAll('g[aria-label="dot"] > circle');
+  return expressive(circles, { datum: (el) => players[plotBound<number>(el)]!, key: (d) => d.name, value: (d) => d.goals }).marks();
+}
+
+/**
+ * The D3 curves drawn with curveMonotoneX, read by tag from their own path data, as wide as their
+ * stroke, each path's series named by segment. With the patchy season, each has a gap at each move.
+ */
+function d3CurveTagMarks(rows: readonly Patchy[], moved = false): readonly MarkGeometry[] {
+  const [across, up] = moved ? [64, 24] : [80, 30];
+  const paths = select(document.body)
+    .append("svg")
+    .attr("width", 520)
+    .attr("height", 240)
+    .append("g")
+    .attr("transform", "translate(40,20)")
+    .selectAll<SVGPathElement, PatchySeries>("path")
+    .data((["goals", "xg"] as const).map((series) => ({ series, rows: [...rows] })))
+    .join("path")
+    .attr("fill", "none")
+    .attr("stroke-width", 2)
+    .attr("d", (d) =>
+      line<Patchy>()
+        .defined((w) => w[d.series] !== undefined)
+        .x((w) => across * (w.week - 1))
+        .y((w) => 200 - up * w[d.series]!)
+        .curve(curveMonotoneX)(d.rows)
+    );
+  return expressive(paths, { key: (d) => d.series, segment: (d) => d.series }).marks();
+}
+
+/** The D3 areas read by tag: closed shapes. Smaller when moved. */
+function d3AreaTagMarks(moved = false): readonly MarkGeometry[] {
+  const [across, up] = moved ? [64, 24] : [80, 30];
+  const areas = select(document.body)
+    .append("svg")
+    .attr("width", 520)
+    .attr("height", 240)
+    .append("g")
+    .attr("transform", "translate(40,20)")
+    .selectAll<SVGPathElement, "goals" | "xg">("path")
+    .data(["goals", "xg"] as const)
+    .join("path")
+    .attr("d", (series) =>
+      area<Week>()
+        .x((w) => across * (w.week - 1))
+        .y0(200)
+        .y1((w) => 200 - up * w[series])
+        .curve(curveMonotoneX)(weeks)
+    );
+  return expressive(areas, { key: (series) => series }).marks();
+}
+
+/**
+ * The other shape elements, read by tag in a margin group stroked 2 px wide: a line, a polyline, a
+ * polygon, an ellipse, a d3.symbol() star moved into place, and a circle stretched into an ellipse by
+ * its transform. Smaller when moved.
+ */
+function shapeElementMarks(moved = false): readonly MarkGeometry[] {
+  const k = moved ? 0.8 : 1;
+  const at = (...values: number[]): string => values.map((value) => value * k).join(" ");
+  const svg = el("svg", { width: 640, height: 300 }, document.body);
+  const plotArea = el("g", { transform: "translate(20,20)", fill: "#2a78d6", stroke: "#2a78d6", "stroke-width": 2 }, svg);
+  const shapes: [string, SVGElement][] = [
+    ["line", el("line", { x1: 0, y1: 0, x2: 120 * k, y2: 60 * k }, plotArea)],
+    ["polyline", el("polyline", { points: at(0, 100, 60, 140, 120, 100, 180, 160) }, plotArea)],
+    ["polygon", el("polygon", { points: at(220, 100, 300, 100, 260, 170) }, plotArea)],
+    ["ellipse", el("ellipse", { cx: 400 * k, cy: 60 * k, rx: 50 * k, ry: 30 * k }, plotArea)],
+    ["star", el("path", { d: symbol(symbolStar, 400 * k * k)()!, transform: `translate(${500 * k},${200 * k})` }, plotArea)],
+    ["stretched circle", el("circle", { r: 20 * k, transform: `translate(${300 * k},${230 * k}) scale(2,1)` }, plotArea)]
+  ];
+  for (const [name, shape] of shapes) (shape as unknown as { __data__: string }).__data__ = name;
+  return expressive<string>(
+    shapes.map(([, shape]) => shape),
+    { key: (name) => name }
+  ).marks();
+}
+
 const effects: Record<string, AnyMarkEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
@@ -449,7 +549,8 @@ const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars"
 const gapped: Record<string, Source> = {
   "lineChart with missing weeks": lineGappedMarks,
   "D3 line with missing weeks through expressive()": d3GappedMarks,
-  "D3 curve with missing weeks through describe.shape": d3CurveGappedMarks
+  "D3 curve with missing weeks through describe.shape": d3CurveGappedMarks,
+  "D3 curve with missing weeks read by tag": (moved) => d3CurveTagMarks(patchy, moved)
 };
 /** The sources described with describe.shape. */
 const shapes: Record<string, Source> = {
@@ -457,6 +558,15 @@ const shapes: Record<string, Source> = {
   "D3 curve with missing weeks through describe.shape": d3CurveGappedMarks,
   "D3 area through describe.shape": d3AreaMarks,
   "D3 rings through describe.shape": d3RingMarks
+};
+/** The sources expressive() reads by tag, with no geometry. */
+const byTag: Record<string, Source> = {
+  "D3 scatter read by tag": d3ScatterMarks,
+  "Plot dots read by tag": plotDotMarks,
+  "D3 curve read by tag": (moved) => d3CurveTagMarks(weeks, moved),
+  "D3 curve with missing weeks read by tag": gapped["D3 curve with missing weeks read by tag"]!,
+  "D3 area read by tag": d3AreaTagMarks,
+  "line, polyline, polygon, ellipse, symbol and stretched circle read by tag": shapeElementMarks
 };
 const sources: Record<string, Source> = {
   ...bars,
@@ -466,7 +576,8 @@ const sources: Record<string, Source> = {
   "D3 line through expressive()": d3LineMarks,
   ...gapped,
   "Plot line through expressive()": plotLineMarks,
-  ...shapes
+  ...shapes,
+  ...byTag
 };
 
 afterEach(() => {
@@ -742,6 +853,37 @@ describe("rings from D3 through describe.shape", () => {
     const [corner] = xg.outline.sample(4);
     expect(corner!.x).toBeCloseTo(120 - k, 9);
     expect(corner!.y).toBeCloseTo(-k, 9);
+  });
+});
+
+describe("marks read by tag through expressive()", () => {
+  /** What can be compared of a mark: everything but its functions. */
+  const seen = (mark: MarkGeometry) => ({ key: mark.key, d: mark.outline.d, closed: mark.outline.closed, length: mark.length, gaps: mark.gaps, thickness: mark.thickness, bounds: mark.bounds });
+
+  it("reads the D3 curves and areas as describe.shape describes their path data through geometry", () => {
+    expect(d3CurveTagMarks(weeks).map(seen)).toEqual(d3CurveMarks().map(seen));
+    expect(d3CurveTagMarks(patchy).map(seen)).toEqual(d3CurveGappedMarks().map(seen));
+    expect(d3CurveTagMarks(weeks).map((mark) => mark.series)).toEqual(["goals", "xg"]);
+    expect(d3AreaTagMarks().map(seen)).toEqual(d3AreaMarks().map(seen));
+  });
+
+  it("reads the scatter's circles and Plot's dots as points, and the other shapes by their outlines", () => {
+    const scatter = d3ScatterMarks();
+    expect(scatter.map((mark) => [mark.key, mark.center, mark.thickness])).toEqual(players.map((p) => [p.name, { x: 10 * p.goals, y: 200 - 10 * p.assists }, 10]));
+    for (const mark of [...scatter, ...plotDotMarks()]) expect(mark).toMatchObject({ length: 0, outline: { closed: true } });
+    const shapes = shapeElementMarks();
+    expect(shapes.map((mark) => [mark.key, mark.outline.closed])).toEqual([
+      ["line", false],
+      ["polyline", false],
+      ["polygon", true],
+      ["ellipse", true],
+      ["star", true],
+      ["stretched circle", true]
+    ]);
+    expect(shapes[0]).toMatchObject({ thickness: 2, start: { x: 0, y: 0 }, end: { x: 120, y: 60 } });
+    // An ellipse's arcs are flattened, within 0.1 px of the curve.
+    const { x, y, width, height } = shapes[5]!.bounds;
+    expect([x - 260, y - 210, width - 80, height - 40].every((off) => Math.abs(off) <= 0.1)).toBe(true);
   });
 });
 

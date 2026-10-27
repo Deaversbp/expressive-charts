@@ -14,7 +14,8 @@ export type MarkSource<D> = string | Element | ArrayLike<Element> | { nodes(): E
 export interface ExpressiveOptions<D> {
   /**
    * The mark's identity, which effects and refresh() follow. Numbers are converted with String().
-   * Elements that share a key are one mark; name each part with `segment`.
+   * Rects that share a key are one mark; name each part with `segment`. A circle or another shape is
+   * a mark of its own, so its key is its alone: one it shares with another element throws.
    */
   readonly key: (datum: D, element: Element) => string | number;
   /**
@@ -22,7 +23,11 @@ export interface ExpressiveOptions<D> {
    * (the D3 convention). Observable Plot binds the row's index instead: `(el) => rows[el.__data__]`.
    */
   readonly datum?: (element: Element) => D;
-  /** Names the parts of a mark that share a key: a stack's series. Segments are ordered from the baseline. */
+  /**
+   * Names the parts of a mark that share a key: a stack's series. Segments are ordered from the
+   * baseline. On a circle or another shape, a mark of its own, it names the mark's series, as
+   * `describe`'s `series` does, so a data effect can read that mark through `related`.
+   */
   readonly segment?: (datum: D, element: Element) => string;
   /**
    * The value an element shows, so refresh() can tell a change in values from a re-layout. Given, an
@@ -33,9 +38,16 @@ export interface ExpressiveOptions<D> {
    */
   readonly value?: (datum: D, element: Element) => number | string | boolean | null | undefined;
   /**
-   * Describes a mark yourself, for shapes the adapter can't read (anything but a `<rect>`). Called once
-   * per mark, with its first element in document order, in the coordinates of the marks' nearest
-   * common ancestor. Build it with `describe` and give it the key passed in.
+   * Describes every mark yourself, instead of the adapter reading them. Without it, a `<rect>` is a
+   * bar (rects that share a key are its segments), a `<circle>` a point (an ellipse under a transform
+   * that stretches it unevenly or skews it), and a `<path>`, `<line>`, `<polyline>`, `<polygon>` or
+   * `<ellipse>` a shape, read with `describe.shape` from its outline, an open one with its stroke
+   * width as drawn. Each is read through its transforms, and a shape SVG wouldn't draw (a path with no
+   * path data) isn't a mark until it draws something. Any other element (`<text>`, `<g>`, `<use>`,
+   * `<image>`) throws, naming its tag. Use this for those, or to say more than an element
+   * shows: a pie's slice as `describe.arc`, which goes round the pie's centre, or a line by its points.
+   * Called once per mark, with its first element in document order, in the coordinates of the marks'
+   * nearest common ancestor. Build it with `describe` and give it the key passed in.
    */
   readonly geometry?: (element: Element, datum: D, key: string) => MarkGeometry;
   /**
@@ -45,7 +57,8 @@ export interface ExpressiveOptions<D> {
    * segment's geometry. They're checked when read: bad samples throw, changing nothing.
    * `samplesAlong(mark, points)` gives a line its samples from the points that drew it. Default: rects
    * with a numeric `value` get the bar chart's samples (from 0 at the baseline to their total, each
-   * segment over its own range); other marks get none.
+   * segment over its own range), and circles with one get it as their one sample, `{ t: 0, value }`;
+   * other marks get none.
    */
   readonly samples?: (datum: D, mark: MarkGeometry) => readonly Sample[];
   /**
@@ -86,11 +99,11 @@ export interface ExpressiveOptions<D> {
   readonly markLabel?: (datum: D, mark: HostMark<D>) => string;
   /**
    * Follows the host's own transitions, frame by frame, without refresh(): a MutationObserver notes
-   * changes to the marks' geometry attributes (d, x, y, width, height, cx, cy, r, points, transform),
-   * and to transform and style on their ancestors up to the root <svg>. Once a frame, on the clock,
-   * the marks that changed are read again (their rows, geometry and samples) and their effects follow,
-   * with no events. Values, colours, names and the elements themselves stay as the last refresh() read
-   * them: call refresh() when the host joins new data. `geometry` should read the element, or a row the
+   * changes to the marks' geometry attributes (d, x, y, width, height, cx, cy, r, rx, ry, x1, y1, x2,
+   * y2, points, transform), and to transform and style on their ancestors up to the root <svg>. Once a
+   * frame, on the clock, the marks that changed are read again (their rows, geometry and samples) and
+   * their effects follow, with no events. Values, colours, stroke widths, names and the elements
+   * themselves stay as the last refresh() read them: call refresh() when the host joins new data. `geometry` should read the element, or a row the
    * host updates each frame; one that reads a transition's target row sees only the end. Default false.
    */
   readonly watch?: boolean;
@@ -127,10 +140,11 @@ export interface Attachment<D> {
   on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void;
   /**
    * The marks now attached, in visual order (leaving marks excluded): bars top to bottom and columns
-   * left to right. Marks described with `geometry` that go round one pivot (a pie's slices: each
+   * left to right. Other marks (circles, shapes, marks described with `geometry`, and bars among
+   * circles or shapes) keep document order, but marks that go round one pivot (a pie's slices: each
    * pivot within 0.5 px of the first, and each mark's `start`, `center` and `end` the same distance
    * from it, more than 0.5 px away) go clockwise from 12 o'clock, by the angle of each mark's
-   * `center` about it. Other `geometry` marks keep document order, lines that start at one point too.
+   * `center` about it. Lines that start at one point keep document order.
    */
   marks(): readonly MarkGeometry[];
   /** With `keyboard: true`, moves focus to the mark, which plays its hover effects. Does nothing for an unknown key. */

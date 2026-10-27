@@ -98,9 +98,10 @@ export function hostMarkHandle(parts: () => readonly HostPart[], edits: HostEdit
 
 /**
  * The host's colours for an element: its fill, or its stroke when the fill is none (a line). Each is
- * the computed value where there's styling. jsdom computes no presentation attributes (every fill is
- * black and every stroke none), so a computed value that's the property's initial one gives way to
- * the nearest value declared on the element or above it. A gradient or pattern gives no colours.
+ * the computed value, as a browser draws it, even the initial one when the page's CSS sets it. jsdom
+ * computes styles but no presentation attributes (every fill is black and every stroke none), so
+ * there a computed value that's the property's initial one gives way to the nearest value declared
+ * on the element or above it. A gradient or pattern gives no colours.
  *
  * The strong colour is our charts' kind of -strong: the colour stepped toward the text colour, in
  * OKLab so the hue stays, so a hovered mark gets darker in the light theme and lighter in the dark.
@@ -118,17 +119,70 @@ export function hostColors(element: Element, root: Element): HostColors | undefi
 const STRONG = "25%";
 
 const NONE = "none";
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** Each root <svg>'s answer from attributesComputed(). */
+const probed = new WeakMap<Element, boolean>();
+
+/**
+ * Whether computed styles read SVG presentation attributes here, as a browser's do and jsdom's don't.
+ * A probe with one is put in the root <svg>, read and taken out at once, so nothing draws it, once a
+ * root. A root that isn't in a document has no computed styles to go by, so it isn't remembered.
+ */
+function attributesComputed(root: Element): boolean {
+  const known = probed.get(root);
+  if (known !== undefined) return known;
+  const view = root.ownerDocument.defaultView;
+  if (!root.isConnected || typeof view?.getComputedStyle !== "function") return false;
+  const probe = root.ownerDocument.createElementNS(SVG_NS, "g");
+  // A property pages don't style, so no rule of theirs answers for the attribute.
+  probe.setAttribute("stroke-miterlimit", "7");
+  root.appendChild(probe);
+  const computed = view.getComputedStyle(probe).getPropertyValue("stroke-miterlimit").trim() === "7";
+  probe.remove();
+  probed.set(root, computed);
+  return computed;
+}
 
 /** A paint property's colour, NONE for no paint (or a transparent one), or undefined when it isn't a colour. */
 function paintOf(element: Element, root: Element, property: "fill" | "stroke"): string | undefined {
+  const raw = element.ownerDocument.defaultView?.getComputedStyle?.(element).getPropertyValue(property);
+  const computed = kind(raw);
+  if (raw && attributesComputed(root)) return computed;
   let declared: string | undefined;
   for (let node: Element | null = element; node && declared === undefined; node = node === root ? null : node.parentElement) {
     const value = (node as SVGElement).style?.getPropertyValue(property) || node.getAttribute(property);
     if (value) declared = value;
   }
-  const computed = kind(element.ownerDocument.defaultView?.getComputedStyle?.(element).getPropertyValue(property));
   const initial = property === "fill" ? computed?.replace(/\s/g, "") === "rgb(0,0,0)" : computed === NONE;
   return computed !== undefined && !(initial && declared !== undefined) ? computed : kind(declared);
+}
+
+/**
+ * An element's stroke width in its own user units, as drawn: the computed value, even a 1 px the
+ * page's CSS sets. jsdom computes no presentation attributes, so there a computed 1, the initial
+ * value, gives way to the nearest `stroke-width` attribute on the element or above it, passing over
+ * one that can't be read, as SVG ignores it. An inline style, which jsdom computes, stops the search.
+ * Undefined when there's none in px.
+ */
+export function strokeWidthOf(element: Element, root: Element): number | undefined {
+  const raw = element.ownerDocument.defaultView?.getComputedStyle?.(element).getPropertyValue("stroke-width");
+  const computed = pixels(raw);
+  if ((raw && attributesComputed(root)) || (computed !== undefined && computed !== 1)) return computed;
+  for (let node: Element | null = element; node; node = node === root ? null : node.parentElement) {
+    if ((node as SVGElement).style?.getPropertyValue("stroke-width")) break;
+    const width = pixels(node.getAttribute("stroke-width"));
+    if (width !== undefined) return width;
+  }
+  return computed;
+}
+
+/** A length of 0 or more, in px or with no unit; undefined for anything else (a percentage, inherit). */
+function pixels(value: string | null | undefined): number | undefined {
+  // One way to match any digits, so a long run of them followed by junk is refused at once.
+  const match = /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*(?:px\s*)?$/i.exec(value ?? "");
+  const number = match ? Number(match[1]) : NaN;
+  return number >= 0 && Number.isFinite(number) ? number : undefined;
 }
 
 /** NONE for no paint or a transparent one, the colour as given, or undefined for anything else (a url(), inherit). */

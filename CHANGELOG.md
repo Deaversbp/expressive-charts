@@ -25,6 +25,19 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`update({ on })` and `leave()` on attachments.** `expressive()`'s and `fromVegaView()`'s attachments swap their effects in place, as a chart's `update({ on })` does: a slot given the same effect or preset name keeps its runs, a changed slot's new effect starts where the old one's runs were, and focus and the tab stop stay, so a page with an effect picker needn't attach again. It returns a promise, which resolves at once, and rejects, changing nothing, on an unknown preset name, a series a data effect needs that the marks don't have, or any option but `on`. `leave()` ends the hover, pointer or keyboard, as a chart's does, with focus staying where it is. Both are additions.
+- **Vega lines with gaps.** `fromVegaView()` reads a line that Vega breaks at a point it leaves out (`defined: false`), as Vega-Lite 6 does at a missing value by default: the line has gaps, its samples have `gapBefore` after each, and no effect draws inside one. It used to throw. A line with no point drawn has no mark, as Vega draws nothing. A curve still throws.
+
+### Changed
+
+### Fixed
+
+- **`checkEffect`'s default data on a gap**, under the 0.x promise. On a mark with gaps, such as the `"gapped line"` fixture, it has a sample at each end of each gap, with its `t` as its value and `gapBefore` on the one after, so a data effect sees the gap as on a line chart's line. Before, it had two samples, 0 at the start and 1 at the end, on every mark, so a data effect never saw a gap. On a mark without gaps it's as before. An effect that leaves the gap alone passes as it did; one that joins across a gap can now fail, as it should. A test that needs other data passes `data`.
+
 ## 0.3.0 (27 October 2026)
 
 A tooltip that can be hovered, change labels that hold up, lines that skip missing values, long axes, and more of the icon sets' SVG. In the effect-author API, `gaps` on `MarkGeometry`, `gapBefore` on `Sample`, `breaks` on `LineSpec`, and `fillRule` and `opacity` on `IconShape` are additions. Its one change is the `"gapped line"` fixture, with its migration note under Changed. The other changes are outside the promise, and each says what to write instead, if anything.

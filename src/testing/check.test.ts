@@ -310,6 +310,31 @@ describe("checkEffect on data effects", () => {
     await expect(checkEffect(label)).resolves.toBeUndefined();
   });
 
+  it("marks each gap in the default data: a sample at each end, its t as its value, and gapBefore on the one after", async () => {
+    const seen = new Map<MarkGeometry, MarkData>();
+    const recording: DataEffect = { ...label, run: async (mark, data) => void seen.set(mark, data), end: (mark, data) => void seen.set(mark, data) };
+    // Values alone at each point: a gap from 0, two that touch, and one to 1, whose samples at one t are one.
+    const alone = build.line({ key: "alone", points: [0, 1, 2, 3].map((i) => ({ x: 30 * i, y: 40 })), breaks: [1, 2, 3] });
+    await checkEffect(recording, { marks: { "gapped line": fixtures["gapped line"], line: fixtures.line, alone } });
+    for (const mark of [fixtures["gapped line"], movedFixtures["gapped line"]]) {
+      const [from, to] = mark.gaps![0]!;
+      expect(seen.get(mark)!.samples).toEqual([
+        { t: 0, value: 0 },
+        { t: from, value: from },
+        { t: to, value: to, gapBefore: true },
+        { t: 1, value: 1 }
+      ]);
+    }
+    expect(seen.get(alone)!.samples).toEqual([
+      { t: 0, value: 0 },
+      { t: 1 / 3, value: 1 / 3, gapBefore: true },
+      { t: 2 / 3, value: 2 / 3, gapBefore: true },
+      { t: 1, value: 1, gapBefore: true }
+    ]);
+    // Without gaps, as before.
+    for (const mark of [fixtures.line, movedFixtures.line]) expect(seen.get(mark)!.samples).toEqual([{ t: 0, value: 0 }, { t: 1, value: 1 }]);
+  });
+
   it("takes each mark's data from data(mark)", async () => {
     const rows: Record<string, Region> = { North: { region: "North", revenue: 12 } };
     const regional: DataEffect<Region> = {

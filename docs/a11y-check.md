@@ -2,7 +2,7 @@
 
 These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`, [section H](#h-the-season-page-linked-hover-and-change-labels) checks linked hover and the change labels on `demo/season.html`, and [section I](#i-missing-values-page-up-and-page-down-and-the-season-page-again) checks what M8 adds: a line with missing values on `demo/line.html`, Page Up and Page Down on `demo/stress.html`, and the season page without its workarounds. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
 
-**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026, and section H, the season page, on 26 October 2026. Section I, for 0.3.0, hasn't been run yet. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026, and section H, the season page, on 26 October 2026. Section I, for 0.3.0, passed with NVDA + Chrome on 27 October 2026. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
 
 A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to paste into an issue.
 
@@ -471,6 +471,16 @@ The date axis's names, the keyboard and the table stay as built. Versions weren'
 - nothing was read that can't be seen, and the changes drawn past the bars and names weren't read on their own.
 
 So linked hover is visual only, and the page's announcement, table and names say what `delta()` and `label()` draw. They stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
+
+**Missing values, Page Up and Page Down, and the season page again (section I), NVDA + Chrome on Windows, 27 October 2026: passed.** The tester reported that every step sounded as expected, so every "Listen for" item passed:
+- a missing week was read once, as one item, saying what's missing, never as a 0 or with a gap;
+- the arrow keys, and Page Up and Page Down, stopped at the missing weeks as at any other;
+- the table read "missing" with its column's header;
+- each D3 line was read once, by name, with the weeks it's missing;
+- Page Up and Page Down went a tenth of the weeks or bars, or a month on the date line, and stopped at the ends;
+- the season page's announcements and table read as in section H, without the page's workarounds.
+
+So the line chart's words for a missing value, the D3 lines' names, the keys and the season page stay as built. It was run with the focus line at a week with no values in place ([#91](https://github.com/Deaversbp/expressive-charts/pull/91)), which step 3 looks for. Versions weren't noted. VoiceOver + Safari hasn't been run on these pages.
 
 Template for the next run:
 

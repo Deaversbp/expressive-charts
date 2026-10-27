@@ -25,6 +25,18 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`fillRule` and `opacity` on `IconShape`**, under the 0.x promise. `fillRule` is `"nonzero"` (the default) or `"evenodd"`, which leaves a hole where the path's parts overlap. `opacity`, from 0 to 1 (default 1), fades the whole shape, its fill and stroke together. `defineIcon` checks them, with a `RangeError` naming the shape and the field, and the SVG layer draws them. They're optional fields: code that builds an `IconShape` needs no change.
+
+### Changed
+
+### Fixed
+
+- **`iconFromSvg` keeps `fill-rule` and `opacity`**, so an icon whose SVG has an even-odd hole (Heroicons' solid style) or a faded part (a duotone set's) draws as its SVG does. Before, the hole filled in and the faded part drew at full strength. They're read from attributes and `style` and inherited through groups, with a group's opacity multiplied into its shapes'. A shape with an opacity of 0 is dropped. `fill-opacity` and `stroke-opacity` still aren't kept.
+
 ## 0.2.0 (26 October 2026)
 
 Built-in effects that explain a change, text that keeps clear of a mark's own labels, and hover linked across charts. Nothing in the effect-author API breaks: its one change, `labelBounds`, is an addition. The other changes are outside the promise, and each says what to write instead, if anything.

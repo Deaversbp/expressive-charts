@@ -63,7 +63,10 @@ export function svgLayer(group: SVGGElement): Layer {
   };
 }
 
-/** One path per shape. Unset fill or stroke draws none; the width is in icon units, so it scales with the icon. */
+/**
+ * One path per shape. Unset fill or stroke draws none; the width is in icon units, so it scales with the icon.
+ * The fill rule and opacity are SVG's own, so unset ones are left to SVG's defaults: nonzero, and 1.
+ */
 function drawShape(shape: IconShape, parent: SVGGElement): void {
   let clip: string | undefined;
   if (shape.clip !== undefined) {
@@ -79,7 +82,9 @@ function drawShape(shape: IconShape, parent: SVGGElement): void {
       "clip-path": clip && `url(#${clip})`,
       "stroke-width": shape.stroke === undefined ? undefined : (shape.width ?? 1),
       "stroke-linecap": shape.linecap,
-      "stroke-linejoin": shape.linejoin
+      "stroke-linejoin": shape.linejoin,
+      "fill-rule": shape.fillRule,
+      opacity: shape.opacity
     },
     parent
   );

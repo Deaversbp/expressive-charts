@@ -2477,6 +2477,35 @@ describe("expressive: circles and shapes", () => {
     ]);
   });
 
+  it("keeps a computed width of 1 px where the page's CSS sets it, over an attribute a browser has read", () => {
+    const { elements } = host((plot) => {
+      const group = el("g", { "stroke-width": 6 }, plot);
+      return [
+        ["thin", el("path", { class: "thin", d: "M0,0L100,0" }, group)],
+        ["plain", el("path", { d: "M0,10L100,10" }, group)],
+        ["inline", el("path", { d: "M0,20L100,20", "stroke-width": 5, style: "stroke-width: 1px" }, plot)]
+      ];
+    });
+    const [thin, plain] = elements as SVGElement[] as [SVGElement, SVGElement];
+    const group = thin.parentElement!;
+    // jsdom reads no presentation attribute: the group's 6 px and the inline style's 1 px.
+    expect(setup<string>(elements, named).fx.marks().map((mark) => mark.thickness)).toEqual([6, 6, 1]);
+    // A browser reads them: a style sheet's 1 px on the thin path, and the group's 6 px inherited by the plain one.
+    const computed = window.getComputedStyle.bind(window);
+    const browser = new Map<Element, string>([
+      [group, "6px"],
+      [thin, "1px"],
+      [plain, "6px"]
+    ]);
+    vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
+      const style = computed(element, pseudo);
+      const width = browser.get(element);
+      return width === undefined ? style : Object.assign(Object.create(style) as CSSStyleDeclaration, { getPropertyValue: (name: string) => (name === "stroke-width" ? width : style.getPropertyValue(name)) });
+    });
+    document.querySelectorAll(".ec-overlay").forEach((overlay) => overlay.remove());
+    expect(setup<string>(elements, named).fx.marks().map((mark) => mark.thickness)).toEqual([1, 6, 1]);
+  });
+
   it("names a circle's or a shape's series with segment, so a data effect can read it", () => {
     const { elements } = host((plot) => [
       [{ name: "goals" }, el("path", { d: "M0,100L50,60L100,40" }, plot)],

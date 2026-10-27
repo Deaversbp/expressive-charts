@@ -132,18 +132,26 @@ function paintOf(element: Element, root: Element, property: "fill" | "stroke"): 
 }
 
 /**
- * An element's stroke width in its own user units, as drawn: the computed value where there's
- * styling. As for colours, a computed value that's the initial 1 gives way to the nearest width
- * declared on the element or above it, since jsdom computes no presentation attributes. One that
- * can't be read is passed over, as SVG ignores it. Undefined when there's none in px.
+ * An element's stroke width in its own user units, as drawn: the computed value. jsdom computes no
+ * presentation attributes, so there a `stroke-width` attribute computes as the initial 1, on its own
+ * element too: then the nearest one on the element or above it is taken instead, passing over one
+ * that can't be read, as SVG ignores it. A browser computes them, so its computed 1 (the page's CSS)
+ * stands. Inline styles are computed everywhere, so one stops the search. Undefined when there's
+ * none in px.
  */
 export function strokeWidthOf(element: Element, root: Element): number | undefined {
-  let declared: number | undefined;
-  for (let node: Element | null = element; node && declared === undefined; node = node === root ? null : node.parentElement) {
-    declared = pixels((node as SVGElement).style?.getPropertyValue("stroke-width") || node.getAttribute("stroke-width"));
+  const computedOf = (node: Element): number | undefined => pixels(element.ownerDocument.defaultView?.getComputedStyle?.(node).getPropertyValue("stroke-width"));
+  let declared: { readonly node: Element; readonly width: number } | undefined;
+  for (let node: Element | null = element; node && !declared; node = node === root ? null : node.parentElement) {
+    if ((node as SVGElement).style?.getPropertyValue("stroke-width")) break;
+    const width = pixels(node.getAttribute("stroke-width"));
+    if (width !== undefined) declared = { node, width };
   }
-  const computed = pixels(element.ownerDocument.defaultView?.getComputedStyle?.(element).getPropertyValue("stroke-width"));
-  return computed !== undefined && !(computed === 1 && declared !== undefined) ? computed : declared;
+  const computed = computedOf(element);
+  if (computed === undefined) return declared?.width;
+  // The attribute's own element computes as 1 too, so it wasn't read.
+  if (computed === 1 && declared && declared.width !== 1 && computedOf(declared.node) === 1) return declared.width;
+  return computed;
 }
 
 /** A length of 0 or more, in px or with no unit; undefined for anything else (a percentage, inherit). */

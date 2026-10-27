@@ -30,11 +30,14 @@ Everything else can still change in a minor release while the library is 0.x: th
 ### Added
 
 - **`fillOpacity` and `strokeOpacity` on `IconShape`**, under the 0.x promise: the fill's and the stroke's own opacity, each from 0 to 1 (default 1), inside the shape's `opacity`, so one shape can have a faint fill inside a full outline. `defineIcon` checks them, with a `RangeError` naming the shape and the field, and the SVG layer sets them on the shape's path. They're optional fields: code that builds an `IconShape` needs no change.
+- **`update({ on })` and `leave()` on attachments.** `expressive()`'s and `fromVegaView()`'s attachments swap their effects in place, as a chart's `update({ on })` does: a slot given the same effect or preset name keeps its runs, a changed slot's new effect starts where the old one's runs were, and focus and the tab stop stay, so a page with an effect picker needn't attach again. It returns a promise, which resolves at once, and rejects, changing nothing, on an unknown preset name, a series a data effect needs that the marks don't have, or any option but `on`. `leave()` ends the hover, pointer or keyboard, as a chart's does, with focus staying where it is. Both are additions.
+- **Vega lines with gaps.** `fromVegaView()` reads a line that Vega breaks at a point it leaves out (`defined: false`), as Vega-Lite 6 does at a missing value by default: the line has gaps, its samples have `gapBefore` after each, and no effect draws inside one. It used to throw. A line with no point drawn has no mark, as Vega draws nothing. A curve still throws.
 
 ### Changed
 
 ### Fixed
 
+- **`checkEffect`'s default data on a gap**, under the 0.x promise. On a mark with gaps, such as the `"gapped line"` fixture, it has a sample at each end of each gap, with its `t` as its value and `gapBefore` on the one after, so a data effect sees the gap as on a line chart's line. Before, it had two samples, 0 at the start and 1 at the end, on every mark, so a data effect never saw a gap. On a mark without gaps it's as before. An effect that leaves the gap alone passes as it did; one that joins across a gap can now fail, as it should. A test that needs other data passes `data`.
 - **`iconFromSvg` keeps `fill-opacity` and `stroke-opacity`**, so an icon whose SVG fades a part's fill or stroke with them draws as its SVG does. Before, the faded part drew at full strength. They're read from attributes and `style`, as numbers or percentages, and inherited through groups as SVG inherits them: a shape's own replaces its group's, rather than multiplying as `opacity` does. A fill or stroke faded to 0 is dropped, as `none` is, and so is a shape left with neither. An icon made from SVG without them comes out the same. A long `width` or `height` on an `<svg>` with no viewBox is now read at once, too: a run of 100,000 digits followed by a letter took 23 s.
 
 ## 0.3.0 (27 October 2026)

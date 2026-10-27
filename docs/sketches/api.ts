@@ -83,7 +83,8 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // fromVegaView() is built too (M4 step 8), with VegaOptions, VegaViewLike and VegaAttachment. Changed
 // from the plan's fromVegaView(view, mark = "marks"): it takes expressive()'s options with `mark` among
 // them, plus `sample` for data effects' values, and returns the attachment, which follows the View's
-// renders itself.
+// renders itself. M9 step 1 gave both attachments update({ on }) and leave(), as the charts have, and
+// fromVegaView() reads a line Vega breaks at a missing value, with its gaps.
 
 // ── Reference charts ─────────────────────────────────────────────────────────
 

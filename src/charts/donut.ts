@@ -727,6 +727,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
           leaving,
           input,
           onScreen,
+          data: "data" in next,
           ...(swapping
             ? {
                 swap: (diff: Diff<D>) => {

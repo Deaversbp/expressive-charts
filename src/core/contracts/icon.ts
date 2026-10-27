@@ -19,6 +19,10 @@ export interface IconShape {
   readonly linejoin?: "miter" | "round";
   /** Path data, in icon units, that clips this shape (the ball's panel pattern). */
   readonly clip?: string;
+  /** Default "nonzero". "evenodd" leaves a hole where the path's parts overlap, as solid icon sets draw them. */
+  readonly fillRule?: "nonzero" | "evenodd";
+  /** From 0 to 1, for the whole shape, fill and stroke together (a duotone set's lighter part). Default 1. */
+  readonly opacity?: number;
 }
 
 /**

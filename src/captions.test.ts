@@ -194,7 +194,7 @@ describe("label from a field the chart doesn't plot", () => {
 describe("how far past the chart's edge the text reaches at 320 px", () => {
   // jsdom's estimate of the text's width, with a bar or a column at the end of its scale. Chrome's
   // own measure is in architecture.md (delta and label): 19.7, 20 and 17.6 px. The layouts leave room
-  // for their own labels, not for these, so a page leaves this much beside the chart.
+  // for their own labels, not for these, unless barChart's `room` keeps it.
   function reach(svg: SVGSVGElement): { left: number; right: number; top: number; bottom: number } {
     const width = Number(svg.getAttribute("width"));
     const height = Number(svg.getAttribute("height"));
@@ -226,6 +226,18 @@ describe("how far past the chart's edge the text reaches at 320 px", () => {
     expect((await bars({ x: "name", y: "goals" }, goals, 2)).top).toBeCloseTo(14, 1);
     const hanging = await bars({ x: "name", y: "goals" }, negative, -2);
     expect(Math.max(hanging.left, hanging.right, hanging.top, hanging.bottom)).toBeLessThan(0);
+  });
+
+  it("with room: 28, bars, negative bars, columns and negative columns all stay inside", async () => {
+    for (const [options, data, by] of [
+      [{ y: "name", x: "goals" }, goals, 2],
+      [{ y: "name", x: "goals" }, negative, -2],
+      [{ x: "name", y: "goals" }, goals, 2],
+      [{ x: "name", y: "goals" }, negative, -2]
+    ] as const) {
+      const edges = await bars({ ...options, room: 28 }, data, by);
+      expect(Math.max(edges.left, edges.right, edges.top, edges.bottom), `${options.x} ${by}`).toBeLessThan(0);
+    }
   });
 
   it("slices and lines: inside", async () => {

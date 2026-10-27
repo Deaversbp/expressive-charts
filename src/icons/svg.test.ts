@@ -138,6 +138,118 @@ describe("iconFromSvg", () => {
     ]);
   });
 
+  it("keeps an even-odd fill rule, so a hole in a solid icon stays a hole", () => {
+    // Drawn for this test in the style of Heroicons' solid set: a square frame filled in currentColor,
+    // its hole a second square wound the same way, so only even-odd leaves it open.
+    const icon = iconFromSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" d="M3 3h18v18H3zM8 8h8v8H8z" clip-rule="evenodd"/>
+      </svg>`,
+      { name: "frame", anchor: { x: 12, y: 12 } }
+    );
+    expect(icon.shapes).toEqual([{ d: "M3,3L21,3L21,21L3,21ZM8,8L16,8L16,16L8,16Z", fill: "text", fillRule: "evenodd" }]);
+    // defineIcon has checked and frozen it.
+    expect(Object.isFrozen(icon.shapes[0])).toBe(true);
+  });
+
+  it("reads the fill rule from attributes and style, in any case, inherited through groups", () => {
+    const icon = iconFromSvg(
+      svg(`
+        <g fill-rule="evenodd">
+          <path d="M0,0L4,4"/>
+          <path d="M0,0L4,4" style="fill-rule: nonzero" fill-rule="evenodd"/>
+          <g><path d="M0,0L4,4" fill-rule="inherit"/></g>
+          <path d="M0,0L4,4" fill-rule="sideways"/>
+          <path d="M0,0L4,4" fill="none" stroke="red"/>
+        </g>
+        <path d="M0,0L4,4" style="fill-rule: EvenOdd"/>
+        <path d="M0,0L4,4"/>`),
+      spec
+    );
+    expect(icon.shapes).toEqual([
+      { d: "M0,0L4,4", fill: "#000000", fillRule: "evenodd" },
+      // Nonzero is the default, so it isn't written.
+      { d: "M0,0L4,4", fill: "#000000" },
+      // A keyword or a value it doesn't know keeps the group's.
+      { d: "M0,0L4,4", fill: "#000000", fillRule: "evenodd" },
+      { d: "M0,0L4,4", fill: "#000000", fillRule: "evenodd" },
+      // A fill rule is only a fill's.
+      { d: "M0,0L4,4", stroke: "red", width: 1 },
+      { d: "M0,0L4,4", fill: "#000000", fillRule: "evenodd" },
+      { d: "M0,0L4,4", fill: "#000000" }
+    ]);
+  });
+
+  it("keeps a shape's opacity: a duotone pair", () => {
+    // Drawn for this test in a duotone style: a faded disc behind a ring and a tick, stroked in currentColor.
+    const icon = iconFromSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="9" fill="currentColor" stroke="none" opacity="0.2"/>
+        <circle cx="12" cy="12" r="9"/>
+        <polyline points="8 12 11 15 16 9"/>
+      </svg>`,
+      { name: "done", anchor: { x: 12, y: 12 } }
+    );
+    expect(icon.shapes).toEqual([
+      { d: "M21,12A9,9 0 0 1 3,12A9,9 0 0 1 21,12Z", fill: "text", opacity: 0.2 },
+      { d: "M21,12A9,9 0 0 1 3,12A9,9 0 0 1 21,12Z", stroke: "text", width: 2 },
+      { d: "M8,12L11,15L16,9", stroke: "text", width: 2 }
+    ]);
+  });
+
+  it("multiplies groups' opacities into their shapes, from attributes and style, as numbers or percentages", () => {
+    const icon = iconFromSvg(
+      svg(`
+        <g opacity="0.5">
+          <path d="M0,0L4,4"/>
+          <g style="opacity: 50%">
+            <path d="M0,0L4,4" opacity=".4"/>
+            <path d="M0,0L4,4" opacity="2"/>
+          </g>
+          <path d="M0,0L4,4" opacity="half"/>
+        </g>
+        <g opacity="0.3"><path d="M0,0L4,4" opacity="0.1"/></g>
+        <path d="M0,0L4,4" opacity="1"/>
+        <path d="M0,0L4,4" style="opacity: 0.35 !important" opacity="0.9"/>
+        <path d="M0,0L4,4" opacity="3e-1"/>`),
+      spec
+    );
+    expect(icon.shapes.map((shape) => shape.opacity)).toEqual([
+      0.5,
+      0.1,
+      // 2 counts as 1, as in CSS, so 0.5 × 0.5.
+      0.25,
+      // One it can't read counts as 1.
+      0.5,
+      // Rounded to 0.001.
+      0.03,
+      // 1 is the default, so it isn't written.
+      undefined,
+      0.35,
+      0.3
+    ]);
+  });
+
+  it("drops shapes with an opacity of 0, and fill-opacity and stroke-opacity", () => {
+    const icon = iconFromSvg(
+      svg(`
+        <path d="M0,0L4,4" opacity="0"/>
+        <path d="M0,0L4,4" opacity="-1"/>
+        <g opacity="0%"><circle r="2"/></g>
+        <path d="M0,0L4,4" fill-opacity="0.5" stroke-opacity="0.5" stroke="red"/>`),
+      spec
+    );
+    expect(icon.shapes).toEqual([{ d: "M0,0L4,4", fill: "#000000", stroke: "red", width: 1 }]);
+    expect(() => iconFromSvg(svg(`<path d="M0,0L4,4" opacity="0"/>`), spec)).toThrow(/has nothing to draw/);
+  });
+
+  it("reads a long opacity quickly", () => {
+    const started = performance.now();
+    const icon = iconFromSvg(svg(`<path d="M0,0L4,4" opacity="${"1".repeat(100_000)}x"/><path d="M0,0L4,4" opacity="${" ".repeat(100_000)}x"/>`), spec);
+    expect(icon.shapes.map((shape) => shape.opacity)).toEqual([undefined, undefined]);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it("applies transforms on groups and shapes, scaling strokes with them", () => {
     const icon = iconFromSvg(
       svg(`<g transform="translate(10 0) scale(2)"><path d="M0,0L1,0" stroke="red" transform="rotate(90)"/><circle r="1" transform="matrix(1 0 0 1 1 1)"/></g>`),

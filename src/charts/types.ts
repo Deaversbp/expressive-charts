@@ -199,6 +199,12 @@ export interface BarChartOptions<D> extends ChartOptions<D> {
    * colour in both; the legend lists the categories. It needs one series: on a stack it throws.
    */
   readonly colorBy?: "series" | "category";
+  /**
+   * Px the layout keeps clear past the labels at each end of the value axis that bars reach, for text
+   * an effect draws there: a `delta` past a bar's value label, or past a negative bar's name. Default
+   * 0. At 320 px, 28 keeps a `delta` inside the chart.
+   */
+  readonly room?: number;
 }
 
 /** What a donut's `markLabel` is given beside the row: the slice as it's heading, as a bar's `MarkSummary` says it, and its share. */

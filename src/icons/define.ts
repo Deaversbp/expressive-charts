@@ -8,6 +8,7 @@ export type IconSpec = Omit<Icon, "footprint" | "pivot" | "size"> & Partial<Pick
 const GAITS: readonly string[] = ["roll", "step", "slide"];
 const LINECAPS: readonly string[] = ["butt", "round"];
 const LINEJOINS: readonly string[] = ["miter", "round"];
+const FILL_RULES: readonly string[] = ["nonzero", "evenodd"];
 /** Path data: commands, numbers, separators. Anything else (markup, url(), quotes) is a mistake. */
 const PATH_DATA = /^\s*[Mm][MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]*$/;
 
@@ -78,8 +79,11 @@ function checkShape(
   if (shape.width !== undefined && finite(`${field}.width`, shape.width) < 0) fail(`${field}.width`, `can't be negative, got ${shape.width}`);
   if (shape.linecap !== undefined && !LINECAPS.includes(shape.linecap)) fail(`${field}.linecap`, `must be butt or round, got ${String(shape.linecap)}`);
   if (shape.linejoin !== undefined && !LINEJOINS.includes(shape.linejoin)) fail(`${field}.linejoin`, `must be miter or round, got ${String(shape.linejoin)}`);
+  if (shape.fillRule !== undefined && !FILL_RULES.includes(shape.fillRule)) fail(`${field}.fillRule`, `must be nonzero or evenodd, got ${String(shape.fillRule)}`);
+  const opacity = shape.opacity === undefined ? 1 : finite(`${field}.opacity`, shape.opacity);
+  if (opacity < 0 || opacity > 1) fail(`${field}.opacity`, `must be from 0 to 1, got ${opacity}`);
   const copy: { -readonly [K in keyof IconShape]: IconShape[K] } = { d: shape.d };
-  for (const key of ["fill", "stroke", "width", "linecap", "linejoin", "clip"] as const) {
+  for (const key of ["fill", "stroke", "width", "linecap", "linejoin", "clip", "fillRule", "opacity"] as const) {
     if (shape[key] !== undefined) (copy as Record<string, unknown>)[key] = shape[key];
   }
   return freeze(copy);

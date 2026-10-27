@@ -174,6 +174,35 @@ describe("svgLayer icons", () => {
     expect(path.getAttribute("stroke-linecap")).toBe("round");
     expect(path.getAttribute("stroke-linejoin")).toBe("round");
   });
+
+  it("draws a shape's fill rule and opacity, and leaves SVG's defaults where it has none", () => {
+    const { overlay, surface } = setup();
+    // An even-odd frame, and a duotone pair: a faded disc under a tick.
+    const frame: IconShape = { d: "M-6,-6L6,-6L6,6L-6,6ZM-3,-3L3,-3L3,3L-3,3Z", fill: "text", fillRule: "evenodd" };
+    const disc: IconShape = { d: "M6,0A6,6 0 0 1 -6,0A6,6 0 0 1 6,0Z", fill: "text", stroke: "surface", opacity: 0.3 };
+    const tick: IconShape = { d: "M-3,0L-1,2L3,-2", stroke: "text", width: 1.5, fillRule: "nonzero", opacity: 1 };
+    surface.group("a", "hover", 1).icon({ ...boot, shapes: [frame, disc, tick] }, { size: 13 });
+    const [hole, faded, front] = Array.from(overlay.querySelectorAll(".ec-icon path")) as SVGPathElement[];
+    expect(hole!.getAttribute("fill-rule")).toBe("evenodd");
+    expect(hole!.getAttribute("opacity")).toBeNull();
+    expect(faded!.getAttribute("fill-rule")).toBeNull();
+    // On the path, so its fill and stroke fade together, and its paint stays the theme's.
+    expect(faded!.getAttribute("opacity")).toBe("0.3");
+    expect(faded!.style.getPropertyValue("fill")).toBe("var(--ec-text, #0b0b0b)");
+    expect(faded!.style.getPropertyValue("stroke")).toBe("var(--ec-surface, #fcfcfb)");
+    // Given as SVG's defaults, they're written as given.
+    expect(front!.getAttribute("fill-rule")).toBe("nonzero");
+    expect(front!.getAttribute("opacity")).toBe("1");
+  });
+
+  it("draws no fill rule or opacity for shapes without them", () => {
+    const { overlay, surface } = setup();
+    surface.group("a", "hover", 1).icon(ball);
+    for (const path of Array.from(overlay.querySelectorAll(".ec-icon path"))) {
+      expect(path.getAttribute("fill-rule")).toBeNull();
+      expect(path.getAttribute("opacity")).toBeNull();
+    }
+  });
 });
 
 describe("svgLayer paths and text", () => {

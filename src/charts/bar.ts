@@ -190,7 +190,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       width: opts.width ?? measuredWidth,
       height: opts.height,
       format: format(opts),
-      measure
+      measure,
+      room: opts.room ?? 0
     });
   }
 
@@ -682,6 +683,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
           leaving,
           input,
           onScreen,
+          data: "data" in next,
           ...(swapping
             ? {
                 swap: (diff: Diff<D>) => {
@@ -750,10 +752,11 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   });
 }
 
-/** The options every chart shares, then `colorBy`: "category" needs one series, so a stack throws. */
+/** The options every chart shares, then `room`, and `colorBy`: "category" needs one series, so a stack throws. */
 function checkOptions<D>(options: BarChartOptions<D>): void {
   checkChartOptions(options, "barChart");
-  const { colorBy } = options;
+  const { colorBy, room } = options;
+  if (room !== undefined && !(typeof room === "number" && Number.isFinite(room) && room >= 0)) throw new RangeError(`barChart: room must be a number of px, 0 or more, got ${String(room)}.`);
   if (colorBy !== undefined && colorBy !== "series" && colorBy !== "category") throw new TypeError(`barChart: colorBy must be "series" or "category", got ${String(colorBy)}.`);
   if (colorBy === "category" && options.stack !== undefined) {
     throw new TypeError('barChart: colorBy: "category" gives each bar one colour, so it needs one series, not a stack. A stack colours its segments by series.');

@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M7 are complete (§9). M8, for 0.3.0, is planned in §9: a tooltip that can be hovered, change labels that hold up, gaps in lines, long axes, the icon sets' fills and TypeScript 7. **0.2.0 is on npm**, published from CI through npm's trusted publishing with provenance on 26 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.2.0)), after 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M8 are complete (§9). M8 built a tooltip that can be hovered, change labels that hold up, gaps in lines, long axes, the icon sets' fills and TypeScript 7. **0.3.0 is on npm**, published from CI through npm's trusted publishing with provenance on 27 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.3.0)), after 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -2209,7 +2209,7 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 
 **Status: complete (26 October 2026).** Every item on the list holds. Steps 1 to 5 built and checked the first six, and 0.2.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 6).
 
-### M8: A tooltip that can be hovered, change labels that hold up, and gaps in lines (0.3.0)
+### M8: A tooltip that can be hovered, change labels that hold up, and gaps in lines (0.3.0) ✅
 
 The audit's one failing criterion fixed, the season page's workarounds made the library's own, lines that skip missing values, long axes, the icon sets' fills, TypeScript 7, and last, 0.3.0 on npm.
 
@@ -2526,11 +2526,17 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 
 **Wave 4:**
 
-8. **Publish 0.3.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.3.0 entry, README's status, its script tag (`@0.3`, and api.md's) and its sizes, and this plan's status line and M8's ✅.
+8. ✅ **Publish 0.3.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.3.0 entry, README's status, its script tag (`@0.3`, and api.md's) and its sizes, and this plan's status line and M8's ✅.
    - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you) and `npm publish --dry-run`. The PR has its results.
    - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com. Nothing else needs setting up.
    - **Then, on your go-ahead in that session:** the `v0.3.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
    - **After:** check npm (the version, README, provenance), install 0.3.0 in a fresh project, and check jsDelivr's `@0.3`.
+   - **Built** (27 October 2026): [0.3.0 is on npm](https://www.npmjs.com/package/expressive-charts/v/0.3.0) through trusted publishing with provenance, and [its release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.3.0) is on GitHub.
+     - **The release PR** ([#93](https://github.com/Deaversbp/expressive-charts/pull/93)): 0.3.0 in `package.json`, the lockfile and `VERSION`; CHANGELOG's 0.3.0 entry, the Unreleased lists under a short summary; README's status, its script tag at `expressive-charts@0.3` (api.md's too), since `@0.2` keeps serving 0.2.x, and its sizes as measured, a bar chart about 31 KB gzipped and everything 72 KB. `release.yml` and CONTRIBUTING didn't change: the workflow runs CI's checks on Node 24, TypeScript 7 among them.
+     - **The dry run** passed on `1284aa6` with the PR: `typecheck`, 2,059 tests, the build, every size within its budget (`barChart` 31.1 KB, the line page's set 37.8, everything 72.2 and the script-tag bundle 78.6), `pack-check` on TypeScript 5.4, 6 and 7, `npm pack` (37 files, 0.2.0's 35 and the stylesheet's two type files from step 5, 1.4 MB packed and 5.2 MB unpacked) and `npm publish --dry-run`.
+     - **You** checked that the trusted publisher was still on npmjs.com.
+     - **The release.** Main's CI was green on `945dab1`. On your go-ahead, `v0.3.0` was created there at 17:48 UTC, and its run published with provenance at 17:49 ([Sigstore's log](https://search.sigstore.dev/?logIndex=3522114495)), first time, with no `ENEEDAUTH`.
+     - **After.** npm shows 0.3.0 as `latest`, with README, its four GIFs, and "Built and signed on GitHub Actions" from `945dab1` and `release.yml`. Its provenance is SLSA v1, from `refs/tags/v0.3.0`. A fresh project installs it with no dependencies, `npm audit signatures` verifies its registry signature and its attestation, and all three entries load as ES modules and as CommonJS, with the same names both ways, `VERSION` 0.3.0 and the stylesheet. jsDelivr serves the script tag at `expressive-charts@0.3`, and the demo pages load. No placeholder version came.
 
 **Done when:**
 - **The tooltip.** Every library chart's tooltip can be hovered, and the audit's 1.4.13 rows pass.
@@ -2542,6 +2548,8 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **The demos** show all of it, with their screenshots and the audit, and script I passed with NVDA + Chrome.
 - **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise changes only by `gaps`, `gapBefore`, `breaks` and the icon fields, which are additions, and by the new fixture, with its migration note.
 - **0.3.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M8 is done.
+
+**Status: complete (27 October 2026).** Every item on the list holds. Steps 1 to 7 built and checked the first eight, and 0.3.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 8).
 
 ### Backlog (after 0.1)
 

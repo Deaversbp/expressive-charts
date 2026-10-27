@@ -4,17 +4,17 @@
     "dist/expressive-charts.global.js": 75.5,
     "dist/icons/sport.cjs": 3.5,
     "dist/icons/sport.js": 9,
-    "dist/index.cjs": 100,
-    "dist/index.js": 100.5,
+    "dist/index.cjs": 110.5,
+    "dist/index.js": 111,
     "dist/testing.cjs": 14,
     "dist/testing.js": 21.5
   },
   "importSets": {
     "motion, animated": 2,
-    "describe, matrix": 3.5,
+    "describe, matrix": 4,
     "expressive, travel": 27,
     "barChart": 30.5,
-    "lineChart, threshold, playback, playButton": 35,
+    "lineChart, threshold, playback, playButton": 39,
     "chartSwitch, donutChart, barChart": 41,
     "everything": 69
   }

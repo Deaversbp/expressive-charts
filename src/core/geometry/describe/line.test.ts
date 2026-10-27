@@ -103,3 +103,79 @@ describe("describe.line", () => {
     expect(() => build.line({ key: "goals", points, width: -1 })).toThrow(/width/);
   });
 });
+
+describe("describe.line with breaks", () => {
+  // Three legs of 50, 60 and 30 px: down-right, straight down, then right.
+  const legs = [
+    { x: 0, y: 0 },
+    { x: 30, y: 40 },
+    { x: 30, y: 100 },
+    { x: 60, y: 100 }
+  ];
+
+  it("has a gap from the point before each break to the point at it, in t", () => {
+    const m = build.line({ key: "goals", points: legs, breaks: [2] });
+    expect(m.gaps).toEqual([[50 / 140, 110 / 140]]);
+    expect(build.line({ key: "goals", points: legs, breaks: [1, 3] }).gaps).toEqual([
+      [0, 50 / 140],
+      [110 / 140, 1]
+    ]);
+  });
+
+  it("has no gaps without breaks, or with none", () => {
+    expect(build.line({ key: "goals", points: legs }).gaps).toBeUndefined();
+    expect(build.line({ key: "goals", points: legs, breaks: [] }).gaps).toBeUndefined();
+    expect("gaps" in build.line({ key: "goals", points: legs })).toBe(false);
+  });
+
+  it("walks straight across the gap: the walk, the body and the samples are the line's", () => {
+    const plain = build.line({ key: "goals", points: legs, width: 2 });
+    const m = build.line({ key: "goals", points: legs, breaks: [2], width: 2 });
+    for (const field of ["start", "end", "length", "thickness", "bounds", "center", "pivot"] as const) expect(m[field]).toEqual(plain[field]);
+    for (const t of [0, 0.2, 0.5, 0.7, 0.9, 1]) {
+      expect(m.path(t)).toEqual(plain.path(t));
+      expect(m.angle(t)).toBe(plain.angle(t));
+    }
+    expect(m.angle(0.5)).toBe(Math.PI / 2);
+    expect(m.outline.sample(15)).toEqual(plain.outline.sample(15));
+  });
+
+  it("leaves the gaps out of slice() and the stroke", () => {
+    const m = build.line({ key: "goals", points: legs, breaks: [2] });
+    expect(m.outline.closed).toBe(false);
+    expect(m.outline.d).toBe("M0,0L30,40M30,100L60,100");
+    expect(m.slice(0, 1)).toBe(m.outline.d);
+    expect(m.slice(25 / 140, 125 / 140)).toBe("M15,20L30,40M30,100L45,100");
+    expect(m.slice(80 / 140, 125 / 140)).toBe("M30,100L45,100");
+    expect(m.slice(60 / 140, 80 / 140)).toBe("M30,50");
+  });
+
+  it("writes no stroke for a value alone between breaks, or at either end", () => {
+    expect(build.line({ key: "goals", points: legs, breaks: [2, 3] }).outline.d).toBe("M0,0L30,40");
+    expect(build.line({ key: "goals", points: legs, breaks: [1] }).outline.d).toBe("M30,40L30,100L60,100");
+    expect(build.line({ key: "goals", points: legs, breaks: [1, 2, 3] }).outline.d).toBe("M0,0");
+    expect(build.line({ key: "goals", points: legs, breaks: [1, 2, 3] }).gaps).toHaveLength(3);
+  });
+
+  it("has no gap where a break is between two points in the same place", () => {
+    const m = build.line({ key: "goals", points: [legs[0]!, legs[1]!, legs[1]!, legs[2]!], breaks: [2] });
+    expect(m.gaps).toBeUndefined();
+    expect(m.outline.d).toBe("M0,0L30,40L30,100");
+  });
+
+  it("rejects breaks that aren't point indices from 1, in order, with no repeats, naming the field", () => {
+    const bad = (breaks: unknown, points = legs) => () => build.line({ key: "goals", points, breaks: breaks as number[] });
+    expect(bad(2)).toThrow(new RangeError("describe.line: breaks must be an array of point indices, got 2."));
+    const message = (i: number, after: number, got: string, count = 4) =>
+      new RangeError(`describe.line: breaks[${i}] must be a whole number more than ${after} and less than ${count}, the number of points, got ${got}.`);
+    expect(bad([0])).toThrow(message(0, 0, "0"));
+    expect(bad([4])).toThrow(message(0, 0, "4"));
+    expect(bad([1.5])).toThrow(message(0, 0, "1.5"));
+    expect(bad([1, Number.NaN])).toThrow(message(1, 1, "NaN"));
+    expect(bad([1, "2"])).toThrow(message(1, 1, '"2"'));
+    expect(bad([2, 2])).toThrow(message(1, 2, "2"));
+    expect(bad([3, 1])).toThrow(message(1, 3, "1"));
+    expect(bad([1], [{ x: 0, y: 0 }])).toThrow(message(0, 0, "1", 1));
+    expect(() => build.line({ key: "goals", points: [{ x: 0, y: 0 }], breaks: [] })).not.toThrow();
+  });
+});

@@ -26,6 +26,7 @@ export function assemble({ key, series, walk, thickness, outline, bounds, center
     path: (t) => walk.point(t),
     angle: (t) => walk.angle(t),
     slice: (t0, t1) => walk.slice(t0, t1),
+    ...(walk.gaps.length === 0 ? {} : { gaps: walk.gaps }),
     thickness,
     outline,
     bounds,

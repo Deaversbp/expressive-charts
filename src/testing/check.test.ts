@@ -93,9 +93,9 @@ describe("checkEffect", () => {
     };
     const message = await outcome(checkEffect(fading, { name: "fade" }));
     const lines = message.split("\n");
-    // Three checks fail on each of the eight fixtures: the full run, motion off, and the change() after them.
-    expect(lines[0]).toBe("checkEffect found 24 problems with fade:");
-    expect(lines).toHaveLength(25);
+    // Three checks fail on each of the nine fixtures: the full run, motion off, and the change() after them.
+    expect(lines[0]).toBe("checkEffect found 27 problems with fade:");
+    expect(lines).toHaveLength(28);
     expect(lines[1]).toBe(
       `- on the bar, a full run should end with the same picture and mark style as end(): item 1 drawn after the run is ` +
         `{"kind":"path","d":"${fixtures.bar.slice(0, 1)}","paint":{"stroke":"mark","opacity":0.5}} but end() draws {"kind":"path","d":"${fixtures.bar.slice(0, 1)}","paint":{"stroke":"mark","opacity":1}}`
@@ -171,7 +171,7 @@ describe("checkEffect", () => {
   it("checks that a full run, and end(), follow a change() to the moved mark", async () => {
     const message = await outcome(checkEffect(stuck, { name: "stuck" }));
     const lines = message.split("\n");
-    expect(lines[0]).toBe("checkEffect found 8 problems with stuck:");
+    expect(lines[0]).toBe("checkEffect found 9 problems with stuck:");
     const was = `{"kind":"path","d":"${fixtures.bar.slice(0, 1)}","paint":{"stroke":"mark","width":3}}`;
     const now = `{"kind":"path","d":"${movedFixtures.bar.slice(0, 1)}","paint":{"stroke":"mark","width":3}}`;
     expect(lines[1]).toBe(
@@ -471,10 +471,13 @@ describe("fixtures", () => {
   });
 
   it("has one of each kind of mark, frozen", () => {
-    expect(Object.keys(fixtures)).toEqual(["bar", "negative bar", "column", "stacked", "short bar", "slice", "line", "point"]);
+    expect(Object.keys(fixtures)).toEqual(["bar", "negative bar", "column", "stacked", "short bar", "slice", "line", "gapped line", "point"]);
     expect(Object.isFrozen(fixtures)).toBe(true);
     expect(fixtures.stacked.segments?.map((segment) => segment.series)).toEqual(["goals", "assists"]);
     expect(fixtures.point.length).toBe(0);
+    expect(fixtures.line.gaps).toBeUndefined();
+    expect(fixtures["gapped line"].gaps).toHaveLength(1);
+    expect(movedFixtures["gapped line"].gaps).toHaveLength(1);
   });
 
   it("has a moved twin of each: the same key and series, somewhere else", () => {

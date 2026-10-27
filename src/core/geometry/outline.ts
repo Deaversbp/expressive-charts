@@ -18,7 +18,7 @@ export type Sides = readonly [
  * right (walked back) and start. That order runs clockwise on screen from the start-left corner.
  */
 export function closedOutline(sides: Sides): Outline {
-  const walks = sides.map(createWalk);
+  const walks = sides.map((side) => createWalk(side));
   return {
     d: pathData(sides.flat(), true),
     closed: true,
@@ -34,7 +34,7 @@ export function closedOutline(sides: Sides): Outline {
   };
 }
 
-/** An open outline: the stroke along a walk. */
+/** An open outline: the stroke along a walk, less its gaps. Its samples run along the whole walk, gaps and all. */
 export function openOutline(walk: Walk): Outline {
   return {
     d: walk.d,

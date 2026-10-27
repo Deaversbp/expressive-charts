@@ -6,6 +6,8 @@ export interface Sample {
   readonly value: number;
   /** The x value or label behind the sample (a week, a date). */
   readonly at?: string | number | Date;
+  /** True on the first sample after a gap in the data, so a data effect doesn't join it to the one before. */
+  readonly gapBefore?: boolean;
 }
 
 export interface MarkData<D = unknown> {

@@ -30,17 +30,21 @@ interface Inherited {
   readonly width: number;
   readonly linecap: IconShape["linecap"];
   readonly linejoin: IconShape["linejoin"];
+  readonly fillRule: NonNullable<IconShape["fillRule"]>;
+  /** The shape's own opacity times its groups'. */
+  readonly opacity: number;
   readonly transform: Matrix;
 }
 
 /**
  * Converts `path`, `circle`, `rect`, `ellipse`, `line`, `polyline` and `polygon` elements into shapes,
- * with their fill, stroke, stroke width, line caps and joins (as attributes or in `style`, inherited
- * from `<g>`) and transforms applied. `currentColor` becomes the theme's `text` colour, so an icon
- * from an icon set follows the chart's theme. Everything else is dropped: scripts, event handlers,
- * `<use>`, text, images, and what's inside `<defs>`, `<clipPath>` and the like. Gradients, patterns,
- * opacity, fill rules and CSS classes aren't kept; a shape painted with a gradient or pattern falls
- * back to its inherited colour.
+ * with their fill, stroke, stroke width, line caps and joins, fill rule and opacity (as attributes or in
+ * `style`, inherited from `<g>`, a group's opacity multiplied into its shapes') and transforms applied.
+ * `currentColor` becomes the theme's `text` colour, so an icon from an icon set follows the chart's
+ * theme. Everything else is dropped: scripts, event handlers, `<use>`, text, images, what's inside
+ * `<defs>`, `<clipPath>` and the like, and shapes with an opacity of 0. Gradients, patterns, `fill-opacity`,
+ * `stroke-opacity` and CSS classes aren't kept; a shape painted with a gradient or pattern falls back to
+ * its inherited colour.
  */
 export function iconFromSvg(markup: string, spec: SvgIconSpec): Icon {
   if (typeof markup !== "string") throw new TypeError("iconFromSvg needs SVG markup as a string.");
@@ -73,7 +77,7 @@ export function iconFromSvg(markup: string, spec: SvgIconSpec): Icon {
         if (typeof spec.size !== "number" || !(spec.size > 0) || !Number.isFinite(spec.size)) fail(`size must be more than 0, got ${String(spec.size)}`);
         scale = spec.size / box.width;
       }
-      root = { fill: "#000000", stroke: "none", width: 1, linecap: undefined, linejoin: undefined, transform: matrix.scale(scale) };
+      root = { fill: "#000000", stroke: "none", width: 1, linecap: undefined, linejoin: undefined, fillRule: "nonzero", opacity: 1, transform: matrix.scale(scale) };
     }
     // Only what's inside the first <svg> is drawn.
     const parent = stack.length > 0 ? stack[stack.length - 1]!.state : first ? root : undefined;
@@ -154,6 +158,12 @@ function pixels(value: string | undefined): number | undefined {
   return number > 0 && Number.isFinite(number) ? number : undefined;
 }
 
+/** An opacity as a number or a percentage, one past 0 or 1 counting as 0 or 1, as in CSS. Anything else counts as 1. */
+function alpha(value: string | undefined): number {
+  const match = /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(%?)\s*$/i.exec(value ?? "");
+  return match ? Math.min(1, Math.max(0, Number(match[1]) / (match[2] ? 100 : 1))) : 1;
+}
+
 function hidden(attributes: Map<string, string>): boolean {
   return attributes.get("display")?.trim() === "none" || attributes.get("visibility")?.trim() === "hidden";
 }
@@ -169,6 +179,7 @@ function inherit(parent: Inherited, attributes: Map<string, string>): Inherited 
   const width = Number.parseFloat(attributes.get("stroke-width") ?? "");
   const linecap = attributes.get("stroke-linecap")?.trim();
   const linejoin = attributes.get("stroke-linejoin")?.trim();
+  const fillRule = attributes.get("fill-rule")?.trim().toLowerCase();
   const transform = attributes.get("transform");
   return {
     fill: paint("fill", parent.fill),
@@ -176,6 +187,9 @@ function inherit(parent: Inherited, attributes: Map<string, string>): Inherited 
     width: width >= 0 ? width : parent.width,
     linecap: linecap === "butt" || linecap === "round" ? linecap : parent.linecap,
     linejoin: linejoin === "miter" || linejoin === "round" ? linejoin : parent.linejoin,
+    fillRule: fillRule === "nonzero" || fillRule === "evenodd" ? fillRule : parent.fillRule,
+    // Opacity isn't inherited in SVG: a group is drawn and then faded. Multiplying is the same unless its shapes overlap.
+    opacity: parent.opacity * alpha(attributes.get("opacity")),
     transform: transform ? matrix.multiply(parent.transform, parseTransform(transform)) : parent.transform
   };
 }
@@ -183,13 +197,14 @@ function inherit(parent: Inherited, attributes: Map<string, string>): Inherited 
 function toShape(tag: string, attributes: Map<string, string>, state: Inherited): IconShape | undefined {
   const fill = state.fill === "none" ? undefined : state.fill;
   const stroke = state.stroke === "none" || !(state.width > 0) ? undefined : state.stroke;
-  if (fill === undefined && stroke === undefined) return undefined;
+  const opacity = round(state.opacity);
+  if ((fill === undefined && stroke === undefined) || !(opacity > 0)) return undefined;
   const commands = outline(tag, attributes);
   if (!commands.some((command) => command.op !== "M")) return undefined;
   const m = state.transform;
   return {
     d: formatPath(transformPath(commands, m)),
-    ...(fill !== undefined ? { fill } : {}),
+    ...(fill !== undefined ? { fill, ...(state.fillRule === "evenodd" ? { fillRule: state.fillRule } : {}) } : {}),
     ...(stroke !== undefined
       ? {
           stroke,
@@ -198,7 +213,8 @@ function toShape(tag: string, attributes: Map<string, string>, state: Inherited)
           ...(state.linecap ? { linecap: state.linecap } : {}),
           ...(state.linejoin ? { linejoin: state.linejoin } : {})
         }
-      : {})
+      : {}),
+    ...(opacity < 1 ? { opacity } : {})
   };
 }
 

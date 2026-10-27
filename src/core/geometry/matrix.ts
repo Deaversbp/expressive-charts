@@ -52,7 +52,13 @@ function around(m: Matrix, about: Point | undefined): Matrix {
 }
 
 /** Builds and applies 2D transforms in SVG order, for `mark.set({ transform })` and `IconHandle.place()`. */
-export const matrix = { translate, rotate, scale, multiply, apply };
+export const matrix: {
+  translate: typeof translate;
+  rotate: typeof rotate;
+  scale: typeof scale;
+  multiply: typeof multiply;
+  apply: typeof apply;
+} = { translate, rotate, scale, multiply, apply };
 
 // Internal: iconFromSvg and the adapter read SVG transforms with these.
 

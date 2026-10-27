@@ -8,7 +8,8 @@
 // since npm shows it away from the repository, and the links in both find their files and headings.
 // README's pictures have alt text, and each plays once and stops within 5 s (WCAG 2.2.2).
 
-import ts from "typescript";
+// TypeScript 6, since 7.0's package has no compiler API.
+import ts from "typescript-6";
 
 /** Each JS entry of the package, by the name a page imports, and its source. */
 const ENTRIES: Readonly<Record<string, string>> = {
@@ -167,6 +168,15 @@ function anchorsOf(text: string): Set<string> {
     seen.set(base, count + 1);
     anchors.add(count === 0 ? base : `${base}-${count}`);
   }
+  return anchors;
+}
+
+const anchorCache = new Map<string, Set<string>>();
+
+/** A Markdown file's anchors, found once a file: api.md links to its own headings and architecture.md's well over a hundred times, and reading the file each time timed out under load. */
+function anchorsIn(repo: Repo, path: string): Set<string> {
+  let anchors = anchorCache.get(path);
+  if (anchors === undefined) anchorCache.set(path, (anchors = anchorsOf(repo.read(path))));
   return anchors;
 }
 
@@ -422,7 +432,7 @@ function brokenLinks(repo: Repo, file: string, text: string, absolute: boolean):
       problems.push(`${at}: there's no ${target}`);
       continue;
     }
-    if (anchor !== undefined && target.endsWith(".md") && !anchorsOf(repo.read(target)).has(anchor)) {
+    if (anchor !== undefined && target.endsWith(".md") && !anchorsIn(repo, target).has(anchor)) {
       problems.push(`${at}: ${target} has no heading #${anchor}`);
     }
   }
@@ -509,7 +519,7 @@ describe("README.md", () => {
     const html = blocks.filter((block) => block.lang === "html").map((block) => block.code).join("\n");
     expect(html).toMatch(new RegExp(`<script src="[^"]*/${pkg.name}@[^/"]+/dist/expressive-charts\\.global\\.js"></script>`));
     expect(pkg.files).toContain("dist");
-    expect(root.read("tsup.config.ts")).toContain('globalName: "ExpressiveCharts"');
+    expect(root.read("tsdown.config.ts")).toContain('globalName: "ExpressiveCharts"');
   });
 
   it("has absolute links, which find their files and headings", () => {

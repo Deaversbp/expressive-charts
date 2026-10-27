@@ -35,6 +35,8 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Changed
 
+- **The package is built with tsdown, on Rolldown,** instead of tsup. Each entry has the same names, as an ES module and as CommonJS, with the same types, checked on TypeScript 5.4, 6 and 7. The files keep their names, but for the shared chunks, which are named by their first module. The script-tag bundle is 72 KB gzipped, 6.6 KB less, and `expressive-charts/icons/sport` loads 4 KB with its chunks, not 9. Nothing to write instead.
+
 ### Fixed
 
 - **`checkEffect`'s default data on a gap**, under the 0.x promise. On a mark with gaps, such as the `"gapped line"` fixture, it has a sample at each end of each gap, with its `t` as its value and `gapBefore` on the one after, so a data effect sees the gap as on a line chart's line. Before, it had two samples, 0 at the start and 1 at the end, on every mark, so a data effect never saw a gap. On a mark without gaps it's as before. An effect that leaves the gap alone passes as it did; one that joins across a gap can now fail, as it should. A test that needs other data passes `data`.

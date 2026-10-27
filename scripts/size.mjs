@@ -5,7 +5,7 @@
 //
 // It measures two things:
 //   - Each published JS file and the stylesheet, raw and compressed. An ES module entry counts the shared chunks
-//     it imports, since loading it fetches them too, and tsup names its chunks by a hash that changes with the code.
+//     it imports, since loading it fetches them too, and tsdown names its chunks by a hash that changes with the code.
 //   - Import sets: what a page that imports a few names pays once its bundler has tree-shaken the package. Each set
 //     is bundled from dist/index.js with Vite's build API and minified, as a page's build would be, so a change that
 //     breaks tree-shaking grows the small sets and fails here.

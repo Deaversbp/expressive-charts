@@ -23,6 +23,10 @@ export interface IconShape {
   readonly fillRule?: "nonzero" | "evenodd";
   /** From 0 to 1, for the whole shape, fill and stroke together (a duotone set's lighter part). Default 1. */
   readonly opacity?: number;
+  /** From 0 to 1, the fill's own, inside `opacity` (a set that fades only a part's fill). Default 1. */
+  readonly fillOpacity?: number;
+  /** From 0 to 1, the stroke's own, inside `opacity`. Default 1. */
+  readonly strokeOpacity?: number;
 }
 
 /**

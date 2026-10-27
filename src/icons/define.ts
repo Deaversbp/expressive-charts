@@ -80,10 +80,12 @@ function checkShape(
   if (shape.linecap !== undefined && !LINECAPS.includes(shape.linecap)) fail(`${field}.linecap`, `must be butt or round, got ${String(shape.linecap)}`);
   if (shape.linejoin !== undefined && !LINEJOINS.includes(shape.linejoin)) fail(`${field}.linejoin`, `must be miter or round, got ${String(shape.linejoin)}`);
   if (shape.fillRule !== undefined && !FILL_RULES.includes(shape.fillRule)) fail(`${field}.fillRule`, `must be nonzero or evenodd, got ${String(shape.fillRule)}`);
-  const opacity = shape.opacity === undefined ? 1 : finite(`${field}.opacity`, shape.opacity);
-  if (opacity < 0 || opacity > 1) fail(`${field}.opacity`, `must be from 0 to 1, got ${opacity}`);
+  for (const key of ["opacity", "fillOpacity", "strokeOpacity"] as const) {
+    const opacity = shape[key] === undefined ? 1 : finite(`${field}.${key}`, shape[key]);
+    if (opacity < 0 || opacity > 1) fail(`${field}.${key}`, `must be from 0 to 1, got ${opacity}`);
+  }
   const copy: { -readonly [K in keyof IconShape]: IconShape[K] } = { d: shape.d };
-  for (const key of ["fill", "stroke", "width", "linecap", "linejoin", "clip", "fillRule", "opacity"] as const) {
+  for (const key of ["fill", "stroke", "width", "linecap", "linejoin", "clip", "fillRule", "opacity", "fillOpacity", "strokeOpacity"] as const) {
     if (shape[key] !== undefined) (copy as Record<string, unknown>)[key] = shape[key];
   }
   return freeze(copy);

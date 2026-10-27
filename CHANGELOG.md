@@ -29,13 +29,21 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Added
 
-- **`describe.shape`**, under the 0.x promise, with its spec, `ShapeSpec`: a mark's geometry from SVG path data, `describe.shape({ key, series, d, matrix, width, labelBounds })`. The library follows the path itself, so it works the same in Node, Vitest and every browser. `d` is read as SVG reads it, up to its first error, and `matrix` moves it into the marks' px, as an element's transform does. A shape is closed when every subpath ends with `Z`, and otherwise open.
+- **`describe.shape`**, under the 0.x promise, with its spec, `ShapeSpec`: a mark's geometry from SVG path data, `describe.shape({ key, series, d, matrix, width, labelBounds })`. The library follows the path itself, so it works the same in Node, Vitest and every browser. `d` is read as SVG reads it, up to its first error, and `matrix` moves it into the marks' px, as an element's transform does. A shape is closed when every subpath ends with `Z`, or where it started, and otherwise open.
   - An open shape is a line. Its walk follows the path, and each later move starts a new run after a gap, so a D3 line drawn with `.defined()` comes with its gaps. Its outline is the stroke, `width` px wide (default 1).
   - A closed shape, such as a D3 area, has no direction, like a point: its walk has length 0, at its centre. Its outline is the whole path, holes too, sampled round its longest subpath from its upper left, so a circle samples as `describe.point`'s does.
   - Béziers, and arcs that aren't circular, become straight pieces within 0.1 px of the curve, so path data still has only `M`, `L`, `A` and `Z`.
   - Path data with nothing to draw, a `matrix` that isn't six finite numbers and a `width` that isn't more than 0 each throw a `RangeError` naming the field.
 
   These are new names, so no code needs to change. The effects guide says how to check an effect on a curve or an area with it.
+
+- **`fillOpacity` and `strokeOpacity` on `IconShape`**, under the 0.x promise: the fill's and the stroke's own opacity, each from 0 to 1 (default 1), inside the shape's `opacity`, so one shape can have a faint fill inside a full outline. `defineIcon` checks them, with a `RangeError` naming the shape and the field, and the SVG layer sets them on the shape's path. They're optional fields: code that builds an `IconShape` needs no change.
+
+### Changed
+
+### Fixed
+
+- **`iconFromSvg` keeps `fill-opacity` and `stroke-opacity`**, so an icon whose SVG fades a part's fill or stroke with them draws as its SVG does. Before, the faded part drew at full strength. They're read from attributes and `style`, as numbers or percentages, and inherited through groups as SVG inherits them: a shape's own replaces its group's, rather than multiplying as `opacity` does. A fill or stroke faded to 0 is dropped, as `none` is, and so is a shape left with neither. An icon made from SVG without them comes out the same. A long `width` or `height` on an `<svg>` with no viewBox is now read at once, too: a run of 100,000 digits followed by a letter took 23 s.
 
 ## 0.3.0 (27 October 2026)
 

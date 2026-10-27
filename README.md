@@ -15,7 +15,7 @@ Composable motion and expressive effects for web charts. Hover, update and morph
 
 Each picture plays once and stops where its effect ends. **[The demo site](https://deaversbp.github.io/expressive-charts/)** has every effect to try, on the library's charts and on D3, Vega-Lite and hand-written ones, with the motion modes and reduced motion.
 
-> **Status: 0.2.0 (October 2026).** The effect-author API is under [the 0.x promise](#the-0x-promise); the charts, adapters, built-in effects and motion core can still change in a minor release. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#020-26-october-2026) lists what's new and what changed since 0.1.0.
+> **Status: 0.3.0 (October 2026).** The effect-author API is under [the 0.x promise](#the-0x-promise); the charts, adapters, built-in effects and motion core can still change in a minor release. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#030-27-october-2026) lists what's new and what changed since 0.2.0.
 
 - **Effects first.** The mark effects `travel`, `flash`, `wiggle`, `pulse`, `trace` and the data effects `threshold`, `delta` and `label`, put together with `sequence`, `parallel`, `only` and `stagger`; and the transition effect `morph`, which `chartSwitch` plays to turn each mark of one chart into its mark in the next (a transition can't go into a combinator). An effect reads only a shared description of the mark, so one effect works on every chart, and effects of your own work everywhere the built-in ones do.
 - **Charts and adapters.** Bar, donut and line charts, a switch that morphs one into another, adapters that bring the same effects to SVG marks drawn by other code, and hover linked across them.
@@ -28,13 +28,13 @@ Each picture plays once and stops where its effect ends. **[The demo site](https
 npm install expressive-charts
 ```
 
-It has no runtime dependencies. It's an ES module and CommonJS, each with its own types, and its JavaScript has no side effects, so a bundler keeps only what a page imports: a bar chart is about 29 KB gzipped, and everything 68 KB.
+It has no runtime dependencies. It's an ES module and CommonJS, each with its own types, and its JavaScript has no side effects, so a bundler keeps only what a page imports: a bar chart is about 31 KB gzipped, and everything 72 KB.
 
 On a page with no bundler, the script-tag bundle defines one global, `ExpressiveCharts`, holding the main entry:
 
 ```html
 <div id="sales"></div>
-<script src="https://cdn.jsdelivr.net/npm/expressive-charts@0.2/dist/expressive-charts.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/expressive-charts@0.3/dist/expressive-charts.global.js"></script>
 <script>
   const { barChart } = ExpressiveCharts;
   barChart("#sales", {

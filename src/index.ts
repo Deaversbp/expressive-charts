@@ -30,7 +30,7 @@ import { motionSwitch as buildMotionSwitch, type MotionSwitch, type MotionSwitch
 import { morph } from "./effects";
 import { iconRegistry, presetRegistry } from "./registries";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
 export * from "./core";
 export * from "./effects";

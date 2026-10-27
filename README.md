@@ -170,7 +170,7 @@ The script-tag bundle, `dist/expressive-charts.global.js`, is the main entry alo
 ## Browsers and TypeScript
 
 - **Browsers.** Current Chrome and Edge, Firefox, and Safari. Every DOM check in the test suite (names, roles, tab order, focus rings, tooltips, keys, switches and reduced motion), with axe's accessibility rules, runs in Chromium, Firefox and WebKit, in Playwright 1.64; the screenshots are Chromium's. That's each browser's engine, not a device: Safari on macOS and iOS hasn't been run itself. The build targets ES2020.
-- **TypeScript 5.4 or newer**, since the types use `NoInfer`. The packed package is checked under `bundler` and `node16` resolution, as an ES module and as CommonJS. Under the old `node10` (`"node"`), TypeScript can't find the subpath entries' types.
+- **TypeScript 5.4 or newer**, since the types use `NoInfer`. The packed package is checked on TypeScript 5.4, 6 and 7, under `bundler` and `node16` resolution, as an ES module and as CommonJS, with `import "expressive-charts/style.css"`. Under the old `node10` (`"node"`), TypeScript can't find the subpath entries' types.
 - **Node.js 22 or newer** to import it on a server: nothing touches the DOM until a chart, an adapter or a control is made, and those need one.
 
 ## Content-Security-Policy

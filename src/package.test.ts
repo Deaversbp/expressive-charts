@@ -61,14 +61,17 @@ function entryFiles(pkg: PackageJson): string[] {
 }
 
 describe("package.json", () => {
-  it("exports the stylesheet the build writes", async () => {
+  it("exports the stylesheet the build writes, with types so TypeScript 6 and later find the import", async () => {
     const pkg = await packageJson();
-    expect(pkg.exports["./style.css"]).toBe("./dist/expressive-charts.css");
+    expect(pkg.exports["./style.css"]).toEqual({
+      import: { types: "./dist/expressive-charts.css.d.ts", default: "./dist/expressive-charts.css" },
+      require: { types: "./dist/expressive-charts.css.d.cts", default: "./dist/expressive-charts.css" }
+    });
   });
 
   it("marks the CSS as having side effects, so bundlers keep the import", async () => {
     const pkg = await packageJson();
-    const css = entryFiles(pkg).filter((file) => file.endsWith(".css"));
+    const css = [...new Set(entryFiles(pkg).filter((file) => file.endsWith(".css")))];
     expect(css).toEqual(["./dist/expressive-charts.css"]);
     for (const file of css) expect(hasSideEffects(pkg.sideEffects, file), file).toBe(true);
   });
@@ -95,7 +98,7 @@ describe("package.json", () => {
     // The package is "type": "module", so a .d.ts describes an ES module. A CommonJS project resolving
     // with node16 would be given ES module types for the .cjs file unless require has its own.
     const pkg = await packageJson();
-    const scripts = Object.entries(pkg.exports).filter(([, target]) => typeof target !== "string");
+    const scripts = Object.entries(pkg.exports).filter(([entry]) => !entry.endsWith(".css"));
     expect(scripts.map(([entry]) => entry)).toEqual([".", "./icons/sport", "./testing"]);
     for (const [entry, target] of scripts) {
       const base = entry === "." ? "./dist/index" : `./dist/${entry.slice(2)}`;

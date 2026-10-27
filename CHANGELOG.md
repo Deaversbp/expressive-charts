@@ -36,6 +36,7 @@ Everything else can still change in a minor release while the library is 0.x: th
 ### Fixed
 
 - **`iconFromSvg` keeps `fill-rule` and `opacity`**, so an icon whose SVG has an even-odd hole (Heroicons' solid style) or a faded part (a duotone set's) draws as its SVG does. Before, the hole filled in and the faded part drew at full strength. They're read from attributes and `style` and inherited through groups, with a group's opacity multiplied into its shapes'. A shape with an opacity of 0 is dropped. `fill-opacity` and `stroke-opacity` still aren't kept.
+- **`import "expressive-charts/style.css"` typechecks on TypeScript 6 and 7.** From TypeScript 6, a side-effect import must find something (`noUncheckedSideEffectImports` is on by default), and the stylesheet had no types, so the import was error TS2882. Its export now has types, an empty module (`dist/expressive-charts.css.d.ts` and `.d.cts`), and bundlers and Node still load the CSS. Nothing changes on TypeScript 5.4 to 5.9.
 
 ## 0.2.0 (26 October 2026)
 

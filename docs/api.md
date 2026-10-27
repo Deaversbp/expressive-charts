@@ -2816,7 +2816,7 @@ One thing drawn, as `picture()` gives it: without ids, its numbers rounded, an i
 
 ## `expressive-charts/style.css`
 
-The stylesheet the charts, adapters and controls inject, as a file: the theme tokens and the default rules. A page whose Content-Security-Policy allows no inline styles loads it itself and turns injection off. Bundlers keep the import, since `package.json` lists CSS under `sideEffects`.
+The stylesheet the charts, adapters and controls inject, as a file: the theme tokens and the default rules. A page whose Content-Security-Policy allows no inline styles loads it itself and turns injection off. Bundlers keep the import, since `package.json` lists CSS under `sideEffects`. It has types, an empty module, so TypeScript 6 and later, which check that a side-effect import finds something, accept the import.
 
 ```ts
 import { configure } from "expressive-charts";

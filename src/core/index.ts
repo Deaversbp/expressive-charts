@@ -63,4 +63,4 @@ export type {
 } from "./contracts";
 
 export { describe, matrix, offset, samplesAlong } from "./geometry";
-export type { ArcSpec, BarSegmentSpec, BarSpec, Baseline, LineSpec, PointSpec, SamplePoint } from "./geometry";
+export type { ArcSpec, BarSegmentSpec, BarSpec, Baseline, LineSpec, PointSpec, SamplePoint, ShapeSpec } from "./geometry";

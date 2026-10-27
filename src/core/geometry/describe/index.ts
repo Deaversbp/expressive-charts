@@ -5,20 +5,24 @@ import { describeArc } from "./arc";
 import { describeBar } from "./bar";
 import { describeLine } from "./line";
 import { describePoint } from "./point";
+import { describeShape } from "./shape";
 
 export const describe: {
   bar: typeof describeBar;
   arc: typeof describeArc;
   line: typeof describeLine;
   point: typeof describePoint;
+  shape: typeof describeShape;
 } = {
   bar: describeBar,
   arc: describeArc,
   line: describeLine,
-  point: describePoint
+  point: describePoint,
+  shape: describeShape
 };
 
 export type { ArcSpec } from "./arc";
 export type { BarSegmentSpec, BarSpec, Baseline } from "./bar";
 export type { LineSpec } from "./line";
 export type { PointSpec } from "./point";
+export type { ShapeSpec } from "./shape";

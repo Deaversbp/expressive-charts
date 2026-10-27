@@ -10,7 +10,7 @@ The library follows [semantic versioning](https://semver.org) from 0.1.0, with t
 
 - `defineEffect` and `defineDataEffect`, with `GeometryEffectSpec` and `DataEffectSpec`;
 - `matrix` and `offset`;
-- `describe.bar`, `describe.arc`, `describe.line` and `describe.point`, with their specs: `BarSpec`, `BarSegmentSpec`, `Baseline`, `ArcSpec`, `LineSpec` and `PointSpec`;
+- `describe.bar`, `describe.arc`, `describe.line`, `describe.point` and `describe.shape`, with their specs: `BarSpec`, `BarSegmentSpec`, `Baseline`, `ArcSpec`, `LineSpec`, `PointSpec` and `ShapeSpec`;
 - the effect contracts (`GeometryEffect`, `DataEffect`, `TransitionEffect`, `MarkEffect`, `AnyMarkEffect`, `Combined`), the contexts (`EffectContext`, `TransitionContext`), the mark and its data (`MarkGeometry`, `Outline`, `Point`, `Rect`, `MarkData`, `Sample`), the drawing API (`Layer`, `MarkHandle`, `MarkStyle`, `Matrix`, `Paint`, `TextStyle`, `Color`, and the handles `IconHandle`, `PathHandle` and `TextHandle`), and icons as an effect gets them (`Icon`, `IconShape`, `IconSource`);
 - the motion types the context uses: `MotionView`, `MotionMode`, `Timing`, `Tween`, `TweenOptions`, `TweenResult` and `Easing`;
 - `expressive-charts/testing`: `checkEffect`, `checkTransition`, `fixtures`, `fixturePairs`, `testContext` and `play`, with their options (`CheckEffectOptions`, `CheckTransitionOptions`, `TestContextOptions`, `PlayOptions`), the fixtures' names (`FixtureName`, `FixturePairName`), the test context (`TestContext`) and what it records (`RecordingLayer`, `RecordingMark`, `Drawn`, `DrawnIcon`, `DrawnPath`, `DrawnText`, `LayerCall`, `MarkCall`, `Picture`), and the motion types they use: `Motion`, `Clock`, `ManualClock`, `ScalingOverrides` and `ScalingRule`.
@@ -28,6 +28,14 @@ Everything else can still change in a minor release while the library is 0.x: th
 ## Unreleased
 
 ### Added
+
+- **`describe.shape`**, under the 0.x promise, with its spec, `ShapeSpec`: a mark's geometry from SVG path data, `describe.shape({ key, series, d, matrix, width, labelBounds })`. The library follows the path itself, so it works the same in Node, Vitest and every browser. `d` is read as SVG reads it, up to its first error, and `matrix` moves it into the marks' px, as an element's transform does. A shape is closed when every subpath ends with `Z`, or where it started, and otherwise open.
+  - An open shape is a line. Its walk follows the path, and each later move starts a new run after a gap, so a D3 line drawn with `.defined()` comes with its gaps. Its outline is the stroke, `width` px wide (default 1).
+  - A closed shape, such as a D3 area, has no direction, like a point: its walk has length 0, at its centre. Its outline is the whole path, holes too, sampled round its longest subpath from its upper left, so a circle samples as `describe.point`'s does.
+  - Béziers, and arcs that aren't circular, become straight pieces within 0.1 px of the curve, so path data still has only `M`, `L`, `A` and `Z`.
+  - Path data with nothing to draw, a `matrix` that isn't six finite numbers and a `width` that isn't more than 0 each throw a `RangeError` naming the field.
+
+  These are new names, so no code needs to change. The effects guide says how to check an effect on a curve or an area with it.
 
 - **`fillOpacity` and `strokeOpacity` on `IconShape`**, under the 0.x promise: the fill's and the stroke's own opacity, each from 0 to 1 (default 1), inside the shape's `opacity`, so one shape can have a faint fill inside a full outline. `defineIcon` checks them, with a `RangeError` naming the shape and the field, and the SVG layer sets them on the shape's path. They're optional fields: code that builds an `IconShape` needs no change.
 - **`update({ on })` and `leave()` on attachments.** `expressive()`'s and `fromVegaView()`'s attachments swap their effects in place, as a chart's `update({ on })` does: a slot given the same effect or preset name keeps its runs, a changed slot's new effect starts where the old one's runs were, and focus and the tab stop stay, so a page with an effect picker needn't attach again. It returns a promise, which resolves at once, and rejects, changing nothing, on an unknown preset name, a series a data effect needs that the marks don't have, or any option but `on`. `leave()` ends the hover, pointer or keyboard, as a chart's does, with focus staying where it is. Both are additions.

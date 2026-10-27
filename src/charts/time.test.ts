@@ -1,4 +1,4 @@
-import { boundaries, timeLevel, timeName, timeStep, timeTicks, type TimeZone } from "./time";
+import { boundaries, monthsOn, timeLevel, timeName, timeStep, timeTicks, type TimeZone } from "./time";
 
 /** Node's environment: the library has no Node types. */
 const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
@@ -232,6 +232,53 @@ describe("timeTicks in local time, across Lord Howe Island's half-hour clock cha
       "2026-04-04T16:30:00.000Z 3:00 AM",
       "2026-04-04T17:00:00.000Z 3:30 AM"
     ]);
+  });
+});
+
+describe("monthsOn", () => {
+  const on = (t: string, months: number, zone: TimeZone = "UTC"): string => iso(monthsOn(ms(t), months, zone));
+
+  it("keeps the day of the month and the time of day, or ends a shorter month on its last day", () => {
+    expect(on("2026-01-15T09:30:00.250Z", 1)).toBe("2026-02-15T09:30:00.250Z");
+    expect(on("2026-01-31T00:00:00Z", 1)).toBe("2026-02-28T00:00:00.000Z");
+    expect(on("2028-01-31T00:00:00Z", 1)).toBe("2028-02-29T00:00:00.000Z");
+    expect(on("2026-05-31T18:00:00Z", 1)).toBe("2026-06-30T18:00:00.000Z");
+    expect(on("2026-03-31T12:00:00Z", -1)).toBe("2026-02-28T12:00:00.000Z");
+    expect(on("2026-02-28T00:00:00Z", 0)).toBe("2026-02-28T00:00:00.000Z");
+  });
+
+  it("goes across a year's end either way, and by a year", () => {
+    expect(on("2026-12-31T00:00:00Z", 2)).toBe("2027-02-28T00:00:00.000Z");
+    expect(on("2026-01-10T00:00:00Z", -1)).toBe("2025-12-10T00:00:00.000Z");
+    expect(on("2028-02-29T00:00:00Z", 12)).toBe("2029-02-28T00:00:00.000Z");
+    // Years before 100 are taken as they are, not as 1900 to 1999.
+    expect(on("0050-01-31T00:00:00Z", 1)).toBe("0050-02-28T00:00:00.000Z");
+  });
+
+  describe("in local time in New York", () => {
+    inZone("America/New_York");
+
+    it("keeps the clock's time across daylight saving, and puts a time the clocks skip after the change", () => {
+      // 9 AM on 15 February is 9 AM on 15 March: an hour less apart, since the clocks went forward.
+      expect(on("2026-02-15T14:00:00Z", 1, "local")).toBe("2026-03-15T13:00:00.000Z");
+      expect(on("2026-02-15T14:00:00Z", 1)).toBe("2026-03-15T14:00:00.000Z");
+      // 2:30 AM on 8 February: on 8 March the clocks skip from 2 to 3 AM, so it's 3:30.
+      expect(on("2026-02-08T07:30:00Z", 1, "local")).toBe("2026-03-08T07:30:00.000Z");
+    });
+
+    it("ends the zone's month on its last day: 10 PM on 30 January is 31 January in UTC", () => {
+      expect(on("2026-01-31T03:00:00Z", 1, "local")).toBe("2026-03-01T03:00:00.000Z");
+      expect(on("2026-01-31T03:00:00Z", 1)).toBe("2026-02-28T03:00:00.000Z");
+    });
+  });
+
+  describe("in local time in Auckland", () => {
+    inZone("Pacific/Auckland");
+
+    it("ends the zone's month on its last day: 1 AM on 31 January is 30 January in UTC", () => {
+      expect(on("2026-01-30T12:00:00Z", 1, "local")).toBe("2026-02-27T12:00:00.000Z");
+      expect(on("2026-01-30T12:00:00Z", 1)).toBe("2026-02-28T12:00:00.000Z");
+    });
   });
 });
 

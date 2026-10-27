@@ -603,7 +603,6 @@ test.describe("text spacing", () => {
 
   for (const { name, demo } of demos) {
     test(`${name}.html: no chart's text overlaps other text or leaves its card`, async ({ page }) => {
-      test.skip(demo === stressDemo, "Its bars' labels overlap at the default spacing: bar charts don't thin their labels yet (the plan's backlog).");
       await openAtRest(page, demo);
       await page.addStyleTag({ content: SPACING });
       await page.clock.runFor(REST);

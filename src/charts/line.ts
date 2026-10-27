@@ -63,6 +63,7 @@ import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffec
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
 import { chartTable, tableModel, type TableModel } from "./table";
+import { monthsOn } from "./time";
 import { chartTooltip, summaryContent, type TooltipContent } from "./tooltip";
 import type { LineChart, LineChartOptions } from "./types";
 
@@ -771,6 +772,17 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       return record !== undefined && revealed(record);
     },
     order: () => rowOrder.filter(revealed).map((record) => record.key),
+    // On a time axis a page is a calendar month in its zone: the first x a month or more on, or back,
+    // or the last one that way. On numbers it's the keyboard's own.
+    page(key, by) {
+      const from = rows.get(key);
+      if (!laidOut.time || !from) return undefined;
+      const stops = rowOrder.filter(revealed);
+      const to = monthsOn(from.row.x, by, lineEncoding(current).timeZone);
+      if (by > 0) return (stops.find((record) => record.row.x >= to) ?? stops[stops.length - 1])?.key;
+      for (let i = stops.length - 1; i >= 0; i--) if (stops[i]!.row.x <= to) return stops[i]!.key;
+      return stops[0]?.key;
+    },
     marks: (key) => {
       const record = rows.get(key);
       return record ? livePoints(record).map((point) => point.key) : [];

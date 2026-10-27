@@ -149,6 +149,29 @@ export function boundaries(lo: number, hi: number, step: TimeStep, zone: TimeZon
   return out;
 }
 
+/**
+ * `months` calendar months on from `t`, or back when it's negative, in the zone: the same day of the
+ * month at the same time of day, or the month's last day when it's shorter, as Temporal's `add`
+ * constrains it (31 January a month on is 28 February, or the 29th in a leap year). A time the
+ * clocks skip there comes out just after the change, as Date's setters move it.
+ */
+export function monthsOn(t: number, months: number, zone: TimeZone): number {
+  const { year, month, date, hours, minutes, seconds, ms } = partsOf(t, zone);
+  // Day 0 of the month after is the last of the month: every zone's calendar has the same months.
+  const last = new Date(0);
+  last.setUTCFullYear(year, month + months + 1, 0);
+  const day = Math.min(date, last.getUTCDate());
+  const d = new Date(0);
+  if (zone === "UTC") {
+    d.setUTCFullYear(year, month + months, day);
+    d.setUTCHours(hours, minutes, seconds, ms);
+  } else {
+    d.setFullYear(year, month + months, day);
+    d.setHours(hours, minutes, seconds, ms);
+  }
+  return d.getTime();
+}
+
 /** The coarsest boundary `t` falls on, in the zone. */
 export function timeLevel(t: number, zone: TimeZone): TimeLevel {
   const { ms, seconds, minutes, hours, date, month } = partsOf(t, zone);

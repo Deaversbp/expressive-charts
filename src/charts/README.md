@@ -6,17 +6,17 @@ Chart components (bar, line, donut, and later more). Each chart gives every mark
 | --- | --- |
 | `bar.ts` | `barChart`: its marks, ticks and focus ring in the DOM, staged and interruptible updates (`retarget`), and what the table, legend and announcements say; the rest is in `shell/` |
 | `shell/` | What charts share beyond their marks, built from callbacks rather than a base class: mark events (`events.ts`), one hover for pointer, touch and keyboard focus, which `leave()` ends (`hover.ts`), transitions and the runner's order for an update (`transitions.ts`), leaving marks (`leaving.ts`), DOM order that keeps focus (`order.ts`), the container's width, web fonts and the hover duration (`watch.ts`), the labels a chart's `labels()` reports (`labels.ts`), and `ChartEnv`, the container, the accessible name and the `needs` check (`setup.ts`) and the default `format` (`format.ts`) |
-| `bar-layout.ts` | The bar chart's layout, pure: encoding, sorting, the nice scale, the frame (scale and bands), and `placeRow` / `placeTick`, which draw a laid-out row or any state in between |
+| `bar-layout.ts` | The bar chart's layout, pure: encoding, sorting, the nice scale, the frame (scale and bands), which labels are drawn so none overlap, and `placeRow` / `placeTick`, which draw a laid-out row or any state in between |
 | `donut.ts` | `donutChart`: its slices, outside labels, centre text and focus ring in the DOM, staged updates (the values, then the slices turning to their new places), and what the table (each share, a total row), legend and announcements say |
 | `donut-layout.ts` | The donut's layout, pure: encoding, sorting, the frame (its size, the ring's centre and radii, from the room its labels leave), the slices laid end to end from their values, and `placeSlice` / `placeLabels` / `placeCenter`, which draw any state in between |
 | `line.ts` | `lineChart`: its lines, points, x columns (the focus stops), crosshair, end labels and ticks in the DOM, on a number or a time axis, gaps where a value is missing, `reveal`, and staged updates in which rows grow out of and fold into their neighbours |
 | `line-layout.ts` | The line chart's layout, pure: encoding (an x of numbers or of `Date`s), the frame (value scale and plot box), and `placeLines` / `placePoints` / `placeColumns` / `placeEndLabels`, which draw any state of the rows at any reveal, breaking a line at a missing value; and `loneValues`, the points that show at rest |
-| `time.ts` | A time axis, pure and with no dependency: the step between ticks, from seconds to years, ticks on boundaries in UTC or local time, and how a time is worded, through `Intl.DateTimeFormat` |
+| `time.ts` | A time axis, pure and with no dependency: the step between ticks, from seconds to years, ticks on boundaries in UTC or local time, a calendar month on (`monthsOn`, for Page Up and Page Down), and how a time is worded, through `Intl.DateTimeFormat` |
 | `types.ts` | What charts share: options, `MarkEvent(s)`, `Chart`, accessors |
 | `colors.ts` | `colorAssignment`: palette slots that follow the entity |
 | `series.ts` | `seriesLabels`: a series' name for people, and checking the option |
 | `motion.ts` | A chart's motion from its `motion` option |
-| `keyboard.ts` | Keyboard focus, shared by `barChart` and `expressive()`: the roving tabindex, arrow keys, Home, End and Escape, whether focus followed a key press, and where focus goes when its mark leaves or its element is replaced |
+| `keyboard.ts` | Keyboard focus, shared by the charts and `expressive()`: the roving tabindex, arrow keys, Page Up and Page Down, Home, End and Escape, whether focus followed a key press, and where focus goes when its mark leaves or its element is replaced |
 | `interaction.ts` | Pointer and touch hover, delegated from the `<svg>` |
 | `tooltip.ts`, `legend.ts` | The tooltip beside the hovered or focused mark, and the series legend |
 | `table.ts` | The data table: its contents from the chart's rows (`tableModel`, pure), with its headers (`table.series` heads each series' column, else its `seriesLabels` name), and the `<details>` or visually hidden table that shows them, kept by key |

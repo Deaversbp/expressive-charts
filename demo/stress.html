@@ -222,6 +222,8 @@
       <ul class="checklist">
         <li>Run a case at each size, from the smallest up, and watch where its readout stops saying <b>Smooth</b>. The limits depend on the device: README's Limits table has them for a desktop CPU, unthrottled and slowed down four times.</li>
         <li>On the D3 columns, compare <code>watch</code>, which follows every frame of the host's own transition, with <code>refresh()</code> once it ends.</li>
+        <li>Look under the bars: where their names would overlap, a chart draws only every 2nd, 5th, 10th, 20th and so on, and leaves the values out when they'd overlap too. Hover a bar, or open its table, for every name and value.</li>
+        <li>Tab into a chart and press <b>Page Up</b> and <b>Page Down</b>: on the bars they move a tenth of the bars at a time, and on the date line a month, so ten years of days is 120 presses rather than 3,653.</li>
         <li>In a clone of the repository, <code>npm run bench</code> presses the same buttons in headless Chromium, against <code>npm run dev</code>, and records every readout.</li>
       </ul>
     </section>

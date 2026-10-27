@@ -1,8 +1,10 @@
 // Screenshots of demo/line.html on a stopped clock: the theme at rest, both charts mid-play at week 20,
-// the crosshair with its tooltip, keyboard focus, the D3 line hovered, and the Vega-Lite line at rest,
-// hovered and focused. Beside them, DOM checks: how long Play takes in each mode, reduced motion, the
-// scrubber, the names, legend and table, and the Vega-Lite line following a resize. Names start with
-// "line-", since screenshot names are shared across files.
+// the crosshair with its tooltip, keyboard focus, the D3 line hovered, the Vega-Lite line at rest,
+// hovered and focused, and the charts with missing weeks mid-play in a gap and at a missing week.
+// Beside them, DOM checks: how long Play takes in each mode, reduced motion, the scrubber, the names,
+// legend and table, the Vega-Lite line following a resize, and the gaps: no red in them, the ball
+// waiting and jumping, and a gap staying a gap without motion. Names start with "line-", since
+// screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, iconTransforms, lineDemo, openDemo, pickMode, REST, tabInto } from "./demo";
@@ -27,6 +29,58 @@ const status = (page: Page): Locator => page.locator("#week-status");
 const week = (page: Page, n: number): Locator => line(page).locator(`.ec-column[data-key="${n}"]`);
 /** A series' path on the D3 line, by the class the page's D3 code gives it. */
 const d3Path = (page: Page, series: "goals" | "xg"): Locator => d3Line(page).locator(`path.line-${series}`);
+
+/** The library's line chart with missing weeks, the D3 line drawn with .defined(), and their two cards. */
+const gaps = (page: Page): Locator => page.locator("#gaps");
+const d3Gaps = (page: Page): Locator => page.locator("#d3-gaps");
+const gapsPair = (page: Page): Locator => season(page).locator(".pair").nth(1);
+const gapsWeek = (page: Page, n: number): Locator => gaps(page).locator(`.ec-column[data-key="${n}"]`);
+/** Each chart's strokes by series: the line chart's, and the D3 code's paths. */
+const STROKES = {
+  "#gaps": { goals: '.ec-line[data-key="goals"] .ec-stroke', xg: '.ec-line[data-key="xg"] .ec-stroke' },
+  "#d3-gaps": { goals: "path.line-goals", xg: "path.line-xg" }
+} as const;
+
+interface Gaps {
+  /** Where each line has no value: from the last x of one subpath of its stroke to the first of the next, on screen. */
+  readonly goals: [number, number][];
+  readonly xg: [number, number][];
+  /** Where the goals line ends, on screen. */
+  readonly end: number;
+  /** The screen x of every point of the red runs threshold draws on the goals line. */
+  readonly reds: number[];
+  /** The middle of the ball, on screen, if one is drawn. */
+  readonly ball?: number;
+}
+
+/** The gaps in a chart's lines, the red runs and the ball, as drawn. */
+async function drawnGaps(page: Page, chart: keyof typeof STROKES): Promise<Gaps> {
+  return page.locator(chart).evaluate((root, strokes) => {
+    /** A path's points on screen, by subpath: each "M" starts one. */
+    const subpaths = (path: SVGGraphicsElement): number[][] => {
+      const ctm = path.getScreenCTM()!;
+      return (path.getAttribute("d") ?? "")
+        .split("M")
+        .filter((part) => part.trim())
+        .map((part) => {
+          const numbers = (part.match(/-?\d*\.?\d+(?:e-?\d+)?/g) ?? []).map(Number);
+          return numbers.flatMap((x, i) => (i % 2 === 0 ? [new DOMPoint(x, numbers[i + 1]).matrixTransform(ctm).x] : []));
+        });
+    };
+    const gapsOf = (selector: string): [number, number][] => {
+      const runs = subpaths(root.querySelector<SVGGraphicsElement>(selector)!);
+      return runs.slice(1).map((run, i) => [Math.max(...runs[i]!), Math.min(...run)]);
+    };
+    const run = root.querySelector('.ec-overlay .ec-run[data-key="goals"]');
+    const reds = [...(run?.querySelectorAll<SVGGraphicsElement>("path") ?? [])].filter((path) => !path.closest(".ec-icon")).flatMap((path) => subpaths(path).flat());
+    const icon = run?.querySelector(".ec-icon")?.getBoundingClientRect();
+    const end = Math.max(...subpaths(root.querySelector<SVGGraphicsElement>(strokes.goals)!).flat());
+    return { goals: gapsOf(strokes.goals), xg: gapsOf(strokes.xg), end, reds, ball: icon ? icon.x + icon.width / 2 : undefined };
+  }, STROKES[chart]);
+}
+
+/** The red points inside a gap of either line, half a pixel in from its ends: none, if threshold leaves the gaps alone. */
+const redInGaps = ({ goals, xg, reds }: Gaps): number[] => reds.filter((x) => [...goals, ...xg].some(([from, to]) => x > from + 0.5 && x < to - 0.5));
 
 /** The red runs threshold draws on each chart's goals line (the ball's own paths are inside its icon). */
 async function redRuns(chart: Locator): Promise<number> {
@@ -93,7 +147,13 @@ test.describe("Play season", () => {
     expect(await redRuns(d3Line(page))).toBe(1);
     expect(await iconTransforms(line(page))).toHaveLength(1);
     expect(await iconTransforms(d3Line(page))).toHaveLength(1);
-    await expect(season(page)).toHaveScreenshot("line-play-week-20.png");
+    // The scrubber and the first two charts; the charts with missing weeks have pictures of their own.
+    const [bar, pair] = await Promise.all([season(page).locator(".bar").boundingBox(), season(page).locator(".pair").first().boundingBox()]);
+    if (!bar || !pair) throw new Error("The scrubber or the first two charts aren't shown.");
+    // In whole pixels, outward, as an element's picture is.
+    const [left, top] = [Math.floor(bar.x), Math.floor(bar.y)];
+    const clip = { x: left, y: top, width: Math.ceil(bar.x + bar.width) - left, height: Math.ceil(pair.y + pair.height) - top };
+    await expect(page).toHaveScreenshot("line-play-week-20.png", { clip });
 
     // It plays on to the end, and the button goes back to Play.
     await page.clock.runFor(REST);
@@ -323,4 +383,143 @@ test.describe("reduced motion", () => {
     expect(await redRuns(vegaLine(page))).toBe(3);
     expect(await iconTransforms(vegaLine(page))).toHaveLength(1);
   });
+});
+
+test.describe("with missing weeks", () => {
+  test("at rest: each gap left out of its line, and no red in any", async ({ page }) => {
+    await openAtRest(page);
+    for (const chart of ["#gaps", "#d3-gaps"] as const) {
+      const drawn = await drawnGaps(page, chart);
+      // Goals miss matchweeks 9 and 10; xG misses 4 and 5 as well.
+      expect(drawn.goals, chart).toHaveLength(1);
+      expect(drawn.xg, chart).toHaveLength(2);
+      expect(drawn.reds.length, chart).toBeGreaterThan(0);
+      expect(redInGaps(drawn), chart).toEqual([]);
+      // The gap the two lines share is in the same place on both.
+      expect(drawn.goals[0]![0], chart).toBeCloseTo(drawn.xg[1]![0], 0);
+      expect(drawn.goals[0]![1], chart).toBeCloseTo(drawn.xg[1]![1], 0);
+    }
+    expect(await redRuns(gaps(page))).toBe(await redRuns(d3Gaps(page)));
+  });
+
+  test("mid-play: the ball waits at matchweek 8 while the gap is revealed, then jumps across it", async ({ page }) => {
+    await openAtRest(page);
+    await playButton(page).click();
+    // Past matchweek 10, inside the gap: each line ends at matchweek 8, and its ball rests there.
+    await page.clock.runFor(Math.ceil((SEASON * 9) / 37) + FRAME);
+    await expect(status(page)).toHaveText("Through matchweek 10");
+    for (const chart of ["#gaps", "#d3-gaps"] as const) {
+      const drawn = await drawnGaps(page, chart);
+      expect(drawn.goals, chart).toEqual([]);
+      expect(drawn.ball, chart).toBeDefined();
+      expect(drawn.end - drawn.ball!, chart).toBeGreaterThanOrEqual(0);
+      expect(drawn.end - drawn.ball!, chart).toBeLessThan(20);
+    }
+    await expect(gapsPair(page)).toHaveScreenshot("line-gaps-wait.png");
+
+    // Past matchweek 11, the line goes on from there, and the ball is past the gap.
+    await page.clock.runFor(Math.ceil((SEASON * 2) / 37));
+    await expect(status(page)).toHaveText("Through matchweek 12");
+    for (const chart of ["#gaps", "#d3-gaps"] as const) {
+      const drawn = await drawnGaps(page, chart);
+      expect(drawn.goals, chart).toHaveLength(1);
+      expect(drawn.ball, chart).toBeGreaterThan(drawn.goals[0]![1]);
+      expect(redInGaps(drawn), chart).toEqual([]);
+    }
+  });
+
+  test("the crosshair and its tooltip at a missing week", async ({ page }) => {
+    await openAtRest(page);
+    await gapsWeek(page, 9).locator(".ec-hit").hover();
+    await page.clock.runFor(REST);
+    const tooltip = gaps(page).locator(".ec-tooltip");
+    await expect(tooltip).toHaveClass(/ec-tooltip-shown/);
+    await expect(tooltip).toHaveText(/^Matchweek 9\s*goals missing · xG missing$/);
+    await expect(gaps(page).locator(".ec-crosshair")).not.toHaveAttribute("visibility", "hidden");
+    // No point to emphasise at a week with no values.
+    await expect(gaps(page).locator(".ec-point.ec-hot")).toHaveCount(0);
+    await expect(gaps(page)).toHaveScreenshot("line-gaps-tooltip.png");
+
+    // Where only xG is missing, the goals point is hot, and the tooltip has no gap to give.
+    await gapsWeek(page, 4).locator(".ec-hit").hover();
+    await page.clock.runFor(REST);
+    await expect(tooltip).toHaveText(/^Matchweek 4\s*4 goals · xG missing$/);
+    await expect(gaps(page).locator(".ec-point.ec-hot")).toHaveCount(1);
+  });
+
+  test("names, the keyboard and the table say what's missing", async ({ page }) => {
+    await openDemo(page, lineDemo);
+    const description = (element: Locator): Promise<string | null | undefined> =>
+      element.evaluate((node) => node.ownerDocument.getElementById(node.getAttribute("aria-describedby") ?? "")?.textContent);
+
+    await expect(gapsWeek(page, 3)).toHaveAttribute("aria-label", "Matchweek 3: 3 goals, 3.5 xG");
+    expect(await description(gapsWeek(page, 3))).toBe("-0.5 vs expected");
+    await expect(gapsWeek(page, 4)).toHaveAttribute("aria-label", "Matchweek 4: 4 goals, xG missing");
+    await expect(gapsWeek(page, 4)).not.toHaveAttribute("aria-describedby");
+    await expect(gapsWeek(page, 9)).toHaveAttribute("aria-label", "Matchweek 9: goals missing, xG missing");
+
+    // The arrow keys, and Page Up and Page Down, a tenth of the 38 weeks rounded up, stop at every week,
+    // the missing ones too, where the crosshair shows the focus: there's no point to ring.
+    await tabInto(page, gaps(page));
+    await expect(gapsWeek(page, 1)).toBeFocused();
+    for (let i = 1; i < 4; i++) await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("PageDown");
+    await expect(gapsWeek(page, 8)).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(gapsWeek(page, 9)).toBeFocused();
+    await page.clock.runFor(REST);
+    await expect(gaps(page).locator(".ec-crosshair")).not.toHaveAttribute("visibility", "hidden");
+    await expect(gaps(page).locator(".ec-focus")).toHaveAttribute("visibility", "hidden");
+    await expect(gaps(page).locator(".ec-tooltip")).toHaveText(/^Matchweek 9\s*goals missing · xG missing$/);
+    await page.keyboard.press("PageDown");
+    await expect(gapsWeek(page, 13)).toBeFocused();
+    await page.keyboard.press("PageUp");
+    await page.keyboard.press("PageUp");
+    await expect(gapsWeek(page, 5)).toBeFocused();
+
+    // The D3 lines are named for the whole season, with the weeks each is missing.
+    await tabInto(page, d3Gaps(page));
+    await expect(d3Gaps(page).locator("path.line-goals")).toBeFocused();
+    await expect(d3Gaps(page).locator("path.line-goals")).toHaveAttribute("aria-label", "Goals scored: 56 goals by matchweek 38, matchweeks 9 and 10 missing");
+    await page.keyboard.press("ArrowRight");
+    await expect(d3Gaps(page).locator("path.line-xg")).toHaveAttribute("aria-label", "Expected goals (xG): 56.5 by matchweek 38, matchweeks 4, 5, 9 and 10 missing");
+
+    const table = gaps(page).locator("table");
+    await expect(table.locator("thead th")).toHaveText(["Matchweek", "Goals scored", "Expected goals (xG)", "Difference"]);
+    await expect(table.locator("tbody tr").nth(3).locator("th, td")).toHaveText(["4", "4", "missing", "missing"]);
+    await expect(table.locator("tbody tr").nth(8).locator("th, td")).toHaveText(["9", "missing", "missing", "missing"]);
+    await expect(table.locator("tbody tr").nth(10).locator("th, td")).toHaveText(["11", "14", "16.6", "-2.6"]);
+  });
+
+  for (const how of ["reduced motion", "Off"] as const) {
+    test(`${how}: a gap stays a gap, the ball waits at its start and is at the tip after Play`, async ({ page }) => {
+      if (how === "reduced motion") await page.emulateMedia({ reducedMotion: "reduce" });
+      await openDemo(page, lineDemo);
+      if (how === "Off") await pickMode(page, "Off");
+
+      // Revealed into the gap: the lines end at matchweek 8, with the ball there and nothing in the gap.
+      await slider(page).fill("10");
+      await expect(status(page)).toHaveText("Through matchweek 10");
+      // One frame, for watch to read the D3 line.
+      await page.clock.runFor(FRAME);
+      for (const chart of ["#gaps", "#d3-gaps"] as const) {
+        const drawn = await drawnGaps(page, chart);
+        expect(drawn.goals, chart).toEqual([]);
+        expect(drawn.end - drawn.ball!, chart).toBeGreaterThanOrEqual(0);
+        expect(drawn.end - drawn.ball!, chart).toBeLessThan(20);
+      }
+
+      await playButton(page).click();
+      // No time passes on the line chart: Play is heard, then the end.
+      await expect(status(page)).toHaveText("Through matchweek 38");
+      await page.clock.runFor(FRAME);
+      for (const chart of ["#gaps", "#d3-gaps"] as const) {
+        const drawn = await drawnGaps(page, chart);
+        expect(drawn.goals, chart).toHaveLength(1);
+        expect(drawn.xg, chart).toHaveLength(2);
+        expect(redInGaps(drawn), chart).toEqual([]);
+        expect(drawn.ball, chart).toBeGreaterThan(drawn.goals[0]![1]);
+      }
+    });
+  }
 });

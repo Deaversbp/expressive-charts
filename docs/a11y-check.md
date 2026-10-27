@@ -1,8 +1,8 @@
 # Screen-reader checks
 
-These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`, and [section H](#h-the-season-page-linked-hover-and-change-labels) checks linked hover and the change labels on `demo/season.html`. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
+These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`, [section H](#h-the-season-page-linked-hover-and-change-labels) checks linked hover and the change labels on `demo/season.html`, and [section I](#i-missing-values-page-up-and-page-down-and-the-season-page-again) checks what M8 adds: a line with missing values on `demo/line.html`, Page Up and Page Down on `demo/stress.html`, and the season page without its workarounds. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
 
-**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026, and section H, the season page, on 26 October 2026. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026, and section H, the season page, on 26 October 2026. Section I, for 0.3.0, hasn't been run yet. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
 
 A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to paste into an issue.
 
@@ -297,7 +297,7 @@ If the announcement in steps 3, 5, 6 or 9 isn't heard, or is heard before the sw
 | 10 | Shift+Tab until "10, toggle button, not pressed" (the Years group; about 7 times). Press Space, and wait a few seconds while the chart is drawn again. Then Tab 6 times. | "10, toggle button, pressed". Then, on the way, "2, toggle button, pressed" and "Play, button", then "Daily visits, 2016 to 2025, grouping" and "Jan 1, 2016: 959 Visits, 934 28-day average, graphic". | |
 | 11 | NVDA+Space (focus mode), Right arrow, then End. | "Jan 2, 2016: 838 Visits, 938 28-day average, graphic", then "Dec 31, 2025: 565 Visits, 503 28-day average, graphic". | |
 
-Ten years are 3,653 days, and the arrow keys go a day at a time, so step 11 uses End. If you'd want a larger step (Page Up and Page Down by a month, say), say so: the charts have none yet.
+Ten years are 3,653 days, and the arrow keys go a day at a time, so step 11 uses End. Since M8, Page Up and Page Down go a month at a time, 120 presses for the ten years: [section I](#i-missing-values-page-up-and-page-down-and-the-season-page-again) hears them.
 
 ## H. The season page: linked hover and change labels
 
@@ -341,6 +341,69 @@ Ten years are 3,653 days, and the arrow keys go a day at a time, so step 11 uses
 | 13 | Focus mode, then Right arrow, then End. | "Lindqvist: 0 goals at matchweek 1, 8 goals after matchweek 26, +8, graphic", then "Castillo: 0 goals at matchweek 1, 0 goals after matchweek 26, no change, graphic". Never "+8" or a name on its own. | |
 
 If a linked chart's week is read in step 2 or 4, or the announcement in step 6 or 7 isn't heard, say so: linked hover would then not be visual only, or the changes would be drawn but not said.
+
+## I. Missing values, Page Up and Page Down, and the season page again
+
+M8 (0.3.0) adds three things to hear: a line with missing values, on the line page's card "With missing weeks"; Page Up and Page Down, which every chart now has, on the stress page; and the season page, which now leaves to the library what it used to do itself. Otherwise the charts read as in sections [E](#e-the-line-page-linechart-and-a-d3-line), [G](#g-the-stress-pages-date-line-linechart-on-dates) and [H](#h-the-season-page-linked-hover-and-change-labels).
+
+- **The line with missing weeks.** The same season as section E's, as a weekly data feed recorded it: no values for matchweeks 9 and 10, and no xG for matchweeks 4 and 5. A missing value is a gap in its line. The `<svg>` is `role="group"`, named "Goals vs expected goals, with missing weeks", and its description says which weeks are missing. A missing week keeps its focus stop, named by what it has and what's missing ("Matchweek 4: 4 goals, xG missing"; "Matchweek 9: goals missing, xG missing"). A week with both values is described by its gap, as in section E; a week with one missing has no description, since there's no gap to give. At a week with no values the crosshair and the tooltip show the focus, as there's no point to ring.
+- **Its table.** As section E's, with "missing" in each cell that has no value, the Difference column's too.
+- **The D3 line with missing weeks.** The page draws it with `line().defined()`, which breaks each path at a missing week. Its `<svg>` is `role="group"`, named "Goals and expected goals with missing weeks on a D3 line". `markLabel` names each line for the whole season and the weeks it's missing ("Goals scored: 56 goals by matchweek 38, matchweeks 9 and 10 missing").
+- **Page Up and Page Down** move focus a page at a time, and stop at the ends, as the arrow keys do. On a line on dates, a page is a calendar month: to the first day a month or more on, or back. Elsewhere it's a tenth of the marks, rounded up: 4 of the line page's 38 weeks, and 10 of the stress page's 100 bars.
+- **The season page** no longer clears the players' changes before each matchweek, works out `delta()`'s value, sizes the slope chart's labels, leaves room beside the bars or thins the goals chart's week names with its own code: the library does each of these. What's heard shouldn't change.
+
+**Setup.** Run `npm run dev`. Use NVDA + Chrome, with the setup from [A](#a-nvda--chrome-windows), and keep the pointer off the charts. Each part starts on a freshly loaded page.
+
+**Listen for:**
+
+1. A missing week is read **once, as one item**, saying what's missing: "Matchweek 9: goals missing, xG missing". Never a 0 or "no goals" for a missing value, and never a gap ("vs expected") for a week with a value missing.
+2. The arrow keys, and Page Up and Page Down, stop at a missing week as at any other.
+3. In the table, a missing value is read as "missing", with its column's header.
+4. Each D3 line is read once, by name, with the weeks it's missing.
+5. Page Up and Page Down go a page at a time: a tenth of the weeks or bars, or a month on the date line. They stop at the ends.
+6. The season page's announcements and table read as in section H.
+
+**Known, no need to report:** as in sections E, G and H. In browse mode, NVDA may take Page Up and Page Down itself, so each step switches to focus mode first.
+
+**The line page.** Open `line.html` at the address Vite prints, for example `http://localhost:5173/line.html`, and reload.
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press 2 until "With missing weeks, heading, level 2". Then press Tab. | "Goals vs expected goals, with missing weeks, grouping", perhaps with its description ("… It has no values for matchweeks 9 and 10, and no xG for matchweeks 4 and 5 …"). Then "Matchweek 1: 0 goals, 0.6 xG, graphic", then "-0.6 vs expected". | |
+| 2 | NVDA+Space (focus mode), then Right arrow 3 times. | "Matchweek 2: 0 goals, 1.7 xG, graphic, -1.7 vs expected", "Matchweek 3: 3 goals, 3.5 xG, graphic, -0.5 vs expected", then "Matchweek 4: 4 goals, xG missing, graphic", with nothing after it. | |
+| 3 | Page Down, then Right arrow. | "Matchweek 8: 12 goals, 12.2 xG, graphic, -0.2 vs expected": 4 weeks on. Then "Matchweek 9: goals missing, xG missing, graphic". The crosshair stands at week 9, with the tooltip "Matchweek 9, goals missing · xG missing", and there's no ring. | |
+| 4 | Right arrow twice. | "Matchweek 10: goals missing, xG missing, graphic", then "Matchweek 11: 14 goals, 16.6 xG, graphic, -2.6 vs expected". | |
+| 5 | Page Up 3 times, then once more. | "Matchweek 7: 10 goals, 10.0 xG, graphic, +0.0 vs expected", "Matchweek 3: …", "Matchweek 1: 0 goals, 0.6 xG, graphic …", then nothing new: week 1 is the first. | |
+| 6 | Escape, then NVDA+Space (browse mode). Tab once, to "Data table", and press Space. | "Data table, button, collapsed", then "expanded". | |
+| 7 | Press T (next table). If nothing happens, press NVDA+Space until NVDA says "Browse mode", then T. | "Goals vs expected goals, with missing weeks, table with 39 rows and 4 columns", then "row 1, column 1, Matchweek". | |
+| 8 | Ctrl+Alt+Down 4 times, then Ctrl+Alt+Right 3 times. | "row 2, 1" … "row 5, 4". Then "Goals scored, column 2, 4", "Expected goals (xG), column 3, missing", "Difference, column 4, missing". | |
+| 9 | Ctrl+Alt+Down 5 times. | Down the Difference column: "5, row 6, missing", "6, row 7, -1.3", "7, row 8, +0.0", "8, row 9, -0.2", "9, row 10, missing". | |
+| 10 | Ctrl+Alt+Left twice. | "Expected goals (xG), column 3, missing", then "Goals scored, column 2, missing": week 9 has neither. | |
+| 11 | Press Tab, to the D3 line with missing weeks. | "Goals and expected goals with missing weeks on a D3 line, grouping", then "Goals scored: 56 goals by matchweek 38, matchweeks 9 and 10 missing, graphic". | |
+| 12 | Focus mode, then Right arrow. | "Expected goals (xG): 56.5 by matchweek 38, matchweeks 4, 5, 9 and 10 missing, graphic". The focus ring goes round the xG line, and the goals line dims. | |
+
+**The stress page.** Open `stress.html` and reload, so its cards show their smallest sizes, and the date line 1 year and 2 series.
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 13 | Press 2 until "Hover on a large chart, heading, level 2". Then press Tab 7 times. | On the way: "Bars, grouping, 100, toggle button, pressed", "500", "1,000", "2,000", "5,000", "Sweep across, button". Then "100 bars, grouping", then "Bar 1: 10 points, graphic". Only some of the bars' names are drawn under them, but every bar is read by its name and value. | |
+| 14 | NVDA+Space (focus mode), then Page Down twice, then Page Up. | "Bar 11: 14 points, graphic", "Bar 21: 11 points, graphic", then "Bar 11: 14 points, graphic" again. | |
+| 15 | End, Page Down, then Page Up. | "Bar 100: 90 points, graphic", nothing new for Page Down, then "Bar 90: 78 points, graphic". | |
+| 16 | Escape, then NVDA+Space (browse mode). Press 2 until "A line on dates, playing, heading, level 2". Then press Tab 10 times. | As section G's step 1, ending "Daily visits, 2025, grouping", then "Jan 1, 2025: 959 Visits, 936 28-day average, graphic". | |
+| 17 | Focus mode, then Page Down twice, then Page Up. | "Feb 1, 2025: 779 Visits, 1,018 28-day average, graphic", "Mar 1, 2025: 1,023 Visits, 1,094 28-day average, graphic", then "Feb 1, 2025: …" again. The crosshair moves a month at a time. | |
+| 18 | End, Page Down, then Page Up. | "Dec 31, 2025: 955 Visits, 848 28-day average, graphic", nothing new for Page Down, then "Nov 30, 2025: 647 Visits, 812 28-day average, graphic": a month back from the 31st is the last day of November. | |
+| 19 | Escape, browse mode. Shift+Tab until "10, toggle button, not pressed" (6 times), press Space, and wait a few seconds while the chart is drawn again. Then Tab 6 times, focus mode, and Page Down twice. | "Daily visits, 2016 to 2025, grouping", "Jan 1, 2016: 959 Visits, 934 28-day average, graphic". Then "Feb 1, 2016: 1,082 Visits, 1,021 28-day average, graphic", "Mar 1, 2016: 1,278 Visits, 1,099 28-day average, graphic". | |
+| 20 | Page Down 10 more times. | A month each, "Apr 1, 2016" to "Dec 1, 2016", then "Jan 1, 2017: 625 Visits, 846 28-day average, graphic". The ten years are 120 presses. | |
+
+**The season page.** Open `season.html` and reload, so the page is after matchweek 24.
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 21 | Press Tab 4 times, to "Play next matchweek", and press Space. | "Play next matchweek, button", then "Matchweek 25: Okafor +1, 15 goals; Lindqvist +1, 7 goals." "+1" rises past Okafor's and Lindqvist's bars. | |
+| 22 | Press Space again. | "Matchweek 26: Lindqvist +1, 8 goals." Okafor's "+1" goes: only this matchweek's changes are drawn. | |
+| 23 | Section H's steps 8 to 11: Tab 9 times to the players' "Data table", Space, T, and along and down the rows. | As section H says: "Goals by player, table with 9 rows and 5 columns", Okafor's row "Forward", "15", "Change, column 4, 0", "Since matchweek 1, column 5, +14", then Lindqvist's "+8" and "Change, column 4, +1". | |
+
+If a missing week is read with a number, or a step lands somewhere other than it says, say so: the names, or a page's size, may need to change.
 
 ## Re-check: each bar's description
 

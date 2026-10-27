@@ -29,7 +29,10 @@ export interface PointerHoverOptions {
 export interface PointerHover {
   /** The hovered key, if any: the target the pointer is on, or whose tooltip it's on. */
   readonly current: string | undefined;
-  /** Leaves the hovered mark, for example because it's being removed. */
+  /**
+   * Leaves the hovered mark, for example because it's being removed. A pointer resting on its tooltip
+   * hovers again only once it moves, though the browser may hit-test the mark under it at once.
+   */
   clear(): void;
   destroy(): void;
 }
@@ -42,6 +45,12 @@ export function pointerHover(svg: SVGSVGElement, options: PointerHoverOptions): 
   let held: { readonly element: HTMLElement; x: number; y: number } | undefined;
   /** Watches the held tooltip for a change that moves it, or hides it, from under the pointer. */
   let watcher: MutationObserver | undefined;
+  /**
+   * Where the pointer rested on a tooltip whose hover ended there. With the tooltip gone, a browser may
+   * hit-test again and send the mark under it a pointerover, though the pointer hasn't moved: until it
+   * moves, that doesn't hover it, or a dismissed tooltip would come back at once.
+   */
+  let still: { readonly x: number; readonly y: number } | undefined;
 
   const enter = (target: HoverTarget | undefined, source: "pointer" | "touch"): void => {
     if (target?.key === current) return;
@@ -134,21 +143,33 @@ export function pointerHover(svg: SVGSVGElement, options: PointerHoverOptions): 
     if (onTip && tip.key === current) return;
     letGo();
     if (!onTip && tip?.key !== current) {
+      still = { x, y };
       leave();
       return;
     }
     arrive(under, x, y);
   };
 
+  /** Whether the pointer is still where a hover ended on its tooltip; once it has moved, it isn't. */
+  const resting = (event: PointerEvent): boolean => {
+    if (still && Math.abs(event.clientX - still.x) < 1 && Math.abs(event.clientY - still.y) < 1) return true;
+    still = undefined;
+    return false;
+  };
   // Touch fires pointerover and pointerleave around every tap; taps are handled on click instead.
   const over = (event: PointerEvent): void => {
-    if (event.pointerType === "touch") return;
+    if (event.pointerType === "touch" || resting(event)) return;
     letGo();
     enter(options.find(event.target), "pointer");
   };
   // Off the <svg>, onto the tooltip the pointer stays on the hovered target; anywhere else it leaves.
   const out = (event: PointerEvent): void => {
-    if (event.pointerType !== "touch") arrive(landing(event), event.clientX, event.clientY);
+    if (event.pointerType === "touch") return;
+    still = undefined;
+    arrive(landing(event), event.clientX, event.clientY);
+  };
+  const move = (event: PointerEvent): void => {
+    if (event.pointerType !== "touch") resting(event);
   };
   const down = (event: PointerEvent): void => {
     lastPointer = event.pointerType;
@@ -167,6 +188,7 @@ export function pointerHover(svg: SVGSVGElement, options: PointerHoverOptions): 
 
   svg.addEventListener("pointerover", over);
   svg.addEventListener("pointerleave", out);
+  svg.addEventListener("pointermove", move);
   svg.addEventListener("pointerdown", down);
   svg.addEventListener("click", click);
   doc.addEventListener("pointerdown", elsewhere, true);
@@ -175,12 +197,16 @@ export function pointerHover(svg: SVGSVGElement, options: PointerHoverOptions): 
     get current() {
       return current;
     },
-    clear: leave,
+    clear() {
+      if (held) still = { x: held.x, y: held.y };
+      leave();
+    },
     destroy() {
       letGo();
       current = undefined;
       svg.removeEventListener("pointerover", over);
       svg.removeEventListener("pointerleave", out);
+      svg.removeEventListener("pointermove", move);
       svg.removeEventListener("pointerdown", down);
       svg.removeEventListener("click", click);
       doc.removeEventListener("pointerdown", elsewhere, true);

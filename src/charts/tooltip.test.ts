@@ -661,9 +661,10 @@ describe("the pointer on the tooltip", () => {
   }
 
   /** A pointer event from or to `related`, as a browser fires it. */
-  function move(type: string, target: Element, related: Element | null = null, pointerType = "mouse"): void {
+  /** A pointer event from or to `related`, as a browser fires it, at 5, 5 unless `at` says. */
+  function move(type: string, target: Element, related: Element | null = null, pointerType = "mouse", at = { x: 5, y: 5 }): void {
     const bubbles = type !== "pointerleave" && type !== "pointerenter";
-    target.dispatchEvent(new PointerEvent(type, { bubbles, pointerType, relatedTarget: related, clientX: 5, clientY: 5 }));
+    target.dispatchEvent(new PointerEvent(type, { bubbles, pointerType, relatedTarget: related, clientX: at.x, clientY: at.y }));
   }
 
   /** The pointer from an element in the <svg> onto `onto`, outside it. */
@@ -729,7 +730,7 @@ describe("the pointer on the tooltip", () => {
         expect(hovered()).toEqual(nothing);
       });
 
-      it("ends on Escape and leave() as before, and the pointer leaving it then changes nothing", () => {
+      it("ends on Escape and leave() as before, and hovers again only once the pointer moves", () => {
         const { svg, target, keys, leave } = make();
         const { box, layer, hovered } = parts(svg);
         const nothing = { text: undefined, hot: [] };
@@ -738,8 +739,12 @@ describe("the pointer on the tooltip", () => {
           offSvg(svg, box());
           end();
           expect(hovered()).toEqual(nothing);
-          offTooltip(svg, layer(), target(keys[0]));
+          // With the tooltip gone, the browser hit-tests the mark under the still pointer: that isn't a move.
+          move("pointerleave", layer(), target(keys[0]));
+          move("pointerover", target(keys[0]), box());
+          expect(hovered()).toEqual(nothing);
           // The pointer hovers again when it next moves onto a mark, as it does on the mark itself.
+          move("pointerover", target(keys[0]), null, "mouse", { x: 9, y: 5 });
           expect(hovered()).not.toEqual(nothing);
           offTooltip(svg, layer(), document.body);
           move("pointerleave", svg, document.body);

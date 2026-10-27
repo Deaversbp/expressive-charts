@@ -184,6 +184,67 @@ describe("pointerHover: the pointer on the tooltip", () => {
   });
 });
 
+describe("pointerHover: a hover that ends with the pointer on its tooltip", () => {
+  it("hovers the mark under the pointer only once the pointer moves, though the browser hit-tests it at once", () => {
+    const { svg, mark, layer, box, heard, interaction } = setup();
+    pointer("pointerover", mark("a"));
+    offSvg(svg, box, 30, 40);
+    pointer("pointermove", box, { x: 32, y: 44 });
+    // Escape, or leave(): the tooltip hides, and the browser sends the mark under it a pointerover.
+    interaction.clear();
+    pointer("pointerleave", layer, { related: mark("b"), x: 32, y: 44 });
+    pointer("pointerover", mark("b"), { x: 32, y: 44 });
+    pointer("pointerover", mark("b"), { x: 32.4, y: 43.7 });
+    expect(heard).toEqual(["hover a pointer", "leave"]);
+    expect(interaction.current).toBeUndefined();
+    pointer("pointerover", mark("b"), { x: 34, y: 44 });
+    expect(heard).toEqual(["hover a pointer", "leave", "hover b pointer"]);
+  });
+
+  it("doesn't take the hover from focus when focus moved it, and its tooltip, away", async () => {
+    const { svg, mark, box, heard, shown, interaction } = setup();
+    let under: Element | null = box;
+    stubPoint(() => under);
+    pointer("pointerover", mark("a"));
+    offSvg(svg, box, 30, 40);
+    shown.key = "c";
+    under = mark("b");
+    box.style.left = "200px";
+    await mutations();
+    pointer("pointerover", mark("b"), { x: 30, y: 40 });
+    expect(heard).toEqual(["hover a pointer", "leave"]);
+    expect(interaction.current).toBeUndefined();
+    pointer("pointerover", mark("b"), { x: 30, y: 46 });
+    expect(heard.slice(-1)).toEqual(["hover b pointer"]);
+  });
+
+  it("counts any move: across the mark under it, or off the chart and back to the same spot", () => {
+    const { svg, mark, box, heard, interaction } = setup();
+    pointer("pointerover", mark("a"));
+    offSvg(svg, box, 30, 40);
+    interaction.clear();
+    pointer("pointerover", mark("b"), { x: 30, y: 40 });
+    // A move within b: no pointerover, as on any mark, but the pointer has moved.
+    pointer("pointermove", mark("b"), { x: 36, y: 40 });
+    pointer("pointerover", mark("b"), { x: 30, y: 40 });
+    expect(heard).toEqual(["hover a pointer", "leave", "hover b pointer"]);
+    pointer("pointerover", mark("a"));
+    offSvg(svg, box, 30, 40);
+    interaction.clear();
+    offSvg(svg, document.body, 300, 40);
+    pointer("pointerover", mark("c"), { x: 30, y: 40 });
+    expect(heard.slice(-1)).toEqual(["hover c pointer"]);
+  });
+
+  it("holds nothing back when the pointer was on the mark, not the tooltip", () => {
+    const { mark, heard, interaction } = setup();
+    pointer("pointerover", mark("a"), { x: 30, y: 40 });
+    interaction.clear();
+    pointer("pointerover", mark("b"), { x: 30, y: 40 });
+    expect(heard).toEqual(["hover a pointer", "leave", "hover b pointer"]);
+  });
+});
+
 describe("pointerHover: a tooltip that moves from under the pointer", () => {
   it("does nothing while the tooltip is still under the pointer", async () => {
     const { svg, mark, box, heard } = setup();

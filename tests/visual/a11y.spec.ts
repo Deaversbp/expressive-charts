@@ -368,6 +368,33 @@ test.describe("content on hover", () => {
         }
       }
     });
+
+    test(`${name}.html: Escape with the pointer on the tooltip hides it until the pointer moves`, async ({ page }) => {
+      if (demo === stressDemo) test.setTimeout(300_000);
+      await openAtRest(page, demo);
+      for (const { chart, shape } of charts) {
+        const at = await hoverShape(page, page.locator(`${chart} ${shape}`));
+        await page.clock.runFor(REST);
+        const { path } = await pathOntoTooltip(page, chart, at);
+        for (const point of path) await page.mouse.move(point.x, point.y);
+        const on = path[path.length - 1]!;
+        expect((await hovered(page, chart)).text, `${chart}: on the tooltip`).toBeTruthy();
+        await page.keyboard.press("Escape");
+        await page.clock.runFor(REST);
+        // The browser may hit-test again under a still pointer, now the tooltip has gone: give it time.
+        await page.waitForTimeout(250);
+        await page.clock.runFor(REST);
+        expect(await hovered(page, chart), `${chart}: dismissed`).toEqual({ text: undefined, hot: [] });
+        // As after Escape on a mark, it hovers again once the pointer moves off and onto a mark: here,
+        // whatever was under the tooltip, if anything was.
+        const under = await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest(".ec-mark, .ec-column")), on);
+        await page.mouse.move(2, 2);
+        await page.mouse.move(on.x, on.y);
+        expect((await hovered(page, chart)).text !== undefined, `${chart}: moved off and back, hovering what's under it`).toBe(under);
+        await page.mouse.move(2, 2);
+        await page.clock.runFor(REST);
+      }
+    });
   }
 });
 

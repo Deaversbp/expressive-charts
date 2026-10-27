@@ -397,6 +397,17 @@ describe("missing values", () => {
     expect(none.frame.scale).toEqual({ lo: 0, hi: 1 });
   });
 
+  it("finds the levels of a long run of missing values in one pass", () => {
+    // 50,000 weeks: no goals at all, and xG only at the first and last, with one gap between.
+    const long = Array.from({ length: 50_000 }, (_, week) => ({ week, goals: null, xg: week === 0 ? 0 : week === 49_999 ? 49_999 : null }));
+    const started = performance.now();
+    const { rows } = layout<{ week: number; goals: null; xg: number | null }>({ data: long, x: "week", series: ["goals", "xg"] });
+    // Scanning each run again for every row in it took seconds here.
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(rows[25_000]!.levels).toEqual({ goals: 0, xg: 25_000 });
+    expect(rows[49_999]!.levels).toEqual({ goals: 0, xg: 49_999 });
+  });
+
   it("breaks a line at a missing value: a gap from the value before to the value after, gapBefore on the sample after it", () => {
     const { rows } = layout<Gappy>({ data: gappy, x: "week", series: ["goals"] });
     const [goals] = placeLines(frame, rest(rows), ["goals"], Infinity);

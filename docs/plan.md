@@ -2420,6 +2420,7 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
        - **A line's datum is its last value's row,** the row its end label is at, so a line revealed into a gap gives the row before the gap.
        - **A value alone shows its point only next to a gap,** so a line of one row, which has none, looks as it did.
        - **The table's rows say what's missing in a `missing` set,** rather than widening their values' type, so the table's own code and tests for bars and slices don't change.
+     - **From review** (Codex, on #87): **a long run of missing values** made the layout quadratic, since each missing row looked for the next value again: 50,000 rows with no values took seconds before anything drew. The next value is now found once for each run. A test lays out 50,000 rows in under a second; it took 22 s before.
    - Docs: architecture.md (Mark geometry, the line chart, `travel` and `threshold`), the effects guide (drawing along a walk with gaps, and the new fixture), api.md, README, CHANGELOG (gaps, `breaks`, `gapBefore` and missing values under Added; the fixture under Changed).
 4. ✅ **The icon sets' fills** (decision 14). Owns `fillRule` and `opacity` in `src/core/contracts/icon.ts`, `src/icons/define.ts`, `src/icons/svg.ts`, the icons in `src/charts/render/layer.ts`, and their tests.
    - Tests: an icon with an even-odd hole and a duotone pair, both written for the tests rather than copied from a set, through `iconFromSvg` and `defineIcon`; inheritance through groups; the `RangeError`s; and the SVG as drawn.

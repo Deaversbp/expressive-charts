@@ -521,6 +521,7 @@ function levelsOf(rows: readonly { readonly x: number; readonly values: readonly
   const levels = rows.map((): Record<string, number> => ({}));
   for (let s = 0; s < count; s++) {
     let before = -1;
+    let after = -1;
     rows.forEach((row, i) => {
       const { series, value } = row.values[s]!;
       if (value !== undefined) {
@@ -528,8 +529,11 @@ function levelsOf(rows: readonly { readonly x: number; readonly values: readonly
         before = i;
         return;
       }
-      let after = i + 1;
-      while (after < rows.length && rows[after]!.values[s]!.value === undefined) after++;
+      // The next value, found once for each run of missing ones, so a long run stays linear.
+      if (after <= i) {
+        after = i + 1;
+        while (after < rows.length && rows[after]!.values[s]!.value === undefined) after++;
+      }
       const a = rows[before]?.values[s]!.value;
       const b = rows[after]?.values[s]!.value;
       levels[i]![series] =

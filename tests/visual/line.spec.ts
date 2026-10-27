@@ -1,6 +1,7 @@
 // Screenshots of demo/line.html on a stopped clock: the theme at rest, both charts mid-play at week 20,
 // the crosshair with its tooltip, keyboard focus, the D3 line hovered, the Vega-Lite line at rest,
-// hovered and focused, and the charts with missing weeks mid-play in a gap and at a missing week.
+// hovered and focused, and the charts with missing weeks mid-play in a gap, and at a missing week
+// hovered and focused.
 // Beside them, DOM checks: how long Play takes in each mode, reduced motion, the scrubber, the names,
 // legend and table, the Vega-Lite line following a resize, and the gaps: no red in them, the ball
 // waiting and jumping, and a gap staying a gap without motion. Names start with "line-", since
@@ -81,6 +82,33 @@ async function drawnGaps(page: Page, chart: keyof typeof STROKES): Promise<Gaps>
 
 /** The red points inside a gap of either line, half a pixel in from its ends: none, if threshold leaves the gaps alone. */
 const redInGaps = ({ goals, xg, reds }: Gaps): number[] => reds.filter((x) => [...goals, ...xg].some(([from, to]) => x > from + 0.5 && x < to - 0.5));
+
+/** The focus at a week with no values, as drawn: how many lines, their stroke's width and contrast against `--ec-surface`, and whether they stand where the crosshair is. */
+async function focusLines(chart: Locator): Promise<{ readonly count: number; readonly width: string; readonly contrast: number; readonly onCrosshair: boolean }> {
+  return chart.evaluate((root) => {
+    const lines = [...root.querySelectorAll<SVGLineElement>(".ec-focus line.ec-focus-ring")];
+    const line = lines[0];
+    if (!line) return { count: 0, width: "", contrast: 0, onCrosshair: false };
+    const crosshair = root.querySelector(".ec-crosshair")!;
+    /** A CSS colour's WCAG 2 luminance, as the browser resolves it on a probe. */
+    const luminance = (color: string): number => {
+      const probe = root.appendChild(document.createElement("i"));
+      probe.style.color = color;
+      const [r, g, b] = getComputedStyle(probe)
+        .color.match(/[\d.]+/g)!
+        .map((value) => {
+          const c = Number(value) / 255;
+          return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+      probe.remove();
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const style = getComputedStyle(line);
+    const [hi, lo] = [luminance(style.stroke), luminance(style.getPropertyValue("--ec-surface"))].sort((a, b) => b - a) as [number, number];
+    const x = crosshair.getAttribute("x1");
+    return { count: lines.length, width: style.strokeWidth, contrast: (hi + 0.05) / (lo + 0.05), onCrosshair: line.getAttribute("x1") === x && line.getAttribute("x2") === x };
+  });
+}
 
 /** The red runs threshold draws on each chart's goals line (the ball's own paths are inside its icon). */
 async function redRuns(chart: Locator): Promise<number> {
@@ -447,6 +475,35 @@ test.describe("with missing weeks", () => {
     await expect(gaps(page).locator(".ec-point.ec-hot")).toHaveCount(1);
   });
 
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`keyboard focus at a missing week, ${colorScheme}: a 2 px line in the focus colour at 3:1, which stays after Escape`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openAtRest(page);
+      // Page Down twice: a page is a tenth of the 38 weeks, rounded up.
+      await tabInto(page, gaps(page));
+      await page.keyboard.press("PageDown");
+      await page.keyboard.press("PageDown");
+      await expect(gapsWeek(page, 9)).toBeFocused();
+      await page.clock.runFor(REST);
+      const focus = gaps(page).locator(".ec-focus");
+      await expect(focus).not.toHaveAttribute("visibility", "hidden");
+      const drawn = await focusLines(gaps(page));
+      expect(drawn).toMatchObject({ count: 1, width: "2px", onCrosshair: true });
+      expect(drawn.contrast).toBeGreaterThanOrEqual(3);
+      await expect(gaps(page).locator(".ec-tooltip")).toHaveText(/^Matchweek 9\s*goals missing · xG missing$/);
+      await expect(gaps(page)).toHaveScreenshot(`line-gaps-focus-${colorScheme}.png`);
+
+      // Escape hides the crosshair and the tooltip, and the line still shows where focus is.
+      await page.keyboard.press("Escape");
+      await page.clock.runFor(REST);
+      await expect(gaps(page).locator(".ec-crosshair")).toHaveAttribute("visibility", "hidden");
+      await expect(gaps(page).locator(".ec-tooltip")).not.toHaveClass(/ec-tooltip-shown/);
+      await expect(gapsWeek(page, 9)).toBeFocused();
+      await expect(focus).not.toHaveAttribute("visibility", "hidden");
+      expect(await focusLines(gaps(page))).toMatchObject({ count: 1, width: "2px" });
+    });
+  }
+
   test("names, the keyboard and the table say what's missing", async ({ page }) => {
     await openDemo(page, lineDemo);
     const description = (element: Locator): Promise<string | null | undefined> =>
@@ -459,7 +516,7 @@ test.describe("with missing weeks", () => {
     await expect(gapsWeek(page, 9)).toHaveAttribute("aria-label", "Matchweek 9: goals missing, xG missing");
 
     // The arrow keys, and Page Up and Page Down, a tenth of the 38 weeks rounded up, stop at every week,
-    // the missing ones too, where the crosshair shows the focus: there's no point to ring.
+    // the missing ones too, where a line in the focus colour shows it: there's no point to ring.
     await tabInto(page, gaps(page));
     await expect(gapsWeek(page, 1)).toBeFocused();
     for (let i = 1; i < 4; i++) await page.keyboard.press("ArrowRight");
@@ -469,7 +526,7 @@ test.describe("with missing weeks", () => {
     await expect(gapsWeek(page, 9)).toBeFocused();
     await page.clock.runFor(REST);
     await expect(gaps(page).locator(".ec-crosshair")).not.toHaveAttribute("visibility", "hidden");
-    await expect(gaps(page).locator(".ec-focus")).toHaveAttribute("visibility", "hidden");
+    await expect(gaps(page).locator(".ec-focus")).not.toHaveAttribute("visibility", "hidden");
     await expect(gaps(page).locator(".ec-tooltip")).toHaveText(/^Matchweek 9\s*goals missing · xG missing$/);
     await page.keyboard.press("PageDown");
     await expect(gapsWeek(page, 13)).toBeFocused();

@@ -2838,7 +2838,7 @@ Every rule is inside `:where()`, so any rule of the page's wins. The colours are
 | `--ec-text`, `--ec-text-muted` | labels, values, ticks, the tooltip and table text |
 | `--ec-surface` | the colour behind the chart, which the library assumes but doesn't paint: the focus ring's gap, the gaps between slices and round a line's dots, and the tooltip's and controls' backgrounds. Set it to match the page |
 | `--ec-grid`, `--ec-axis` | gridlines, the axis and the line chart's crosshair |
-| `--ec-focus` | the focus ring |
+| `--ec-focus` | the focus ring, and a line chart's focus at an x with no values |
 | `--ec-negative` | `threshold`'s default colour |
 | `--ec-ring` | hairline borders on the tooltip and controls |
 | `--ec-series-1` … `--ec-series-8`, each with `-strong` | the palette slots, and a hovered mark's stronger colour |

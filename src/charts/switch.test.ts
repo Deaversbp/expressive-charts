@@ -614,6 +614,52 @@ describe("chartSwitch: hover and focus", () => {
     expect(leaveColumns).not.toHaveBeenCalled();
   });
 
+  it("runs a show() a leave listener calls as a switch starts once the switch has begun, as one switch", async () => {
+    const { switcher, donut, container, clock, transition } = setup();
+    pointer("pointerover", donut.element.querySelector('.ec-mark[data-key="Saved"] .ec-hit')!);
+    let again: Promise<void> | undefined;
+    donut.on("leave", () => {
+      // The old view is still the view on show here.
+      expect(switcher.current).toBe("donut");
+      again ??= switcher.show("columns");
+    });
+    const landed = vi.fn();
+    const landedAgain = vi.fn();
+    void switcher.show("columns").then(landed);
+    void again!.then(landedAgain);
+    expect(transition.runs).toHaveLength(4);
+    clock.advance(950);
+    await flush();
+    expect(landed).toHaveBeenCalledTimes(1);
+    expect(landedAgain).toHaveBeenCalledTimes(1);
+    expect(transition.runs).toHaveLength(4);
+    expect(clock.idle).toBe(true);
+    expect(container("columns").classList.contains("ec-switch-inactive")).toBe(false);
+    expect(container("donut").classList.contains("ec-switch-inactive")).toBe(true);
+  });
+
+  it("switches back when a leave listener asks for the view a switch is leaving, and stops when one destroys the switch", async () => {
+    const { switcher, donut, container, clock } = setup();
+    pointer("pointerover", donut.element.querySelector('.ec-mark[data-key="Goal"] .ec-hit')!);
+    const stop = donut.on("leave", () => void switcher.show("donut"));
+    void switcher.show("columns");
+    await flush();
+    // Back before the shapes have moved: it lands where it began at once.
+    expect(switcher.current).toBe("donut");
+    expect(container("donut").classList.contains("ec-switch-inactive")).toBe(false);
+    expect(container("columns").classList.contains("ec-switch-inactive")).toBe(true);
+    expect(clock.idle).toBe(true);
+    stop();
+
+    const destroyed = setup();
+    pointer("pointerover", destroyed.donut.element.querySelector('.ec-mark[data-key="Goal"] .ec-hit')!);
+    destroyed.donut.on("leave", () => destroyed.switcher.destroy());
+    await expect(destroyed.switcher.show("columns")).resolves.toBeUndefined();
+    expect(destroyed.target.children).toHaveLength(0);
+    expect(destroyed.transition.runs).toHaveLength(0);
+    expect(destroyed.clock.idle).toBe(true);
+  });
+
   it("moves focus on a mark to the same key in the new view once the switch lands", async () => {
     const { switcher, donut, columns, clock } = setup();
     donut.focus("Saved");
@@ -679,6 +725,64 @@ describe("chartSwitch: hover and focus", () => {
     void switcher.show("columns");
     expect(columns.element.contains(document.activeElement)).toBe(true);
     expect(document.activeElement?.getAttribute("data-key")).toBe("Goal");
+  });
+});
+
+describe("chartSwitch: the view on show", () => {
+  const hover = (chart: { readonly element: Element }, key: string) => pointer("pointerover", chart.element.querySelector(`.ec-mark[data-key="${key}"] :is(.ec-hit, .ec-segment)`)!);
+
+  it("gives the view on show's marks, and while a switch plays the marks of the view it's heading for", async () => {
+    const { switcher, donut, columns, clock } = setup();
+    expect(switcher.marks()).toEqual(donut.marks());
+    void switcher.show("columns");
+    clock.advance(300);
+    expect(switcher.marks()).toEqual(columns.marks());
+    clock.advance(650);
+    await flush();
+    expect(switcher.marks()).toEqual(columns.marks());
+  });
+
+  it("hears the view on show's events with on(), and only its", async () => {
+    const { switcher, donut, columns, clock } = setup();
+    const heard: string[] = [];
+    const stop = switcher.on("hover", (event) => heard.push(`hover ${event.mark.key} ${event.data.datum.outcome}`));
+    switcher.on("leave", (event) => heard.push(`leave ${event.mark.key}`));
+    hover(donut, "Saved");
+    // The hidden view's (jsdom doesn't make it inert, as a browser does).
+    hover(columns, "Goal");
+    expect(heard).toEqual(["hover Saved Saved"]);
+    pointer("pointerleave", columns.element);
+    // The donut's hover ends as the switch starts, while it's still the view on show.
+    void switcher.show("columns");
+    expect(heard).toEqual(["hover Saved Saved", "leave Saved"]);
+    clock.advance(950);
+    await flush();
+    hover(columns, "Blocked");
+    hover(donut, "Goal");
+    expect(heard.slice(2)).toEqual(["hover Blocked Blocked"]);
+    stop();
+    pointer("pointerleave", donut.element);
+    hover(columns, "Saved");
+    expect(heard.slice(3)).toEqual(["leave Blocked"]);
+  });
+
+  it("ends the view on show's hover with leave(), and only its", async () => {
+    const { switcher, donut, columns, clock } = setup();
+    const leaveDonut = vi.spyOn(donut, "leave");
+    const leaveColumns = vi.spyOn(columns, "leave");
+    hover(donut, "Goal");
+    switcher.leave();
+    expect(donut.element.querySelector(".ec-hot")).toBeNull();
+    expect(donut.element.classList.contains("ec-hovering")).toBe(false);
+    expect(leaveDonut).toHaveBeenCalledTimes(1);
+    expect(() => switcher.leave()).not.toThrow();
+    void switcher.show("columns");
+    clock.advance(950);
+    await flush();
+    leaveDonut.mockClear();
+    switcher.leave();
+    expect(leaveColumns).toHaveBeenCalledTimes(1);
+    expect(leaveDonut).not.toHaveBeenCalled();
   });
 });
 

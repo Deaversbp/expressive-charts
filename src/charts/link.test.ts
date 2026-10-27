@@ -7,7 +7,7 @@ import { View, parse } from "vega";
 import { compile, type TopLevelSpec } from "vega-lite";
 import { createMotion, manualClock, type GeometryEffect } from "../core";
 import { createRegistry, type PresetFactory } from "../core/registry";
-import { play } from "../core/testing";
+import { flush, play } from "../core/testing";
 import { expressive, fromVegaView } from "./adapter";
 import { barChart } from "./bar";
 import { donutChart } from "./donut";
@@ -122,6 +122,37 @@ async function vegaShots(): Promise<{ view: View; svg: SVGSVGElement; rect: (wee
   const rect = (week: number) =>
     Array.from(svg.querySelectorAll(".mark-rect.role-mark path")).find((path) => (path as unknown as { __data__: { datum: Week } }).__data__.datum.week === week)!;
   return { view, svg, rect };
+}
+
+/**
+ * Shots per matchweek as a donut and as columns in a chart switch, keyed by matchweek ("2"), on the
+ * env given, so its clock plays the switch. The transition ends at once: the switch's own 950 ms decide when it lands.
+ */
+function shotsSwitch(env: ReturnType<typeof environment>) {
+  const donutHover = recorder();
+  const columnHover = recorder();
+  const switcher = chartSwitch(
+    container(),
+    {
+      views: {
+        donut: (host, colors) => donutChart<Week>(host, { label: "Shots", data: weeks, category: (d) => String(d.week), value: "shots", colors, width: 300, on: { hover: donutHover.effect } }, env),
+        columns: (host, colors) => barChart<Week>(host, { label: "Shots", data: weeks, x: (d) => String(d.week), y: "shots", orientation: "vertical", colors, width: 400, on: { hover: columnHover.effect } }, env)
+      },
+      initial: "donut",
+      transition: { kind: "transition", run: () => Promise.resolve(), end() {}, clear() {} }
+    },
+    env
+  );
+  const donut = switcher.chart("donut");
+  const columns = switcher.chart("columns");
+  const slice = (key: string) => donut.element.querySelector(`.ec-mark[data-key="${key}"]`) as SVGGElement;
+  const column = (key: string) => columns.element.querySelector(`.ec-mark[data-key="${key}"]`) as SVGGElement;
+  /** Lets the switch play to its end and land. */
+  const land = async () => {
+    env.clock.advance(950);
+    await flush();
+  };
+  return { switcher, donut, columns, slice, column, land, donutHover, columnHover };
 }
 
 function pointer(type: string, target: Element): void {
@@ -386,8 +417,8 @@ describe("link: charts", () => {
       },
       env
     );
-    // @ts-expect-error: a chart switch isn't a source yet.
-    expect(() => link([bars, switcher])).toThrow(/chartSwitch can't be linked yet/);
+    // A chart switch is a source since M9 step 2 ("link: a chart switch" below).
+    link([bars, switcher]).destroy();
     expect(() => link([bars, {} as never])).toThrow(/must be a chart/);
     expect(() => link("bars" as never)).toThrow(/needs an array/);
     expect(() => link([bars], { by: "week" as never })).toThrow(/by must be a function/);
@@ -520,5 +551,291 @@ describe("link: attachments", () => {
     expect(hot(line)).toEqual([]);
     fx.destroy();
     view.finalize();
+  });
+});
+
+/** The keys of the marks a chart or view shows hovered. */
+const hotIn = (chart: { readonly element: Element }) => Array.from(chart.element.querySelectorAll(".ec-hot"), (element) => element.getAttribute("data-key"));
+
+describe("link: a chart switch", () => {
+  it("links the view on show with a bar chart both ways, by the pointer and the keyboard, and never the hidden view", () => {
+    const { env, bars, bar, hot } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher]);
+    const switchEvents = listen(shots.switcher);
+
+    pointer("pointerover", bar("2").querySelector(".ec-segment")!);
+    expect(hotIn(shots.donut)).toEqual(["2"]);
+    expect(shots.donutHover.log).toEqual(["run 2"]);
+    expect(switchEvents).toEqual(["hover 2 linked 1/1"]);
+    expect(hotIn(shots.columns)).toEqual([]);
+    expect(shots.columnHover.log).toEqual([]);
+    pointer("pointerleave", bars.element);
+    expect(hotIn(shots.donut)).toEqual([]);
+
+    pointer("pointerover", shots.slice("3").querySelector(".ec-hit")!);
+    expect(hot(bars)).toEqual(["3"]);
+    pointer("pointerleave", shots.donut.element);
+    expect(hot(bars)).toEqual([]);
+
+    tabTo(shots.slice("1"));
+    expect(hot(bars)).toEqual(["1"]);
+    press(shots.slice("1"), "ArrowRight");
+    expect(hot(bars)).toEqual(["2"]);
+    expect(press(shots.slice("2"), "Escape").defaultPrevented).toBe(true);
+    expect(hot(bars)).toEqual([]);
+
+    // The hidden view's own hover isn't linked (jsdom doesn't make it inert, as a browser does).
+    (document.activeElement as HTMLElement).blur();
+    pointer("pointerover", shots.column("4").querySelector(".ec-segment")!);
+    expect(hotIn(shots.columns)).toEqual(["4"]);
+    expect(hot(bars)).toEqual([]);
+    expect(switchEvents.some((event) => event.includes(" 4 "))).toBe(false);
+  });
+
+  it("links the new view once a switch lands, both ways", async () => {
+    const { env, bars, bar, hot } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher]);
+    await Promise.all([shots.switcher.show("columns"), shots.land()]);
+    pointer("pointerover", bar("4").querySelector(".ec-segment")!);
+    expect(hotIn(shots.columns)).toEqual(["4"]);
+    expect(shots.columnHover.log).toEqual(["run 4"]);
+    expect(hotIn(shots.donut)).toEqual([]);
+    pointer("pointerleave", bars.element);
+    pointer("pointerover", shots.column("1").querySelector(".ec-segment")!);
+    expect(hot(bars)).toEqual(["1"]);
+    pointer("pointerleave", shots.columns.element);
+    tabTo(shots.column("3"));
+    expect(hot(bars)).toEqual(["3"]);
+  });
+
+  it("links an attachment with the view on show, both ways, before and after a switch", async () => {
+    const { env } = season();
+    const shots = shotsSwitch(env);
+    const d3 = d3Shots();
+    const fx = expressive(d3.selection(), { key: (d) => String(d.week), dim: true, keyboard: true }, environment());
+    link([shots.switcher, fx]);
+    const fxEvents = listen(fx);
+
+    pointer("pointerover", shots.slice("2").querySelector(".ec-hit")!);
+    expect(fxEvents).toEqual(["hover 2 linked 1/1"]);
+    expect(d3.rect(1).classList.contains("ec-dimmed")).toBe(true);
+    pointer("pointerleave", shots.donut.element);
+    expect(fxEvents.slice(1)).toEqual(["leave 2"]);
+
+    pointer("pointerover", d3.rect(3));
+    expect(hotIn(shots.donut)).toEqual(["3"]);
+    pointer("pointerleave", d3.svg);
+    expect(hotIn(shots.donut)).toEqual([]);
+
+    await Promise.all([shots.switcher.show("columns"), shots.land()]);
+    tabTo(d3.rect(4));
+    expect(hotIn(shots.columns)).toEqual(["4"]);
+    expect(hotIn(shots.donut)).toEqual([]);
+    expect(press(d3.rect(4), "Escape").defaultPrevented).toBe(true);
+    expect(hotIn(shots.columns)).toEqual([]);
+  });
+
+  it("ends the view's own hover as a switch starts, and the link hears it end", async () => {
+    const { env, bars, line, hot } = season();
+    const shots = shotsSwitch(env);
+    link([bars, line, shots.switcher]);
+    const switchEvents = listen(shots.switcher);
+    pointer("pointerover", shots.slice("2").querySelector(".ec-hit")!);
+    expect(hot(bars)).toEqual(["2"]);
+    expect(hot(line)).toEqual(["goals@2", "xg@2"]);
+    void shots.switcher.show("columns");
+    expect(hot(bars)).toEqual([]);
+    expect(hot(line)).toEqual([]);
+    // The switch's on() hears the leave: the donut was the view on show until then.
+    expect(switchEvents).toEqual(["hover 2 pointer 1/1", "leave 2"]);
+    await shots.land();
+    expect(hotIn(shots.columns)).toEqual([]);
+    expect(hot(bars)).toEqual([]);
+  });
+
+  it("hides a link's hover as a switch starts, and shows it in the new view when it lands", async () => {
+    const { env, bars, bar, hot } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher]);
+    const switchEvents = listen(shots.switcher);
+    pointer("pointerover", bar("2").querySelector(".ec-segment")!);
+    expect(hotIn(shots.donut)).toEqual(["2"]);
+    void shots.switcher.show("columns");
+    expect(hotIn(shots.donut)).toEqual([]);
+    expect(shots.donut.element.classList.contains("ec-hovering")).toBe(false);
+    env.clock.advance(500);
+    expect(hotIn(shots.columns)).toEqual([]);
+    expect(shots.columnHover.log).toEqual([]);
+    // The bar's own hover goes on.
+    expect(hot(bars)).toEqual(["2"]);
+    await shots.land();
+    expect(hotIn(shots.columns)).toEqual(["2"]);
+    expect(shots.columns.element.classList.contains("ec-hovering")).toBe(true);
+    expect(shots.columnHover.log).toEqual(["run 2"]);
+    expect(switchEvents).toEqual(["hover 2 linked 1/1", "leave 2", "hover 2 linked 1/1"]);
+    pointer("pointerleave", bars.element);
+    expect(hotIn(shots.columns)).toEqual([]);
+  });
+
+  it("holds a link's hover that comes mid-switch, and shows the latest when it lands", async () => {
+    const { env, bars, bar } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher]);
+    const switchEvents = listen(shots.switcher);
+    void shots.switcher.show("columns");
+    env.clock.advance(300);
+    pointer("pointerover", bar("3").querySelector(".ec-segment")!);
+    pointer("pointerover", bar("4").querySelector(".ec-segment")!);
+    expect(hotIn(shots.columns)).toEqual([]);
+    expect(hotIn(shots.donut)).toEqual([]);
+    expect(switchEvents).toEqual([]);
+    await shots.land();
+    expect(hotIn(shots.columns)).toEqual(["4"]);
+    expect(switchEvents).toEqual(["hover 4 linked 1/1"]);
+
+    // One that ends mid-switch shows nothing.
+    pointer("pointerleave", bars.element);
+    void shots.switcher.show("donut");
+    env.clock.advance(300);
+    pointer("pointerover", bar("1").querySelector(".ec-segment")!);
+    pointer("pointerleave", bars.element);
+    await shots.land();
+    expect(hotIn(shots.donut)).toEqual([]);
+  });
+
+  it("shows a link's hover in the view a switch back lands in", async () => {
+    const { env, bars, bar } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher]);
+    pointer("pointerover", bar("2").querySelector(".ec-segment")!);
+    void shots.switcher.show("columns");
+    env.clock.advance(300);
+    void shots.switcher.show("donut");
+    await shots.land();
+    expect(shots.switcher.current).toBe("donut");
+    expect(hotIn(shots.donut)).toEqual(["2"]);
+    expect(hotIn(shots.columns)).toEqual([]);
+    expect(shots.donutHover.log).toEqual(["run 2", "clear", "run 2"]);
+  });
+
+  it("shows a link's hover in the new view at once with motion off", () => {
+    const { env, bars, bar } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher]);
+    pointer("pointerover", bar("3").querySelector(".ec-segment")!);
+    env.motion.setMode("off");
+    void shots.switcher.show("columns");
+    expect(hotIn(shots.donut)).toEqual([]);
+    expect(hotIn(shots.columns)).toEqual(["3"]);
+  });
+
+  it("hovers the partner again when focus moves into the new view", async () => {
+    const { env, bars, hot } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher]);
+    shots.donut.focus("3");
+    expect(hot(bars)).toEqual(["3"]);
+    void shots.switcher.show("columns");
+    expect(hot(bars)).toEqual([]);
+    await shots.land();
+    // Focus lands on column 3 as a key press would, and its hover is linked.
+    expect(document.activeElement).toBe(shots.column("3"));
+    expect(hot(bars)).toEqual(["3"]);
+  });
+
+  it("keeps the view on show to emphasis and dimming with effects: false", async () => {
+    const { env, bars, bar } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher], { effects: false });
+    pointer("pointerover", bar("2").querySelector(".ec-segment")!);
+    expect(hotIn(shots.donut)).toEqual(["2"]);
+    expect(shots.donut.element.classList.contains("ec-hovering")).toBe(true);
+    void shots.switcher.show("columns");
+    await shots.land();
+    expect(hotIn(shots.columns)).toEqual(["2"]);
+    expect(shots.donutHover.log).toEqual([]);
+    expect(shots.columnHover.log).toEqual([]);
+  });
+
+  it("ends the link's hover in it with leave(), mid-switch too, until the link's next hover", async () => {
+    const { env, bars, bar, hot } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher]);
+    pointer("pointerover", bar("2").querySelector(".ec-segment")!);
+    shots.switcher.leave();
+    expect(hotIn(shots.donut)).toEqual([]);
+    expect(hot(bars)).toEqual(["2"]);
+    void shots.switcher.show("columns");
+    await shots.land();
+    expect(hotIn(shots.columns)).toEqual([]);
+
+    void shots.switcher.show("donut");
+    env.clock.advance(300);
+    pointer("pointerover", bar("3").querySelector(".ec-segment")!);
+    shots.switcher.leave();
+    await shots.land();
+    expect(hotIn(shots.donut)).toEqual([]);
+    pointer("pointerover", bar("4").querySelector(".ec-segment")!);
+    expect(hotIn(shots.donut)).toEqual(["4"]);
+  });
+
+  it("can't be in a link while its views' charts are in another, or theirs while it is", () => {
+    const { env, bars, line } = season();
+    const shots = shotsSwitch(env);
+    const first = link([bars, shots.switcher]);
+    expect(() => link([shots.donut])).toThrow(/one link at a time/);
+    expect(() => link([line, shots.columns])).toThrow(/one link at a time/);
+    first.destroy();
+    const byView = link([line, shots.columns]);
+    expect(() => link([bars, shots.switcher])).toThrow(/one link at a time/);
+    byView.destroy();
+    expect(() => link([shots.switcher, shots.donut])).toThrow(/one link at a time/);
+    expect(() => link([shots.columns, shots.switcher])).toThrow(/one link at a time/);
+    // Nothing was linked by the throws.
+    link([bars, shots.switcher]).destroy();
+    link([line, shots.donut, shots.columns]).destroy();
+  });
+
+  it("drops out when it's destroyed, ending the link's hover if it was the one hovered, and frees its views' charts", async () => {
+    const { env, bars, bar, hot } = season();
+    const shots = shotsSwitch(env);
+    link([bars, shots.switcher]);
+    pointer("pointerover", shots.slice("2").querySelector(".ec-hit")!);
+    expect(hot(bars)).toEqual(["2"]);
+    shots.switcher.destroy();
+    expect(hot(bars)).toEqual([]);
+    expect(() => pointer("pointerover", bar("3").querySelector(".ec-segment")!)).not.toThrow();
+    // It left its link, and its views' charts with it: they drop out of a new one.
+    expect(() => link([shots.switcher]).destroy()).not.toThrow();
+    expect(() => link([shots.donut, shots.columns]).destroy()).not.toThrow();
+
+    // Destroyed mid-switch with a link's hover held: nothing lands.
+    const again = shotsSwitch(env);
+    const { bars: others, bar: other } = season();
+    link([others, again.switcher]);
+    pointer("pointerover", other("1").querySelector(".ec-segment")!);
+    void again.switcher.show("columns");
+    env.clock.advance(300);
+    again.switcher.destroy();
+    await expect(again.land()).resolves.toBeUndefined();
+    expect(hotIn(others)).toEqual(["1"]);
+  });
+
+  it("reads `by`'s rows from the views' charts", () => {
+    const { env, bars, line, hot } = season();
+    const shots = shotsSwitch(env);
+    const half = link([bars, shots.switcher], { by: (event) => (event.data.datum.week <= 2 ? "first half" : "second half") });
+    pointer("pointerover", shots.slice("1").querySelector(".ec-hit")!);
+    expect(hot(bars)).toEqual(["1", "2"]);
+    half.destroy();
+    // @ts-expect-error: a Week has no `player`.
+    const typed = () => link([line, shots.switcher], { by: (event) => event.data.datum.player });
+    expect(typed).toBeTypeOf("function");
+    shots.switcher.on("hover", (event) => {
+      const week: number = event.data.datum.week;
+      expect(week).toBeTypeOf("number");
+    });
   });
 });

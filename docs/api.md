@@ -2123,7 +2123,7 @@ chartSwitch<T extends ChartSwitchViews>(target: string | Element, options: Chart
 Views of the same data in one place, one shown at a time, which turns each mark into the mark with its key in the next view: a donut turning into columns ([architecture.md](architecture.md#switching-between-charts)). Each view is a function that draws its chart in the container it's given. Labels move with their shapes and swap their text half way, a key in only one view fades, and the old view's axes, legend and table fade out as the new one's fade in. Only the view shown can be seen, reached or read; focus on a mark moves to its key in the new view; and a switch back mid-way reverses from where the shapes are. A switch takes 950 ms in Presentation and 200 ms in Analysis, and jumps with motion off. Options that aren't a switch's throw a `TypeError`. Returns [`ChartSwitch<T>`](#chartswitcht).
 
 ```ts
-import { barChart, chartSwitch, donutChart } from "expressive-charts";
+import { barChart, chartSwitch, donutChart, link } from "expressive-charts";
 
 const shots = chartSwitch("#shots", {
   views: {
@@ -2135,6 +2135,9 @@ const shots = chartSwitch("#shots", {
 });
 button.addEventListener("click", () => void shots.show(shots.current === "donut" ? "columns" : "donut"));
 await shots.chart("columns").update({ data: nextMatch }); // the bar chart itself
+shots.on("hover", (event) => console.log(event.data.datum.shots)); // the view on show's hover
+const totals = barChart("#totals", { label: "Shot outcomes", data: outcomes, y: "outcome", x: "shots" });
+link([shots, totals]);                               // the view on show hovers with the bars beside it
 ```
 
 #### `ChartSwitch<T>`
@@ -2144,9 +2147,14 @@ interface ChartSwitch<T extends ChartSwitchViews>
 ```
 
 - `current`: the view shown, or the one a switch is heading for.
-- `show(view)`: `Promise<void>`. Switches to `view`, by the motion mode. It resolves when the switch has landed, or as soon as another `show()` replaces it. A `show()` back to the view a switch is leaving reverses it; one to a third view lands the switch first. It rejects for a view the switch doesn't have.
+- `show(view)`: `Promise<void>`. Switches to `view`, by the motion mode. It resolves when the switch has landed, or as soon as another `show()` replaces it. A `show()` back to the view a switch is leaving reverses it; one to a third view lands the switch first. One that a `leave` listener calls as the old view's hover ends runs once the switch has begun. It rejects for a view the switch doesn't have.
 - `chart(view)`: the chart a view's function returned, typed as it returned it, for `update()` and the rest.
+- `on(type, listener)`: `() => void`, the unsubscribe. Listens for the mark events of the view on show, `current`, as its chart's `on()` does, typed by the views' rows (a union when they differ). The other views' events aren't heard. The old view's hover ends as a switch starts, while it's still the view on show, so its `leave` events are heard; from then the view the switch is heading for is heard.
+- `marks()`: `readonly MarkGeometry[]`. The view on show's marks, as its chart's `marks()` gives them; while a switch plays, the marks of the view it's heading for.
+- `leave()`: ends the view on show's hover, its own or a [link's](#linked-hover), as its chart's `leave()` does. Does nothing when nothing is hovered.
 - `destroy()`: ends any switch, destroys every view's chart and removes everything the switch added.
+
+A switch can be in a [link](#link): its view on show hovers with the other sources, and a link's hover waits while a switch plays and shows in the new view when it lands.
 
 #### `ChartSwitchOptions<T>`
 
@@ -2173,7 +2181,7 @@ interface ChartSwitchView {
 }
 ```
 
-What a switch uses of each view's chart. The bar, donut and line charts' handles have all of it, though a line chart's points don't suit a switch yet. A view's function that returns something without these throws.
+What a switch uses of each view's chart. The bar, donut and line charts' handles have all of it, though a line chart's points don't suit a switch yet. A view's function that returns something without these throws. They also have `on()`, which the switch's `on()` hears, and a hover a [link](#link) can drive: a view without them isn't heard or linked.
 
 #### `ChartSwitchViewFactory`
 
@@ -2409,7 +2417,7 @@ A value for data effects, alone or with where it is along x (`at`), which `thres
 
 ### Linked hover
 
-Hover across charts and attachments, by a value their marks share ([architecture.md](architecture.md#linked-hover)): a column and the line's point at its matchweek, both halves of a butterfly, small multiples.
+Hover across charts, chart switches and attachments, by a value their marks share ([architecture.md](architecture.md#linked-hover)): a column and the line's point at its matchweek, both halves of a butterfly, small multiples.
 
 ```ts
 import { barChart, expressive, lineChart, link } from "expressive-charts";
@@ -2428,12 +2436,13 @@ link([goals, xg], { by: (event) => event.data.datum.week, effects: false }); // 
 link<S extends LinkSource<unknown>>(sources: readonly S[], options?: LinkOptions<D>): Link
 ```
 
-Links hover across `sources`, charts and attachments whose rows are `D` (a union when they differ). When one is hovered by the pointer, touch or the keyboard, every other one hovers its targets that share a hovered mark's linking value: a line chart its x, a bar chart its bar, a donut its slice, an attachment its mark. They leave when it leaves. Options: [`LinkOptions<D>`](#linkoptionsd). Returns [`Link`](#link-type).
+Links hover across `sources`, charts, chart switches and attachments whose rows are `D` (a union when they differ). When one is hovered by the pointer, touch or the keyboard, every other one hovers its targets that share a hovered mark's linking value: a line chart its x, a bar chart its bar, a donut its slice, an attachment its mark. They leave when it leaves. Options: [`LinkOptions<D>`](#linkoptionsd). Returns [`Link`](#link-type).
 
 - **A linked mark's hover** is its chart's own: the emphasis, the dimming of the chart's other marks, and its hover effect, with `source: "linked"` on the `hover` event. It gets no tooltip, focus ring or focus, and nothing is announced, so linked hover is visual only: a page that relies on it says the same in its table.
 - **One hover a link.** The newest hover anywhere in the link is the one shown, so a chart's own hover ends when another source is hovered. Escape or `leave()` on the hovered source ends every one, and so does Escape with focus on a source that shows a linked hover. `leave()` on a linked source ends only its own.
 - **A source mid-change** holds its linked hover and plays it once the change settles, as for any hover. A source with no target for the value hovers nothing.
-- **Its limits.** A source can be in one link at a time. A second link, the same source twice, or anything that isn't a chart or an attachment throws a `TypeError`, linking nothing. A [`chartSwitch`](#chartswitch) can't be linked yet. A destroyed source drops out.
+- **A [`chartSwitch`](#chartswitch)** takes part through its view on show; the hidden view is never hovered. While a switch plays, neither view can be reached, so it neither starts a link's hover nor shows one. A hover in the view it leaves ends as it starts, and the link hears it end. When it lands, the link's hover, if there is one, shows in the new view. `leave()` on the switch ends a link's hover in it until the link's next hover, mid-switch too.
+- **Its limits.** A source can be in one link at a time. A second link, the same source twice, or anything that isn't a chart, a chart switch or an attachment throws a `TypeError`, linking nothing. A switch's views' charts go with it: a switch whose view's chart is in a link throws, and so does a view's chart whose switch is in one. A destroyed source drops out.
 
 #### `LinkOptions<D>`
 
@@ -2453,7 +2462,7 @@ interface LinkSource<D> {
 }
 ```
 
-What `link()` takes, typed by its rows: a chart ([`barChart()`](#barchart), [`donutChart()`](#donutchart), [`lineChart()`](#linechart)) or an attachment ([`expressive()`](#expressive), [`fromVegaView()`](#fromvegaview)). `link()` checks at run time that each is one of these.
+What `link()` takes, typed by its rows: a chart ([`barChart()`](#barchart), [`donutChart()`](#donutchart), [`lineChart()`](#linechart)), a [`chartSwitch()`](#chartswitch), whose rows are its views' charts', or an attachment ([`expressive()`](#expressive), [`fromVegaView()`](#fromvegaview)). `link()` checks at run time that each is one of these.
 
 #### `Link` (type)
 

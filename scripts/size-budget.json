@@ -12,10 +12,10 @@
   "importSets": {
     "motion, animated": 3,
     "describe, matrix": 5,
-    "expressive, travel": 27,
+    "expressive, travel": 30,
     "barChart": 34,
     "lineChart, threshold, playback, playButton": 39,
-    "chartSwitch, donutChart, barChart": 41,
+    "chartSwitch, donutChart, barChart": 45.5,
     "everything": 76.5
   }
 }

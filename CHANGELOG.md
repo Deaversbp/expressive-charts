@@ -27,9 +27,17 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ## Unreleased
 
+### Added
+
+- **`fillOpacity` and `strokeOpacity` on `IconShape`**, under the 0.x promise: the fill's and the stroke's own opacity, each from 0 to 1 (default 1), inside the shape's `opacity`, so one shape can have a faint fill inside a full outline. `defineIcon` checks them, with a `RangeError` naming the shape and the field, and the SVG layer sets them on the shape's path. They're optional fields: code that builds an `IconShape` needs no change.
+
 ### Changed
 
 - **The package is built with tsdown, on Rolldown,** instead of tsup. Each entry has the same names, as an ES module and as CommonJS, with the same types, checked on TypeScript 5.4, 6 and 7. The files keep their names, but for the shared chunks, which are named by their first module. The script-tag bundle is 72 KB gzipped, 6.6 KB less, and `expressive-charts/icons/sport` loads 4 KB with its chunks, not 9. Nothing to write instead.
+
+### Fixed
+
+- **`iconFromSvg` keeps `fill-opacity` and `stroke-opacity`**, so an icon whose SVG fades a part's fill or stroke with them draws as its SVG does. Before, the faded part drew at full strength. They're read from attributes and `style`, as numbers or percentages, and inherited through groups as SVG inherits them: a shape's own replaces its group's, rather than multiplying as `opacity` does. A fill or stroke faded to 0 is dropped, as `none` is, and so is a shape left with neither. An icon made from SVG without them comes out the same. A long `width` or `height` on an `<svg>` with no viewBox is now read at once, too: a run of 100,000 digits followed by a letter took 23 s.
 
 ## 0.3.0 (27 October 2026)
 

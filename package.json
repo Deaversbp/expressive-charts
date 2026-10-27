@@ -67,7 +67,8 @@
       "require": {
         "types": "./dist/expressive-charts.css.d.cts",
         "default": "./dist/expressive-charts.css"
-      }
+      },
+      "default": "./dist/expressive-charts.css"
     }
   },
   "files": [

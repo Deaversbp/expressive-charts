@@ -60,13 +60,39 @@ function entryFiles(pkg: PackageJson): string[] {
   return [pkg.main, pkg.module, ...Object.values(pkg.exports).flatMap(files)];
 }
 
+/**
+ * The file a target leads to under some conditions, as Node and bundlers resolve exports: the first
+ * key, in order, that's "default" or one of the conditions and leads to a file.
+ */
+function resolve(target: Target, conditions: readonly string[]): string | undefined {
+  if (typeof target === "string") return target;
+  for (const [condition, next] of Object.entries(target)) {
+    if (condition !== "default" && !conditions.includes(condition)) continue;
+    const file = resolve(next, conditions);
+    if (file !== undefined) return file;
+  }
+  return undefined;
+}
+
 describe("package.json", () => {
   it("exports the stylesheet the build writes, with types so TypeScript 6 and later find the import", async () => {
     const pkg = await packageJson();
     expect(pkg.exports["./style.css"]).toEqual({
       import: { types: "./dist/expressive-charts.css.d.ts", default: "./dist/expressive-charts.css" },
-      require: { types: "./dist/expressive-charts.css.d.cts", default: "./dist/expressive-charts.css" }
+      require: { types: "./dist/expressive-charts.css.d.cts", default: "./dist/expressive-charts.css" },
+      default: "./dist/expressive-charts.css"
     });
+  });
+
+  it("resolves the stylesheet under any conditions, so CSS resolvers find it too", async () => {
+    // css-loader's @import resolves with only "style", and Sass's package importer with "sass" and
+    // "style": neither matches import or require, so the stylesheet needs a default beside them.
+    const css = (await packageJson()).exports["./style.css"]!;
+    for (const conditions of [["import"], ["require"], ["style"], ["sass", "style"], []]) {
+      expect(resolve(css, conditions), conditions.join(", ") || "none").toBe("./dist/expressive-charts.css");
+    }
+    expect(resolve(css, ["types", "import"])).toBe("./dist/expressive-charts.css.d.ts");
+    expect(resolve(css, ["types", "require"])).toBe("./dist/expressive-charts.css.d.cts");
   });
 
   it("marks the CSS as having side effects, so bundlers keep the import", async () => {

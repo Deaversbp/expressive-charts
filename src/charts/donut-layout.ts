@@ -6,7 +6,8 @@
 // each slice's value and angles. Transitions interpolate those, and placeSlice, placeLabels and
 // placeCenter draw any state in between the same way the layout draws its own.
 
-import { describe, type MarkData, type MarkGeometry, type Rect } from "../core";
+import type { MarkData, MarkGeometry, Rect } from "../core";
+import { describeArc } from "../core/geometry/describe/arc";
 import { textBox, type TextPlacement } from "./render/text";
 import { percent } from "./shell/format";
 import type { DonutChartOptions } from "./types";
@@ -182,7 +183,7 @@ export function joinedStarts(values: readonly number[]): number[] {
  * (and `measure`), the boxes of the label's two lines are its `labelBounds`; with no label, none.
  */
 export function placeSlice<D>(frame: DonutFrame, state: SliceState<D>, label?: SliceLabel, measure?: Measure): DonutSlice<D> {
-  const geometry = describe.arc({
+  const geometry = describeArc({
     key: state.key,
     series: state.series,
     cx: frame.cx,

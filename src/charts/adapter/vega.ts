@@ -7,7 +7,10 @@
 // Duck-typed on the View: nothing here imports Vega, so it stays a dev dependency.
 
 import type { Baseline, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
-import { defaultClock, describe, matrix, samplesAlong } from "../../core";
+import { defaultClock, matrix, samplesAlong } from "../../core";
+import { describeArc } from "../../core/geometry/describe/arc";
+import { describeLine } from "../../core/geometry/describe/line";
+import { describePoint } from "../../core/geometry/describe/point";
 import { report } from "../../core/report";
 import { linkable, portOf } from "../link";
 import type { ChartEnv } from "../shell/setup";
@@ -421,7 +424,7 @@ function lineOf(key: string, element: Element, first: VegaItem, m: Matrix): Mark
   const width = first.strokeWidth ?? Number.parseFloat(element.getAttribute("stroke-width") ?? "1");
   const points = pointsOf(first);
   const breaks = points.flatMap((p, i) => (p.gapBefore ? [i] : []));
-  return describe.line({
+  return describeLine({
     key,
     series: key,
     points: points.map(({ point }) => matrix.apply(m, point)),
@@ -435,13 +438,13 @@ function sliceOf(key: string, item: VegaItem, m: Matrix): MarkGeometry {
   const center = matrix.apply(m, { x: number(item.x), y: number(item.y) });
   const s = scaleOf(m);
   const [start, end] = [number(item.startAngle), number(item.endAngle)].sort((a, b) => a - b) as [number, number];
-  return describe.arc({ key, cx: center.x, cy: center.y, inner: number(item.innerRadius) * s, outer: number(item.outerRadius) * s, start, end });
+  return describeArc({ key, cx: center.x, cy: center.y, inner: number(item.innerRadius) * s, outer: number(item.outerRadius) * s, start, end });
 }
 
 /** A point: Vega's symbol `size` is its area in px², 64 by default. */
 function pointOf(key: string, item: VegaItem, m: Matrix): MarkGeometry {
   const center = matrix.apply(m, { x: number(item.x), y: number(item.y) });
-  return describe.point({ key, x: center.x, y: center.y, r: Math.sqrt(Math.max(0, item.size ?? 64) / Math.PI) * scaleOf(m) });
+  return describePoint({ key, x: center.x, y: center.y, r: Math.sqrt(Math.max(0, item.size ?? 64) / Math.PI) * scaleOf(m) });
 }
 
 /** A rect item's box in its group's coordinates, with a negative width or height turned round. */

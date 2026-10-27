@@ -25,6 +25,18 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`fillOpacity` and `strokeOpacity` on `IconShape`**, under the 0.x promise: the fill's and the stroke's own opacity, each from 0 to 1 (default 1), inside the shape's `opacity`, so one shape can have a faint fill inside a full outline. `defineIcon` checks them, with a `RangeError` naming the shape and the field, and the SVG layer sets them on the shape's path. They're optional fields: code that builds an `IconShape` needs no change.
+
+### Changed
+
+### Fixed
+
+- **`iconFromSvg` keeps `fill-opacity` and `stroke-opacity`**, so an icon whose SVG fades a part's fill or stroke with them draws as its SVG does. Before, the faded part drew at full strength. They're read from attributes and `style`, as numbers or percentages, and inherited through groups as SVG inherits them: a shape's own replaces its group's, rather than multiplying as `opacity` does. A fill or stroke faded to 0 is dropped, as `none` is, and so is a shape left with neither. An icon made from SVG without them comes out the same. A long `width` or `height` on an `<svg>` with no viewBox is now read at once, too: a run of 100,000 digits followed by a letter took 23 s.
+
 ## 0.3.0 (27 October 2026)
 
 A tooltip that can be hovered, change labels that hold up, lines that skip missing values, long axes, and more of the icon sets' SVG. In the effect-author API, `gaps` on `MarkGeometry`, `gapBefore` on `Sample`, `breaks` on `LineSpec`, and `fillRule` and `opacity` on `IconShape` are additions. Its one change is the `"gapped line"` fixture, with its migration note under Changed. The other changes are outside the promise, and each says what to write instead, if anything.

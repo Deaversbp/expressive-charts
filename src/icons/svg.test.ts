@@ -230,7 +230,7 @@ describe("iconFromSvg", () => {
     ]);
   });
 
-  it("drops shapes with an opacity of 0, and fill-opacity and stroke-opacity", () => {
+  it("drops shapes with an opacity of 0, but keeps fill-opacity and stroke-opacity", () => {
     const icon = iconFromSvg(
       svg(`
         <path d="M0,0L4,4" opacity="0"/>
@@ -239,7 +239,7 @@ describe("iconFromSvg", () => {
         <path d="M0,0L4,4" fill-opacity="0.5" stroke-opacity="0.5" stroke="red"/>`),
       spec
     );
-    expect(icon.shapes).toEqual([{ d: "M0,0L4,4", fill: "#000000", stroke: "red", width: 1 }]);
+    expect(icon.shapes).toEqual([{ d: "M0,0L4,4", fill: "#000000", stroke: "red", width: 1, fillOpacity: 0.5, strokeOpacity: 0.5 }]);
     expect(() => iconFromSvg(svg(`<path d="M0,0L4,4" opacity="0"/>`), spec)).toThrow(/has nothing to draw/);
   });
 
@@ -247,6 +247,130 @@ describe("iconFromSvg", () => {
     const started = performance.now();
     const icon = iconFromSvg(svg(`<path d="M0,0L4,4" opacity="${"1".repeat(100_000)}x"/><path d="M0,0L4,4" opacity="${" ".repeat(100_000)}x"/>`), spec);
     expect(icon.shapes.map((shape) => shape.opacity)).toEqual([undefined, undefined]);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("keeps a shape's fill-opacity and stroke-opacity: a fill faded inside its outline", () => {
+    // Drawn for this test: a tag filled faintly and outlined at full strength, as one shape, which
+    // opacity can't say, with a hole outlined faintly and a string at full strength.
+    const icon = iconFromSvg(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3,8L15,8L21,12L15,16L3,16Z" fill="currentColor" fill-opacity="0.25"/>
+        <circle cx="15" cy="12" r="1.5" stroke-opacity=".4"/>
+        <line x1="3" y1="12" x2="1" y2="12"/>
+      </svg>`,
+      { name: "tag", anchor: { x: 12, y: 12 } }
+    );
+    expect(icon.shapes).toEqual([
+      { d: "M3,8L15,8L21,12L15,16L3,16Z", fill: "text", fillOpacity: 0.25, stroke: "text", width: 2 },
+      { d: "M16.5,12A1.5,1.5 0 0 1 13.5,12A1.5,1.5 0 0 1 16.5,12Z", stroke: "text", width: 2, strokeOpacity: 0.4 },
+      { d: "M3,12L1,12", stroke: "text", width: 2 }
+    ]);
+  });
+
+  it("inherits fill-opacity and stroke-opacity through groups, a shape's own replacing its group's", () => {
+    const icon = iconFromSvg(
+      svg(
+        `
+        <path d="M0,0L4,4"/>
+        <g fill-opacity="0.5" style="stroke-opacity: 0.6">
+          <path d="M0,0L4,4"/>
+          <g stroke-opacity="0.9" style="fill-opacity: 0.4">
+            <path d="M0,0L4,4" fill-opacity="0.8"/>
+            <path d="M0,0L4,4" style="fill-opacity: 0.7" fill-opacity="0.1"/>
+          </g>
+          <path d="M0,0L4,4" fill-opacity="1" stroke-opacity="inherit"/>
+          <path d="M0,0L4,4" fill-opacity="half" stroke-opacity=""/>
+          <path d="M0,0L4,4" opacity="0.5" fill-opacity="0.5"/>
+        </g>`,
+        'viewBox="0 0 24 24" stroke="red" stroke-opacity="0.3"'
+      ),
+      spec
+    );
+    expect(icon.shapes.map((shape) => [shape.fillOpacity, shape.strokeOpacity])).toEqual([
+      // From the root.
+      [undefined, 0.3],
+      // From the group, its attribute and its style.
+      [0.5, 0.6],
+      // The shape's own replaces its group's rather than multiplying, and the inner group's replaces the outer's.
+      [0.8, 0.9],
+      // style beats the attribute, as in CSS.
+      [0.7, 0.9],
+      // 1 replaces the group's, and is the default, so it isn't written. inherit keeps the group's.
+      [undefined, 0.6],
+      // One it can't read keeps the group's.
+      [0.5, 0.6],
+      // Kept beside the shape's opacity, not multiplied into it.
+      [0.5, 0.6]
+    ]);
+    expect(icon.shapes[6]!.opacity).toBe(0.5);
+  });
+
+  it("reads fill-opacity and stroke-opacity as numbers or percentages, one past 0 or 1 counting as 0 or 1", () => {
+    const icon = iconFromSvg(
+      svg(`
+        <path d="M0,0L4,4" stroke="red" fill-opacity="40%" stroke-opacity="2.5%"/>
+        <path d="M0,0L4,4" stroke="red" fill-opacity="150%" stroke-opacity="2"/>
+        <path d="M0,0L4,4" stroke="red" fill-opacity=".25" stroke-opacity="3e-1"/>
+        <path d="M0,0L4,4" stroke="red" fill-opacity=" 0.123456 " stroke-opacity="33.3333%"/>`),
+      spec
+    );
+    expect(icon.shapes.map((shape) => [shape.fillOpacity, shape.strokeOpacity])).toEqual([
+      [0.4, 0.025],
+      [undefined, undefined],
+      [0.25, 0.3],
+      // Rounded to 0.001.
+      [0.123, 0.333]
+    ]);
+  });
+
+  it("writes fill-opacity only on a filled shape and stroke-opacity only on a stroked one", () => {
+    const icon = iconFromSvg(
+      svg(`
+        <path d="M0,0L4,4" fill="none" stroke="red" fill-opacity="0.5" stroke-opacity="0.5"/>
+        <path d="M0,0L4,4" fill-opacity="0.5" stroke-opacity="0.5"/>
+        <path d="M0,0L4,4" stroke="red" stroke-width="0" fill-opacity="0.5" stroke-opacity="0.5"/>
+        <g fill="none" fill-opacity="0.5"><path d="M0,0L4,4" fill="blue"/></g>`),
+      spec
+    );
+    expect(icon.shapes).toEqual([
+      { d: "M0,0L4,4", stroke: "red", width: 1, strokeOpacity: 0.5 },
+      { d: "M0,0L4,4", fill: "#000000", fillOpacity: 0.5 },
+      { d: "M0,0L4,4", fill: "#000000", fillOpacity: 0.5 },
+      // A shape that sets its own fill keeps its group's fill-opacity, as in SVG.
+      { d: "M0,0L4,4", fill: "blue", fillOpacity: 0.5 }
+    ]);
+  });
+
+  it("drops a fill or a stroke faded to 0, and a shape with neither left", () => {
+    const icon = iconFromSvg(
+      svg(`
+        <path d="M0,0L4,4" stroke="red" fill-opacity="0"/>
+        <path d="M0,0L4,4" stroke="red" stroke-opacity="0%"/>
+        <path d="M0,0L4,4" stroke="red" fill-opacity="-1" stroke-opacity="0.0004"/>
+        <g fill-opacity="0"><circle r="2" fill-rule="evenodd"/></g>
+        <path d="M0,0L4,4" fill-opacity="0.3"/>`),
+      spec
+    );
+    expect(icon.shapes).toEqual([
+      { d: "M0,0L4,4", stroke: "red", width: 1 },
+      { d: "M0,0L4,4", fill: "#000000" },
+      { d: "M0,0L4,4", fill: "#000000", fillOpacity: 0.3 }
+    ]);
+    expect(() => iconFromSvg(svg(`<path d="M0,0L4,4" stroke="red" fill-opacity="0" stroke-opacity="0"/>`), spec)).toThrow(/has nothing to draw/);
+  });
+
+  it("reads a long fill-opacity, stroke-opacity, width and height quickly", () => {
+    const started = performance.now();
+    const icon = iconFromSvg(
+      svg(`<path d="M0,0L4,4" stroke="red" fill-opacity="${"1".repeat(100_000)}x" stroke-opacity="0${" ".repeat(100_000)}x"/>`),
+      spec
+    );
+    expect([icon.shapes[0]!.fillOpacity, icon.shapes[0]!.strokeOpacity]).toEqual([undefined, undefined]);
+    // A root with no viewBox: its width and height are read as px.
+    for (const root of [`width="${"1".repeat(100_000)}x" height="4"`, `width="4" height="1${" ".repeat(100_000)}x"`, `width="${"1".repeat(100_000)}.x" height="4"`]) {
+      expect(() => iconFromSvg(svg(`<path d="M0,0L4,4"/>`, root), spec)).toThrow(/needs a viewBox/);
+    }
     expect(performance.now() - started).toBeLessThan(1000);
   });
 

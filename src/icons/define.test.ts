@@ -59,6 +59,33 @@ describe("defineIcon", () => {
     expect(defineIcon({ ...spec, shapes: [{ d: "M0,0L1,1", fill: "text", opacity: 0 }] }).shapes[0]!.opacity).toBe(0);
   });
 
+  it("keeps a shape's fill and stroke opacity: a tag whose fill is faded inside its outline", () => {
+    // Drawn for this test: a tag filled faintly and outlined at full strength, so one shape's fill and
+    // stroke differ, which opacity can't say, and a hole punched in it with a faded stroke.
+    const tag = defineIcon({
+      ...spec,
+      name: "tag",
+      shapes: [
+        { d: "M-8,-4L4,-4L8,0L4,4L-8,4Z", fill: "text", stroke: "text", width: 1.5, fillOpacity: 0.25 },
+        { d: "M3,0A1,1 0 0 1 1,0A1,1 0 0 1 3,0Z", stroke: "text", strokeOpacity: 0.5, opacity: 0.8 },
+        { d: "M-6,0L-2,0", stroke: "text", fillOpacity: 1, strokeOpacity: 1 }
+      ]
+    });
+    expect(tag.shapes).toEqual([
+      { d: "M-8,-4L4,-4L8,0L4,4L-8,4Z", fill: "text", stroke: "text", width: 1.5, fillOpacity: 0.25 },
+      // Each is the shape's own, kept beside its opacity, not multiplied into it.
+      { d: "M3,0A1,1 0 0 1 1,0A1,1 0 0 1 3,0Z", stroke: "text", strokeOpacity: 0.5, opacity: 0.8 },
+      // Defaults given are kept as given.
+      { d: "M-6,0L-2,0", stroke: "text", fillOpacity: 1, strokeOpacity: 1 }
+    ]);
+    expect(Object.isFrozen(tag.shapes[0])).toBe(true);
+    // Neither is filled in where a shape leaves it out.
+    expect(defineIcon(spec).shapes[0]).not.toHaveProperty("fillOpacity");
+    expect(defineIcon(spec).shapes[0]).not.toHaveProperty("strokeOpacity");
+    const clear = defineIcon({ ...spec, shapes: [{ d: "M0,0L1,1", fill: "text", stroke: "text", fillOpacity: 0, strokeOpacity: 0 }] }).shapes[0]!;
+    expect([clear.fillOpacity, clear.strokeOpacity]).toEqual([0, 0]);
+  });
+
   it("freezes the icon, since every run shares it", () => {
     const icon = defineIcon(spec);
     expect(Object.isFrozen(icon)).toBe(true);
@@ -97,6 +124,24 @@ describe("defineIcon", () => {
       [{ d: "M0,0", opacity: Number.NaN }, /shapes\[1\]\.opacity must be a finite number, got NaN/],
       [{ d: "M0,0", opacity: Number.POSITIVE_INFINITY }, /shapes\[1\]\.opacity must be a finite number, got Infinity/],
       [{ d: "M0,0", opacity: "0.5" as unknown as number }, /shapes\[1\]\.opacity must be a finite number, got 0\.5/]
+    ];
+    for (const [shape, message] of bad) {
+      const make = () => defineIcon({ ...spec, shapes: [spec.shapes[0]!, shape] });
+      expect(make).toThrow(RangeError);
+      expect(make).toThrow(message);
+    }
+  });
+
+  it("throws a RangeError naming the shape and the field for a bad fill or stroke opacity", () => {
+    const bad: [IconShape, RegExp][] = [
+      [{ d: "M0,0", fillOpacity: 1.5 }, /^defineIcon: "flag" shapes\[1\]\.fillOpacity must be from 0 to 1, got 1\.5\.$/],
+      [{ d: "M0,0", fillOpacity: -0.1 }, /shapes\[1\]\.fillOpacity must be from 0 to 1, got -0\.1/],
+      [{ d: "M0,0", fillOpacity: Number.NaN }, /shapes\[1\]\.fillOpacity must be a finite number, got NaN/],
+      [{ d: "M0,0", fillOpacity: "40%" as unknown as number }, /shapes\[1\]\.fillOpacity must be a finite number, got 40%/],
+      [{ d: "M0,0", strokeOpacity: 2 }, /^defineIcon: "flag" shapes\[1\]\.strokeOpacity must be from 0 to 1, got 2\.$/],
+      [{ d: "M0,0", strokeOpacity: -1 }, /shapes\[1\]\.strokeOpacity must be from 0 to 1, got -1/],
+      [{ d: "M0,0", strokeOpacity: Number.NEGATIVE_INFINITY }, /shapes\[1\]\.strokeOpacity must be a finite number, got -Infinity/],
+      [{ d: "M0,0", strokeOpacity: null as unknown as number }, /shapes\[1\]\.strokeOpacity must be a finite number, got null/]
     ];
     for (const [shape, message] of bad) {
       const make = () => defineIcon({ ...spec, shapes: [spec.shapes[0]!, shape] });

@@ -1,20 +1,20 @@
 // The marks checkEffect runs an effect on by default: one of each kind the geometry builders
 // describe, plus the awkward cases (a bar growing the other way, a stack with a gap, a bar shorter
-// than most icons, a point whose walk has no length). Each has a moved twin: the same mark somewhere
-// else, as a resize or a transition's next frame leaves it, for the check that effects follow onChange.
-// checkTransition's pairs are made of the same marks.
+// than most icons, a line that skips a value, a point whose walk has no length). Each has a moved
+// twin: the same mark somewhere else, as a resize or a transition's next frame leaves it, for the
+// check that effects follow onChange. checkTransition's pairs are made of the same marks.
 
 import { describe as build, type MarkGeometry } from "../core";
 
-export type FixtureName = "bar" | "negative bar" | "column" | "stacked" | "short bar" | "slice" | "line" | "point";
+export type FixtureName = "bar" | "negative bar" | "column" | "stacked" | "short bar" | "slice" | "line" | "gapped line" | "point";
 
-/** Every kind of mark an effect meets: bars (plain, negative, a column, stacked, too short), a donut slice, a line and a point. */
+/** Every kind of mark an effect meets: bars (plain, negative, a column, stacked, too short), a donut slice, a line, a line with a gap, and a point. */
 export const fixtures: Readonly<Record<FixtureName, MarkGeometry>> = /* @__PURE__ */ makeFixtures(false);
 
 /**
  * Each fixture moved: the same key and series, somewhere else and another size. The bars are a row
  * lower and shorter (the stack's segments in another ratio), the slice turned and the ring smaller,
- * the line further revealed and rescaled, and the point moved.
+ * the lines further revealed and rescaled, and the point moved.
  */
 export const movedFixtures: Readonly<Record<FixtureName, MarkGeometry>> = /* @__PURE__ */ makeFixtures(true);
 
@@ -38,6 +38,9 @@ function makeFixtures(moved: boolean): Readonly<Record<FixtureName, MarkGeometry
   const bar = (width: number, more: Partial<Parameters<typeof build.bar>[0]> = {}): MarkGeometry =>
     build.bar({ key: "Okafor", series: "goals", x: 0, y, width, height: 20, baseline: "left", ...more });
   const [goals, assists] = moved ? [120, 82] : [160, 62];
+  const points = moved
+    ? [{ x: 0, y: 90 }, { x: 64, y: 58 }, { x: 128, y: 82 }, { x: 192, y: 26 }, { x: 256, y: 40 }]
+    : [{ x: 0, y: 100 }, { x: 80, y: 60 }, { x: 160, y: 90 }, { x: 240, y: 20 }];
   return Object.freeze({
     bar: bar(moved ? 160 : 200, { radius: 4 }),
     "negative bar": build.bar({ key: "n", series: "goals", x: moved ? 30 : 0, y, width: moved ? 90 : 120, height: 20, baseline: "right" }),
@@ -47,14 +50,9 @@ function makeFixtures(moved: boolean): Readonly<Record<FixtureName, MarkGeometry
     slice: moved
       ? build.arc({ key: "Saved", cx: 140, cy: 130, inner: 60, outer: 100, start: 0.5, end: 2 })
       : build.arc({ key: "Saved", cx: 150, cy: 150, inner: 70, outer: 116, start: 0.3, end: 2.4 }),
-    line: build.line({
-      key: "goals",
-      series: "goals",
-      points: moved
-        ? [{ x: 0, y: 90 }, { x: 64, y: 58 }, { x: 128, y: 82 }, { x: 192, y: 26 }, { x: 256, y: 40 }]
-        : [{ x: 0, y: 100 }, { x: 80, y: 60 }, { x: 160, y: 90 }, { x: 240, y: 20 }],
-      width: 2
-    }),
+    line: build.line({ key: "goals", series: "goals", points, width: 2 }),
+    // The line broken after its second point: a run, a gap, and a run.
+    "gapped line": build.line({ key: "goals", series: "goals", points, breaks: [2], width: 2 }),
     point: build.point({ key: "p", x: moved ? 40 : 10, y: moved ? 25 : 10, r: 3 })
   });
 }

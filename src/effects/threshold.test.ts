@@ -203,3 +203,78 @@ describe("threshold", () => {
     expectTypeOf(series).toExtend<DataEffect<{ name: string; goals: number }>>();
   });
 });
+
+describe("threshold on gaps", () => {
+  /** The samples with gapBefore on the ones at these indices. */
+  const gapped = (values: readonly Sample[], ...after: number[]): Sample[] => values.map((sample, i) => (after.includes(i) ? { ...sample, gapBefore: true } : sample));
+  // The line fixture's goals, with no value between the second vertex and the third.
+  const broken = gapped(goals, 2);
+
+  it("doesn't join the mark's samples across a gapBefore: nothing is coloured there", async () => {
+    // As the first test, less the part of the second leg between its crossing and the third vertex, which the gap leaves without values.
+    expect(await drawn(threshold({ compareTo: 4.5 }), line, dataOf(broken))).toEqual(
+      runs(line, [
+        [0, 0.625 * tA],
+        [tB, tB + 0.375 * (1 - tB)]
+      ])
+    );
+  });
+
+  it("draws with slice() on a line with a gap, so the stroke's gap stays a gap", async () => {
+    const mark = fixtures["gapped line"];
+    expect(mark.gaps).toEqual([[tA, tB]]);
+    const picture = await drawn(threshold({ compareTo: 4.5 }), mark, dataOf(broken));
+    expect(picture).toEqual(runs(mark, [[0, 0.625 * tA], [tB, tB + 0.375 * (1 - tB)]]));
+    // Without gapBefore, the samples would join across it, but slice() still leaves it out.
+    expect(await drawn(threshold({ compareTo: 4.5 }), mark, dataOf(goals))).toEqual(runs(mark, [[0, 0.625 * tA], [tA + 0.5 * (tB - tA), tB + 0.375 * (1 - tB)]]));
+    expect(mark.slice(tA + 0.5 * (tB - tA), tB + 0.375 * (1 - tB))).toBe(mark.slice(tB, tB + 0.375 * (1 - tB)));
+  });
+
+  it("puts no stations in a gap in the mark's samples, where the reference bends", async () => {
+    // The reference peaks at 100 halfway through the gap: joined, the goals would be below it there.
+    const reference = samples([0, tA, (tA + tB) / 2, tB, 1], [0, 0, 100, 0, 0]);
+    const values = samples(vertices, [2, 6, 3, 7]);
+    expect(await drawn(threshold({ compareTo: "target" }), line, dataOf(values, { target: reference }))).not.toEqual([]);
+    expect(await drawn(threshold({ compareTo: "target" }), line, dataOf(gapped(values, 2), { target: reference }))).toEqual([]);
+  });
+
+  it("doesn't interpolate a related series across its own gapBefore: where it has no value, nothing is coloured", async () => {
+    // As "compares a related series by at", with no xG between weeks 2 and 3: the second leg goes uncoloured.
+    const xg = gapped(samples([0, 0.2, 0.7, 1], [4, 4, 5, 5], [1, 2, 3, 4]), 2);
+    expect(await drawn(threshold({ compareTo: "xg" }), line, dataOf(goals, { xg }))).toEqual(
+      runs(line, [
+        [0, 0.5 * tA],
+        [tB, tB + 0.5 * (1 - tB)]
+      ])
+    );
+  });
+
+  it("stops at a gap in the reference inside one of the mark's legs, and starts again after it", async () => {
+    // A bar from 0 to 10, below a flat 6 until t = 0.6, with no reference from t = 0.2 to 0.4.
+    const reference = gapped(samples([0, 0.2, 0.4, 1], [6, 6, 6, 6]), 2);
+    const values = samples([0, 1], [0, 10]);
+    expect(await drawn(threshold({ compareTo: "target" }), bar, dataOf(values, { target: reference }))).toEqual(
+      runs(bar, [
+        [0, 0.2],
+        [0.4, 0.6]
+      ])
+    );
+  });
+
+  it("colours nothing where either has no value, with gaps in both", async () => {
+    // Goals below a flat 10 everywhere, but no goals over the second leg and no reference over the third.
+    const reference = gapped(samples(vertices, [10, 10, 10, 10], [1, 2, 3, 4]), 3);
+    expect(await drawn(threshold({ compareTo: "xg" }), line, dataOf(broken, { xg: reference }))).toEqual(runs(line, [[0, tA]]));
+  });
+
+  it("follows a change() from a line without gaps to one with them", async () => {
+    const ctx = testContext();
+    const effect = threshold({ compareTo: 4.5 });
+    await play(ctx.clock, effect.run(line, dataOf(goals), ctx));
+    expect(ctx.layer.picture()).toEqual(runs(line, [[0, 0.625 * tA], [tA + 0.5 * (tB - tA), tB + 0.375 * (1 - tB)]]));
+    ctx.change(fixtures["gapped line"], dataOf(broken));
+    await flush();
+    expect(ctx.layer.picture()).toEqual(runs(fixtures["gapped line"], [[0, 0.625 * tA], [tB, tB + 0.375 * (1 - tB)]]));
+    expect(movedFixtures["gapped line"].gaps).toHaveLength(1);
+  });
+});

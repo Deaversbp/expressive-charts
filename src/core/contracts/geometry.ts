@@ -45,8 +45,16 @@ export interface MarkGeometry {
   path(t: number): Point;
   /** Direction of travel in radians, in (-PI, PI]; the mark's "up" side is angle - PI/2. */
   angle(t: number): number;
-  /** SVG path data for the part of the walk between t0 and t1, in either order. */
+  /** SVG path data for the part of the walk between t0 and t1, in either order. It leaves out the gaps. */
   slice(t0: number, t1: number): string;
+  /**
+   * The stretches of the walk with no data, as [from, to] values of t, in order and apart: each with
+   * 0 ≤ from < to ≤ 1, ending at or before the next starts. A line that skips a value has one, from
+   * the value before to the value after. The walk runs straight across a gap, so `path` and `angle`
+   * work as on any walk, and `outline.sample(n)` runs along it all; `slice()` and an open outline's
+   * `d` leave the gaps out, with a moveto across each. Unset means none.
+   */
+  readonly gaps?: readonly (readonly [from: number, to: number])[];
 
   // The body: what the mark looks like.
 

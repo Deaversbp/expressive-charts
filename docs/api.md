@@ -522,7 +522,8 @@ One mark, described the same way whoever drew it. In chart pixels, with y pointi
   - `length`: `number`. In px; 0 for a point.
   - `path(t)`: `Point`. The point at `t` from 0 to 1, by distance along the walk; `t` outside is clamped.
   - `angle(t)`: `number`. The direction of travel in radians, in (−π, π], clockwise on screen. The mark's up side is `angle − π/2`.
-  - `slice(t0, t1)`: `string`. SVG path data for the walk between `t0` and `t1`, in either order.
+  - `slice(t0, t1)`: `string`. SVG path data for the walk between `t0` and `t1`, in either order, less its gaps: each part between them starts with its own move.
+  - `gaps`: `readonly (readonly [from: number, to: number])[] | undefined`. The stretches of the walk with no data, as values of `t`, in order and apart: each with `0 ≤ from < to ≤ 1`, ending at or before the next starts. A line that skips a value has one, from the value before to the value after. The walk runs straight across a gap, so `path`, `angle` and `outline.sample` work as on any walk; `slice()` and an open outline's `d` leave it out. Unset means none ([architecture.md](architecture.md#gaps)).
 - **The body.**
   - `thickness`: `number`. Px across the walk: a bar's height, a ring's width, a stroke's width, a point's diameter.
   - `outline`: [`Outline`](#outline).
@@ -546,7 +547,7 @@ interface Outline {
 }
 ```
 
-A mark's shape: `d` is its SVG path data; `closed` is true for areas (bars, slices, points) and false for strokes (lines). A closed outline's `sample(n)`, with `n` a multiple of 4, gives `n / 4` points a side, clockwise on screen from the start-left corner: the left side, the end, the right side, then the start, so corners land at 0, n/4, n/2 and 3n/4. An open outline's gives `n` points along the stroke, both ends included.
+A mark's shape: `d` is its SVG path data, which for a stroke leaves out the walk's gaps; `closed` is true for areas (bars, slices, points) and false for strokes (lines). A closed outline's `sample(n)`, with `n` a multiple of 4, gives `n / 4` points a side, clockwise on screen from the start-left corner: the left side, the end, the right side, then the start, so corners land at 0, n/4, n/2 and 3n/4. An open outline's gives `n` points along the stroke, both ends included, across any gaps.
 
 #### `Point`
 
@@ -596,10 +597,11 @@ interface Sample {
   readonly t: number;
   readonly value: number;
   readonly at?: string | number | Date;
+  readonly gapBefore?: boolean;
 }
 ```
 
-A value at `t` along the walk, from 0 to 1. `at` is the x behind it (a week, a date), which [`threshold`](#threshold) matches a related series by.
+A value at `t` along the walk, from 0 to 1. `at` is the x behind it (a week, a date), which [`threshold`](#threshold) matches a related series by. `gapBefore` is `true` on the first sample after a gap in the data, so a data effect doesn't join it to the one before; [`samplesAlong()`](#samplesalong) sets it from the mark's `gaps`.
 
 #### `GeometryEffect`
 
@@ -934,7 +936,7 @@ Each builder returns a [`MarkGeometry`](#markgeometry):
 | --- | --- | --- | --- | --- |
 | Walk | the middle of the baseline edge to the middle of the tip | the start angle to the end angle, on the mid-radius arc | the first point to the last | none: length 0 at the point |
 | `thickness` | across the bar | `outer − inner` | `width` | `2r` |
-| `outline` | the rectangle, its tip rounded | the annular sector | the stroke, open | the circle |
+| `outline` | the rectangle, its tip rounded | the annular sector | the stroke, open, less its gaps | the circle |
 | `pivot` | the middle of the baseline edge | the centre | the first point | the point |
 | `segments` | at least one | none | none | none |
 
@@ -1003,12 +1005,13 @@ interface LineSpec {
   readonly key: string;
   readonly series?: string;
   readonly points: readonly Point[];
+  readonly breaks?: readonly number[];
   readonly width?: number;
   readonly labelBounds?: readonly Rect[];
 }
 ```
 
-A polyline through `points` (at least one), in chart px, with straight legs. `width` is its stroke width, default 1. `labelBounds`, the boxes of its own labels (an end label), is passed through as the geometry's.
+A polyline through `points` (at least one), in chart px, with straight legs. `breaks` are the indices of the points that start a new run, so there's a gap in the geometry's [`gaps`](#markgeometry) from `points[i - 1]` to `points[i]`, and the stroke leaves it out: each a whole number from 1 to the last index, in order, with no repeats, or it throws a `RangeError` naming it. A line drawn with d3's `.defined()` is described by its defined points and the indices where they break. Default none. `width` is its stroke width, default 1. `labelBounds`, the boxes of its own labels (an end label), is passed through as the geometry's.
 
 #### `PointSpec`
 
@@ -1059,7 +1062,7 @@ The point `distance` px from `point` in the direction `angle`, in screen radians
 samplesAlong(mark: MarkGeometry, points: readonly SamplePoint[]): Sample[]
 ```
 
-Data effects' samples for a mark the library didn't draw: each point, in the mark's coordinates, is projected onto the nearest point of the mark's walk, and the samples come back in `t` order. A point on the walk, such as a vertex of the polyline the page drew, lands exactly where it is, so [`threshold`](#threshold)'s crossings are exact on a line described from the points that drew it. It's for [`expressive()`](#expressive)'s `samples`. Throws a `TypeError` if `mark` isn't a geometry or `points` isn't an array, and a `RangeError` for a point whose `x`, `y` or `value` isn't finite.
+Data effects' samples for a mark the library didn't draw: each point, in the mark's coordinates, is projected onto the nearest point of the mark's walk, and the samples come back in `t` order. A point on the walk, such as a vertex of the polyline the page drew, lands exactly where it is, so [`threshold`](#threshold)'s crossings are exact on a line described from the points that drew it. On a mark with `gaps`, the first sample past each gap's middle has `gapBefore`. It's for [`expressive()`](#expressive)'s `samples`. Throws a `TypeError` if `mark` isn't a geometry or `points` isn't an array, and a `RangeError` for a point whose `x`, `y` or `value` isn't finite.
 
 #### `SamplePoint`
 
@@ -1102,7 +1105,7 @@ lineChart("#xg", {
 travel(icon: Icon | string, options?: TravelOptions): GeometryEffect
 ```
 
-Carries an icon along the mark's walk, or along one segment, and leaves it resting at the end: a ball rolling out a bar, round a donut slice or along a line ([architecture.md](architecture.md#travel)). `icon` is an [`Icon`](#icon) or a registered icon's name, looked up each time the effect runs; an unknown name throws then, and the chart reports it. The icon is inset by its footprint, so it stays inside the mark. A trip takes `max(260 ms, distance ÷ 360 px/s)` base, with `"effect"` timing, times its gait's pace, and at most 4 s, eased by the gait or `easeOutCubic`. So past 1,440 px at pace 1 the icon goes faster, not longer, and a trip ends within 5 s even behind `stagger`. A missing segment, or a walk under 0.5 px, makes it a no-op that finishes at once. Its end state is the icon resting at the end, and it follows the mark when the mark moves. Options: [`TravelOptions`](#traveloptions). A non-icon throws a `TypeError`.
+Carries an icon along the mark's walk, or along one segment, and leaves it resting at the end: a ball rolling out a bar, round a donut slice or along a line ([architecture.md](architecture.md#travel)). `icon` is an [`Icon`](#icon) or a registered icon's name, looked up each time the effect runs; an unknown name throws then, and the chart reports it. The icon is inset by its footprint, so it stays inside the mark. A trip takes `max(260 ms, distance ÷ 360 px/s)` base, with `"effect"` timing, times its gait's pace, and at most 4 s, eased by the gait or `easeOutCubic`. So past 1,440 px at pace 1 the icon goes faster, not longer, and a trip ends within 5 s even behind `stagger`. A missing segment, or a walk under 0.5 px, makes it a no-op that finishes at once. Across a gap in the walk it jumps, never drawn over the gap, and its trip's time counts only the walk it's drawn on. Its end state is the icon resting at the end, at the last value, and it follows the mark when the mark moves. Options: [`TravelOptions`](#traveloptions). A non-icon throws a `TypeError`.
 
 #### `TravelOptions`
 
@@ -1329,7 +1332,7 @@ interface LabelOptions {
 threshold(options: ThresholdOptions): DataEffect
 ```
 
-A data effect that colours the parts of a mark's walk where its values are below a reference (or above it), at the mark's full thickness, each part ending exactly where the values cross ([architecture.md](architecture.md#threshold)). The reference is a number or a related series' name, which goes in `needs.related`, so a chart without that series throws when it's made. A series is matched by each sample's `at` when every sample of both has a number or a `Date` there, and by `t` otherwise. It's an encoding rather than motion: it draws at once, redraws on every change, and shows the same with motion off, so it belongs in `on.decorate`. It reads no row fields, so it fits any chart.
+A data effect that colours the parts of a mark's walk where its values are below a reference (or above it), at the mark's full thickness, each part ending exactly where the values cross ([architecture.md](architecture.md#threshold)). The reference is a number or a related series' name, which goes in `needs.related`, so a chart without that series throws when it's made. A series is matched by each sample's `at` when every sample of both has a number or a `Date` there, and by `t` otherwise. Nothing is interpolated across a sample with `gapBefore`, the mark's or the reference's, so where either has no value nothing is coloured. It's an encoding rather than motion: it draws at once, redraws on every change, and shows the same with motion off, so it belongs in `on.decorate`. It reads no row fields, so it fits any chart.
 
 #### `ThresholdOptions`
 
@@ -2206,7 +2209,7 @@ expressive(lines, {
 
 This line's `geometry` and `samples` are built from the rows bound to each path, so `watch` follows the line only while the page updates those rows every frame, as a reveal does (`paths.datum(…).attr("d", …)` on each frame). A D3 transition that binds the new rows once and interpolates the path's `d` would show only its end: the overlay jumps to the final line. There, describe the line from the element's own path (`describe.line` from points read off it each frame), or call `refresh()` when the transition ends. Rects need nothing: they're read from the element.
 
-**Observable Plot** binds each rect to its row's index, so pass `datum`. Plot draws a new `<svg>` each time, so pass `refresh()` the new one's rects. After a transform that derives new data (`groupY`, `binX`), the index is into Plot's derived rows, not yours: read them through the mark's `render` option instead. A Plot line's path is bound to its series' row indices, with `-1` where Plot breaks the line at a missing value: pass `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, a `geometry` from those rows' points through Plot's own scales (`plot.scale("x").apply(r.week)`), and `samples` from `samplesAlong` on the same points. Where Plot leaves a gap, the described line goes straight across it. The accessors are tested against Plot 0.6.17.
+**Observable Plot** binds each rect to its row's index, so pass `datum`. Plot draws a new `<svg>` each time, so pass `refresh()` the new one's rects. After a transform that derives new data (`groupY`, `binX`), the index is into Plot's derived rows, not yours: read them through the mark's `render` option instead. A Plot line's path is bound to its series' row indices, with `-1` where Plot breaks the line at a missing value: pass `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, a `geometry` from those rows' points through Plot's own scales (`plot.scale("x").apply(r.week)`), and `samples` from `samplesAlong` on the same points. Where Plot leaves a gap, give `describe.line` the `breaks`: the indices, among those rows, of the ones after each `-1`. The accessors are tested against Plot 0.6.17.
 
 ```ts
 import { expressive } from "expressive-charts";
@@ -2615,14 +2618,14 @@ interface CheckTransitionOptions
 const fixtures: Readonly<Record<FixtureName, MarkGeometry>>
 ```
 
-One of each kind of mark an effect meets: a bar, a negative bar, a column, a stack with a gap, a 6 px bar, a donut slice, a line and a point. Each has a moved twin for check 5.
+One of each kind of mark an effect meets: a bar, a negative bar, a column, a stack with a gap, a 6 px bar, a donut slice, a line, the line with a gap after its second point, and a point. Each has a moved twin for check 5.
 
 #### `FixtureName`
 
 *Under the 0.x promise.*
 
 ```ts
-type FixtureName = "bar" | "negative bar" | "column" | "stacked" | "short bar" | "slice" | "line" | "point"
+type FixtureName = "bar" | "negative bar" | "column" | "stacked" | "short bar" | "slice" | "line" | "gapped line" | "point"
 ```
 
 #### `fixturePairs`

@@ -35,6 +35,8 @@ const WHENS: readonly string[] = ["below", "above"];
  *   samples, where it bends), so they're exact where the walk is straight between samples: our lines,
  *   and a host polyline sampled at its vertices. Along a curve they're approximate; denser samples
  *   narrow the error.
+ * - **Gaps.** Nothing is interpolated across a sample with `gapBefore`, the mark's or the reference's:
+ *   where either has no value, nothing is coloured. `slice()` leaves the mark's own gaps out too.
  *
  * It draws at once, with no animation, and redraws on every `onChange`, so it follows a line as it's
  * revealed. Its end state is the same picture, so the colour shows with motion off.
@@ -82,7 +84,7 @@ export function threshold(options: ThresholdOptions): DataEffect {
 interface Reference {
   /** Where a mark's sample sits on the reference's axis. */
   place(sample: Sample): number;
-  /** The reference at u, or undefined outside its range. */
+  /** The reference at u, or undefined outside its range and inside its gaps (their ends have values). */
   valueAt(u: number): number | undefined;
   /** Where the reference bends, in u: its samples' places. */
   readonly bends: readonly number[];
@@ -99,7 +101,42 @@ function reference(compareTo: number | string, data: MarkData): Reference | unde
     .map((sample) => ({ u: place(sample), value: sample.value }))
     .filter((point) => Number.isFinite(point.u))
     .sort((a, b) => a.u - b.u);
-  return { place, valueAt: (u) => interpolate(points, u), bends: points.map((point) => point.u) };
+  const gaps = gapsOf(related.samples, place);
+  return { place, valueAt: (u) => (inside(gaps, u) ? undefined : interpolate(points, u)), bends: points.map((point) => point.u) };
+}
+
+/** Where the samples have no value, in u: from the sample before each `gapBefore` to it, merged and in order. */
+function gapsOf(samples: readonly Sample[], place: (sample: Sample) => number): [number, number][] {
+  const gaps: [number, number][] = [];
+  samples.forEach((sample, i) => {
+    const before = samples[i - 1];
+    if (sample.gapBefore !== true || !before) return;
+    const u = place(before);
+    const v = place(sample);
+    if (Number.isFinite(u) && Number.isFinite(v) && u !== v) gaps.push([Math.min(u, v), Math.max(u, v)]);
+  });
+  gaps.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const gap of gaps) {
+    const last = merged[merged.length - 1];
+    if (last && gap[0] < last[1]) last[1] = Math.max(last[1], gap[1]);
+    else merged.push(gap);
+  }
+  return merged;
+}
+
+/** Whether u is strictly inside one of the gaps (merged and in order). */
+function inside(gaps: readonly (readonly [number, number])[], u: number): boolean {
+  // The gap after the last one that starts before u.
+  let lo = 0;
+  let hi = gaps.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (gaps[mid]![0] < u) lo = mid + 1;
+    else hi = mid;
+  }
+  const gap = gaps[lo - 1];
+  return gap !== undefined && u < gap[1];
 }
 
 /** A sample's `at` as a number: a finite number, or a valid Date's time. Labels have none. */
@@ -130,31 +167,37 @@ function interpolate(points: readonly { readonly u: number; readonly value: numb
 /** A place along the walk, with how far past the reference the mark is there: more than 0 is coloured. */
 interface Station {
   readonly t: number;
+  /** Where it is on the reference's axis. */
+  readonly u: number;
   /** Undefined where there's no reference or no finite value. */
   readonly past: number | undefined;
+  /** False after a gap in the mark's values: nothing is coloured between it and the station before. */
+  readonly joined: boolean;
 }
 
 /**
  * The parts of the walk, as [t0, t1] in order, where the mark's values are past the reference on the
  * `when` side. Between neighbouring stations (the samples, plus the places where the reference bends
- * between them) both are linear in t, so each crossing is where that difference reaches 0.
+ * between them) both are linear in t, so each crossing is where that difference reaches 0. Stations
+ * either side of a gap, the mark's or the reference's, aren't joined.
  */
 function runs(samples: readonly Sample[], ref: Reference | undefined, when: "below" | "above"): [number, number][] {
   if (!ref) return [];
   const sign = when === "below" ? 1 : -1;
-  const station = (t: number, u: number, value: number): Station => {
+  const station = (t: number, u: number, value: number, joined = true): Station => {
     const level = ref.valueAt(u);
-    if (level === undefined || !Number.isFinite(level) || !Number.isFinite(value) || !Number.isFinite(t)) return { t, past: undefined };
+    if (level === undefined || !Number.isFinite(level) || !Number.isFinite(value) || !Number.isFinite(t)) return { t, u, past: undefined, joined };
     const past = sign * (level - value);
-    return { t, past: Math.abs(past) <= TIE * Math.max(Math.abs(level), Math.abs(value)) ? 0 : past };
+    return { t, u, past: Math.abs(past) <= TIE * Math.max(Math.abs(level), Math.abs(value)) ? 0 : past, joined };
   };
 
   const stations: Station[] = [];
   samples.forEach((sample, i) => {
     const u = ref.place(sample);
-    stations.push(station(sample.t, u, sample.value));
+    stations.push(station(sample.t, u, sample.value, sample.gapBefore !== true));
     const next = samples[i + 1];
-    if (!next) return;
+    // No bends across a gap in the mark's values: there's nothing there to compare.
+    if (!next || next.gapBefore === true) return;
     // Where the reference bends between this sample and the next, in the order the walk meets them.
     const v = ref.place(next);
     if (u === v || !Number.isFinite(u) || !Number.isFinite(v)) return;
@@ -179,7 +222,9 @@ function runs(samples: readonly Sample[], ref: Reference | undefined, when: "bel
   for (let i = 1; i < stations.length; i++) {
     const a = stations[i - 1]!;
     const b = stations[i]!;
-    if (a.past === undefined || b.past === undefined || !(b.t > a.t)) continue;
+    if (a.past === undefined || b.past === undefined || !b.joined || !(b.t > a.t)) continue;
+    // Between two stations the reference doesn't bend, so it's in a gap there if it is halfway.
+    if (a.u !== b.u && ref.valueAt((a.u + b.u) / 2) === undefined) continue;
     if (a.past > 0 && b.past > 0) add(a.t, b.t);
     else if (a.past > 0) add(a.t, a.t + (b.t - a.t) * (a.past / (a.past - b.past)));
     else if (b.past > 0) add(a.t + (b.t - a.t) * (a.past / (a.past - b.past)), b.t);

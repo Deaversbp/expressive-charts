@@ -170,3 +170,65 @@ describe("walk.slice", () => {
     expectPoint(half.end, { x: 0, y: -10 }, 3);
   });
 });
+
+describe("a walk with gaps", () => {
+  // 100 px along x in four legs of 25, then the same with gaps left out of its path data.
+  const legs = () => [0, 25, 50, 75].map((x) => line({ x, y: 0 }, { x: x + 25, y: 0 }));
+  const gapped = (...gaps: [number, number][]) => createWalk(legs(), gaps);
+
+  it("walks straight across a gap: start, end, length, point and angle are the walk's", () => {
+    const plain = createWalk(legs());
+    const walk = gapped([0.25, 0.5]);
+    expect(walk.gaps).toEqual([[0.25, 0.5]]);
+    expect(plain.gaps).toEqual([]);
+    for (const field of ["start", "end", "length"] as const) expect(walk[field]).toEqual(plain[field]);
+    for (const t of [0, 0.3, 0.375, 0.49, 0.5, 0.8, 1]) {
+      expect(walk.point(t)).toEqual(plain.point(t));
+      expect(walk.angle(t)).toBe(plain.angle(t));
+    }
+  });
+
+  it("leaves a gap out of slice(0, 1) and d, with a move across it", () => {
+    const walk = gapped([0.25, 0.5]);
+    expect(walk.slice(0, 1)).toBe("M0,0L25,0M50,0L75,0L100,0");
+    expect(walk.d).toBe(walk.slice(0, 1));
+    expect(measurePath(walk.d).length).toBe(75);
+  });
+
+  it("leaves out several gaps, and gaps that don't fall on a joint", () => {
+    const walk = gapped([0.1, 0.2], [0.55, 0.6], [0.9, 0.95]);
+    expect(walk.d).toBe("M0,0L10,0M20,0L25,0L50,0L55,0M60,0L75,0L90,0M95,0L100,0");
+    expect(measurePath(walk.d).length).toBeCloseTo(80, 9);
+  });
+
+  it("starts a slice at the end of a gap when it starts inside it, and ends one at its start", () => {
+    const walk = gapped([0.25, 0.5]);
+    expect(walk.slice(0.3, 0.8)).toBe("M50,0L75,0L80,0");
+    expect(walk.slice(0.1, 0.4)).toBe("M10,0L25,0");
+    expect(walk.slice(0.1, 0.25)).toBe("M10,0L25,0");
+    expect(walk.slice(0.5, 0.6)).toBe("M50,0L60,0");
+    expect(walk.slice(0.8, 0.3)).toBe(walk.slice(0.3, 0.8));
+  });
+
+  it("is a move where it starts when it's all in a gap, at its ends or inside", () => {
+    const walk = gapped([0.25, 0.5]);
+    expect(walk.slice(0.25, 0.5)).toBe("M25,0");
+    expect(walk.slice(0.3, 0.4)).toBe("M30,0");
+    expect(walk.slice(0.4, 0.4)).toBe("M40,0");
+    expect(walk.slice(0.1, 0.1)).toBe("M10,0");
+  });
+
+  it("writes nothing for a value alone between two gaps, or before or after them at the walk's ends", () => {
+    expect(gapped([0.25, 0.5], [0.5, 0.75]).d).toBe("M0,0L25,0M75,0L100,0");
+    expect(gapped([0, 0.25]).d).toBe("M25,0L50,0L75,0L100,0");
+    expect(gapped([0.75, 1]).d).toBe("M0,0L25,0L50,0L75,0");
+    expect(gapped([0, 0.5], [0.5, 1]).d).toBe("M0,0");
+  });
+
+  it("leaves the gaps out of an arc too", () => {
+    const walk = createWalk([arc({ x: 0, y: 0 }, 10, 0, Math.PI)], [[0.25, 0.75]]);
+    const drawn = measurePath(walk.d);
+    expect(drawn.commands.map((c) => c.op)).toEqual(["M", "A", "M", "A"]);
+    expect(drawn.length).toBeCloseTo(5 * Math.PI, 2);
+  });
+});

@@ -38,7 +38,7 @@ Everything else can still change in a minor release while the library is 0.x: th
 ### Changed
 
 - **The package is built with tsdown, on Rolldown,** instead of tsup. Each entry has the same names, as an ES module and as CommonJS, with the same types, checked on TypeScript 5.4, 6 and 7. The files keep their names, but for the shared chunks, which are named by their first module. The script-tag bundle is 72 KB gzipped, 6.6 KB less, and `expressive-charts/icons/sport` loads 4 KB with its chunks, not 9. Nothing to write instead.
-- **A chart switch ends the old view's hover before `current` changes**, so `leave` listeners on that view's chart read `current` as the view the switch is leaving, not the one it's heading for. A page that wants the new view there takes it from the `show(view)` that started the switch.
+- **A chart switch ends the old view's hover before `current` changes**, so `leave` listeners on that view's chart read `current` as the view the switch is leaving, not the one it's heading for. A page that wants the new view there takes it from the `show(view)` that started the switch. A `show()` such a listener calls runs once the switch has begun.
 
 ### Fixed
 

@@ -614,6 +614,52 @@ describe("chartSwitch: hover and focus", () => {
     expect(leaveColumns).not.toHaveBeenCalled();
   });
 
+  it("runs a show() a leave listener calls as a switch starts once the switch has begun, as one switch", async () => {
+    const { switcher, donut, container, clock, transition } = setup();
+    pointer("pointerover", donut.element.querySelector('.ec-mark[data-key="Saved"] .ec-hit')!);
+    let again: Promise<void> | undefined;
+    donut.on("leave", () => {
+      // The old view is still the view on show here.
+      expect(switcher.current).toBe("donut");
+      again ??= switcher.show("columns");
+    });
+    const landed = vi.fn();
+    const landedAgain = vi.fn();
+    void switcher.show("columns").then(landed);
+    void again!.then(landedAgain);
+    expect(transition.runs).toHaveLength(4);
+    clock.advance(950);
+    await flush();
+    expect(landed).toHaveBeenCalledTimes(1);
+    expect(landedAgain).toHaveBeenCalledTimes(1);
+    expect(transition.runs).toHaveLength(4);
+    expect(clock.idle).toBe(true);
+    expect(container("columns").classList.contains("ec-switch-inactive")).toBe(false);
+    expect(container("donut").classList.contains("ec-switch-inactive")).toBe(true);
+  });
+
+  it("switches back when a leave listener asks for the view a switch is leaving, and stops when one destroys the switch", async () => {
+    const { switcher, donut, container, clock } = setup();
+    pointer("pointerover", donut.element.querySelector('.ec-mark[data-key="Goal"] .ec-hit')!);
+    const stop = donut.on("leave", () => void switcher.show("donut"));
+    void switcher.show("columns");
+    await flush();
+    // Back before the shapes have moved: it lands where it began at once.
+    expect(switcher.current).toBe("donut");
+    expect(container("donut").classList.contains("ec-switch-inactive")).toBe(false);
+    expect(container("columns").classList.contains("ec-switch-inactive")).toBe(true);
+    expect(clock.idle).toBe(true);
+    stop();
+
+    const destroyed = setup();
+    pointer("pointerover", destroyed.donut.element.querySelector('.ec-mark[data-key="Goal"] .ec-hit')!);
+    destroyed.donut.on("leave", () => destroyed.switcher.destroy());
+    await expect(destroyed.switcher.show("columns")).resolves.toBeUndefined();
+    expect(destroyed.target.children).toHaveLength(0);
+    expect(destroyed.transition.runs).toHaveLength(0);
+    expect(destroyed.clock.idle).toBe(true);
+  });
+
   it("moves focus on a mark to the same key in the new view once the switch lands", async () => {
     const { switcher, donut, columns, clock } = setup();
     donut.focus("Saved");

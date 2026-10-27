@@ -86,6 +86,7 @@ export interface ChartSwitch<T extends ChartSwitchViews> {
    * when the switch has landed, or as soon as another show() replaces it. A show() back to the view
    * a switch is leaving reverses it from where the shapes are; one to a third view lands the switch
    * first. With motion off, the switch has landed when show() returns. Rejects for an unknown view.
+   * One a `leave` listener calls as the old view's hover ends runs once the switch has begun.
    */
   show(view: ChartSwitchViewName<T>): Promise<void>;
   /** The chart a view's function returned: for update(), on() and the rest. */
@@ -235,6 +236,8 @@ export function chartSwitch<T extends ChartSwitchViews>(
   let told: View | undefined;
   /** Whether the link has a hover from another source for the switch: shown in the view on show, or once a switch lands. */
   let held = false;
+  /** While a switch's old view's hover ends: the show() calls its listeners made, run once the switch has begun. */
+  let opening: (() => void)[] | undefined;
 
   // Turning motion off mid-switch lands it, as every animation jumps to its end.
   const stopMotion = motion.subscribe(() => {
@@ -297,9 +300,23 @@ export function chartSwitch<T extends ChartSwitchViews>(
   function start(from: View, to: View, carried?: { readonly focus: FocusMemory | undefined }): Promise<void> {
     const memory = carried ? carried.focus : readFocus(from);
     // The old view's hover ends as the viewer's would, a link's too, while it's still the view on
-    // show, so the switch's on() and its link hear it end. Focus stays where it is, already read,
-    // until the view turns inert, which takes it off in a browser.
-    from.chart.leave();
+    // show, so the switch's on() and its link hear it end. A show() its listeners call waits until
+    // the switch has begun, and a destroy() stops it. Focus stays where it is, already read, until
+    // the view turns inert, which takes it off in a browser.
+    const waiting: (() => void)[] = [];
+    opening = waiting;
+    try {
+      from.chart.leave();
+    } finally {
+      opening = undefined;
+    }
+    const done = destroyed ? Promise.resolve() : begin(from, to, memory);
+    for (const run of waiting) run();
+    return done;
+  }
+
+  /** Switches from `from` to `to`, its hover ended. */
+  function begin(from: View, to: View, memory: FocusMemory | undefined): Promise<void> {
     current = to.name;
     if (motion.mode === "off") {
       for (const each of views.values()) setActive(each.container, each === to);
@@ -482,6 +499,8 @@ export function chartSwitch<T extends ChartSwitchViews>(
     show(name) {
       if (!views.has(name)) return Promise.reject(new TypeError(`chartSwitch: there's no view ${JSON.stringify(name)}. The views are ${names.map((n) => JSON.stringify(n)).join(", ")}.`));
       if (destroyed) return Promise.resolve();
+      const waiting = opening;
+      if (waiting) return new Promise<void>((resolve) => waiting.push(() => resolve(api.show(name))));
       const session = active;
       if (!session) return name === current ? Promise.resolve() : start(view(current), view(name));
       const heading = session.forward ? session.b : session.a;

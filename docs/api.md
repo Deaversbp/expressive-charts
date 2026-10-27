@@ -2104,7 +2104,7 @@ interface ChartSwitch<T extends ChartSwitchViews>
 ```
 
 - `current`: the view shown, or the one a switch is heading for.
-- `show(view)`: `Promise<void>`. Switches to `view`, by the motion mode. It resolves when the switch has landed, or as soon as another `show()` replaces it. A `show()` back to the view a switch is leaving reverses it; one to a third view lands the switch first. It rejects for a view the switch doesn't have.
+- `show(view)`: `Promise<void>`. Switches to `view`, by the motion mode. It resolves when the switch has landed, or as soon as another `show()` replaces it. A `show()` back to the view a switch is leaving reverses it; one to a third view lands the switch first. One that a `leave` listener calls as the old view's hover ends runs once the switch has begun. It rejects for a view the switch doesn't have.
 - `chart(view)`: the chart a view's function returned, typed as it returned it, for `update()` and the rest.
 - `on(type, listener)`: `() => void`, the unsubscribe. Listens for the mark events of the view on show, `current`, as its chart's `on()` does, typed by the views' rows (a union when they differ). The other views' events aren't heard. The old view's hover ends as a switch starts, while it's still the view on show, so its `leave` events are heard; from then the view the switch is heading for is heard.
 - `marks()`: `readonly MarkGeometry[]`. The view on show's marks, as its chart's `marks()` gives them; while a switch plays, the marks of the view it's heading for.

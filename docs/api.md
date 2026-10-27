@@ -2217,7 +2217,7 @@ The same effects on SVG charts drawn by other code: D3, Observable Plot, a hand-
 expressive<D = unknown>(target: MarkSource<D>, options: ExpressiveOptions<D>): Attachment<D>
 ```
 
-Attaches effects to SVG marks drawn by other code. `target` is a selector, an element, a list of elements or a D3 selection, whose data types the callbacks ([`MarkSource`](#marksourced)). `<rect>`s are read as bars, stacks included; other shapes take a `geometry` built with [`describe`](#describe). Call `refresh()` after the host redraws, which fires `enter`, `update` and `exit` by key, or pass `watch: true` to follow the host's own transitions frame by frame. Marks it can't read, bad samples and missing series throw before anything changes. Options: [`ExpressiveOptions<D>`](#expressiveoptionsd). Returns [`Attachment<D>`](#attachmentd).
+Attaches effects to SVG marks drawn by other code. `target` is a selector, an element, a list of elements or a D3 selection, whose data types the callbacks ([`MarkSource`](#marksourced)). `<rect>`s are read as bars, stacks included, `<circle>`s as points, and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements as shapes, from their own path data with [`describe.shape`](#shapespec), each through its transforms. Anything else takes a `geometry` built with [`describe`](#describe), which wins over all of them. Call `refresh()` after the host redraws, which fires `enter`, `update` and `exit` by key, or pass `watch: true` to follow the host's own transitions frame by frame. Marks it can't read, bad samples and missing series throw before anything changes. Options: [`ExpressiveOptions<D>`](#expressiveoptionsd). Returns [`Attachment<D>`](#attachmentd).
 
 D3 stacked bars, a D3 pie and a D3 line:
 
@@ -2258,9 +2258,35 @@ expressive(lines, {
 });
 ```
 
-This line's `geometry` and `samples` are built from the rows bound to each path, so `watch` follows the line only while the page updates those rows every frame, as a reveal does (`paths.datum(…).attr("d", …)` on each frame). A D3 transition that binds the new rows once and interpolates the path's `d` would show only its end: the overlay jumps to the final line. There, describe the line from the element's own path data, `describe.shape({ key, d: el.getAttribute("d") ?? "", width: 2 })`, which `watch` reads again each frame, or call `refresh()` when the transition ends. Rects need nothing: they're read from the element.
+This line's `geometry` and `samples` are built from the rows bound to each path, so `watch` follows the line only while the page updates those rows every frame, as a reveal does (`paths.datum(…).attr("d", …)` on each frame). A D3 transition that binds the new rows once and interpolates the path's `d` would show only its end: the overlay jumps to the final line. There, leave `geometry` out, so the path is read from its own path data, which `watch` reads again each frame, or call `refresh()` when the transition ends. Rects, circles and shapes need nothing: they're read from the element.
 
-**Observable Plot** binds each rect to its row's index, so pass `datum`. Plot draws a new `<svg>` each time, so pass `refresh()` the new one's rects. After a transform that derives new data (`groupY`, `binX`), the index is into Plot's derived rows, not yours: read them through the mark's `render` option instead. A Plot line's path is bound to its series' row indices, with `-1` where Plot breaks the line at a missing value: pass `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, a `geometry` from those rows' points through Plot's own scales (`plot.scale("x").apply(r.week)`), and `samples` from `samplesAlong` on the same points. Where Plot leaves a gap, give `describe.line` the `breaks`: the indices, among those rows, of the ones after each `-1`. The accessors are tested against Plot 0.6.17.
+Circles and shapes read by their tags, with no `geometry`: a D3 scatter and a curve.
+
+```ts
+import { expressive, only, samplesAlong, threshold } from "expressive-charts";
+
+// dots: a D3 scatter's <circle>s, one a player. Each is a point at its centre, with its radius, through its transforms.
+expressive<Player>(document.querySelectorAll("#scatter circle"), {
+  key: (d) => d.name,
+  value: (d) => d.goals,                             // a dot's one sample, { t: 0, value }, for a data effect
+  keyboard: true,                                    // in document order
+  markLabel: (d) => `${d.name}: ${d.goals} goals`
+});
+
+// curves: a <path> per series drawn with d3.line().curve(d3.curveMonotoneX), each read from its own d,
+// as wide as its stroke, with a gap at each move that .defined() leaves.
+expressive(lines, {
+  key: (d) => d.series,
+  segment: (d) => d.series,                          // a shape's series, which threshold reads through related("xg")
+  samples: (d, mark) => samplesAlong(mark, d.rows.map((r) => ({ x: x(r.week), y: y(r.value), value: r.value, at: r.week }))),
+  watch: true,                                       // follows a D3 transition of each path's d
+  on: { decorate: only("goals", threshold({ compareTo: "xg" })) }
+});
+```
+
+A circle under an uneven scale or a skew is read as an ellipse, a shape. An open shape's width is its stroke width as drawn, scaled by its transforms; a width of 0 reads as 1 px. A shape SVG wouldn't draw, such as a path with no path data, isn't a mark until it draws something. A circle or a shape is a mark of its own: a key it shares with another element throws a `TypeError`. Each keeps document order in `marks()` and for the arrow keys, and so does every mark when circles or shapes are among the rects. A pie's slices read as shapes would each have their own centre, so describe them with `describe.arc`, as above, to go round the pie clockwise.
+
+**Observable Plot** binds each rect to its row's index, so pass `datum`. Its dots are `<circle>`s, read by tag as points with the same `datum`. Plot draws a new `<svg>` each time, so pass `refresh()` the new one's rects. After a transform that derives new data (`groupY`, `binX`), the index is into Plot's derived rows, not yours: read them through the mark's `render` option instead. A Plot line's path is bound to its series' row indices, with `-1` where Plot breaks the line at a missing value: pass `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, a `geometry` from those rows' points through Plot's own scales (`plot.scale("x").apply(r.week)`), and `samples` from `samplesAlong` on the same points. Where Plot leaves a gap, give `describe.line` the `breaks`: the indices, among those rows, of the ones after each `-1`. The accessors are tested against Plot 0.6.17.
 
 ```ts
 import { expressive } from "expressive-charts";
@@ -2282,19 +2308,19 @@ fx.refresh(nextPlot.querySelectorAll('g[aria-label="bar"] > rect')); // Plot's n
 interface ExpressiveOptions<D>
 ```
 
-- `key`: `(datum: D, element: Element) => string | number`, required. The mark's identity, which effects and `refresh()` follow. Elements that share a key are one mark's parts, named by `segment`.
+- `key`: `(datum: D, element: Element) => string | number`, required. The mark's identity, which effects and `refresh()` follow. Rects that share a key are one mark's parts, named by `segment`. A circle or another shape is a mark of its own, so a key it shares with another element throws.
 - `datum`: `(element: Element) => D`. The element's row. Default: a selection's `data()`, else `element.__data__`, D3's convention.
-- `segment`: `(datum: D, element: Element) => string`. Names the parts of a mark that share a key: a stack's series. They're ordered from the baseline.
+- `segment`: `(datum: D, element: Element) => string`. Names the parts of a mark that share a key: a stack's series. They're ordered from the baseline. On a circle or another shape it names the mark's `series`, so a data effect reads it through `related`.
 - `value`: `(datum: D, element: Element) => number | string | boolean | null | undefined`. What an element shows, so `refresh()` can tell a change in values from a new layout: given, an update means a value changed, as on our charts; without it, a length changed, so a resize updates every bar. Return a number or a string.
-- `geometry`: `(element: Element, datum: D, key: string) => MarkGeometry`. Describes a mark the adapter can't read (anything but a `<rect>`), with `describe`, in the coordinates of the marks' nearest common ancestor. Called once per mark with its first element.
-- `samples`: `(datum: D, mark: MarkGeometry) => readonly Sample[]`. Data effects' values along the mark. Default: rects with a numeric `value` get the bar chart's samples; other marks get none. Bad samples throw.
+- `geometry`: `(element: Element, datum: D, key: string) => MarkGeometry`. Describes every mark yourself, with `describe`, in the coordinates of the marks' nearest common ancestor, instead of the adapter reading `<rect>`s as bars, `<circle>`s as points and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements as shapes. Give it for anything else (`<text>`, `<g>`, `<use>` and `<image>` throw, naming the tag), or to say more than an element shows: a pie's slices with `describe.arc`, which go round its centre. Called once per mark with its first element.
+- `samples`: `(datum: D, mark: MarkGeometry) => readonly Sample[]`. Data effects' values along the mark. Default: rects with a numeric `value` get the bar chart's samples, and circles with one get it as their one sample, `{ t: 0, value }`; other marks get none. Bad samples throw.
 - `baseline`: `Baseline | "auto"`. Default `"auto"`: the line every rect has an edge on. A rect whose other edge is on it grows the other way, as a negative bar.
 - `motion`: `Motion | MotionMode`. As on a chart.
 - `on`: `EffectSlots<D>`. As on a chart.
 - `keyboard`: `boolean`. Default false. Makes marks focusable as one tab stop: the arrow keys, Home and End move between them in visual order (round a pie, clockwise from 12 o'clock), and Page Down and Page Up a tenth of the marks, rounded up; focus plays the hover effects, and a ring shows.
 - `dim`: `boolean`. Default false: the host owns its styling. True dims the other marks while one is hovered, and gives the hovered one its strong colour.
 - `markLabel`: `(datum: D, mark: HostMark<D>) => string`. Names each mark for screen readers as one item: its first part becomes `role="img"` with the text as its name, and its other parts are hidden, so a stack isn't read in pieces. Default: the adapter writes no ARIA. With `keyboard`, give it, since a focusable element needs a name. Make the `<svg>` `role="group"`, not `role="img"`.
-- `watch`: `boolean`. Default false. Follows the host's own transitions frame by frame, without `refresh()`: once a frame, the marks whose geometry attributes (or whose ancestors' `transform` or `style`) changed are read again, and their effects follow, with no events. Call `refresh()` when the host joins new data, before its transition starts. A `geometry` or `samples` callback should read the element, or rows the host updates every frame: one that reads rows bound once, as a transition's targets, sees only the end. Its cost grows with the marks that move: about 17–19 µs a moving column a frame at 500 columns, which halves the most that stay smooth ([Limits](architecture.md#limits)).
+- `watch`: `boolean`. Default false. Follows the host's own transitions frame by frame, without `refresh()`: once a frame, the marks whose geometry attributes (`d`, `x`, `y`, `width`, `height`, `cx`, `cy`, `r`, `rx`, `ry`, `x1`, `y1`, `x2`, `y2`, `points`, `transform`, or their ancestors' `transform` or `style`) changed are read again, and their effects follow, with no events. Call `refresh()` when the host joins new data, before its transition starts. A `geometry` or `samples` callback should read the element, or rows the host updates every frame: one that reads rows bound once, as a transition's targets, sees only the end. Its cost grows with the marks that move: about 17–19 µs a moving column a frame at 500 columns, which halves the most that stay smooth ([Limits](architecture.md#limits)).
 
 #### `MarkSource<D>`
 
@@ -2313,7 +2339,7 @@ interface Attachment<D>
 - `refresh(source?)`: reads the marks again, from `source` if it's given and from then on, and fires `enter`, `update` and `exit` by key. A mark that only moved follows without an event. A read that finds a new row, a new value, or a mark entering or leaving is an update, which ends the last one's `update` effects (a `delta`) on the marks it leaves alone; one that finds none keeps them. It throws, changing nothing, on marks it can't read.
 - `update({ on })`: `Promise<void>`. Swaps the effects for a new `on`, as a chart's `update({ on })` does ([architecture.md](architecture.md#adapters)): a slot given the same effect or preset name keeps its runs, and a slot left out is emptied. A changed slot's new effect starts where the old one's runs were: `decorate` again on every mark, a held hover replayed with the new hover effect, and `enter`, `update` and `exit` at their end state, so nothing enters again. Focus and the tab stop stay, nothing fires, and a data effect finds the series it reads (`needs`), following them from then on. It resolves once that's done, at once. It rejects, changing nothing, on an `on` it can't resolve (an unknown preset name), a series a data effect needs that the marks don't have, or any other option, which can't change yet.
 - `on(type, listener)`: listens for [`MarkEvents`](#markeventsd), and returns a function that stops it.
-- `marks()`: `readonly MarkGeometry[]`. The marks in visual order: bars top to bottom, columns left to right, a pie's slices clockwise from 12 o'clock, other marks described with `geometry` in document order.
+- `marks()`: `readonly MarkGeometry[]`. The marks in visual order: bars top to bottom, columns left to right, a pie's slices described with `describe.arc` clockwise from 12 o'clock, and other marks in document order: circles, shapes, marks described with `geometry`, and bars among circles or shapes.
 - `focus(key)`: with `keyboard`, moves focus to the mark, which plays its hover effects.
 - `leave()`: ends the hover, pointer or keyboard, as the viewer moving away would: the emphasis, the dimming and the hover effects end, and `leave` fires for each mark that was hovered. A link's hover shown on it ends too. Focus stays where it is, with its ring, as after Escape. It does nothing when nothing is hovered.
 - `destroy()`: clears every effect and puts back everything the adapter changed.

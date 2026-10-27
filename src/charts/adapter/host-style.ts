@@ -131,6 +131,29 @@ function paintOf(element: Element, root: Element, property: "fill" | "stroke"): 
   return computed !== undefined && !(initial && declared !== undefined) ? computed : kind(declared);
 }
 
+/**
+ * An element's stroke width in its own user units, as drawn: the computed value where there's
+ * styling. As for colours, a computed value that's the initial 1 gives way to the nearest width
+ * declared on the element or above it, since jsdom computes no presentation attributes. One that
+ * can't be read is passed over, as SVG ignores it. Undefined when there's none in px.
+ */
+export function strokeWidthOf(element: Element, root: Element): number | undefined {
+  let declared: number | undefined;
+  for (let node: Element | null = element; node && declared === undefined; node = node === root ? null : node.parentElement) {
+    declared = pixels((node as SVGElement).style?.getPropertyValue("stroke-width") || node.getAttribute("stroke-width"));
+  }
+  const computed = pixels(element.ownerDocument.defaultView?.getComputedStyle?.(element).getPropertyValue("stroke-width"));
+  return computed !== undefined && !(computed === 1 && declared !== undefined) ? computed : declared;
+}
+
+/** A length of 0 or more, in px or with no unit; undefined for anything else (a percentage, inherit). */
+function pixels(value: string | null | undefined): number | undefined {
+  // One way to match any digits, so a long run of them followed by junk is refused at once.
+  const match = /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\s*(?:px\s*)?$/i.exec(value ?? "");
+  const number = match ? Number(match[1]) : NaN;
+  return number >= 0 && Number.isFinite(number) ? number : undefined;
+}
+
 /** NONE for no paint or a transparent one, the colour as given, or undefined for anything else (a url(), inherit). */
 function kind(value: string | null | undefined): string | undefined {
   const v = value?.trim().toLowerCase();

@@ -10,7 +10,7 @@
 import type { Clock } from "../../core";
 
 /** Attributes that move or reshape a mark. */
-const GEOMETRY = ["d", "x", "y", "width", "height", "cx", "cy", "r", "points", "transform"];
+const GEOMETRY = ["d", "x", "y", "width", "height", "cx", "cy", "r", "rx", "ry", "x1", "y1", "x2", "y2", "points", "transform"];
 /** Attributes that move everything inside an ancestor. */
 const ANCESTOR = ["transform", "style"];
 

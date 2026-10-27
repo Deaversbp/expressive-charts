@@ -4,7 +4,7 @@
 import type { Icon, IconShape, Matrix, Point, Rect } from "../core";
 import { matrix } from "../core";
 import { parseTransform } from "../core/geometry";
-import { formatPath, parsePath, transformPath, type PathCommand } from "../core/geometry/path";
+import { formatPath, shapeOutline, transformPath } from "../core/geometry/path";
 import { defineIcon, type IconSpec } from "./define";
 
 /**
@@ -210,7 +210,7 @@ function toShape(tag: string, attributes: Map<string, string>, state: Inherited)
   const stroke = state.stroke === "none" || !(state.width > 0) || !(strokeOpacity > 0) ? undefined : state.stroke;
   const opacity = round(state.opacity);
   if ((fill === undefined && stroke === undefined) || !(opacity > 0)) return undefined;
-  const commands = outline(tag, attributes);
+  const commands = shapeOutline(tag, (name) => attributes.get(name));
   if (!commands.some((command) => command.op !== "M")) return undefined;
   const m = state.transform;
   return {
@@ -230,75 +230,6 @@ function toShape(tag: string, attributes: Map<string, string>, state: Inherited)
       : {}),
     ...(opacity < 1 ? { opacity } : {})
   };
-}
-
-/** The element's outline as path commands, in its own coordinates. */
-function outline(tag: string, attributes: Map<string, string>): PathCommand[] {
-  const num = (name: string): number => {
-    const value = Number.parseFloat(attributes.get(name) ?? "");
-    return Number.isFinite(value) ? value : 0;
-  };
-  switch (tag) {
-    case "path":
-      return parsePath(attributes.get("d") ?? "");
-    case "circle":
-      return ellipse(num("cx"), num("cy"), num("r"), num("r"));
-    case "ellipse":
-      return ellipse(num("cx"), num("cy"), num("rx"), num("ry"));
-    case "line":
-      return [
-        { op: "M", to: { x: num("x1"), y: num("y1") } },
-        { op: "L", to: { x: num("x2"), y: num("y2") } }
-      ];
-    case "polyline":
-    case "polygon": {
-      const values = (attributes.get("points") ?? "").trim().split(/[\s,]+/).filter(Boolean).map(Number);
-      const points: Point[] = [];
-      for (let i = 0; i + 1 < values.length && Number.isFinite(values[i]) && Number.isFinite(values[i + 1]); i += 2) {
-        points.push({ x: values[i]!, y: values[i + 1]! });
-      }
-      if (points.length < 2) return [];
-      const lines = points.map((to, i): PathCommand => ({ op: i === 0 ? "M" : "L", to }));
-      // A polyline is a polygon left open: no closing segment, and filled as any open path is.
-      return tag === "polygon" ? [...lines, { op: "Z", to: points[0]! }] : lines;
-    }
-    case "rect":
-      return rect(num("x"), num("y"), num("width"), num("height"), attributes);
-    default:
-      return [];
-  }
-}
-
-function ellipse(cx: number, cy: number, rx: number, ry: number): PathCommand[] {
-  if (!(rx > 0 && ry > 0)) return [];
-  const arc = (x: number): PathCommand => ({ op: "A", rx, ry, rotation: 0, large: false, sweep: true, to: { x, y: cy } });
-  return [{ op: "M", to: { x: cx + rx, y: cy } }, arc(cx - rx), arc(cx + rx), { op: "Z", to: { x: cx + rx, y: cy } }];
-}
-
-function rect(x: number, y: number, w: number, h: number, attributes: Map<string, string>): PathCommand[] {
-  if (!(w > 0 && h > 0)) return [];
-  const corner = (name: string): number | undefined => {
-    const value = Number.parseFloat(attributes.get(name) ?? "");
-    return value >= 0 ? value : undefined;
-  };
-  // A missing rx or ry takes the other's value, and both are capped at half the side.
-  const rx = Math.min(corner("rx") ?? corner("ry") ?? 0, w / 2);
-  const ry = Math.min(corner("ry") ?? corner("rx") ?? 0, h / 2);
-  const line = (px: number, py: number): PathCommand => ({ op: "L", to: { x: px, y: py } });
-  if (!(rx > 0 && ry > 0)) return [{ op: "M", to: { x, y } }, line(x + w, y), line(x + w, y + h), line(x, y + h), { op: "Z", to: { x, y } }];
-  const arc = (px: number, py: number): PathCommand => ({ op: "A", rx, ry, rotation: 0, large: false, sweep: true, to: { x: px, y: py } });
-  return [
-    { op: "M", to: { x: x + rx, y } },
-    line(x + w - rx, y),
-    arc(x + w, y + ry),
-    line(x + w, y + h - ry),
-    arc(x + w - rx, y + h),
-    line(x + rx, y + h),
-    arc(x, y + h - ry),
-    line(x, y + ry),
-    arc(x + rx, y),
-    { op: "Z", to: { x: x + rx, y } }
-  ];
 }
 
 function findLast(stack: readonly { readonly tag: string }[], tag: string): number {

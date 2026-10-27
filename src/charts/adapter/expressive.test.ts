@@ -3,6 +3,7 @@ import {
   createMotion,
   describe as build,
   manualClock,
+  matrix,
   samplesAlong,
   type DataEffect,
   type EffectContext,
@@ -296,8 +297,8 @@ describe("expressive: keys and segments", () => {
     expect(() => setup(host.selection(), { key: (d) => d.data.name, segment: () => "goals" })).toThrow(/two "goals" segments/);
     expect(() => setup(host.selection(), { key: () => undefined as unknown as string })).toThrow(/Every mark needs a key/);
     expect(() => setup(host.svg, { key: () => "x" })).toThrow(/got an <svg>, not its marks/);
-    const path = el("path", { d: "M0,0L10,0" }, host.plot);
-    expect(() => setup([path], { key: () => "line" })).toThrow(/can't read the geometry of a <path>/);
+    const text = el("text", { x: 0, y: 0 }, host.plot);
+    expect(() => setup([text], { key: () => "label" })).toThrow(/can't read the geometry of a <text>/);
     expect(() => setup(host.selection(), { ...stacked, baseline: "middle" as "left" })).toThrow(/baseline must be/);
     expect(() => setup(host.selection(), { ...stacked, value: 3 as never })).toThrow(/value must be a function/);
     expect(() => setup(host.selection(), { ...stacked, markLabel: "Okafor" as never })).toThrow(/markLabel must be a function/);
@@ -656,10 +657,10 @@ describe("expressive: refresh", () => {
     const host = d3Stack();
     const { fx } = setup(host.selection(), stacked);
     const before = fx.marks();
-    const circle = Object.assign(el("circle", { r: 3 }, host.groups[0]!), { __data__: host.selection().data()[0] });
-    expect(() => fx.refresh([circle])).toThrow(/<circle>/);
+    const text = Object.assign(el("text", { x: 3 }, host.groups[0]!), { __data__: host.selection().data()[0] });
+    expect(() => fx.refresh([text])).toThrow(/<text>/);
     expect(fx.marks()).toEqual(before);
-    circle.remove();
+    text.remove();
     fx.refresh();
     expect(fx.marks().map((m) => m.key)).toEqual(["Okafor", "Tanaka", "Lindqvist"]);
   });
@@ -2337,6 +2338,323 @@ describe("expressive: leave()", () => {
     expect(() => fx.leave()).not.toThrow();
     expect(events).toEqual(["hover Okafor pointer"]);
     expect(hover.log).toEqual(["run Okafor", "clear"]);
+  });
+});
+
+describe("expressive: circles and shapes", () => {
+  interface Dot {
+    name: string;
+    x: number;
+    y: number;
+    r: number;
+    goals: number;
+  }
+  const dots: Dot[] = [
+    { name: "Okafor", x: 160, y: 40, r: 6, goals: 16 },
+    { name: "Tanaka", x: 60, y: 100, r: 4, goals: 6 },
+    { name: "Lindqvist", x: 100, y: 70, r: 5, goals: 10 }
+  ];
+  const byName: ExpressiveOptions<Dot> = { key: (d) => d.name };
+  const named: ExpressiveOptions<string> = { key: (d) => d };
+
+  /** A margin group, and the elements `draw` puts in it, each with its row on __data__. */
+  function host<T>(draw: (plot: SVGGElement) => [T, SVGElement][]) {
+    const svg = el("svg", { width: 400, height: 240 }, document.body);
+    const plot = el("g", { transform: "translate(40,20)", fill: "#2a78d6", stroke: "#2a78d6", "stroke-width": 2 }, svg);
+    const elements = draw(plot).map(([datum, element]) => Object.assign(element, { __data__: datum }));
+    return { svg, plot, elements };
+  }
+
+  /** A D3 scatter: one circle a row, at its x and y, in the margin group. */
+  const scatter = (rows: Dot[] = dots) => host((plot) => rows.map((d) => [d, el("circle", { cx: d.x, cy: d.y, r: d.r }, plot)]));
+
+  /** What can be compared of a mark: everything but its functions. */
+  const seen = (mark: MarkGeometry) => ({
+    key: mark.key,
+    series: mark.series,
+    d: mark.outline.d,
+    closed: mark.outline.closed,
+    length: mark.length,
+    thickness: mark.thickness,
+    bounds: mark.bounds,
+    center: mark.center,
+    start: mark.start,
+    end: mark.end
+  });
+
+  it("reads a <circle> as a point at its centre with its radius, in document order", () => {
+    const { elements } = scatter();
+    const { fx } = setup<Dot>(elements, byName);
+    expect(fx.marks().map(seen)).toEqual(dots.map((d) => seen(build.point({ key: d.name, x: d.x, y: d.y, r: d.r }))));
+  });
+
+  it("reads a circle through its transforms, turned and evenly scaled, and as a shape, an ellipse, under an uneven scale or a skew", () => {
+    // D3's other way to place a dot: a group a row, moved there, with the circle at its origin.
+    const { elements } = host((plot) =>
+      ["translate(100,50) rotate(30) scale(1.5)", "translate(200,50) scale(2,1)", "translate(300,50) skewX(20)"].map((transform, i) => [
+        `dot ${i}`,
+        el("circle", { cx: 0, cy: 0, r: 10 }, el("g", { transform }, plot))
+      ])
+    );
+    const { fx } = setup<string>(elements, named);
+    const [turned, wide, skewed] = fx.marks() as [MarkGeometry, MarkGeometry, MarkGeometry];
+    expect(seen(turned)).toEqual(seen(build.point({ key: "dot 0", x: 100, y: 50, r: 15 })));
+    expect(seen(wide)).toEqual(seen(build.shape({ key: "dot 1", d: "M10,0A10,10 0 0 1 -10,0A10,10 0 0 1 10,0Z", matrix: [2, 0, 0, 1, 200, 50] })));
+    expect(wide).toMatchObject({ length: 0, center: { x: 200, y: 50 }, outline: { closed: true } });
+    expect(wide.bounds).toEqual({ x: 180, y: 40, width: 40, height: 20 });
+    expect(seen(skewed)).toEqual(seen(build.shape({ key: "dot 2", d: "M10,0A10,10 0 0 1 -10,0A10,10 0 0 1 10,0Z", matrix: matrix.multiply(matrix.translate(300, 50), [1, 0, Math.tan(Math.PI / 9), 1, 0, 0]) })));
+  });
+
+  it("reads a circle with no radius as a dot, which a host may grow from 0", () => {
+    const { elements } = host((plot) => [
+      ["new", el("circle", { cx: 50, cy: 60, r: 0 }, plot)],
+      ["stretched", el("circle", { cx: 10, cy: 10, r: 0, transform: "scale(3,1)" }, plot)]
+    ]);
+    const { fx } = setup<string>(elements, named);
+    expect(fx.marks().map(seen)).toEqual([seen(build.point({ key: "new", x: 50, y: 60, r: 0 })), seen(build.point({ key: "stretched", x: 30, y: 10, r: 0 }))]);
+  });
+
+  it("reads <path>, <line>, <polyline>, <polygon> and <ellipse> through describe.shape, from their outlines as path data", () => {
+    const shapes: [string, string, Record<string, string | number>, string][] = [
+      ["curve", "path", { d: "M0,100C40,0 80,0 120,100" }, "M0,100C40,0 80,0 120,100"],
+      ["area", "path", { d: "M0,100L60,20L120,100Z" }, "M0,100L60,20L120,100Z"],
+      ["line", "line", { x1: 0, y1: 0, x2: 100, y2: 50 }, "M0,0L100,50"],
+      ["polyline", "polyline", { points: "0,0 50,20 100,0" }, "M0,0L50,20L100,0"],
+      ["polygon", "polygon", { points: "0,0 50,20 100,0" }, "M0,0L50,20L100,0Z"],
+      ["ellipse", "ellipse", { cx: 60, cy: 40, rx: 30, ry: 20 }, "M90,40A30,20 0 0 1 30,40A30,20 0 0 1 90,40Z"]
+    ];
+    const { elements } = host((plot) => shapes.map(([key, tag, attributes]) => [key, el(tag as "path", attributes, plot)]));
+    const { fx } = setup<string>(elements, named);
+    // An open shape is as wide as its stroke: 2 px, from the margin group.
+    expect(fx.marks().map(seen)).toEqual(shapes.map(([key, , , d]) => seen(build.shape({ key, d, width: 2 }))));
+    expect(fx.marks().map((mark) => mark.outline.closed)).toEqual([false, true, false, false, true, true]);
+  });
+
+  it("moves a shape through its transforms, arcs too", () => {
+    const { elements } = host((plot) => [
+      ["ring", el("ellipse", { cx: 0, cy: 0, rx: 30, ry: 20, transform: "rotate(90)" }, el("g", { transform: "translate(100,80)" }, plot))],
+      ["tick", el("line", { x1: 0, y1: 0, x2: 10, y2: 0, transform: "translate(5,5) scale(3)" }, plot)]
+    ]);
+    const { fx } = setup<string>(elements, named);
+    const [ring, tick] = fx.marks() as [MarkGeometry, MarkGeometry];
+    expect(seen(ring)).toEqual(seen(build.shape({ key: "ring", d: "M30,0A30,20 0 0 1 -30,0A30,20 0 0 1 30,0Z", matrix: matrix.multiply(matrix.translate(100, 80), matrix.rotate(Math.PI / 2)) })));
+    expect(ring.bounds).toEqual({ x: 80, y: 50, width: 40, height: 60 });
+    expect(tick.start).toEqual({ x: 5, y: 5 });
+    expect(tick.end).toEqual({ x: 35, y: 5 });
+  });
+
+  it("takes an open shape's width from its stroke as drawn, scaled by its transforms, and a width of 0 as 1 px", () => {
+    const { svg, elements } = host((plot) => [
+      ["own", el("path", { d: "M0,0L100,0", "stroke-width": 3, transform: "scale(2)" }, plot)],
+      ["group's", el("path", { d: "M0,10L100,10" }, el("g", { transform: "scale(2)", "stroke-width": 1.5 }, plot))],
+      ["margin's", el("path", { d: "M0,20L100,20" }, plot)],
+      ["inline", el("path", { d: "M0,30L100,30", style: "stroke-width: 4px" }, plot)],
+      ["sheet", el("path", { class: "thick", d: "M0,40L100,40" }, plot)],
+      ["uneven", el("path", { d: "M0,50L100,50", "stroke-width": 1, transform: "scale(4,1)" }, plot)],
+      ["unstroked", el("path", { d: "M0,60L100,60", "stroke-width": 0 }, plot)],
+      ["junk", el("path", { d: "M0,70L100,70", "stroke-width": `${"9".repeat(50_000)}x` }, plot)]
+    ]);
+    // A style sheet's, as a browser computes it: jsdom computes no stroke-width.
+    const sheet = svg.querySelector(".thick")!;
+    const computed = window.getComputedStyle.bind(window);
+    vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
+      const style = computed(element, pseudo);
+      return element === sheet ? Object.assign(Object.create(style) as CSSStyleDeclaration, { getPropertyValue: (name: string) => (name === "stroke-width" ? "5px" : style.getPropertyValue(name)) }) : style;
+    });
+    const started = performance.now();
+    const { fx } = setup<string>(elements, named);
+    expect(performance.now() - started).toBeLessThan(1000);
+    // The junk isn't a length, so the margin's 2 px is inherited, as SVG would.
+    expect(fx.marks().map((mark) => [mark.key, mark.thickness])).toEqual([
+      ["own", 6],
+      ["group's", 3],
+      ["margin's", 2],
+      ["inline", 4],
+      ["sheet", 5],
+      ["uneven", 2],
+      ["unstroked", 1],
+      ["junk", 2]
+    ]);
+  });
+
+  it("names a circle's or a shape's series with segment, so a data effect can read it", () => {
+    const { elements } = host((plot) => [
+      [{ name: "goals" }, el("path", { d: "M0,100L50,60L100,40" }, plot)],
+      [{ name: "xg" }, el("path", { d: "M0,90L50,70L100,50" }, plot)],
+      [{ name: "target" }, el("circle", { cx: 100, cy: 30, r: 4 }, plot)]
+    ]);
+    const decoration = dataRecorder(["xg"]);
+    const { fx } = setup<{ name: string }>(elements, { key: (d) => d.name, segment: (d) => d.name, on: { decorate: decoration.effect } });
+    expect(fx.marks().map((mark) => mark.series)).toEqual(["goals", "xg", "target"]);
+    expect(decoration.last("goals")!.related("xg")).toBe(decoration.last("xg"));
+    expect(decoration.last("goals")!.related("goals")!.datum).toEqual({ name: "goals" });
+  });
+
+  it("gives a circle with a numeric value its one sample, as a Vega symbol has it, and shapes none", () => {
+    const { elements } = host((plot) => [
+      ...dots.map((d): [Dot, SVGElement] => [d, el("circle", { cx: d.x, cy: d.y, r: d.r }, plot)]),
+      [{ ...dots[0]!, name: "trend" }, el("path", { d: "M0,100L160,40" }, plot)]
+    ]);
+    const decoration = dataRecorder();
+    setup<Dot>(elements, { ...byName, value: (d) => (d.name === "Tanaka" ? "six" : d.goals), on: { decorate: decoration.effect } });
+    expect(decoration.last("Okafor")!.samples).toEqual([{ t: 0, value: 16 }]);
+    expect(decoration.last("Lindqvist")!.samples).toEqual([{ t: 0, value: 10 }]);
+    // A value that isn't a number, and a shape, have none; the page gives a curve's.
+    expect(decoration.last("Tanaka")!.samples).toEqual([]);
+    expect(decoration.last("trend")!.samples).toEqual([]);
+    // Without value, none either.
+    const plain = dataRecorder();
+    setup<Dot>(scatter().elements, { ...byName, on: { decorate: plain.effect } });
+    expect(plain.last("Okafor")!.samples).toEqual([]);
+  });
+
+  it("keeps circles and shapes in document order, bars among them too, and dots on one pivot", () => {
+    const { elements } = host((plot) => [
+      ["right", el("circle", { cx: 300, cy: 50, r: 4 }, plot)],
+      ["bar", el("rect", { x: 0, y: 100, width: 50, height: 20 }, plot)],
+      ["left", el("circle", { cx: 10, cy: 10, r: 4 }, plot)],
+      ["axis", el("line", { x1: 0, y1: 200, x2: 300, y2: 200 }, plot)]
+    ]);
+    const { fx } = setup<string>(elements, { ...named, keyboard: true });
+    expect(fx.marks().map((mark) => mark.key)).toEqual(["right", "bar", "left", "axis"]);
+    // The bar is still a bar.
+    expect(fx.marks()[1]).toMatchObject({ start: { x: 0, y: 110 }, end: { x: 50, y: 110 } });
+    fx.focus("right");
+    key(elements[0]!, "ArrowRight");
+    expect(document.activeElement).toBe(elements[1]);
+    // Bars alone keep their visual order: top to bottom.
+    const bars = host((plot) => [
+      ["low", el("rect", { x: 0, y: 100, width: 50, height: 20 }, plot)],
+      ["high", el("rect", { x: 0, y: 10, width: 80, height: 20 }, plot)]
+    ]);
+    expect(setup<string>(bars.elements, named).fx.marks().map((mark) => mark.key)).toEqual(["high", "low"]);
+  });
+
+  it("leaves out a shape that draws nothing, and reads it once it does", () => {
+    const { elements } = host((plot) => [
+      ["dot", el("circle", { cx: 10, cy: 10, r: 3 }, plot)],
+      ["empty line", el("path", {}, plot)],
+      ["moves only", el("path", { d: "M0,0M10,10" }, plot)],
+      ["flat ellipse", el("ellipse", { cx: 10, cy: 10, rx: 0, ry: 5 }, plot)],
+      ["one point", el("polyline", { points: "5,5" }, plot)]
+    ]);
+    const story = recorder();
+    const { fx } = setup<string>(elements, { ...named, keyboard: true, on: { enter: story.effect } });
+    expect(fx.marks().map((mark) => mark.key)).toEqual(["dot"]);
+    expect(elements.map((element) => element.getAttribute("tabindex"))).toEqual(["0", null, null, null, null]);
+    story.log.length = 0;
+    elements[1]!.setAttribute("d", "M0,50L100,50");
+    fx.refresh();
+    expect(fx.marks().map((mark) => mark.key)).toEqual(["dot", "empty line"]);
+    expect(story.log).toEqual(["run empty line"]);
+  });
+
+  it("throws a TypeError naming the key a circle or a shape shares with another element", () => {
+    const { plot } = host(() => []);
+    const shared = (tags: ("rect" | "circle" | "path")[], options: Partial<ExpressiveOptions<string>> = {}) => () =>
+      setup<string>(
+        tags.map((tag, i) => Object.assign(el(tag, tag === "path" ? { d: "M0,0L10,0" } : { x: 0, y: i * 30, width: 20, height: 20, r: 5 }, plot), { __data__: "Okafor" })),
+        { ...named, segment: (_d, element) => element.localName, ...options }
+      );
+    expect(shared(["rect", "circle"])).toThrow(new TypeError('expressive: two elements have the key "Okafor", and one is a <circle>. A circle or a shape is a mark of its own: give each its own key.'));
+    expect(shared(["path", "rect"])).toThrow(/key "Okafor", and one is a <path>/);
+    expect(shared(["circle", "path"])).toThrow(TypeError);
+    expect(shared(["circle", "circle"], { segment: undefined })).toThrow(/key "Okafor", and one is a <circle>/);
+    // Rects still group into segments.
+    expect(shared(["rect", "rect"], { segment: (_d, element) => element.getAttribute("y")! })).not.toThrow();
+  });
+
+  it("throws on any other element, naming its tag", () => {
+    const { plot } = host(() => []);
+    for (const tag of ["text", "g", "use", "image"]) {
+      const element = Object.assign(el(tag as "g", {}, plot), { __data__: "Okafor" });
+      expect(() => setup<string>([element], named)).toThrow(
+        new TypeError(
+          `expressive: can't read the geometry of a <${tag}> (mark "Okafor"). <rect>, <circle>, <ellipse>, <line>, <path>, <polygon> and <polyline> are read; describe others with the geometry option.`
+        )
+      );
+    }
+  });
+
+  it("still takes geometry from the page, over every element", () => {
+    const { elements } = host((plot) => [
+      ["dot", el("circle", { cx: 10, cy: 10, r: 3 }, plot)],
+      ["name", el("text", { x: 50, y: 50 }, plot)],
+      ["bar", el("rect", { x: 0, y: 100, width: 50, height: 20 }, plot)]
+    ]);
+    const { fx } = setup<string>(elements, { ...named, geometry: (_el, _d, key) => build.point({ key, x: 1, y: 2, r: 3 }) });
+    expect(fx.marks().map(seen)).toEqual(["dot", "name", "bar"].map((key) => seen(build.point({ key, x: 1, y: 2, r: 3 }))));
+  });
+
+  it("dims, names and focuses dots and shapes as any mark", () => {
+    const { svg, elements } = scatter();
+    const { fx } = setup<Dot>(elements, { ...byName, dim: true, keyboard: true, markLabel: (d) => `${d.name}: ${d.goals} goals` });
+    expect(elements.map((element) => element.getAttribute("aria-label"))).toEqual(["Okafor: 16 goals", "Tanaka: 6 goals", "Lindqvist: 10 goals"]);
+    expect(elements.map((element) => element.getAttribute("role"))).toEqual(["img", "img", "img"]);
+    expect(elements.map((element) => element.getAttribute("tabindex"))).toEqual(["0", "-1", "-1"]);
+    pointer("pointerover", elements[1]!);
+    expect(elements.map((element) => element.classList.contains("ec-dimmed"))).toEqual([true, false, true]);
+    expect(elements[1]!.style.getPropertyValue("fill")).toMatch(BLUE);
+    pointer("pointerleave", svg);
+    fx.focus("Lindqvist");
+    expect(document.activeElement).toBe(elements[2]);
+    expect(overlayOf(svg).querySelector(".ec-focus-ring")!.getAttribute("d")).toBe(fx.marks()[2]!.outline.d);
+  });
+
+  describe("with watch", () => {
+    const delivered = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it("follows x1, y1, x2, y2, rx and ry, and every other shape attribute", async () => {
+      const { elements } = host((plot) => [
+        ["line", el("line", { x1: 0, y1: 0, x2: 100, y2: 0 }, plot)],
+        ["ellipse", el("ellipse", { cx: 50, cy: 50, rx: 20, ry: 10 }, plot)],
+        ["polygon", el("polygon", { points: "0,0 10,0 10,10" }, plot)],
+        ["dot", el("circle", { cx: 5, cy: 5, r: 2 }, plot)]
+      ]);
+      const story = recorder();
+      const { fx, clock } = setup<string>(elements, { ...named, watch: true, on: { decorate: story.effect } });
+      story.log.length = 0;
+      const [line, ellipse, polygon, dot] = elements as SVGElement[] as [SVGElement, SVGElement, SVGElement, SVGElement];
+      const steps: [SVGElement, string, string, (mark: MarkGeometry) => unknown, unknown][] = [
+        [line, "x1", "10", (mark) => mark.start, { x: 10, y: 0 }],
+        [line, "y1", "20", (mark) => mark.start, { x: 10, y: 20 }],
+        [line, "x2", "90", (mark) => mark.end.x, 90],
+        [line, "y2", "40", (mark) => mark.end.y, 40],
+        [ellipse, "rx", "30", (mark) => mark.bounds.width, 60],
+        [ellipse, "ry", "15", (mark) => mark.bounds.height, 30],
+        [polygon, "points", "0,0 20,0 20,20", (mark) => mark.bounds.width, 20],
+        [dot, "r", "4", (mark) => mark.thickness, 8]
+      ];
+      for (const [element, name, value, read, expected] of steps) {
+        element.setAttribute(name, value);
+        await delivered();
+        clock.advance(16);
+        expect(read(fx.marks().find((mark) => mark.key === (element as unknown as { __data__: string }).__data__)!), name).toEqual(expected);
+      }
+      expect(story.log).toEqual(["change line", "change line", "change line", "change line", "change ellipse", "change ellipse", "change polygon", "change dot"]);
+    });
+
+    it("keeps a shape that draws nothing in a frame as it was, and its stroke width from the last full read", async () => {
+      const { elements } = host((plot) => [["line", el("path", { d: "M0,0L100,0", "stroke-width": 3 }, plot)]]);
+      const story = recorder();
+      const { fx, clock } = setup<string>(elements, { ...named, watch: true, on: { decorate: story.effect } });
+      const before = fx.marks();
+      story.log.length = 0;
+      elements[0]!.setAttribute("d", "");
+      await delivered();
+      clock.advance(16);
+      expect(fx.marks()).toEqual(before);
+      expect(story.log).toEqual([]);
+      // A new stroke width waits for refresh(), as colours do; a transform scales the one it has.
+      elements[0]!.setAttribute("stroke-width", "5");
+      elements[0]!.setAttribute("transform", "scale(2)");
+      elements[0]!.setAttribute("d", "M0,0L50,0");
+      await delivered();
+      clock.advance(16);
+      expect(fx.marks()[0]).toMatchObject({ thickness: 6, end: { x: 100, y: 0 } });
+      fx.refresh();
+      expect(fx.marks()[0]!.thickness).toBe(10);
+    });
   });
 });
 

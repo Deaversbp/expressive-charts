@@ -139,7 +139,13 @@ export interface RunnerOptions<D = unknown> {
 export interface Runner<D = unknown> {
   /** Marks appeared: starts `decorate` (it stays until the mark exits), then `enter`. */
   enter(marks: readonly RunInput<D>[]): void;
-  /** Marks' values changed, when their transition starts: runs `update`, with the previous geometry and data. */
+  /**
+   * An update started, as its transition starts (docs/architecture.md#events-and-effect-slots says
+   * what counts as one). First it ends the `update` runs of the marks not in `marks`, as a re-trigger
+   * would, so what the last update explained goes with it. Then it runs `update` on `marks`, the marks
+   * whose values changed, with the geometry on screen and the values before: the data each key last
+   * rested at, not values part way through a change.
+   */
   update(marks: readonly UpdateInput<D>[]): void;
   /**
    * Marks are leaving: clears their other runs and runs `exit`. Resolves when every exit run has
@@ -178,6 +184,12 @@ interface Entry<D> {
   /** The latest geometry and data seen for the key. */
   mark: MarkGeometry;
   data: MarkData<D>;
+  /**
+   * The data the key last rested at: its last enter() or update() (where it was heading), a change()
+   * outside a transition (a resize, a line's reveal), or settle(). An update run's `previous` values,
+   * so an update that replaces one still moving counts from the values the last one gave.
+   */
+  resting: MarkData<D>;
   readonly runs: Map<EffectSlot, Run<D>>;
   /** The merged style last written to the mark's handle. */
   applied: MarkStyle;
@@ -251,7 +263,7 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
       entry.data = input.data;
       return entry;
     }
-    const created: Entry<D> = { key, mark: input.mark, data: input.data, runs: new Map(), applied: {}, handle: undefined, exiting: undefined };
+    const created: Entry<D> = { key, mark: input.mark, data: input.data, resting: input.data, runs: new Map(), applied: {}, handle: undefined, exiting: undefined };
     entries.set(key, created);
     return created;
   }
@@ -461,6 +473,7 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
       if (destroyed) return;
       marks.forEach((input, index) => {
         const entry = track(input);
+        entry.resting = input.data;
         cancelExit(entry);
         const batch = { index, count: marks.length };
         start(entry, "decorate", input.data, batch);
@@ -470,11 +483,20 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
 
     update(marks) {
       if (destroyed) return;
+      // What the last update explained goes with it, on the marks this one leaves alone: a flash
+      // still playing stops, and a delta that stayed is cleared, as a re-trigger clears them.
+      const changing = new Set(marks.map((input) => input.mark.key));
+      for (const entry of [...entries.values()]) {
+        const run = entry.runs.get("update");
+        if (run && !changing.has(entry.key)) clearRun(run);
+      }
       marks.forEach((input, index) => {
         const known = entries.get(input.mark.key);
         const previous = input.from ?? known?.mark;
-        const data = known && !input.data.previous ? withPrevious(input.data, known.data) : input.data;
-        start(track(input), "update", data, { index, count: marks.length }, { previous });
+        const data = known && !input.data.previous ? withPrevious(input.data, known.resting) : input.data;
+        const entry = track(input);
+        entry.resting = input.data;
+        start(entry, "update", data, { index, count: marks.length }, { previous });
       });
     },
 
@@ -523,7 +545,11 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
       const entry = entries.get(mark.key);
       if (!entry) return;
       entry.mark = mark;
-      if (data) entry.data = data;
+      if (data) {
+        entry.data = data;
+        // Outside a transition the values aren't on their way anywhere: a resize, a line's reveal.
+        if (!transitioning) entry.resting = data;
+      }
       for (const run of [...entry.runs.values()]) {
         if (run.state === "cleared") continue;
         try {
@@ -548,6 +574,8 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
     settle() {
       if (!transitioning) return;
       transitioning = false;
+      // Landed: each mark rests at the data its last frame gave.
+      for (const entry of entries.values()) if (!entry.exiting) entry.resting = entry.data;
       const keys = [...hovered];
       keys.forEach((key, index) => {
         const entry = entries.get(key);

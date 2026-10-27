@@ -158,6 +158,7 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-tick) { fill: var(--ec-text-muted, ${TOKENS["text-muted"]}); font-size: 11px; }
 :where(.ec-chart .ec-label) { fill: var(--ec-text, ${TOKENS.text}); font-size: 12.5px; }
 :where(.ec-chart .ec-value, .ec-chart .ec-text) { fill: var(--ec-text, ${TOKENS.text}); font-size: 12.5px; font-weight: 600; }
+:where(.ec-overlay .ec-text) { fill: var(--ec-text, ${TOKENS.text}); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 :where(.ec-chart .ec-hit) { fill: transparent; }
 :where(.ec-chart .ec-mark:focus) { outline: none; }
 :where(.ec-chart .ec-focus) { pointer-events: none; }

@@ -107,6 +107,12 @@ export interface PlayUpdateOptions<D, R extends LeavingMark> {
   /** The mark as it is on screen: what exit reports, so it matches what's on its way out. */
   onScreen(record: R): RunInput<D>;
   /**
+   * Whether update() was given `data`. Then it's an update even if no value changed (a matchweek where
+   * nobody scores), so the runner ends the update runs of the marks it leaves alone. Without `data`,
+   * it's one only if a value changed or a mark came or went: `update({ on })` alone keeps them.
+   */
+  readonly data: boolean;
+  /**
    * With a new `on`: swaps the runner's effects once `arrange` has matched the new layout to the
    * marks, before the runner hears the change, so the new effects start on the marks as the update
    * leaves them and play its exit, update and enter. Given what changed, so it can leave out the
@@ -118,8 +124,9 @@ export interface PlayUpdateOptions<D, R extends LeavingMark> {
 /**
  * Plays an update's change through the runner, in the order it expects: interrupt; `arrange` matches
  * the new layout to the marks; new effects, if any, are swapped in; a hover whose mark has left ends; then exit, update and enter, each
- * followed by its events; `announce`; and the tab stop follows its key. The runner then hears change()
- * on every frame, and settle() once the transition settles. Returns the leaves to wait for.
+ * followed by its events; `announce`; and the tab stop follows its key. The runner hears update() only
+ * for an update (see `data`), so `update({ on })` alone keeps what the last one explained. The runner
+ * then hears change() on every frame, and settle() once the transition settles. Returns the leaves to wait for.
  */
 export function playUpdate<D, R extends LeavingMark>(
   options: PlayUpdateOptions<D, R>,
@@ -138,7 +145,9 @@ export function playUpdate<D, R extends LeavingMark>(
     options.leaving.sweep();
   });
   events.emitEach("exit", diff.exiting, onScreen);
-  runner.update(diff.changed.map(({ record, from }) => ({ ...input(record), from })));
+  if (options.data || diff.changed.length > 0 || diff.entering.length > 0 || diff.exiting.length > 0) {
+    runner.update(diff.changed.map(({ record, from }) => ({ ...input(record), from })));
+  }
   events.emitEach("update", diff.changed, ({ record, from }) => ({ ...input(record), from }));
   runner.enter(diff.entering.map(input));
   events.emitEach("enter", diff.entering, input);

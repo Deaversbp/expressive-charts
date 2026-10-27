@@ -162,6 +162,21 @@ describe("barChart: drawing", () => {
     expect(() => barChart(host, { label: "Goals", data: players, y: "name", x: "goals", format: "0.0" as unknown as () => string }, env)).toThrow(/barChart: format must be a function/);
   });
 
+  it("keeps `room` clear past the labels at the end bars reach, and checks it", async () => {
+    const { chart, settle } = setup({ motion: "off" });
+    const okafor = () => chart.marks().find((mark) => mark.key === "Okafor")!.length;
+    const without = okafor();
+    await settle(chart.update({ room: 28 }));
+    // The longest bar is 16 of 20, so it gives up 16/20 of the 28 px.
+    expect(okafor()).toBeCloseTo(without - 28 * (16 / 20), 6);
+    await settle(chart.update({ room: 0 }));
+    expect(okafor()).toBeCloseTo(without, 6);
+    for (const room of [-1, Number.NaN, Infinity, "28" as never]) {
+      expect(() => setup({ room })).toThrow(new RangeError(`barChart: room must be a number of px, 0 or more, got ${String(room)}.`));
+      await expect(chart.update({ room })).rejects.toThrow(/room must be a number of px/);
+    }
+  });
+
   it("leaves nothing behind when its first layout throws", () => {
     const observe = vi.fn();
     vi.stubGlobal(

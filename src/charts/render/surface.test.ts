@@ -203,6 +203,31 @@ describe("svgLayer icons", () => {
       expect(path.getAttribute("opacity")).toBeNull();
     }
   });
+
+  it("draws a shape's fill and stroke opacity on its path, and leaves SVG's defaults where it has none", () => {
+    const { overlay, surface } = setup();
+    // A tag filled faintly inside its full outline, a hole outlined faintly in a faded shape, and a string given the defaults.
+    const tag: IconShape = { d: "M-8,-4L4,-4L8,0L4,4L-8,4Z", fill: "text", stroke: "text", width: 1.5, fillOpacity: 0.25 };
+    const hole: IconShape = { d: "M3,0A1,1 0 0 1 1,0A1,1 0 0 1 3,0Z", stroke: "text", strokeOpacity: 0.5, opacity: 0.8 };
+    const string: IconShape = { d: "M-6,0L-2,0", stroke: "text", fillOpacity: 1, strokeOpacity: 1 };
+    surface.group("a", "hover", 1).icon({ ...boot, shapes: [tag, hole, string] }, { size: 13 });
+    const paths = Array.from(overlay.querySelectorAll(".ec-icon path")) as SVGPathElement[];
+    expect(paths.map((path) => ["opacity", "fill-opacity", "stroke-opacity"].map((name) => path.getAttribute(name)))).toEqual([
+      [null, "0.25", null],
+      // Each is its own attribute, so SVG multiplies them as it draws.
+      ["0.8", null, "0.5"],
+      // Given as SVG's defaults, they're written as given.
+      [null, "1", "1"]
+    ]);
+    // The paint stays the theme's.
+    expect(paths[0]!.style.getPropertyValue("fill")).toBe("var(--ec-text, #0b0b0b)");
+    expect(paths[0]!.style.getPropertyValue("stroke")).toBe("var(--ec-text, #0b0b0b)");
+    surface.group("a", "hover", 2).icon(ball);
+    for (const path of Array.from(overlay.querySelectorAll('.ec-icon[data-icon="ball"] path'))) {
+      expect(path.getAttribute("fill-opacity")).toBeNull();
+      expect(path.getAttribute("stroke-opacity")).toBeNull();
+    }
+  });
 });
 
 describe("svgLayer paths and text", () => {

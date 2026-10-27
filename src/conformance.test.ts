@@ -1,8 +1,9 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// nine sources: bars from the reference barChart, from expressive() on bars drawn by other code and
+// ten sources: bars from the reference barChart, from expressive() on bars drawn by other code and
 // from a stacked Observable Plot bar through expressive(), the slices of the reference donutChart, the
-// slices of a D3 pie through expressive(), the lines and points of the reference lineChart, and the
-// lines of a D3 line chart, of a D3 line with missing weeks and of a Plot line through expressive(),
+// slices of a D3 pie through expressive(), the lines and points of the reference lineChart, on a full
+// season and on one with missing weeks, and the lines of a D3 line chart, of a D3 line with missing
+// weeks and of a Plot line through expressive(),
 // with samples from samplesAlong. Each source also draws its marks at another size, as a resize would,
 // for the check that effects follow onChange. On lines with gaps, no effect draws inside one, on any
 // frame. This test brings charts and effects together, so it lives beside src/index.ts, the only
@@ -250,6 +251,21 @@ function d3GappedSource(moved = false): { readonly marks: readonly MarkGeometry[
 const d3GappedMarks = (moved = false): readonly MarkGeometry[] => d3GappedSource(moved).marks;
 
 /**
+ * The reference line chart on the patchy season: each line with a gap, and the points of the values
+ * there are, each with the data its enter event gave it, as lineSource has them.
+ */
+function lineGappedSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<MarkGeometry, MarkData<Patchy>> } {
+  const container = document.body.appendChild(document.createElement("div"));
+  const chart = lineChart<Patchy>(container, { label: "Goals vs xG", data: [], x: "week", series: ["goals", "xg"], width: moved ? 480 : 640, height: moved ? 240 : 300, motion: "off" });
+  const data = new Map<MarkGeometry, MarkData<Patchy>>();
+  chart.on("enter", (event) => data.set(event.mark, event.data));
+  void chart.update({ data: patchy });
+  return { marks: chart.marks(), data };
+}
+
+const lineGappedMarks = (moved = false): readonly MarkGeometry[] => lineGappedSource(moved).marks;
+
+/**
  * A Plot line on the same season: each path's rows from its indices, described from their points
  * through Plot's scales, with samplesAlong samples, and the data a decoration gets. Smaller when moved.
  */
@@ -313,7 +329,7 @@ const options: Record<string, CheckEffectOptions> = { "staggered flash, third of
 type Source = (moved?: boolean) => readonly MarkGeometry[];
 const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars": adapterMarks, "Plot bars through expressive()": plotBarMarks };
 /** The sources whose lines have gaps. */
-const gapped: Record<string, Source> = { "D3 line with missing weeks through expressive()": d3GappedMarks };
+const gapped: Record<string, Source> = { "lineChart with missing weeks": lineGappedMarks, "D3 line with missing weeks through expressive()": d3GappedMarks };
 const sources: Record<string, Source> = {
   ...bars,
   donutChart: donutMarks,
@@ -447,6 +463,34 @@ describe("lines from a D3 line with missing weeks through expressive()", () => {
   });
 });
 
+describe("lines and points from lineChart with missing weeks", () => {
+  it("finds a line per series with a gap each, and a point for each value there is", () => {
+    const { marks, data } = lineGappedSource();
+    expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg", "goals@1", "xg@1", "goals@2", "xg@2", "xg@3", "goals@4", "xg@4", "goals@5", "goals@6", "xg@6"]);
+    expect(marks[0]!.gaps).toHaveLength(1);
+    expect(marks[1]!.gaps).toHaveLength(1);
+    expect(data.get(marks[0]!)!.samples.map((sample) => [sample.at, sample.gapBefore === true])).toEqual([
+      [1, false],
+      [2, false],
+      [4, true],
+      [5, false],
+      [6, false]
+    ]);
+  });
+
+  it("threshold below xG passes the conformance checks on every line and point, with the chart's data, and colours nothing where either is missing", async () => {
+    const { marks, data } = lineGappedSource();
+    const twins = lineGappedSource(true);
+    const all = new Map([...data, ...twins.data]);
+    const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+    await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: (mark) => all.get(mark)! });
+    // As on the D3 line: only weeks 1 and 2 are coloured.
+    const ctx = testContext();
+    threshold({ compareTo: "xg" }).end(marks[0]!, data.get(marks[0]!)!, ctx);
+    expect(ctx.layer.drawn.map((item) => (item.kind === "path" ? item.d : item.kind))).toEqual([marks[0]!.slice(0, marks[0]!.gaps![0]![0])]);
+  });
+});
+
 describe("lines from a Plot line through expressive()", () => {
   it("finds a line for each series, in document order, with a sample at each week", () => {
     const { marks, data } = plotLineSource();
@@ -549,10 +593,9 @@ describe.each(Object.entries(gapped))("effects on the gaps of lines from %s", (_
   it.each(Object.keys(effects))("%s draws nothing inside a gap, on any frame", async (name) => {
     const twins = marksOf(true);
     const problems: string[] = [];
-    for (const mark of marksOf()) {
-      expect(mark.gaps?.length, mark.key).toBeGreaterThan(0);
-      problems.push(...(await insideGaps(effects[name]!, mark, twins.find((twin) => twin.key === mark.key)!, options[name])));
-    }
+    const lines = marksOf().filter((mark) => mark.gaps !== undefined);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const mark of lines) problems.push(...(await insideGaps(effects[name]!, mark, twins.find((twin) => twin.key === mark.key)!, options[name])));
     expect(problems).toEqual([]);
   });
 });

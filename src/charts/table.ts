@@ -3,7 +3,8 @@
 // visually hidden but still read. Its rows are the chart's, in visual order, so it follows the sort;
 // its columns are the category (each row's header), any extra columns the page lists, each series,
 // and the total of a stack, in the chart's format, then any columns the page puts after the values.
-// A donut adds each row's share and a total row. Text is only ever set as text, never parsed as HTML.
+// A donut adds each row's share and a total row. A line's missing value says "missing". Text is only
+// ever set as text, never parsed as HTML.
 
 import { percent } from "./shell/format";
 import type { ChartOptions, TableColumn, TableOptions } from "./types";
@@ -19,6 +20,8 @@ export interface TableRow<D> {
   /** Its index in `data`. */
   readonly index: number;
   readonly values: readonly { readonly series: string; readonly value: number }[];
+  /** The series with no value in this row, a line chart's gaps: their cells say "missing". */
+  readonly missing?: ReadonlySet<string>;
   readonly total: number;
 }
 
@@ -102,6 +105,9 @@ export function checkTableOption(option: unknown, chart: string): void {
   });
 }
 
+/** A missing value's cell: a word, so it's heard as missing, not as an empty cell. */
+const MISSING = "missing";
+
 /** What the table shows, or undefined with `table: false`. Reads every cell, so a column that throws throws here. */
 export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
   const { option, format } = input;
@@ -134,7 +140,7 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
       cells: [
         { text: row.category, numeric: false },
         ...first.map((column) => columnCell(column, row, format)),
-        ...input.series.map((series) => number(values.get(series) ?? 0)),
+        ...input.series.map((series) => (row.missing?.has(series) ? { text: MISSING, numeric: true } : number(values.get(series) ?? 0))),
         ...(totals ? [number(row.total)] : []),
         ...share(row.total),
         ...last.map((column) => columnCell(column, row, format))

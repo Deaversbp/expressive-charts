@@ -3,6 +3,7 @@ import {
   layoutLines,
   LINE_WIDTH,
   lineEncoding,
+  loneValues,
   placeColumns,
   placeEndLabels,
   placeLines,
@@ -84,10 +85,14 @@ describe("layoutLines", () => {
     expect(() => layout<Week>({ data: weeks, x: "week", key: () => "same", series: ["goals"] })).toThrow(/two rows have the key "same"/);
   });
 
-  it("throws on an x or a value that isn't a finite number, a missing one included", () => {
+  it("throws on an x or a value that isn't a finite number, but takes a missing value", () => {
     expect(() => layout<Week>({ data: [{ week: Number.NaN, goals: 1, xg: 1 }], x: "week", series: ["goals"] })).toThrow(/x must be a finite number, got NaN in row 0/);
     expect(() => layout({ data: [{ week: "1", goals: 1 }] as unknown as Week[], x: "week", series: ["goals"] })).toThrow(/x must be a finite number, got "1"/);
-    expect(() => layout({ data: [{ week: 1, xg: 1 }] as unknown as Week[], x: "week", series: ["goals"] })).toThrow(/"goals" for "1" must be a finite number, got undefined/);
+    expect(() => layout({ data: [{ week: 1, xg: 1 }] as unknown as Week[], x: "week", series: ["goals"] })).not.toThrow();
+    expect(() => layout({ data: [{ week: 1, goals: "2" }] as unknown as Week[], x: "week", series: ["goals"] })).toThrow(
+      /"goals" for "1" must be a finite number, or null or undefined where it has no value, got "2"/
+    );
+    expect(() => layout<Week>({ data: [{ week: 1, goals: Number.NaN, xg: 1 }], x: "week", series: ["goals"] })).toThrow(/got NaN/);
     expect(() => layout<Week>({ data: [{ week: 1, goals: Infinity, xg: 1 }], x: "week", series: ["goals"] })).toThrow(/got Infinity/);
   });
 
@@ -358,5 +363,111 @@ describe("a time axis", () => {
     const [point] = placePoints({ ...frame, box }, rows[1]!, ["goals"], true);
     expect(point!.data.samples[0]!.at).toEqual(day(2));
     expect(placePoints({ ...frame, box }, rows[1]!, ["goals"], true)[0]!.data.samples[0]!.at).not.toBe(point!.data.samples[0]!.at);
+  });
+});
+
+describe("missing values", () => {
+  interface Gappy {
+    week: number;
+    goals: number | null;
+  }
+  /** At x 0, 4, 6 and 10: goals 0, missing, 60 and 100. */
+  const gappy: Gappy[] = [
+    { week: 0, goals: 0 },
+    { week: 4, goals: null },
+    { week: 6, goals: 60 },
+    { week: 10, goals: 100 }
+  ];
+  const rest = <D>(rows: readonly { key: string; datum: D; x: number; levels: Readonly<Record<string, number>>; missing: ReadonlySet<string> }[]): RowState<D>[] =>
+    rows.map((row) => ({ key: row.key, datum: row.datum, x: row.x, values: row.levels, missing: row.missing }));
+
+  it("lays a missing value out as undefined, with its level where its line runs past, and leaves it out of the scale", () => {
+    const { rows, frame: laid, decimals } = layout<Gappy>({ data: gappy, x: "week", series: ["goals"] });
+    expect(rows.map((row) => row.values[0]!.value)).toEqual([0, undefined, 60, 100]);
+    expect(rows.map((row) => [...row.missing])).toEqual([[], ["goals"], [], []]);
+    // Across the gap from x 0 to 6, in proportion to x.
+    expect(rows[1]!.levels).toEqual({ goals: 40 });
+    expect(laid.scale).toEqual({ lo: 0, hi: 100 });
+    expect(decimals).toEqual({ goals: 0 });
+    // Before a line's first value and after its last, level with it; with no values, 0.
+    const ends = layout<Gappy>({ data: [{ week: 0, goals: null }, { week: 1, goals: 5 }, { week: 2, goals: null }], x: "week", series: ["goals"] }).rows;
+    expect(ends.map((row) => row.levels.goals)).toEqual([5, 5, 5]);
+    const none = layout<Gappy>({ data: [{ week: 0, goals: null }, { week: 1, goals: null }], x: "week", series: ["goals"] });
+    expect(none.rows.map((row) => row.levels.goals)).toEqual([0, 0]);
+    expect(none.frame.scale).toEqual({ lo: 0, hi: 1 });
+  });
+
+  it("finds the levels of a long run of missing values in one pass", () => {
+    // 50,000 weeks: no goals at all, and xG only at the first and last, with one gap between.
+    const long = Array.from({ length: 50_000 }, (_, week) => ({ week, goals: null, xg: week === 0 ? 0 : week === 49_999 ? 49_999 : null }));
+    const started = performance.now();
+    const { rows } = layout<{ week: number; goals: null; xg: number | null }>({ data: long, x: "week", series: ["goals", "xg"] });
+    // Scanning each run again for every row in it took seconds here.
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(rows[25_000]!.levels).toEqual({ goals: 0, xg: 25_000 });
+    expect(rows[49_999]!.levels).toEqual({ goals: 0, xg: 49_999 });
+  });
+
+  it("breaks a line at a missing value: a gap from the value before to the value after, gapBefore on the sample after it", () => {
+    const { rows } = layout<Gappy>({ data: gappy, x: "week", series: ["goals"] });
+    const [goals] = placeLines(frame, rest(rows), ["goals"], Infinity);
+    // The first value is alone, so it has no stroke: the stroke starts where the gap ends.
+    expect(goals!.geometry.outline.d).toBe("M340,122.4L540,12");
+    expect(goals!.geometry.gaps).toEqual([[0, expect.closeTo(Math.hypot(300, 165.6) / goals!.geometry.length, 12)]]);
+    expect(goals!.data.samples.map((s) => [s.at, s.value, s.gapBefore === true])).toEqual([
+      [0, 0, false],
+      [6, 60, true],
+      [10, 100, false]
+    ]);
+    expect(goals!.data.samples[1]!.t).toBe(goals!.geometry.gaps![0]![1]);
+  });
+
+  it("ends a line revealed into a gap at its last value, and goes on part way past it", () => {
+    const { rows } = layout<Gappy>({ data: gappy, x: "week", series: ["goals"] });
+    const into = placeLines(frame, rest(rows), ["goals"], 5)[0]!;
+    expect(into.geometry.length).toBe(0);
+    expect(into.end).toEqual({ x: 40, y: 288, value: 0 });
+    expect(into.data.datum).toBe(gappy[0]);
+    const past = placeLines(frame, rest(rows), ["goals"], 8)[0]!;
+    expect(past.data.samples.map((s) => s.at)).toEqual([0, 6, 8]);
+    expect(past.end.value).toBe(80);
+    expect(past.data.datum).toBe(gappy[2]);
+  });
+
+  it("is empty with no value up to the reveal: no samples, at its level, the row at the reveal its datum, and its label empty", () => {
+    const missingFirst = layout<Gappy>({ data: [{ week: 0, goals: null }, ...gappy.slice(2)], x: "week", series: ["goals"] }).rows;
+    const labels = { text: (series: string, value: number) => `${value} ${series}`, measure };
+    const [empty] = placeLines(frame, rest(missingFirst), ["goals"], 0, false, labels);
+    expect(empty!.data.samples).toEqual([]);
+    expect(empty!.geometry.length).toBe(0);
+    expect(empty!.geometry.start).toEqual({ x: 40, y: positions(frame).y(60) });
+    expect(empty!.label?.text).toBe("");
+    expect(empty!.geometry.labelBounds).toEqual([]);
+  });
+
+  it("places an empty line's label nowhere, so the others' aren't pushed aside", () => {
+    const rows = [
+      { key: "a", datum: "A", x: 0, values: { goals: 50, xg: 50 }, missing: new Set(["xg"]) },
+      { key: "b", datum: "B", x: 10, values: { goals: 50, xg: 50 }, missing: new Set(["xg"]) }
+    ];
+    const labels = { text: (series: string) => series, measure };
+    const [goals] = placeLines(frame, rows, ["goals", "xg"], Infinity, false, labels);
+    const [alone] = placeLines(frame, rows, ["goals"], Infinity, false, labels);
+    expect(goals!.label).toEqual(alone!.label);
+  });
+
+  it("gives no point for a missing value", () => {
+    const row: RowState<string> = { key: "4", datum: "W4", x: 4, values: { goals: 40, xg: 25 }, missing: new Set(["goals"]) };
+    expect(placePoints(frame, row, ["goals", "xg"]).map((point) => point.key)).toEqual(["xg@4"]);
+    expect(placePoints(frame, row, ["goals", "xg"])[0]!.data.related("goals")).toBeUndefined();
+  });
+
+  it("finds the values alone: next to a gap with no other value beside them", () => {
+    const row = (key: string, missing: string[]): RowState<string> => ({ key, datum: key, x: Number(key), values: { goals: 1, xg: 1 }, missing: new Set(missing) });
+    const rows = [row("1", []), row("2", ["goals"]), row("3", []), row("4", ["goals", "xg"]), row("5", ["xg"])];
+    expect([...loneValues(rows, ["goals", "xg"])].sort()).toEqual(["goals@1", "goals@3", "goals@5"]);
+    // No gap, no value alone: not even a line of one value.
+    expect(loneValues([row("1", [])], ["goals"]).size).toBe(0);
+    expect(loneValues(states([{ key: "a", datum: "A", x: 0, values: [{ series: "goals", value: 1 }] }, { key: "b", datum: "B", x: 1, values: [{ series: "goals", value: 2 }] }]), ["goals"]).size).toBe(0);
   });
 });

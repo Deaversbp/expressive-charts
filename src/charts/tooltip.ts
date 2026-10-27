@@ -2,6 +2,9 @@
 // and centre, or at a point, such as a crosshair over the points it crosses. The box is aria-hidden, so it isn't read twice: each mark's aria-label has the values,
 // and its accessible description is `markDescription`'s text or, by default, a tooltip function's.
 // Its text is only ever set as text, never parsed as HTML, so a tooltip function can't inject markup.
+// While it shows it takes the pointer, so it can be hovered (WCAG 1.4.13): beside a mark, a clear
+// bridge spans the gap to the mark, so the pointer can cross from one to the other. One that comes up
+// under a pointer that didn't move onto it lets the pointer through until the pointer is off it.
 
 import { matrix, type Matrix, type MarkGeometry, type MotionView } from "../core";
 import { report } from "../core/report";
@@ -60,12 +63,19 @@ export interface Tooltip {
    * The default tooltip text says nothing the mark's aria-label doesn't, so it describes nothing.
    */
   describe(element: SVGElement, row: { readonly datum: unknown }): void;
+  /**
+   * The tooltip while it shows, or undefined: its layer, holding the box and, beside a mark, the
+   * bridge to it. Both take the pointer.
+   */
+  element(): HTMLElement | undefined;
   hide(): void;
   destroy(): void;
 }
 
 /** Px between the mark and the box, as in the prototype. */
 const GAP = 12;
+/** Px the bridge reaches into the mark, so no sliver is left between them. */
+const OVERLAP = 1;
 /** Base ms for showing and hiding: hover feedback. */
 const FADE = 100;
 /** For description ids, unique in the page. */
@@ -122,22 +132,61 @@ export function chartTooltip<D>(
 ): Tooltip {
   let layer: HTMLDivElement | undefined;
   let box: HTMLDivElement | undefined;
+  let bridge: HTMLDivElement | undefined;
   /** Each row's text, and the option it was worked out with: a function is called once per row. */
   let texts = new WeakMap<object, { readonly option: TooltipOption<D> | undefined; readonly content: TooltipContent | undefined }>();
   /** The text the box shows. */
   let rendered: string | undefined;
+  /** Where a mouse or pen last was, in client px. */
+  let pointer: { readonly x: number; readonly y: number } | undefined;
+  /**
+   * Whether it came up, or moved, under a pointer that hadn't moved onto it: a crosshair's column
+   * reaches it, so it can. Then it lets the pointer through, so it doesn't catch a pointer running
+   * along the chart, until the pointer is off it.
+   */
+  let through = false;
+  /** The bridge's trapezoid in the layer's px, while there's one. */
+  let shape: Trapezoid | undefined;
 
   const timing = (element: HTMLElement): void => element.style.setProperty("--ec-hover-duration", `${options.motion.duration(FADE, "feedback")}ms`);
 
-  function element(): HTMLDivElement {
-    if (!layer || !box) {
+  const shown = (): boolean => box?.classList.contains("ec-tooltip-shown") ?? false;
+  /** Whether the pointer is over the box or the bridge. */
+  const under = (): boolean => {
+    if (!pointer || !box || !layer) return false;
+    const { x, y } = pointer;
+    const { left, right, top, bottom } = box.getBoundingClientRect();
+    if (x > left && x < right && y > top && y < bottom) return true;
+    if (!shape) return false;
+    const origin = layer.getBoundingClientRect();
+    return inside(shape, x - origin.left, y - origin.top);
+  };
+  const letThrough = (on: boolean): void => {
+    through = on;
+    layer?.classList.toggle("ec-tooltip-through", on);
+  };
+  /** The document's pointer, heard before the chart hears it. */
+  const track = (event: PointerEvent): void => {
+    pointer = event.pointerType === "touch" ? undefined : { x: event.clientX, y: event.clientY };
+    if (through && !under()) letThrough(false);
+  };
+
+  svg.ownerDocument.addEventListener("pointerover", track, true);
+  svg.ownerDocument.addEventListener("pointermove", track, true);
+
+  /** The box, in its layer just after the <svg>, with the bridge after it. */
+  function made(): HTMLDivElement {
+    if (!layer || !box || !bridge) {
       const doc = svg.ownerDocument;
       layer = doc.createElement("div");
       layer.className = "ec-tooltip-layer";
       box = doc.createElement("div");
       box.className = "ec-tooltip";
       box.setAttribute("aria-hidden", "true");
-      layer.appendChild(box);
+      bridge = doc.createElement("div");
+      bridge.className = "ec-tooltip-bridge";
+      bridge.setAttribute("aria-hidden", "true");
+      layer.append(box, bridge);
     }
     if (layer.previousSibling !== svg) svg.after(layer);
     return box;
@@ -156,19 +205,23 @@ export function chartTooltip<D>(
     if (!box) return;
     timing(box);
     box.classList.remove("ec-tooltip-shown");
+    letThrough(false);
   }
 
   /**
    * Shows the box with `row`'s text, placed against `anchor`: it turns viewBox units into the chart
-   * box's px with `toPx`, at rest or, with `moved`, as an effect has moved the mark.
+   * box's px with `toPx`, at rest or, with `moved`, as an effect has moved the mark. An anchor with a
+   * left and right edge is a mark, and gets a bridge.
    */
-  function place(row: { readonly datum: unknown }, summary: () => TooltipContent, anchor: (toPx: ToPx, moved: boolean) => TooltipAnchor, moved: boolean): void {
+  function place(row: { readonly datum: unknown }, summary: () => TooltipContent, anchor: (toPx: ToPx, moved: boolean) => Anchored, moved: boolean): void {
     const content = contentFor(row, summary);
     if (content === undefined) {
       hide();
       return;
     }
-    const tip = element();
+    const tip = made();
+    // The pointer on it, having moved onto it, stays on it wherever it goes.
+    const held = shown() && !through && under();
     const key = typeof content === "string" ? `text:${content}` : JSON.stringify(content);
     if (key !== rendered) {
       render(tip, content);
@@ -181,24 +234,35 @@ export function chartTooltip<D>(
     const toPx: ToPx = { x: (x) => (x - view.x) * k, y: (y) => (y - view.y) * k };
     const area = chart.width > 0 ? { width: chart.width, height: chart.height } : { width: view.width, height: view.height };
     const size = { width: tip.offsetWidth, height: tip.offsetHeight };
+    const near = anchor(toPx, moved);
     // The side is the mark's at rest, so an effect moving it (a wiggle) can't flip the box back and forth.
-    const placed = placeTooltip(anchor(toPx, moved), size, area, moved ? placeTooltip(anchor(toPx, false), size, area).side : undefined);
+    const placed = placeTooltip(near, size, area, moved ? placeTooltip(anchor(toPx, false), size, area).side : undefined);
     const origin = layer!.getBoundingClientRect();
-    tip.style.left = `${Math.round(chart.left - origin.left + placed.x)}px`;
-    tip.style.top = `${Math.round(chart.top - origin.top + placed.y)}px`;
+    // From the chart box's px to the layer's.
+    const dx = chart.left - origin.left;
+    const dy = chart.top - origin.top;
+    const left = Math.round(dx + placed.x);
+    const top = Math.round(dy + placed.y);
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
     tip.setAttribute("data-side", placed.side);
+    const mark = near.left === undefined || near.right === undefined ? undefined : { left: dx + near.left, right: dx + near.right, top: dy + near.top, bottom: dy + near.bottom };
+    shape = span(bridge!, { left, top, ...size }, mark, placed.side);
     timing(tip);
     tip.classList.add("ec-tooltip-shown");
+    letThrough(!held && under());
   }
 
   return {
     show(mark, row, summary, transform) {
-      const anchor = (toPx: ToPx, moved: boolean): TooltipAnchor => {
+      const anchor = (toPx: ToPx, moved: boolean): Anchored => {
         const m = moved ? transform : undefined;
         const { x, y, width, height } = mark.bounds;
-        const ys = [{ x, y }, { x: x + width, y }, { x, y: y + height }, { x: x + width, y: y + height }].map((corner) => (m ? matrix.apply(m, corner).y : corner.y));
+        const corners = [{ x, y }, { x: x + width, y }, { x, y: y + height }, { x: x + width, y: y + height }].map((corner) => (m ? matrix.apply(m, corner) : corner));
+        const xs = corners.map((corner) => corner.x);
+        const ys = corners.map((corner) => corner.y);
         const center = m ? matrix.apply(m, mark.center) : mark.center;
-        return { x: toPx.x(center.x), top: toPx.y(Math.min(...ys)), bottom: toPx.y(Math.max(...ys)) };
+        return { x: toPx.x(center.x), top: toPx.y(Math.min(...ys)), bottom: toPx.y(Math.max(...ys)), left: toPx.x(Math.min(...xs)), right: toPx.x(Math.max(...xs)) };
       };
       place(row, summary, anchor, transform !== undefined);
     },
@@ -229,15 +293,76 @@ export function chartTooltip<D>(
       if (desc.textContent !== content) desc.textContent = content;
       element.setAttribute("aria-describedby", desc.id);
     },
+    element: () => (shown() ? layer : undefined),
     hide,
     destroy() {
+      svg.ownerDocument.removeEventListener("pointerover", track, true);
+      svg.ownerDocument.removeEventListener("pointermove", track, true);
       layer?.remove();
       layer = undefined;
       box = undefined;
+      bridge = undefined;
+      shape = undefined;
+      through = false;
       texts = new WeakMap();
       rendered = undefined;
     }
   };
+}
+
+/** A mark's edges in px. */
+interface Edges {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+/** What the box is placed against in the chart box's px and, for a mark, its left and right edges. */
+interface Anchored extends TooltipAnchor {
+  readonly left?: number;
+  readonly right?: number;
+}
+
+/** A trapezoid with level top and bottom edges: their y's, and each edge's left and right. */
+interface Trapezoid {
+  readonly top: number;
+  readonly bottom: number;
+  readonly upper: { readonly left: number; readonly right: number };
+  readonly lower: { readonly left: number; readonly right: number };
+}
+
+/** Whether a point is inside a trapezoid, off its edges. */
+function inside({ top, bottom, upper, lower }: Trapezoid, x: number, y: number): boolean {
+  if (y <= top || y >= bottom) return false;
+  const t = (y - top) / (bottom - top);
+  return x > upper.left + (lower.left - upper.left) * t && x < upper.right + (lower.right - upper.right) * t;
+}
+
+/**
+ * Spans the bridge across the gap between the box and `mark`, in the layer's px: a trapezoid from the
+ * box's edge to the mark's, a px into it, so the pointer can go straight from one to the other without
+ * leaving the hover. It's clear, and takes only the pointer. At a point there's none: a crosshair's
+ * target is its whole column, which reaches the box. Gives the trapezoid, if there's one.
+ */
+function span(bridge: HTMLElement, box: { readonly left: number; readonly top: number; readonly width: number; readonly height: number }, mark: Edges | undefined, side: TooltipPlacement["side"]): Trapezoid | undefined {
+  bridge.hidden = mark === undefined;
+  if (!mark) return undefined;
+  const edge = { left: box.left, right: box.left + box.width };
+  // The upper edge and the lower one, with their y's.
+  const [upper, lower, top, bottom] =
+    side === "above" ? [edge, mark, box.top + box.height, Math.round(mark.top + OVERLAP)] : [mark, edge, Math.round(mark.bottom - OVERLAP), box.top];
+  const left = Math.round(Math.min(upper.left, lower.left));
+  const width = Math.round(Math.max(upper.right, lower.right)) - left;
+  const height = Math.max(0, bottom - top);
+  const x = (value: number): string => `${Math.round(value) - left}px`;
+  bridge.style.left = `${left}px`;
+  bridge.style.top = `${top}px`;
+  bridge.style.width = `${width}px`;
+  bridge.style.height = `${height}px`;
+  bridge.style.setProperty("clip-path", `polygon(${x(upper.left)} 0px, ${x(upper.right)} 0px, ${x(lower.right)} ${height}px, ${x(lower.left)} ${height}px)`);
+  const round = (edge: { readonly left: number; readonly right: number }) => ({ left: Math.round(edge.left), right: Math.round(edge.right) });
+  return { top, bottom: top + height, upper: round(upper), lower: round(lower) };
 }
 
 /** None with `false`; a function's text, where an empty string or a throw shows none; otherwise the default. */

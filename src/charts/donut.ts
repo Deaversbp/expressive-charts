@@ -632,7 +632,8 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
         const record = records.get(key);
         if (record) showTooltip(record);
       },
-      hide: () => tooltip.hide()
+      hide: () => tooltip.hide(),
+      element: () => tooltip.element()
     }
   });
 

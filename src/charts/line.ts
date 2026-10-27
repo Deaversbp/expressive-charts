@@ -782,7 +782,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       return record && onScreen(record);
     },
     ring: drawRing,
-    tooltip: { show: showHover, hide: hideHover }
+    tooltip: { show: showHover, hide: hideHover, element: () => tooltip.element() }
   });
 
   // ── Changes ────────────────────────────────────────────────────────────────

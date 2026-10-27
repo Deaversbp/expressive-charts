@@ -2,7 +2,7 @@
 
 This is a written WCAG 2.2 AA pass of the demo pages, made before the first release. It covers `bars.html`, `donut.html`, `line.html` and `morph.html`, and since M7 `season.html`: the library's charts, its controls, and the D3, Vega-Lite and hand-written charts that `expressive()` and `fromVegaView()` drive there. `stress.html` has no table yet. axe and the DOM checks below run on it as on the others, but its criteria haven't been written up. `index.html` (a list of links) and `lab.html` (the single-file prototype the library grew out of, which doesn't use it) aren't part of it.
 
-It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. And in M7 (24 October 2026), hover stopped dimming the other marks' labels, with a check that they keep 4.5:1 (**contrast on hover**, below); the rows for 1.4.3 and the judgement call on dimming describe it as it is now. `season.html` came in M7 step 5, and its table was written then (26 October 2026), from the same checks. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
+It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. And in M7 (24 October 2026), hover stopped dimming the other marks' labels, with a check that they keep 4.5:1 (**contrast on hover**, below); the rows for 1.4.3 and the judgement call on dimming describe it as it is now. `season.html` came in M7 step 5, and its table was written then (26 October 2026), from the same checks. In M8 the tooltip became hoverable, which fixed finding 6, with a check that a pointer can move onto it (**onto the tooltip**, below); the rows for 1.4.13 describe it as it is now. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
 
 ## How it was checked
 
@@ -11,6 +11,7 @@ It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since 
   - **tab order**: every tab stop in order, each showing its focus (the chart's ring, or the control's outline), then Shift+Tab back through every one;
   - **ring**: the tooltip never covers the focus ring, at any mark of each library chart;
   - **hover**: the tooltip stays while the pointer does, Escape hides it without the pointer moving, and it stays hidden until the pointer moves off and onto a mark;
+  - **onto the tooltip**: on each library chart, the pointer moves from a mark onto its tooltip 2 px at a time, across it, then off it onto another mark or away. The hover and the tooltip's text stay until it leaves, the other mark is hovered, and away nothing is. And Escape with the pointer on the tooltip hides it until the pointer moves, though the browser hit-tests the mark it uncovers. The bridge over the gap takes the pointer inside its trapezoid and nowhere else. And on `line.html`, a tooltip that comes up under the pointer lets it through, so the crosshair follows the pointer across it, until the pointer has been off it (added in M8);
   - **contrast on hover**: while a mark of each library chart is hovered, in light and dark, every text in the chart keeps 4.5:1 against the card behind it, at the opacity it's drawn with (added in M7);
   - **spacing**: with WCAG 1.4.12's spacing added after load, no chart's text overlaps other text or leaves its card;
   - **5 s**: nothing on the page moves by itself 5 s after load;
@@ -23,7 +24,7 @@ It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since 
 
 ## What it found
 
-Six problems: five fixed as part of the audit, and one in the backlog. Two judgement calls are listed after them.
+Six problems: five fixed as part of the audit, and the sixth in M8. Two judgement calls are listed after them.
 
 **Fixed:**
 
@@ -33,9 +34,9 @@ Six problems: five fixed as part of the audit, and one in the backlog. Two judge
 4. **The line page's own legends lost their colours under forced colours.** Windows contrast themes force border colours but not SVG strokes, so the D3 and Vega-Lite cards' swatches all turned the theme's text colour while their lines kept theirs. They opt out with `forced-color-adjust: none`, as the library's legend swatches already did.
 5. **Pressed toggles were told apart only by weight under forced colours.** Forced colours drop a button's background, so the motion switch's pressed mode, and the pages' own toggles, had only their bold left. They take `Highlight` and `HighlightText` there now.
 
-**In the backlog** ([the development log's backlog](plan.md#backlog-after-01)):
+**Fixed in M8** ([the development log](plan.md#m8-a-tooltip-that-can-be-hovered-change-labels-that-hold-up-and-gaps-in-lines-030)):
 
-6. **The tooltip can't be hovered (1.4.13, "hoverable").** It's `pointer-events: none`, so moving the pointer onto it hovers whatever is under it: another mark, whose tooltip replaces it, or nothing, which hides it. Making it hoverable would block the marks it covers, so it isn't a contained fix. The options: a tooltip that holds while the pointer crosses onto it, and gives way once the pointer settles on another mark; or the tooltip's text in a line of its own beside the chart, which covers nothing.
+6. **The tooltip couldn't be hovered (1.4.13, "hoverable").** It was `pointer-events: none`, so moving the pointer onto it hovered whatever was under it: another mark, whose tooltip replaced it, or nothing, which hid it. Now it takes the pointer while it shows, and the pointer on it stays on the mark it describes: leaving it for a mark hovers that mark, and leaving it for anything else ends the hover. Beside a mark, a clear bridge spans the 12 px gap between them, so the pointer can go straight from one to the other: without it, the pointer crossed 4 or 5 px of the next row on the bars page, and 10 to 13 px of nothing round the donut. A tooltip that comes up under the pointer, as a crosshair's can, lets it through until the pointer has been off it, so it never catches a pointer running along a chart. The marks it covers are reached round it, since a bar's target is its whole row or column, or by keyboard. Escape still hides it without the pointer moving.
 
 **Judgement calls**, which could reasonably go the other way:
 
@@ -122,7 +123,7 @@ The library's `barChart` with `travel`, and the hand-written chart through `expr
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px. The library's chart lays out again at the width; the hand-written one scales. |
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast): marks, ring. Dimmed bars while hovering: judgement call. |
 | 1.4.12 Text spacing | Pass | spacing. |
-| 1.4.13 Content on hover or focus | **Fail** (hoverable; backlog) | hover: persistent, and dismissible after fix 3. Not hoverable (finding 6). |
+| 1.4.13 Content on hover or focus | Pass (fixed) | hover: persistent, and dismissible after fix 3. onto the tooltip: hoverable, after finding 6's fix. |
 | 2.1.1 Keyboard | Pass | tab order; arrows, Home and End (`bars.spec.ts`); every control is a button. NVDA A and C. |
 | 2.1.2 No keyboard trap | Pass | tab order, both ways. |
 | 2.1.4 Character key shortcuts | Pass | None. |
@@ -169,7 +170,7 @@ The library's `donutChart` and columns on `barChart`, and a D3 pie through `expr
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px. |
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast). Slices are separated by a 2 px line in the surface colour. |
 | 1.4.12 Text spacing | Pass | spacing. |
-| 1.4.13 Content on hover or focus | **Fail** (hoverable; backlog) | hover, on the donut and the columns. Finding 6. |
+| 1.4.13 Content on hover or focus | Pass (fixed) | hover and onto the tooltip, on the donut and the columns. Finding 6. |
 | 2.1.1 Keyboard | Pass | tab order; arrows round the ring (`donut.spec.ts`); the picker keeps focus (`donut.spec.ts`). NVDA D. |
 | 2.1.2 No keyboard trap | Pass | tab order, both ways. |
 | 2.1.4 Character key shortcuts | Pass | None. |
@@ -210,7 +211,7 @@ The library's `lineChart` with `threshold` and a riding ball, a D3 line through 
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px: the cards stack, the line chart lays out again, the D3 and Vega-Lite lines scale. |
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast): both lines, the red, the ring. The scrubber is the browser's own. |
 | 1.4.12 Text spacing | Pass | spacing. |
-| 1.4.13 Content on hover or focus | **Fail** (hoverable; backlog) | hover, on the crosshair's tooltip. Finding 6. |
+| 1.4.13 Content on hover or focus | Pass (fixed) | hover and onto the tooltip, on the crosshair's tooltip. Finding 6. |
 | 2.1.1 Keyboard | Pass | tab order; weeks by arrow key, the scrubber by arrows, Play by Space, each host line by arrow key (`line.spec.ts`). NVDA E 1–14. |
 | 2.1.2 No keyboard trap | Pass | tab order, both ways. |
 | 2.1.4 Character key shortcuts | Pass | None. |
@@ -252,7 +253,7 @@ The donut and the columns in one `chartSwitch`, with `morph()`, the V key and th
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px. |
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast). |
 | 1.4.12 Text spacing | Pass | spacing. |
-| 1.4.13 Content on hover or focus | **Fail** (hoverable; backlog) | hover. Finding 6. |
+| 1.4.13 Content on hover or focus | Pass (fixed) | hover and onto the tooltip. Finding 6. |
 | 2.1.1 Keyboard | Pass | tab order; V on a slice or column switches, and focus follows its outcome (`morph.spec.ts`). NVDA F. |
 | 2.1.2 No keyboard trap | Pass | tab order, both ways. |
 | 2.1.4 Character key shortcuts | Pass | V works only with focus on a mark (`morph.spec.ts`), which the criterion allows. |
@@ -293,7 +294,7 @@ The library's `barChart`, twice (goals per matchweek, and goals by player), and 
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px. `season.spec.ts`: after a matchweek at 320 px, with Okafor's bar at the end of its scale, every change stays inside its card's padding, with no sideways scroll; the players' chart leaves 28 px beside itself for them (M7 decision 12). The goals chart shows the first week and every fifth under its columns, and below 600 px leaves out their values: each is in the names, the tooltip and the table. |
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast): the marks, the ring. Marks dimmed by a hover, linked or not: judgement call. |
 | 1.4.12 Text spacing | Pass | spacing. The slope chart draws itself again when its names grow, so each change stays clear of its name. |
-| 1.4.13 Content on hover or focus | **Fail** (hoverable; backlog) | hover, on the three library charts. Finding 6. A linked chart shows no tooltip. |
+| 1.4.13 Content on hover or focus | Pass (fixed) | hover and onto the tooltip, on the three library charts. Finding 6. A linked chart shows no tooltip. |
 | 2.1.1 Keyboard | Pass | tab order; `season.spec.ts`: the arrow keys in one linked chart, the others following, and Escape ending all three. Every control is a button. NVDA H. |
 | 2.1.2 No keyboard trap | Pass | tab order, both ways. |
 | 2.1.4 Character key shortcuts | Pass | None. |

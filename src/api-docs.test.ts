@@ -170,6 +170,15 @@ function anchorsOf(text: string): Set<string> {
   return anchors;
 }
 
+const anchorCache = new Map<string, Set<string>>();
+
+/** A Markdown file's anchors, found once a file: api.md links to its own headings and architecture.md's well over a hundred times, and reading the file each time timed out under load. */
+function anchorsIn(repo: Repo, path: string): Set<string> {
+  let anchors = anchorCache.get(path);
+  if (anchors === undefined) anchorCache.set(path, (anchors = anchorsOf(repo.read(path))));
+  return anchors;
+}
+
 interface Link {
   readonly href: string;
   readonly line: number;
@@ -422,7 +431,7 @@ function brokenLinks(repo: Repo, file: string, text: string, absolute: boolean):
       problems.push(`${at}: there's no ${target}`);
       continue;
     }
-    if (anchor !== undefined && target.endsWith(".md") && !anchorsOf(repo.read(target)).has(anchor)) {
+    if (anchor !== undefined && target.endsWith(".md") && !anchorsIn(repo, target).has(anchor)) {
       problems.push(`${at}: ${target} has no heading #${anchor}`);
     }
   }

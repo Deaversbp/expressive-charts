@@ -718,10 +718,26 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     tooltip.hide();
   }
 
-  /** A ring round each point at the focused x, as it is on screen, moved with its body when an effect moves it. */
+  /** The focus at an x with every value missing, in `ring` while it shows there. */
+  let ringLine: SVGLineElement | undefined;
+
+  /**
+   * A ring round each point at the focused x, as it is on screen, moved with its body when an effect
+   * moves it. An x with every value missing has no point to ring: a line in the ring's colour shows
+   * its focus where the crosshair is, and stays when Escape hides the crosshair.
+   */
   function drawRing(key: string | undefined): void {
     const record = key === undefined ? undefined : rows.get(key);
-    const marks = record && revealed(record) ? livePoints(record) : [];
+    const live = record !== undefined && revealed(record);
+    const marks = live ? livePoints(record) : [];
+    if (live && marks.length === 0) {
+      ringLine ??= svgElement("line", { class: "ec-focus-ring", "stroke-width": RING }, ring);
+      if (ring.childElementCount > 1 || ring.firstElementChild !== ringLine) ring.replaceChildren(ringLine);
+      setAttributes(ringLine, placeCrosshair(drawnFrame, record.px));
+      ring.removeAttribute("visibility");
+      return;
+    }
+    ringLine?.remove();
     while (ring.childElementCount > marks.length) ring.lastElementChild!.remove();
     marks.forEach((point, i) => {
       let group = ring.children[i] as SVGGElement | undefined;

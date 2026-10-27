@@ -5,6 +5,7 @@ import { createMotion, manualClock, type DataEffect, type MarkData, type MarkGeo
 import { createRegistry, type PresetFactory } from "../core/registry";
 import { measurePath, play } from "../core/testing";
 import { lineChart } from "./line";
+import { themes } from "./render/theme";
 import type { ChartEnv } from "./shell/setup";
 import type { LineChart, LineChartOptions } from "./types";
 
@@ -23,6 +24,8 @@ const weeks: Week[] = [
   { week: 5, goals: 6 },
   { week: 6, goals: 8, xg: 6 }
 ];
+/** The same weeks with nothing counted in week 3. */
+const blankWeek3: Week[] = weeks.map((w) => (w.week === 3 ? { week: 3, goals: null, xg: null } : w));
 
 function setup(options: Partial<LineChartOptions<Week>> = {}) {
   const container = document.body.appendChild(document.createElement("div"));
@@ -72,7 +75,34 @@ function listen(chart: LineChart<Week>) {
 }
 
 const pointer = (type: string, target: Element) => target.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "mouse" }));
+const press = (target: Element, key: string) => target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+/** Tab into the chart: a key press, then focus lands on the column Tab reaches. */
+function tabTo(target: SVGElement): void {
+  press(document.body, "Tab");
+  target.focus();
+}
 const tooltipText = () => Array.from(document.querySelector(".ec-tooltip")!.children, (line) => line.textContent);
+
+/** A property's colour on an element, its var() read from the custom properties the element inherits. */
+function colorOf(element: Element, property: string): string {
+  const style = getComputedStyle(element);
+  const value = style.getPropertyValue(property).trim();
+  const token = /^var\((--[\w-]+),\s*(.+)\)$/.exec(value);
+  return token ? style.getPropertyValue(token[1]!).trim() || token[2]! : value;
+}
+
+/** WCAG 2 contrast between two #rrggbb colours. */
+function contrast(a: string, b: string): number {
+  const luminance = (hex: string): number => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    }) as [number, number, number];
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
 const tableRows = (container: Element) => Array.from(container.querySelectorAll(".ec-table tbody tr"), (tr) => Array.from(tr.children, (cell) => cell.textContent));
 
 afterEach(() => {
@@ -293,7 +323,7 @@ describe("lineChart with missing values: a missing x", () => {
   });
 
   it("keeps an x with every value missing a stop: the crosshair, its name, the tooltip at the crosshair's top, and the table", () => {
-    const { svg, column, container, chart } = setup({ data: weeks.map((w) => (w.week === 3 ? { week: 3, goals: null, xg: null } : w)) });
+    const { svg, column, container, chart } = setup({ data: blankWeek3 });
     const events = listen(chart);
     expect(column("3").getAttribute("aria-label")).toBe("3: goals missing, xg missing");
     pointer("pointerover", column("3"));
@@ -306,6 +336,66 @@ describe("lineChart with missing values: a missing x", () => {
     expect(Number(crosshair.getAttribute("x1"))).toBeGreaterThan(Number(hit.getAttribute("x")));
     expect(tooltipText()).toEqual(["3", "goals missing · xg missing"]);
     expect(tableRows(container)[2]).toEqual(["3", "missing", "missing"]);
+  });
+
+  it("shows keyboard focus there with no point to ring: a 2 px line where the crosshair is, in the focus colour, at 3:1 or more in both themes", () => {
+    for (const theme of ["light", "dark"] as const) {
+      const { svg, column, container } = setup({ data: blankWeek3 });
+      container.setAttribute("data-theme", theme);
+      tabTo(column("3"));
+      const ring = svg.querySelector(".ec-focus")!;
+      expect(ring.getAttribute("visibility")).toBeNull();
+      expect(Array.from(ring.children, (child) => child.getAttribute("class"))).toEqual(["ec-focus-ring"]);
+      const line = ring.querySelector("line")!;
+      const crosshair = svg.querySelector(".ec-crosshair")!;
+      for (const end of ["x1", "y1", "x2", "y2"]) expect(line.getAttribute(end)).toBe(crosshair.getAttribute(end));
+      expect(line.getAttribute("stroke-width")).toBe("2");
+      const stroke = colorOf(line, "stroke");
+      expect(stroke).toBe(themes[theme].focus);
+      expect(contrast(stroke, colorOf(line, "--ec-surface")), theme).toBeGreaterThanOrEqual(3);
+      document.body.textContent = "";
+    }
+  });
+
+  it("keeps that line after Escape hides the crosshair and tooltip, rings the points instead at an x with values, and draws nothing for the pointer", () => {
+    const { svg, column } = setup({ data: blankWeek3 });
+    const ring = svg.querySelector(".ec-focus")!;
+    const crosshair = svg.querySelector(".ec-crosshair")!;
+    const children = () => Array.from(ring.children, (child) => child.tagName);
+    pointer("pointerover", column("3"));
+    expect(crosshair.getAttribute("visibility")).toBeNull();
+    expect(ring.getAttribute("visibility")).toBe("hidden");
+    pointer("pointerleave", svg);
+
+    tabTo(column("3"));
+    expect(children()).toEqual(["line"]);
+    press(column("3"), "Escape");
+    expect(crosshair.getAttribute("visibility")).toBe("hidden");
+    expect(document.querySelector(".ec-tooltip")!.classList.contains("ec-tooltip-shown")).toBe(false);
+    expect(ring.getAttribute("visibility")).toBeNull();
+    expect(children()).toEqual(["line"]);
+    press(column("3"), "ArrowRight");
+    expect(children()).toEqual(["g", "g"]);
+    press(column("4"), "ArrowLeft");
+    expect(children()).toEqual(["line"]);
+    column("3").blur();
+    expect(ring.getAttribute("visibility")).toBe("hidden");
+  });
+
+  it("moves the line with its x, and gives way to rings when the values come back", async () => {
+    const { svg, column, chart, settle } = setup({ data: blankWeek3 });
+    const line = () => svg.querySelector(".ec-focus line");
+    tabTo(column("3"));
+    const before = Number(line()!.getAttribute("x1"));
+    await settle(chart.update({ width: 400 }));
+    expect(Number(line()!.getAttribute("x1"))).toBeLessThan(before);
+    expect(line()!.getAttribute("x1")).toBe(svg.querySelector(".ec-crosshair")!.getAttribute("x1"));
+    await settle(chart.update({ data: weeks }));
+    expect(line()).toBeNull();
+    expect(svg.querySelectorAll(".ec-focus > g")).toHaveLength(1);
+    await settle(chart.update({ data: blankWeek3 }));
+    expect(line()).not.toBeNull();
+    expect(svg.querySelectorAll(".ec-focus > g")).toHaveLength(0);
   });
 
   it("still throws on NaN and the infinities, and on a value that isn't a number", () => {

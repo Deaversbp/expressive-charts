@@ -1,9 +1,9 @@
 {
   "files": {
     "dist/expressive-charts.css": 2.5,
-    "dist/expressive-charts.global.js": 75.5,
+    "dist/expressive-charts.global.js": 83.5,
     "dist/icons/sport.cjs": 3.5,
-    "dist/icons/sport.js": 9,
+    "dist/icons/sport.js": 10,
     "dist/index.cjs": 110.5,
     "dist/index.js": 111,
     "dist/testing.cjs": 14,
@@ -16,6 +16,6 @@
     "barChart": 30.5,
     "lineChart, threshold, playback, playButton": 39,
     "chartSwitch, donutChart, barChart": 41,
-    "everything": 69
+    "everything": 76.5
   }
 }

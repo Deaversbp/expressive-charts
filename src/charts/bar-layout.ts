@@ -122,6 +122,8 @@ export interface BarLayoutInput<D> {
   readonly format: (value: number) => string;
   /** Text width in px, for margins and the labels' boxes. */
   readonly measure: Measure;
+  /** Px kept clear past the labels at each end of the value axis that bars reach. Default 0. */
+  readonly room?: number;
 }
 
 type Measure = (text: string, className: string, size: number) => number;
@@ -368,10 +370,12 @@ function horizontalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>
   const labelWidth = widest(rows.map((row) => row.category), "ec-label", LABEL_SIZE, measure);
   const valueWidth = widest(values, "ec-value", VALUE_SIZE, measure);
   const tickWidth = widest(ticks, "ec-tick", TICK_SIZE, measure);
+  const { positive, negative } = reach(input, rows);
   // Value labels sit past the tip, so negative bars need room on the left as well.
   const negativeRoom = domain.lo < 0 ? valueWidth + PAD : 0;
-  const left = Math.max(labelWidth + 10 + negativeRoom, tickWidth / 2 + 2);
-  const right = Math.max(valueWidth + PAD + 4, tickWidth / 2 + 2);
+  // `room` is outermost: past the names on the left, which negative bars' text goes past too.
+  const left = Math.max(labelWidth + 10 + negativeRoom + negative, tickWidth / 2 + 2);
+  const right = Math.max(valueWidth + PAD + 4 + positive, tickWidth / 2 + 2);
   const rowSize = input.height === undefined || n === 0 ? ROW : Math.max(0, input.height - TOP - AXIS) / n;
   return {
     orientation: "horizontal",
@@ -385,9 +389,10 @@ function verticalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[]
   const n = rows.length;
   const height = input.height ?? VERTICAL_HEIGHT;
   const tickWidth = widest(ticks, "ec-tick", TICK_SIZE, measure);
-  // Room above positive columns (and below negative ones) for their value labels.
-  const top = domain.hi > 0 ? VALUE_SIZE + PAD + 2 : TOP;
-  const bottom = AXIS + (domain.lo < 0 ? VALUE_SIZE + PAD : 0);
+  const { positive, negative } = reach(input, rows);
+  // Room above positive columns (and below negative ones) for their value labels, and `room` past them.
+  const top = (domain.hi > 0 ? VALUE_SIZE + PAD + 2 : TOP) + positive;
+  const bottom = AXIS + (domain.lo < 0 ? VALUE_SIZE + PAD : 0) + negative;
   const left = tickWidth + 8 + 2;
   const plot = { x: left, y: top, width: Math.max(0, width - left - 8), height: Math.max(0, height - top - bottom) };
   const band = n > 0 ? plot.width / n : 0;
@@ -396,6 +401,18 @@ function verticalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[]
     orientation: "vertical",
     scale: { lo: domain.lo, hi: domain.hi, from: base, extent: -plot.height, label: base + 18 },
     bands: { start: plot.x, band, thickness: Math.min((band * BAR) / ROW, MAX_COLUMN), span: plot.width, width, height }
+  };
+}
+
+/**
+ * `room` at each end of the value axis that bars reach: the positive end if a total is above 0, the
+ * negative end if one is below. An end no bar reaches gets none, so nothing moves for it.
+ */
+function reach<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[]): { readonly positive: number; readonly negative: number } {
+  const room = input.room ?? 0;
+  return {
+    positive: rows.some((row) => row.total > 0) ? room : 0,
+    negative: rows.some((row) => row.total < 0) ? room : 0
   };
 }
 

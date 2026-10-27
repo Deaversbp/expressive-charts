@@ -110,6 +110,8 @@ interface Diff<D> {
   readonly changed: { readonly record: MarkRecord<D>; readonly from: MarkGeometry }[];
   /** Only moved, or got a new row: the runner follows without an update. */
   readonly moved: MarkRecord<D>[];
+  /** Whether a mark got a new row. With a value changed or a mark come or gone, that makes the read an update. */
+  newRow: boolean;
 }
 
 type HoverSource = MarkEvents<unknown>["hover"]["source"];
@@ -385,7 +387,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     if (reading.root && reading.root !== root) moveTo(reading.root);
     ancestor = reading.ancestor ?? ancestor;
     const keys = new Set(reading.marks.map((mark) => mark.key));
-    const diff: Diff<D> = { entering: [], exiting: [], changed: [], moved: [] };
+    const diff: Diff<D> = { entering: [], exiting: [], changed: [], moved: [], newRow: false };
     const recolor: string[] = [];
     for (const record of order) {
       if (keys.has(record.key)) continue;
@@ -401,8 +403,10 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         const from = record.mark;
         // With `value`, a resize or a new axis maximum only moves marks, as on our charts.
         const changed = options.value ? valuesChanged(from.parts, mark.parts) : lengthsChanged(from.geometry, mark.geometry);
+        const newRow = from.data.datum !== mark.data.datum;
+        if (newRow) diff.newRow = true;
         if (changed) diff.changed.push({ record, from: from.geometry });
-        else if (geometryChanged(from.geometry, mark.geometry) || from.data.datum !== mark.data.datum || samplesChanged(from.data.samples, mark.data.samples)) {
+        else if (newRow || geometryChanged(from.geometry, mark.geometry) || samplesChanged(from.data.samples, mark.data.samples)) {
           diff.moved.push(record);
         }
         if (from.parts[0]?.colors?.color !== mark.parts[0]?.colors?.color) recolor.push(mark.key);
@@ -850,7 +854,11 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       dropGone();
       const exited = runner.exit(diff.exiting.map(input));
       emitEach("exit", diff.exiting);
-      runner.update(diff.changed.map(({ record, from }) => ({ ...input(record), from })));
+      // A new row, a new value, or a mark come or gone is an update: it ends the update runs of the
+      // marks it leaves alone. A read that finds none (a Vega render for a hover signal) keeps them.
+      if (diff.newRow || diff.changed.length > 0 || diff.entering.length > 0 || diff.exiting.length > 0) {
+        runner.update(diff.changed.map(({ record, from }) => ({ ...input(record), from })));
+      }
       diff.changed.forEach(({ record, from }, index) => emit("update", { ...input(record), from, batch: { index, count: diff.changed.length } }));
       runner.enter(diff.entering.map(input));
       emitEach("enter", diff.entering);

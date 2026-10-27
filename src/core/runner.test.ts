@@ -593,6 +593,122 @@ describe("createRunner", () => {
     });
   });
 
+  describe("an update ends the last one's update runs", () => {
+    it("on the marks it leaves alone, as a re-trigger would: abort, clear(), layer, mark style, listeners", async () => {
+      const update = probe();
+      const { runner, clock, surface } = setup({ update });
+      runner.enter([input("a"), input("b")]);
+      runner.update([input("a", 60)]);
+      clock.advance(50);
+      // A run still playing on a mark this update leaves alone stops there.
+      runner.update([input("b", 80)]);
+      expect(update.contexts[0]!.signal.aborted).toBe(true);
+      expect(update.log).toEqual(["run a #0", "clear #0", "run b #1"]);
+      expect(surface.groups.map((group) => `${group.key} ${group.cleared}`)).toEqual(["a true", "b false"]);
+      expect(surface.mark("a").calls).toEqual([{ op: "set", style: { emphasis: 1 } }, { op: "reset" }]);
+      runner.change(bar("a", 50));
+      expect(update.log).not.toContain("change a 50 #0");
+      await flush();
+      expect(update.log).toContain("cancelled a #0");
+    });
+
+    it("on every mark when it changes none (new data, the same values), and one that finished goes too", async () => {
+      const update = probe();
+      const { runner, clock, surface } = setup({ update });
+      runner.enter([input("a"), input("b")]);
+      runner.update([input("a", 60), input("b", 80)]);
+      clock.advance(100);
+      await flush();
+      expect(update.log).toEqual(["run a #0", "run b #1", "done a #0", "done b #1"]);
+      expect(surface.picture()).toHaveLength(2);
+      runner.update([]);
+      expect(update.log.slice(4)).toEqual(["clear #0", "clear #1"]);
+      expect(surface.picture()).toEqual([]);
+    });
+
+    it("leaves the other slots' runs alone", () => {
+      const decorate = probe();
+      const enter = probe();
+      const hover = probe();
+      const update = probe();
+      const { runner } = setup({ decorate, enter, hover, update });
+      runner.enter([input("a"), input("b")]);
+      runner.hover([input("a")]);
+      runner.update([input("a", 60)]);
+      runner.update([input("b", 80)]);
+      for (const effect of [decorate, enter, hover]) expect(effect.log.filter((line) => line.startsWith("clear"))).toEqual([]);
+      expect(update.log).toEqual(["run a #0", "clear #0", "run b #1"]);
+    });
+
+    it("with motion off: the end state drawn, then cleared at the next update", () => {
+      const update = probe();
+      const { runner, surface } = setup({ update }, "off");
+      runner.enter([input("a"), input("b")]);
+      runner.update([input("a", 60)]);
+      expect(update.log).toEqual(["end a #0"]);
+      expect(surface.picture()).toEqual([walked(bar("a", 60))]);
+      runner.update([input("b", 80)]);
+      expect(update.log).toEqual(["end a #0", "clear #0", "end b #1"]);
+      expect(surface.picture()).toEqual([walked(bar("b", 80))]);
+    });
+
+    it("gives the values the last update gave, not the values part way through its change", () => {
+      const previous: (number | undefined)[] = [];
+      const update: DataEffect<Row> = {
+        kind: "data",
+        run: async (_mark, data) => void previous.push(data.previous?.datum.value),
+        end: () => {},
+        clear: () => {}
+      };
+      const { runner } = setup<Row>({ update });
+      runner.enter([{ mark: bar("a"), data: dataOf(100) }]);
+      runner.interrupt();
+      runner.update([{ mark: bar("a", 60), data: dataOf(60) }]);
+      // A frame of the change, which the latest data follows.
+      runner.change(bar("a", 80), dataOf(80));
+      // Another update replaces the one still moving.
+      runner.interrupt();
+      runner.update([{ mark: bar("a", 40), data: dataOf(40) }]);
+      expect(previous).toEqual([100, 60]);
+    });
+
+    it("counts from where a mark rested since: a change outside a transition, or the frame it settled on", () => {
+      const previous: (number | undefined)[] = [];
+      const update: DataEffect<Row> = {
+        kind: "data",
+        run: async (_mark, data) => void previous.push(data.previous?.datum.value),
+        end: () => {},
+        clear: () => {}
+      };
+      const { runner } = setup<Row>({ update });
+      runner.enter([{ mark: bar("a"), data: dataOf(100) }]);
+      // A line revealed further, or a resize: no transition, so the values rest there.
+      runner.change(bar("a", 90), dataOf(90));
+      runner.interrupt();
+      runner.update([{ mark: bar("a", 60), data: dataOf(60) }]);
+      // The change lands, and settles on its last frame's data: a new row with the same values.
+      const landed = dataOf(60);
+      runner.change(bar("a", 60), landed);
+      runner.settle();
+      runner.interrupt();
+      runner.update([{ mark: bar("a", 40), data: dataOf(40) }]);
+      expect(previous).toEqual([90, 60]);
+
+      // The geometry before is still the one on screen.
+      const from = bar("a", 45);
+      const seen: (MarkGeometry | undefined)[] = [];
+      const geometry = setup<Row>({ update: { kind: "data", run: async (_mark, _data, ctx) => void seen.push(ctx.previous), end: () => {}, clear: () => {} } });
+      geometry.runner.enter([{ mark: bar("b"), data: dataOf(100) }]);
+      geometry.runner.interrupt();
+      geometry.runner.update([{ mark: bar("b", 60), data: dataOf(60) }]);
+      const frame = bar("b", 75);
+      geometry.runner.change(frame, dataOf(75));
+      geometry.runner.update([{ mark: bar("b", 40), data: dataOf(40) }]);
+      geometry.runner.update([{ mark: bar("b", 30), data: dataOf(30), from }]);
+      expect(seen.slice(1)).toEqual([frame, from]);
+    });
+  });
+
   describe("enter and exit", () => {
     it("enter starts decorate, then enter, with batch positions", () => {
       const decorate = probe();

@@ -16,6 +16,8 @@ const ENTRIES: Readonly<Record<string, string>> = {
   "expressive-charts/icons/sport": "src/icons/sport/index.ts",
   "expressive-charts/testing": "src/testing/index.ts"
 };
+/** The stylesheet's types, which an `import "expressive-charts/style.css"` finds (TypeScript 6 and later check it). */
+const STYLESHEET = { "expressive-charts/style.css": "src/style.css.ts" };
 
 const REPOSITORY = "https://github.com/Deaversbp/expressive-charts";
 /** Where README's pictures are, as files on main. */
@@ -304,7 +306,7 @@ interface Compiled {
 function compile(repo: Repo, examples: readonly Example[]): Compiled {
   const config = ts.readConfigFile(`${repo.root}/tsconfig.json`, ts.sys.readFile);
   if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
-  const paths = Object.fromEntries(Object.entries(ENTRIES).map(([name, source]) => [name, [`./${source}`]]));
+  const paths = Object.fromEntries(Object.entries({ ...ENTRIES, ...STYLESHEET }).map(([name, source]) => [name, [`./${source}`]]));
   const json = { ...config.config, compilerOptions: { ...config.config.compilerOptions, types: [], noEmit: true, moduleDetection: "force", paths } };
   const { options } = ts.parseJsonConfigFileContent(json, ts.sys, repo.root, undefined, `${repo.root}/tsconfig.json`);
 

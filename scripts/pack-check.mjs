@@ -2,8 +2,9 @@
 // installs it in a new project in the system's temporary folder, and uses it as a consumer would:
 //   1. the tarball has every file package.json points at, the changelog, and nothing else;
 //   2. every entry imports in Node as an ES module and as CommonJS, with no DOM, with the same names;
-//   3. a small consumer typechecks against it with this repository's TypeScript, under `bundler`,
-//      `node16` (an ES module) and `node16` (CommonJS) resolution, each reading its own types.
+//   3. a small consumer typechecks against it with each TypeScript in devDependencies (`typescript`
+//      and `typescript-*`: 5.4, the oldest README promises, 6 and 7), under `bundler`, `node16` (an
+//      ES module) and `node16` (CommonJS) resolution, each reading its own types.
 // Run it after `npm run build`:
 //
 //   npm run pack-check              (add `-- --keep` to keep the temporary project for a look)
@@ -25,10 +26,12 @@ const failures = [];
 /** The files an exports target leads to, through every condition. */
 const targets = (target) => (typeof target === "string" ? [target] : Object.values(target).flatMap(targets));
 
-/** The JavaScript entries, by the name a consumer imports ("expressive-charts/testing"), with their exports targets. */
-const scripts = Object.entries(pkg.exports)
+/** Every entry with types, by the name a consumer imports ("expressive-charts/testing"), with its exports target. */
+const typed = Object.entries(pkg.exports)
   .filter(([, target]) => typeof target !== "string")
   .map(([path, target]) => ({ entry: path === "." ? pkg.name : `${pkg.name}/${path.slice(2)}`, target }));
+/** The JavaScript entries: all but the stylesheet, whose types only let TypeScript find its import. */
+const scripts = typed.filter(({ entry }) => !entry.endsWith(".css"));
 const entries = scripts.map(({ entry }) => entry);
 const pointedAt = [pkg.main, pkg.module, pkg.types, ...Object.values(pkg.exports).flatMap(targets)].map((file) => file.replace(/^\.\//, ""));
 /** What npm adds to every tarball, and what `files` adds beside dist/. */
@@ -121,17 +124,25 @@ try {
   }
   if (empty.length + differ.length === 0) ok(`each entry has the same names both ways (${entries.map((entry) => `${entry}: ${esm.names[entry].length}`).join(", ")})`);
 
-  // 3. Types, with this repository's TypeScript.
-  const tsc = createRequire(join(root, "package.json")).resolve("typescript/bin/tsc");
-  const tsVersion = JSON.parse(readFileSync(join(dirname(tsc), "..", "package.json"), "utf8")).version;
-  console.log(`Types, with TypeScript ${tsVersion}`);
+  // 3. Types, with each TypeScript the repository has: `typescript` (6, which builds the declarations)
+  //    and the ones under other names (`typescript-5.4`, `typescript-7`, which runs `typecheck`).
+  const fromRoot = createRequire(join(root, "package.json"));
+  const compilers = Object.keys(pkg.devDependencies)
+    .filter((name) => name === "typescript" || name.startsWith("typescript-"))
+    .map((name) => {
+      // TypeScript 7's exports have its package.json but not bin/tsc, so the path comes from its "bin".
+      const manifest = fromRoot.resolve(`${name}/package.json`);
+      const { version, bin } = JSON.parse(readFileSync(manifest, "utf8"));
+      return { tsc: join(dirname(manifest), bin.tsc), version };
+    })
+    .sort((a, b) => a.version.localeCompare(b.version, "en", { numeric: true }));
   const resolutions = [
     { name: "bundler", file: "bundler.ts", module: "esnext", moduleResolution: "bundler", condition: "import" },
     { name: "node16, an ES module", file: "node16-esm.mts", module: "node16", moduleResolution: "node16", condition: "import" },
     { name: "node16, CommonJS", file: "node16-cjs.cts", module: "node16", moduleResolution: "node16", condition: "require" }
   ];
-  for (const { name, file, module, moduleResolution, condition } of resolutions) {
-    const config = `tsconfig.${file.replace(/\.\w+$/, "")}.json`;
+  const configOf = (file) => `tsconfig.${file.replace(/\.\w+$/, "")}.json`;
+  for (const { file, module, moduleResolution } of resolutions) {
     const compilerOptions = {
       target: "es2020",
       lib: ["es2020", "dom", "dom.iterable"],
@@ -144,16 +155,22 @@ try {
       types: []
     };
     writeFileSync(join(app, file), consumerSource());
-    writeFileSync(join(app, config), JSON.stringify({ compilerOptions, files: [file] }, null, 2));
-    const checked = spawnSync(process.execPath, [tsc, "-p", config], { cwd: app, encoding: "utf8" });
-    // Which declarations it read: each entry's own for this condition, as package.json names them.
-    const listed = spawnSync(process.execPath, [tsc, "-p", config, "--listFilesOnly"], { cwd: app, encoding: "utf8" });
-    const read = listed.stdout.split(/\r?\n/).map((line) => line.replace(/\\/g, "/"));
-    const expected = scripts.map(({ target }) => typesFile(target, condition));
-    const unread = expected.filter((declaration) => declaration === undefined || !read.some((line) => line.endsWith(`/node_modules/${pkg.name}/${declaration}`)));
-    if (checked.status !== 0) fail(`${name}: tsc found errors:\n${(checked.stdout + checked.stderr).trim()}`);
-    else if (unread.length > 0) fail(`${name}: it typechecks, but without ${unread.map((declaration) => declaration ?? "an entry's types").join(", ")}`);
-    else ok(`${name}: typechecks, reading ${expected.join(", ")}`);
+    writeFileSync(join(app, configOf(file)), JSON.stringify({ compilerOptions, files: [file] }, null, 2));
+  }
+  for (const { tsc, version } of compilers) {
+    console.log(`Types, with TypeScript ${version}`);
+    for (const { name, file, condition } of resolutions) {
+      const config = configOf(file);
+      const checked = spawnSync(process.execPath, [tsc, "-p", config], { cwd: app, encoding: "utf8" });
+      // Which declarations it read: each entry's own for this condition, as package.json names them.
+      const listed = spawnSync(process.execPath, [tsc, "-p", config, "--listFilesOnly"], { cwd: app, encoding: "utf8" });
+      const read = listed.stdout.split(/\r?\n/).map((line) => line.replace(/\\/g, "/"));
+      const expected = typed.map(({ target }) => typesFile(target, condition));
+      const unread = expected.filter((declaration) => declaration === undefined || !read.some((line) => line.endsWith(`/node_modules/${pkg.name}/${declaration}`)));
+      if (checked.status !== 0) fail(`TypeScript ${version}, ${name}: tsc found errors:\n${(checked.stdout + checked.stderr).trim()}`);
+      else if (unread.length > 0) fail(`TypeScript ${version}, ${name}: it typechecks, but without ${unread.map((declaration) => declaration ?? "an entry's types").join(", ")}`);
+      else ok(`${name}: typechecks, reading ${expected.join(", ")}`);
+    }
   }
 } finally {
   if (keep) console.log(`\nThe temporary project is in ${work}`);
@@ -168,13 +185,15 @@ console.log("\npack-check: the package works as ES modules and as CommonJS, with
 
 /**
  * A small consumer, the same source as .ts, .mts and .cts: an effect written with the author API, a
- * chart, the sport pack and the conformance suite. The `@ts-expect-error` shows the types are real
- * rather than `any`: a field the rows don't have must be an error.
+ * chart, the sport pack, the conformance suite and the stylesheet (which TypeScript 6 and later check
+ * is found). The `@ts-expect-error` shows the types are real rather than `any`: a field the rows don't
+ * have must be an error.
  */
 function consumerSource() {
   return `import { barChart, defineEffect, describe, matrix, travel, VERSION, type EffectContext, type MarkGeometry } from "${pkg.name}";
 import { soccerBall } from "${pkg.name}/icons/sport";
 import { checkEffect, fixtures, type CheckEffectOptions } from "${pkg.name}/testing";
+import "${pkg.name}/style.css";
 
 export const version: string = VERSION;
 

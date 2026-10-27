@@ -585,7 +585,7 @@ interface MarkData<D = unknown> {
 }
 ```
 
-What a data effect reads beside the geometry. `datum` is the row behind the mark (a line's is the row at its revealed end). `samples` are its values along the walk, by `t`. `related(series)` is another series' data in the same chart, if it's there: a bar's other segment, a line's other line. `previous` is the data before an update, for effects that show a change.
+What a data effect reads beside the geometry. `datum` is the row behind the mark (a line's is the row at its revealed end). `samples` are its values along the walk, by `t`. `related(series)` is another series' data in the same chart, if it's there: a bar's other segment, a line's other line. `previous` is the data before an update, for effects that show a change: the values the mark's last update gave, or where it has rested since (a resize, a reveal), never values part way through a change.
 
 #### `Sample`
 
@@ -866,9 +866,11 @@ The `on` option of the charts and adapters: an effect, or a preset's name, for e
 | --- | --- | --- |
 | `hover` | on pointer hover or keyboard focus | leave; cleared during a data change and replayed after it |
 | `enter` | when a mark appears | it's triggered again, or the mark exits |
-| `update` | when a mark's values change (not on a re-sort alone) | it's triggered again, or the mark exits |
+| `update` | when a mark's values change (not on a re-sort alone) | it's triggered again, the chart's next update, or the mark exits |
 | `exit` | before a mark is removed, which waits for it | it finishes |
 | `decorate` | from enter, for lasting effects such as `threshold` | the mark exits; it follows every change |
+
+The chart's next update ends the `update` runs of the marks it leaves alone too, so a `delta` goes with it. An update is a chart's `update()` with `data`, even if no value changed, or one that changes a value or adds or removes a mark; or an attachment's `refresh()` that finds a new row, a new value, or a mark entering or leaving. `update({ on })` alone, a re-sort, a resize, `reveal()`, and a `refresh()` that finds nothing new keep them. To keep something past the next update, put it in `decorate`.
 
 An unknown preset name, a transition effect in a slot, or a slot that doesn't exist throws when the chart is made, and makes `update({ on })` reject.
 
@@ -1266,7 +1268,7 @@ interface TraceOptions
 delta<D = unknown>(options?: DeltaOptions<D>): DataEffect<D>
 ```
 
-A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label, outside a slice's label. It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until the next update clears it, following the mark as it moves. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
+A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label, outside a slice's label. It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until its chart's next update clears it, whether or not that update changes its mark, following the mark as it moves. `data.previous` is the values the last update gave, so an update that replaces one still moving says "+1", not the change from part way. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
 
 The text goes in the overlay, which screen readers don't read: a page that relies on it says the same in its table or its announcement. On a line chart, `update` runs on the points whose values changed too, so a change meant for the line goes in [`only()`](#only) with a filter on the mark's length:
 
@@ -1729,6 +1731,7 @@ The [shared options](#chartoptionsd), and:
 - `sort`: `"none" | "value" | "key" | ((a: D, b: D) => number)`. Default `"none"`, data order. `"value"` puts the largest total first, `"key"` the keys A to Z (numbers in numeric order). Sorting never changes a key or a colour.
 - `orientation`: `"horizontal" | "vertical"`. Forces bars or columns; needed when both axes hold numbers.
 - `colorBy`: `"series" | "category"`. Default `"series"`. `"category"` gives each bar its own palette slot by its key, as a donut's slices have, so one `colorAssignment()` shared with a donut keeps each category's colour in both. It needs one series: on a stack it throws.
+- `room`: `number`. Default 0. Px kept clear past the labels at each end of the value axis that bars reach, for text an effect draws there: a [`delta`](#delta) past a bar's value label, above a column's, or past a negative bar's name. At 320 px, `room: 28` keeps a `delta` inside the chart. Anything but a number of px, 0 or more, throws a `RangeError`.
 
 Bars are 20 px thick in rows of 34 px, so a horizontal chart's height follows its rows unless `height` is given; columns are 300 px high.
 
@@ -2253,7 +2256,7 @@ What `expressive()` reads marks from: a selector, an element, a list of elements
 interface Attachment<D>
 ```
 
-- `refresh(source?)`: reads the marks again, from `source` if it's given and from then on, and fires `enter`, `update` and `exit` by key. A mark that only moved follows without an event. It throws, changing nothing, on marks it can't read.
+- `refresh(source?)`: reads the marks again, from `source` if it's given and from then on, and fires `enter`, `update` and `exit` by key. A mark that only moved follows without an event. A read that finds a new row, a new value, or a mark entering or leaving is an update, which ends the last one's `update` effects (a `delta`) on the marks it leaves alone; one that finds none keeps them. It throws, changing nothing, on marks it can't read.
 - `on(type, listener)`: listens for [`MarkEvents`](#markeventsd), and returns a function that stops it.
 - `marks()`: `readonly MarkGeometry[]`. The marks in visual order: bars top to bottom, columns left to right, a pie's slices clockwise from 12 o'clock, other marks described with `geometry` in document order.
 - `focus(key)`: with `keyboard`, moves focus to the mark, which plays its hover effects.
@@ -2838,4 +2841,4 @@ Every rule is inside `:where()`, so any rule of the page's wins. The colours are
 | `--ec-series-1` … `--ec-series-8`, each with `-strong` | the palette slots, and a hovered mark's stronger colour |
 | `--ec-dim-opacity` | the opacity of the other marks' bodies while one is hovered (0.3). Their labels keep theirs |
 
-`--ec-hover-duration` is set by each chart from its motion, so hover feedback is instant with motion off. The eight series colours are checked for 3:1 contrast and for colour-vision deficiencies in both themes. A page that puts a chart on a darker background than `--ec-surface` should set `--ec-text-muted` darker there too, since it's 4.6:1 on the light surface.
+`--ec-hover-duration` is set by each chart from its motion, so hover feedback is instant with motion off. The text effects draw (`delta`, `label`) is `.ec-text` in an `.ec-overlay`: 12.5 px, weight 600, with tabular digits, in `--ec-text`, on our charts and on attachments alike; a page's own rule, such as `#slope .ec-text { font-size: 11px }`, wins. The eight series colours are checked for 3:1 contrast and for colour-vision deficiencies in both themes. A page that puts a chart on a darker background than `--ec-surface` should set `--ec-text-muted` darker there too, since it's 4.6:1 on the light surface.

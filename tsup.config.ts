@@ -7,14 +7,18 @@ async function writeFile(path: string, text: string): Promise<void> {
   await fs.writeFile(path, text);
 }
 
+// npm package: ES module + CommonJS + type declarations. The sport icon pack
+// ("expressive-charts/icons/sport") and the conformance suite for effect authors
+// ("expressive-charts/testing") are their own entries, so the core build carries neither.
+const entry = { index: "src/index.ts", "icons/sport": "src/icons/sport/index.ts", testing: "src/testing/index.ts" };
+
 export default defineConfig([
   {
-    // npm package: ES module + CommonJS + type declarations. The sport icon pack
-    // ("expressive-charts/icons/sport") and the conformance suite for effect authors
-    // ("expressive-charts/testing") are their own entries, so the core build carries neither.
-    entry: { index: "src/index.ts", "icons/sport": "src/icons/sport/index.ts", testing: "src/testing/index.ts" },
+    entry,
     format: ["esm", "cjs"],
-    dts: true,
+    // The stylesheet's types are a declarations entry of their own, not written in onSuccess:
+    // the declarations build deletes every .d.ts in dist/ as it starts, alongside onSuccess.
+    dts: { entry: { ...entry, "expressive-charts.css": "src/style.css.ts" } },
     sourcemap: true,
     clean: true,
     target: "es2020",

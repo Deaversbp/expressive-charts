@@ -8,13 +8,21 @@ Thanks for helping. Read [docs/architecture.md](docs/architecture.md) first; the
 npm install
 npm run dev        # demo pages with live reload
 npm test           # tests
-npm run typecheck  # types
+npm run typecheck  # types, with TypeScript 7
 npm run build      # package output in dist/
 npm run size       # bundle sizes against their budgets, after a build
 npm run pack-check # after a build: the packed tarball, installed and used as a consumer would
 ```
 
-`pack-check` (`scripts/pack-check.mjs`) packs the package, installs the tarball in a new project in the system's temporary folder, imports every entry in Node as ES modules and as CommonJS with no DOM, and typechecks a small consumer against it with the repository's TypeScript under `bundler`, `node16` (ES module) and `node16` (CommonJS) resolution. Each must read its own declarations: `.d.ts` for `import`, `.d.cts` for `require`. CI runs it after the build. `-- --keep` keeps the temporary project.
+Three TypeScripts are dev dependencies, each pinned exactly:
+
+- `typescript-7` (`npm:typescript@7.0.2`), the native compiler, runs `typecheck`.
+- `typescript` (6.0.3) builds the declarations, through tsup, and runs `src/api-docs.test.ts`. Both need TypeScript's JS API, which 7.0 doesn't have, so `typescript` stays a 6 until tsup supports 7.
+- `typescript-5.4` (`npm:typescript@5.4.5`), the oldest README promises, is for `pack-check`.
+
+Each has a `tsc`, so `npx tsc` could run any of them: run TypeScript through the npm scripts, or by its path (`node node_modules/typescript-7/bin/tsc`).
+
+`pack-check` (`scripts/pack-check.mjs`) packs the package, installs the tarball in a new project in the system's temporary folder, imports every entry in Node as ES modules and as CommonJS with no DOM, and typechecks a small consumer against it with each of the three TypeScripts, under `bundler`, `node16` (ES module) and `node16` (CommonJS) resolution. Each must read its own declarations: `.d.ts` for `import`, `.d.cts` for `require`, the stylesheet's included. CI runs it after the build. `-- --keep` keeps the temporary project.
 
 Node.js 22 or newer is required (CI tests 22 and 24).
 

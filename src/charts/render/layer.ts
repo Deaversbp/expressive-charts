@@ -65,7 +65,7 @@ export function svgLayer(group: SVGGElement): Layer {
 
 /**
  * One path per shape. Unset fill or stroke draws none; the width is in icon units, so it scales with the icon.
- * The fill rule and opacity are SVG's own, so unset ones are left to SVG's defaults: nonzero, and 1.
+ * The fill rule and the opacities are SVG's own, so unset ones are left to SVG's defaults: nonzero, and 1.
  */
 function drawShape(shape: IconShape, parent: SVGGElement): void {
   let clip: string | undefined;
@@ -84,7 +84,9 @@ function drawShape(shape: IconShape, parent: SVGGElement): void {
       "stroke-linecap": shape.linecap,
       "stroke-linejoin": shape.linejoin,
       "fill-rule": shape.fillRule,
-      opacity: shape.opacity
+      opacity: shape.opacity,
+      "fill-opacity": shape.fillOpacity,
+      "stroke-opacity": shape.strokeOpacity
     },
     parent
   );

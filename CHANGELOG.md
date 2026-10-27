@@ -25,7 +25,9 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
-## Unreleased
+## 0.3.0 (27 October 2026)
+
+A tooltip that can be hovered, change labels that hold up, lines that skip missing values, long axes, and more of the icon sets' SVG. In the effect-author API, `gaps` on `MarkGeometry`, `gapBefore` on `Sample`, `breaks` on `LineSpec`, and `fillRule` and `opacity` on `IconShape` are additions. Its one change is the `"gapped line"` fixture, with its migration note under Changed. The other changes are outside the promise, and each says what to write instead, if anything.
 
 ### Added
 
@@ -48,7 +50,6 @@ Everything else can still change in a minor release while the library is 0.x: th
 ### Fixed
 
 - **An update run's `data.previous` holds the values the last update gave**, not the values part way through a change still playing. So an update that replaces one still moving says "+1" with `delta`'s default `value`, not "+1.88", and a page no longer needs a `value` that reads its rows to get it right. The values before are the data the mark last rested at: its last update, or where it's been since without a transition (a resize, a line's reveal). The `previous` geometry, and an `update` event's `from`, are still the mark on screen, which the transition starts from.
-
 - **`iconFromSvg` keeps `fill-rule` and `opacity`**, so an icon whose SVG has an even-odd hole (Heroicons' solid style) or a faded part (a duotone set's) draws as its SVG does. Before, the hole filled in and the faded part drew at full strength. They're read from attributes and `style` and inherited through groups, with a group's opacity multiplied into its shapes'. A shape with an opacity of 0 is dropped. `fill-opacity` and `stroke-opacity` still aren't kept.
 - **`import "expressive-charts/style.css"` typechecks on TypeScript 6 and 7.** From TypeScript 6, a side-effect import must find something (`noUncheckedSideEffectImports` is on by default), and the stylesheet had no types, so the import was error TS2882. Its export now has types, an empty module (`dist/expressive-charts.css.d.ts` and `.d.cts`), and bundlers and Node still load the CSS. It keeps a plain `default` too, so a CSS `@import` (css-loader's) and Sass, which resolve with conditions such as `style`, still find it. Nothing changes on TypeScript 5.4 to 5.9.
 - **The tooltip can be hovered** (WCAG 1.4.13, the accessibility audit's one fail). It took no pointer, so moving onto it hovered whatever was under it, or nothing, which hid it. Now, while it shows, the pointer on it stays on the mark or x it's for, so its text can be read, selected and magnified: leaving it for a mark hovers that mark, and leaving it for anything else ends the hover. Beside a mark, a clear bridge over the 12 px gap leads to it, and one that comes up under a resting pointer, as a crosshair's can, lets the pointer through until the pointer is off it. It looks the same, and Escape still hides it. While it shows it covers the marks under it: reach them round it, or by keyboard.

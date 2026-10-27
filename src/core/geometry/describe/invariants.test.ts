@@ -1,9 +1,24 @@
 // The contract every builder keeps, checked on a spread of marks, segments included.
 // Effects rely on these without knowing which builder made a mark.
 
+import { area, curveMonotoneX, line } from "d3-shape";
 import type { MarkGeometry, Point } from "../../contracts/geometry";
 import { measurePath } from "../../testing";
+import { matrix } from "../matrix";
 import { describe as build } from "./index";
+
+/** A season's values, with three missing, drawn as d3 draws them: a curve, gaps and all, and an area. */
+const values = [3, 4, null, 6, 6.5, 8, null, 9, null, 9.5, 11];
+const curved = line<number | null>()
+  .defined((v) => v !== null)
+  .x((_, i) => 40 * i)
+  .y((v) => 200 - 10 * v!)
+  .curve(curveMonotoneX);
+const filled = area<number>()
+  .x((_, i) => 40 * i)
+  .y0(200)
+  .y1((v) => 200 - 10 * v)
+  .curve(curveMonotoneX);
 
 const fixtures: [string, MarkGeometry][] = [
   ["bar", build.bar({ key: "a", series: "goals", x: 10, y: 20, width: 180, height: 22, baseline: "left", radius: 4 })],
@@ -46,7 +61,14 @@ const fixtures: [string, MarkGeometry][] = [
       width: 2.25
     })
   ],
-  ["dot", build.point({ key: "m", x: 10, y: 10, r: 4.5 })]
+  ["dot", build.point({ key: "m", x: 10, y: 10, r: 4.5 })],
+  ["curve", build.shape({ key: "q", d: curved(values.filter((v) => v !== null))!, width: 2 })],
+  // Each piece leaves in the direction the one before arrives: a circle's arc, a Bézier and half an ellipse's.
+  ["open shape with arcs, turned", build.shape({ key: "r", d: "M0,0L20,0A10,10 0 0 1 30,10L30,30Q30,50 50,50A20,10 0 0 1 70,60", matrix: matrix.rotate(0.3, { x: 20, y: 0 }), width: 3 })],
+  ["area", build.shape({ key: "s", d: filled([3, 5, 9, 8, 12])! })],
+  ["area with a hole", build.shape({ key: "t", d: "M0,0V100H100V0ZM30,30H70V70H30Z" })],
+  ["circle, anticlockwise", build.shape({ key: "u", d: "M40,10A30,30 0 0 0 40,70A30,30 0 0 0 40,10Z" })],
+  ["ellipse, skewed", build.shape({ key: "v", d: "M0,-20A30,20 0 0 1 0,20A30,20 0 0 1 0,-20Z", matrix: [1, 0, 0.4, 1, 50, 50] })]
 ];
 
 const everyMark = fixtures.flatMap(([name, mark]): [string, MarkGeometry][] => [
@@ -142,7 +164,8 @@ const zigzag = [
 const gappedMarks: [string, MarkGeometry][] = [
   ["line with a gap", build.line({ key: "n", points: zigzag, breaks: [2], width: 2.25 })],
   ["line with two gaps", build.line({ key: "o", points: zigzag, breaks: [2, 4], width: 2.25 })],
-  ["line with a value alone at each end and between gaps", build.line({ key: "p", points: zigzag, breaks: [1, 3, 4, 5], width: 2.25 })]
+  ["line with a value alone at each end and between gaps", build.line({ key: "p", points: zigzag, breaks: [1, 3, 4, 5], width: 2.25 })],
+  ["curve with gaps", build.shape({ key: "w", d: curved(values)!, width: 2 })]
 ];
 
 /** The px of the gaps between t0 and t1. */

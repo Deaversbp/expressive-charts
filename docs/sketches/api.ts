@@ -61,9 +61,11 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 
 // ── Geometry builders: public, shared by reference charts and adapters ───────
 
-// describe.bar, .arc, .line and .point are built, in src/core/geometry (with the Baseline type and
-// NEW: an optional `gap` between bar segments). The sketch's describe.shape, which would walk any SVG
-// shape with getPointAtLength, isn't built: architecture.md lists it as planned.
+// describe.bar, .arc, .line, .point and .shape are built, in src/core/geometry (with the Baseline type and
+// NEW: an optional `gap` between bar segments). Changed from the sketch: describe.shape, which would
+// walk an SVG element with getPointAtLength, reads path data instead, describe.shape({ key, d, matrix,
+// width }) with ShapeSpec (M9 decision 4, built in M9 step 3): the library follows the path itself, so
+// it works in Node and jsdom, and the same in every browser.
 
 // NEW: samplesAlong(mark, points) projects data points (in mark coordinates) onto a mark's walk,
 // giving data effects their samples. Built in M4 step 4 (src/core/geometry), with the SamplePoint type

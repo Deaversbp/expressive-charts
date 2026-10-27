@@ -6,16 +6,16 @@
     "dist/icons/sport.js": 10,
     "dist/index.cjs": 110.5,
     "dist/index.js": 111,
-    "dist/testing.cjs": 14,
-    "dist/testing.js": 21.5
+    "dist/testing.cjs": 19,
+    "dist/testing.js": 28
   },
   "importSets": {
     "motion, animated": 2,
-    "describe, matrix": 4,
-    "expressive, travel": 27,
+    "describe, matrix": 7.5,
+    "expressive, travel": 33,
     "barChart": 34,
-    "lineChart, threshold, playback, playButton": 39,
-    "chartSwitch, donutChart, barChart": 41,
+    "lineChart, threshold, playback, playButton": 45,
+    "chartSwitch, donutChart, barChart": 47,
     "everything": 76.5
   }
 }

@@ -915,6 +915,7 @@ offset(bar.end, bar.angle(1) - Math.PI / 2, 8);   // 8 px to the up side of the 
 matrix.rotate(Math.PI / 12, bar.pivot);           // 15° clockwise about the baseline
 
 const slice = describe.arc({ key: "Saved", cx: 0, cy: 0, inner: 70, outer: 116, start: 0, end: Math.PI / 2 }); // d3.pie() angles
+const curve = describe.shape({ key: "goals", d: "M0,170C40,160 40,150 80,140", width: 2 }); // any path data: a d3 curve, an area
 ```
 
 #### `describe`
@@ -927,18 +928,19 @@ const describe: {
   arc(spec: ArcSpec): MarkGeometry;
   line(spec: LineSpec): MarkGeometry;
   point(spec: PointSpec): MarkGeometry;
+  shape(spec: ShapeSpec): MarkGeometry;
 }
 ```
 
 Each builder returns a [`MarkGeometry`](#markgeometry):
 
-| | `describe.bar` | `describe.arc` | `describe.line` | `describe.point` |
-| --- | --- | --- | --- | --- |
-| Walk | the middle of the baseline edge to the middle of the tip | the start angle to the end angle, on the mid-radius arc | the first point to the last | none: length 0 at the point |
-| `thickness` | across the bar | `outer − inner` | `width` | `2r` |
-| `outline` | the rectangle, its tip rounded | the annular sector | the stroke, open, less its gaps | the circle |
-| `pivot` | the middle of the baseline edge | the centre | the first point | the point |
-| `segments` | at least one | none | none | none |
+| | `describe.bar` | `describe.arc` | `describe.line` | `describe.point` | `describe.shape`, open | `describe.shape`, closed |
+| --- | --- | --- | --- | --- | --- | --- |
+| Walk | the middle of the baseline edge to the middle of the tip | the start angle to the end angle, on the mid-radius arc | the first point to the last | none: length 0 at the point | along the path, with a gap at each later move | none: length 0 at the centre |
+| `thickness` | across the bar | `outer − inner` | `width` | `2r` | `width` | the smaller of its width and height |
+| `outline` | the rectangle, its tip rounded | the annular sector | the stroke, open, less its gaps | the circle | the stroke, open, less its gaps | the whole path, holes too |
+| `pivot` | the middle of the baseline edge | the centre | the first point | the point | the first point | the centre |
+| `segments` | at least one | none | none | none | none | none |
 
 Path data uses absolute `M`, `L`, `A` and `Z` only, with numbers rounded to 0.001 px.
 
@@ -1029,6 +1031,47 @@ interface PointSpec {
 ```
 
 A dot of radius `r`. Its walk has length 0, so `travel` and `trace` do nothing on it, while `wiggle`, `pulse` and `flash` still work. `labelBounds`, the boxes of its own labels, is passed through as the geometry's.
+
+#### `ShapeSpec`
+
+*Under the 0.x promise.*
+
+```ts
+interface ShapeSpec {
+  readonly key: string;
+  readonly series?: string;
+  readonly d: string;
+  readonly matrix?: Matrix;
+  readonly width?: number;
+  readonly labelBounds?: readonly Rect[];
+}
+```
+
+Any SVG shape, from its path data. The library follows the path itself, so it works the same in Node, in jsdom and in every browser ([architecture.md](architecture.md#shapes)).
+
+- `d`: `string`, required. Path data in the shape's own px, every command, relative or absolute, read as SVG reads it, up to its first error.
+- `matrix`: [`Matrix`](#matrix-type). Moves the shape into the marks' px, as an element's transform does, arcs too. Default none.
+- `width`: `number`. An open shape's stroke width in px, more than 0. Default 1.
+- `labelBounds`: `readonly Rect[]`. The boxes of its own labels, in the marks' px, passed through as the geometry's.
+
+A shape is closed when every subpath ends with `Z`, or where it started, and otherwise open.
+
+- **An open shape is a line.** Its walk follows the path from its first point, and each later move starts a new run after a [gap](#markgeometry), so a line drawn with d3's `.defined()` comes with its gaps. Its outline is the stroke, less the gaps, and its `thickness`, `bounds`, `center` and `pivot` are as `describe.line`'s.
+- **A closed shape has no direction**, like a point: its walk has length 0, at its bounds' centre, so `travel` and `trace` do nothing on it, while `wiggle`, `pulse`, `flash` and `morph` work on its outline. The outline's `d` is the whole path, holes too. Its `sample(n)` goes round the longest subpath, clockwise on screen, in four quarters of equal length from its upper left (the point with the least x + y), so a circle samples as `describe.point`'s does. Its centre and pivot are its bounds' centre, and its `thickness` is the smaller of its width and height.
+- **Curves.** Straight pieces stay straight, and a circular arc (an `A` whose radii are equal after `matrix`) stays an arc. Béziers and other arcs become straight pieces within 0.1 px of the curve.
+
+Path data with nothing to draw throws a `RangeError` naming `d`, and so do path data that isn't a string, and coordinates that `matrix` takes past the largest number. A `matrix` that isn't six finite numbers, and a `width` that isn't a number more than 0, each throw a `RangeError` naming the field.
+
+```ts
+import { area, curveMonotoneX, line } from "d3-shape";
+import { describe, matrix } from "expressive-charts";
+
+const weeks = [{ week: 1, goals: 0 }, { week: 2, goals: 1 }, { week: 3, goals: 4 }];
+const x = (w: (typeof weeks)[number]): number => 80 * (w.week - 1);
+const y = (w: (typeof weeks)[number]): number => 200 - 30 * w.goals;
+const goals = describe.shape({ key: "goals", d: line(x, y).curve(curveMonotoneX)(weeks)!, width: 2 }); // open: a line
+const under = describe.shape({ key: "goals", d: area(x, 200, y).curve(curveMonotoneX)(weeks)!, matrix: matrix.translate(40, 20) }); // closed: an area
+```
 
 #### `matrix`
 
@@ -2207,7 +2250,7 @@ expressive(lines, {
 });
 ```
 
-This line's `geometry` and `samples` are built from the rows bound to each path, so `watch` follows the line only while the page updates those rows every frame, as a reveal does (`paths.datum(…).attr("d", …)` on each frame). A D3 transition that binds the new rows once and interpolates the path's `d` would show only its end: the overlay jumps to the final line. There, describe the line from the element's own path (`describe.line` from points read off it each frame), or call `refresh()` when the transition ends. Rects need nothing: they're read from the element.
+This line's `geometry` and `samples` are built from the rows bound to each path, so `watch` follows the line only while the page updates those rows every frame, as a reveal does (`paths.datum(…).attr("d", …)` on each frame). A D3 transition that binds the new rows once and interpolates the path's `d` would show only its end: the overlay jumps to the final line. There, describe the line from the element's own path data, `describe.shape({ key, d: el.getAttribute("d") ?? "", width: 2 })`, which `watch` reads again each frame, or call `refresh()` when the transition ends. Rects need nothing: they're read from the element.
 
 **Observable Plot** binds each rect to its row's index, so pass `datum`. Plot draws a new `<svg>` each time, so pass `refresh()` the new one's rects. After a transform that derives new data (`groupY`, `binX`), the index is into Plot's derived rows, not yours: read them through the mark's `render` option instead. A Plot line's path is bound to its series' row indices, with `-1` where Plot breaks the line at a missing value: pass `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, a `geometry` from those rows' points through Plot's own scales (`plot.scale("x").apply(r.week)`), and `samples` from `samplesAlong` on the same points. Where Plot leaves a gap, give `describe.line` the `breaks`: the indices, among those rows, of the ones after each `-1`. The accessors are tested against Plot 0.6.17.
 

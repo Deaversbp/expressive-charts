@@ -10,7 +10,7 @@ The library follows [semantic versioning](https://semver.org) from 0.1.0, with t
 
 - `defineEffect` and `defineDataEffect`, with `GeometryEffectSpec` and `DataEffectSpec`;
 - `matrix` and `offset`;
-- `describe.bar`, `describe.arc`, `describe.line` and `describe.point`, with their specs: `BarSpec`, `BarSegmentSpec`, `Baseline`, `ArcSpec`, `LineSpec` and `PointSpec`;
+- `describe.bar`, `describe.arc`, `describe.line`, `describe.point` and `describe.shape`, with their specs: `BarSpec`, `BarSegmentSpec`, `Baseline`, `ArcSpec`, `LineSpec`, `PointSpec` and `ShapeSpec`;
 - the effect contracts (`GeometryEffect`, `DataEffect`, `TransitionEffect`, `MarkEffect`, `AnyMarkEffect`, `Combined`), the contexts (`EffectContext`, `TransitionContext`), the mark and its data (`MarkGeometry`, `Outline`, `Point`, `Rect`, `MarkData`, `Sample`), the drawing API (`Layer`, `MarkHandle`, `MarkStyle`, `Matrix`, `Paint`, `TextStyle`, `Color`, and the handles `IconHandle`, `PathHandle` and `TextHandle`), and icons as an effect gets them (`Icon`, `IconShape`, `IconSource`);
 - the motion types the context uses: `MotionView`, `MotionMode`, `Timing`, `Tween`, `TweenOptions`, `TweenResult` and `Easing`;
 - `expressive-charts/testing`: `checkEffect`, `checkTransition`, `fixtures`, `fixturePairs`, `testContext` and `play`, with their options (`CheckEffectOptions`, `CheckTransitionOptions`, `TestContextOptions`, `PlayOptions`), the fixtures' names (`FixtureName`, `FixturePairName`), the test context (`TestContext`) and what it records (`RecordingLayer`, `RecordingMark`, `Drawn`, `DrawnIcon`, `DrawnPath`, `DrawnText`, `LayerCall`, `MarkCall`, `Picture`), and the motion types they use: `Motion`, `Clock`, `ManualClock`, `ScalingOverrides` and `ScalingRule`.
@@ -24,6 +24,18 @@ From 0.1.0:
 - Additions (a new optional field, a new helper) can come in any release.
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
+
+## Unreleased
+
+### Added
+
+- **`describe.shape`**, under the 0.x promise, with its spec, `ShapeSpec`: a mark's geometry from SVG path data, `describe.shape({ key, series, d, matrix, width, labelBounds })`. The library follows the path itself, so it works the same in Node, Vitest and every browser. `d` is read as SVG reads it, up to its first error, and `matrix` moves it into the marks' px, as an element's transform does. A shape is closed when every subpath ends with `Z`, and otherwise open.
+  - An open shape is a line. Its walk follows the path, and each later move starts a new run after a gap, so a D3 line drawn with `.defined()` comes with its gaps. Its outline is the stroke, `width` px wide (default 1).
+  - A closed shape, such as a D3 area, has no direction, like a point: its walk has length 0, at its centre. Its outline is the whole path, holes too, sampled round its longest subpath from its upper left, so a circle samples as `describe.point`'s does.
+  - Béziers, and arcs that aren't circular, become straight pieces within 0.1 px of the curve, so path data still has only `M`, `L`, `A` and `Z`.
+  - Path data with nothing to draw, a `matrix` that isn't six finite numbers and a `width` that isn't more than 0 each throw a `RangeError` naming the field.
+
+  These are new names, so no code needs to change. The effects guide says how to check an effect on a curve or an area with it.
 
 ## 0.3.0 (27 October 2026)
 

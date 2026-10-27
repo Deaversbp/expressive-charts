@@ -21,6 +21,7 @@ const values = {
   "describe.arc": lib.describe.arc,
   "describe.line": lib.describe.line,
   "describe.point": lib.describe.point,
+  "describe.shape": lib.describe.shape,
   checkEffect: testing.checkEffect,
   checkTransition: testing.checkTransition,
   fixtures: testing.fixtures,
@@ -39,6 +40,7 @@ const types = {
   ArcSpec: type<lib.ArcSpec>(),
   LineSpec: type<lib.LineSpec>(),
   PointSpec: type<lib.PointSpec>(),
+  ShapeSpec: type<lib.ShapeSpec>(),
 
   GeometryEffect: type<lib.GeometryEffect>(),
   DataEffect: type<lib.DataEffect>(),

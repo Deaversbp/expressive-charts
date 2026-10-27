@@ -3,7 +3,8 @@
 // from the prototype in demo/lab.html and drawn in fixed colours (a white ball is white in any theme).
 
 import type { Icon } from "../../core";
-import { formatNumber as n } from "../../core/geometry";
+// From its own file, not the geometry's index, so this entry doesn't carry the builders.
+import { formatNumber as n } from "../../core/geometry/path-data";
 import { defineIcon } from "../define";
 
 const BALL_R = 8.5;

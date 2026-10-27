@@ -81,7 +81,7 @@ A mark the library didn't draw has no `labelBounds` unless the page's `geometry`
 - **Missing and zero.** A series that isn't shown has no segment; a zero value has a segment of length 0. Treat both the same: a walk under 0.5 px should finish at once and draw nothing.
 - **Never branch on the kind of chart.** There is no `mark.type`, on purpose. If an effect needs something the contract doesn't give, the contract is missing it: open an issue rather than guessing from the shape.
 
-`describe.bar`, `.arc`, `.line` and `.point` build marks by hand, for tests or for `expressive({ geometry })`.
+`describe.bar`, `.arc`, `.line`, `.point` and `.shape` build marks by hand, for tests or for `expressive({ geometry })`. `describe.shape` reads any SVG path data, so a curve or an area another library drew is a mark too ([below](#on-a-curve-or-an-area)).
 
 ### Drawing along a walk with gaps
 
@@ -91,7 +91,7 @@ A line that skips a value has a gap in its walk, from the value before to the va
 - **Put things on the walk outside the gaps.** An icon or a label placed at `path(t)` for a `t` inside a gap sits where there's no data. `travel` jumps from one side of a gap to the other; check `mark.gaps` before you place something at a `t` of your own.
 - **`outline.sample(n)` runs along the whole walk**, gaps and all, so a morph between two lines joins across their gaps part way.
 - **In data, a gap is `gapBefore`:** `true` on the first sample after it. Don't interpolate between a sample with `gapBefore` and the one before.
-- Most marks have no gaps: `mark.gaps` is unset, and `slice()` is the whole stretch. A line described with `describe.line({ points, breaks })` has them, `breaks` being the indices of the points that start a new run.
+- Most marks have no gaps: `mark.gaps` is unset, and `slice()` is the whole stretch. A line described with `describe.line({ points, breaks })` has them, `breaks` being the indices of the points that start a new run. So does an open shape from `describe.shape` with more than one move, as d3 draws a line with `.defined()`.
 
 ```ts
 // The stroke so far, with the line's gaps left out.
@@ -341,6 +341,39 @@ const ctx = testContext();
 await play(ctx.clock, trace().run(fixtures.bar, ctx));
 expect(ctx.layer.picture()).toEqual([{ kind: "path", d: fixtures.bar.slice(0, 1), paint: { stroke: "mark", width: 3, opacity: 0.5, linecap: "round" } }]);
 ```
+
+### On a curve or an area
+
+The fixtures are made of straight pieces and circular arcs. To check an effect on a curve or an area, describe one from the path data that draws it, with `describe.shape`, and pass it in `marks`, with a moved twin for check 5:
+
+```ts
+import { area, curveMonotoneX, line } from "d3-shape";
+import { describe } from "expressive-charts";
+import { checkEffect } from "expressive-charts/testing";
+import { trace } from "./trace";
+
+const weeks = [0, 1, 4, 6, 6, 7].map((goals, i) => ({ week: i + 1, goals }));
+
+/** A curve, the same with week 3 missing, and the area under it, at a scale. */
+function shapes(scale: number) {
+  const x = (w: (typeof weeks)[number]): number => 80 * scale * (w.week - 1);
+  const y = (w: (typeof weeks)[number]): number => 200 - 30 * scale * w.goals;
+  return {
+    curve: describe.shape({ key: "curve", d: line(x, y).curve(curveMonotoneX)(weeks)!, width: 2 }),
+    gapped: describe.shape({ key: "gapped", d: line(x, y).defined((w) => w.week !== 3).curve(curveMonotoneX)(weeks)!, width: 2 }),
+    area: describe.shape({ key: "area", d: area(x, 200, y).curve(curveMonotoneX)(weeks)! })
+  };
+}
+
+test("trace works on curves and areas", async () => {
+  const moved = shapes(0.8);
+  await checkEffect(trace(), { marks: shapes(1), moved: (mark) => moved[mark.key as keyof typeof moved] });
+});
+```
+
+- **A curve** is flattened into straight pieces within 0.1 px of it, so an effect sees it as a line with many short legs: `angle(t)` turns a little at each.
+- **An open shape with more than one move**, such as the curve drawn with `.defined()`, has a gap at each later move, which your effect should leave alone, as on the `gapped line` fixture ([above](#drawing-along-a-walk-with-gaps)).
+- **An area is closed** and has no direction, like a point: its walk has length 0, at its centre. So `trace` and `travel`, which go along the walk, draw nothing on it, and an effect that works on the outline, as `pulse` does, follows its whole path, holes too.
 
 ## Transition effects and `checkTransition`
 

@@ -1,9 +1,11 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// ten sources: bars from the reference barChart, from expressive() on bars drawn by other code and
+// fourteen sources: bars from the reference barChart, from expressive() on bars drawn by other code and
 // from a stacked Observable Plot bar through expressive(), the slices of the reference donutChart, the
 // slices of a D3 pie through expressive(), the lines and points of the reference lineChart, on a full
-// season and on one with missing weeks, and the lines of a D3 line chart, of a D3 line with missing
-// weeks and of a Plot line through expressive(),
+// season and on one with missing weeks, the lines of a D3 line chart, of a D3 line with missing
+// weeks and of a Plot line through expressive(), and shapes through expressive(), each described from
+// its own path data with describe.shape: a D3 curve, the same with missing weeks, a D3 area, and D3
+// rings, areas with holes,
 // with samples from samplesAlong. Each source also draws its marks at another size, as a resize would,
 // for the check that effects follow onChange. On lines with gaps, no effect draws inside one, on any
 // frame. This test brings charts and effects together, so it lives beside src/index.ts, the only
@@ -11,7 +13,7 @@
 
 import { barX, lineY, plot, type Plot } from "@observablehq/plot";
 import { select } from "d3-selection";
-import { arc, line, pie, type PieArcDatum } from "d3-shape";
+import { arc, area, curveMonotoneX, line, pie, type PieArcDatum } from "d3-shape";
 import {
   barChart,
   delta,
@@ -21,6 +23,8 @@ import {
   flash,
   label,
   lineChart,
+  matrix,
+  morph,
   parallel,
   pulse,
   samplesAlong,
@@ -36,7 +40,7 @@ import {
 } from "./index";
 import { drawnInGaps, flush, type TestContext } from "./core/testing";
 import { cleat, soccerBall } from "./icons/sport";
-import { checkEffect, testContext, type CheckEffectOptions } from "./testing";
+import { checkEffect, checkTransition, testContext, type CheckEffectOptions } from "./testing";
 
 interface Player {
   name: string;
@@ -287,6 +291,119 @@ function plotLineSource(moved = false): { readonly marks: readonly MarkGeometry[
 
 const plotLineMarks = (moved = false): readonly MarkGeometry[] => plotLineSource(moved).marks;
 
+/** A path's own path data, which describe.shape reads. */
+const dOf = (element: Element): string => element.getAttribute("d") ?? "";
+
+/**
+ * A D3 line drawn with curveMonotoneX on the season: two paths in a margin <g>, each described from
+ * its own path data with describe.shape, with samplesAlong samples at the weeks, and the data a
+ * decoration gets. 80 px a week and 30 px a goal (64 and 24 when moved).
+ */
+function d3CurveSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<string, MarkData> } {
+  const [across, up] = moved ? [64, 24] : [80, 30];
+  const x = (week: number): number => across * (week - 1);
+  const y = (value: number): number => 200 - up * value;
+  const plot = select(document.body).append("svg").attr("width", 520).attr("height", 240).append("g").attr("transform", "translate(40,20)");
+  const paths = plot
+    .selectAll<SVGPathElement, { series: "goals" | "xg"; rows: Week[] }>("path")
+    .data((["goals", "xg"] as const).map((series) => ({ series, rows: weeks })))
+    .join("path")
+    .attr("fill", "none")
+    .attr("stroke-width", 2)
+    .attr("d", (d) =>
+      line<Week>()
+        .x((w) => x(w.week))
+        .y((w) => y(w[d.series]))
+        .curve(curveMonotoneX)(d.rows)
+    );
+  const data = new Map<string, MarkData>();
+  const fx = expressive(paths, {
+    key: (d) => d.series,
+    geometry: (el, d, key) => build.shape({ key, series: d.series, d: dOf(el), width: 2 }),
+    samples: (d, mark) => samplesAlong(mark, d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]), value: w[d.series], at: w.week }))),
+    on: { decorate: { kind: "data", run: async (mark, markData) => void data.set(mark.key, markData), end: () => {}, clear: () => {} } }
+  });
+  return { marks: fx.marks(), data };
+}
+
+const d3CurveMarks = (moved = false): readonly MarkGeometry[] => d3CurveSource(moved).marks;
+
+/**
+ * The same curve drawn with .defined() over the patchy season, so each path has a move after each
+ * missing week, which describe.shape makes a gap; with samplesAlong samples at the weeks there are.
+ */
+function d3CurveGappedSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<string, MarkData> } {
+  const [across, up] = moved ? [64, 24] : [80, 30];
+  const x = (week: number): number => across * (week - 1);
+  const y = (value: number): number => 200 - up * value;
+  const plot = select(document.body).append("svg").attr("width", 520).attr("height", 240).append("g").attr("transform", "translate(40,20)");
+  const paths = plot
+    .selectAll<SVGPathElement, PatchySeries>("path")
+    .data((["goals", "xg"] as const).map((series) => ({ series, rows: patchy })))
+    .join("path")
+    .attr("fill", "none")
+    .attr("stroke-width", 2)
+    .attr("d", (d) =>
+      line<Patchy>()
+        .defined((w) => w[d.series] !== undefined)
+        .x((w) => x(w.week))
+        .y((w) => y(w[d.series]!))
+        .curve(curveMonotoneX)(d.rows)
+    );
+  const data = new Map<string, MarkData>();
+  const fx = expressive(paths, {
+    key: (d) => d.series,
+    geometry: (el, d, key) => build.shape({ key, series: d.series, d: dOf(el), width: 2 }),
+    samples: (d, mark) =>
+      samplesAlong(
+        mark,
+        d.rows.flatMap((w) => (w[d.series] === undefined ? [] : [{ x: x(w.week), y: y(w[d.series]!), value: w[d.series]!, at: w.week }]))
+      ),
+    on: { decorate: { kind: "data", run: async (mark, markData) => void data.set(mark.key, markData), end: () => {}, clear: () => {} } }
+  });
+  return { marks: fx.marks(), data };
+}
+
+const d3CurveGappedMarks = (moved = false): readonly MarkGeometry[] => d3CurveGappedSource(moved).marks;
+
+/** A D3 area under each series' curve, down to 0, each described from its own path data: closed shapes. Smaller when moved. */
+function d3AreaMarks(moved = false): readonly MarkGeometry[] {
+  const [across, up] = moved ? [64, 24] : [80, 30];
+  const plot = select(document.body).append("svg").attr("width", 520).attr("height", 240).append("g").attr("transform", "translate(40,20)");
+  const areas = plot
+    .selectAll<SVGPathElement, "goals" | "xg">("path")
+    .data(["goals", "xg"] as const)
+    .join("path")
+    .attr("d", (series) =>
+      area<Week>()
+        .x((w) => across * (w.week - 1))
+        .y0(200)
+        .y1((w) => 200 - up * w[series])
+        .curve(curveMonotoneX)(weeks)
+    );
+  return expressive(areas, { key: (series) => series, geometry: (el, series, key) => build.shape({ key, series, d: dOf(el) }) }).marks();
+}
+
+/**
+ * A D3 ring for each series, a donut of one slice, side by side: areas with holes, each drawn round
+ * its own centre and moved there with a transform, so it's described from its own path data with
+ * that move as its matrix. Smaller, and nearer, when moved.
+ */
+function d3RingMarks(moved = false): readonly MarkGeometry[] {
+  const plot = select(document.body).append("svg").attr("width", 640).attr("height", 300).append("g").attr("transform", "translate(320,150)");
+  const scale = moved ? 0.8 : 1;
+  const rings = plot
+    .selectAll<SVGPathElement, { series: string; cx: number; inner: number; outer: number }>("path")
+    .data([
+      { series: "goals", cx: -170 * scale, inner: 40 * scale, outer: 60 * scale },
+      { series: "xg", cx: 120 * scale, inner: 70 * scale, outer: 116 * scale }
+    ])
+    .join("path")
+    .attr("transform", (d) => `translate(${d.cx},0)`)
+    .attr("d", (d) => arc()({ innerRadius: d.inner, outerRadius: d.outer, startAngle: 0, endAngle: 2 * Math.PI }));
+  return expressive(rings, { key: (d) => d.series, geometry: (el, d, key) => build.shape({ key, series: d.series, d: dOf(el), matrix: matrix.translate(d.cx, 0) }) }).marks();
+}
+
 const effects: Record<string, AnyMarkEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
@@ -329,7 +446,18 @@ const options: Record<string, CheckEffectOptions> = { "staggered flash, third of
 type Source = (moved?: boolean) => readonly MarkGeometry[];
 const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars": adapterMarks, "Plot bars through expressive()": plotBarMarks };
 /** The sources whose lines have gaps. */
-const gapped: Record<string, Source> = { "lineChart with missing weeks": lineGappedMarks, "D3 line with missing weeks through expressive()": d3GappedMarks };
+const gapped: Record<string, Source> = {
+  "lineChart with missing weeks": lineGappedMarks,
+  "D3 line with missing weeks through expressive()": d3GappedMarks,
+  "D3 curve with missing weeks through describe.shape": d3CurveGappedMarks
+};
+/** The sources described with describe.shape. */
+const shapes: Record<string, Source> = {
+  "D3 curve through describe.shape": d3CurveMarks,
+  "D3 curve with missing weeks through describe.shape": d3CurveGappedMarks,
+  "D3 area through describe.shape": d3AreaMarks,
+  "D3 rings through describe.shape": d3RingMarks
+};
 const sources: Record<string, Source> = {
   ...bars,
   donutChart: donutMarks,
@@ -337,7 +465,8 @@ const sources: Record<string, Source> = {
   lineChart: lineMarks,
   "D3 line through expressive()": d3LineMarks,
   ...gapped,
-  "Plot line through expressive()": plotLineMarks
+  "Plot line through expressive()": plotLineMarks,
+  ...shapes
 };
 
 afterEach(() => {
@@ -512,6 +641,138 @@ describe("lines from a Plot line through expressive()", () => {
     const ctx = testContext();
     threshold({ compareTo: "xg" }).end(marks[0]!, data.get("goals")!, ctx);
     expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);
+  });
+});
+
+describe("lines from a D3 curve through describe.shape", () => {
+  it("finds a curve for each series, open, through each week, with a sample on it at each week", () => {
+    const { marks, data } = d3CurveSource();
+    expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg"]);
+    for (const mark of marks) {
+      const series = mark.key as "goals" | "xg";
+      expect(mark.outline.closed).toBe(false);
+      expect(mark.series).toBe(series);
+      expect(mark.thickness).toBe(2);
+      expect(mark.start).toEqual({ x: 0, y: 200 - 30 * weeks[0]![series] });
+      expect(mark.end).toEqual({ x: 400, y: 200 - 30 * weeks[5]![series] });
+      // The curve is flattened, so its path data has straight pieces only.
+      expect(mark.outline.d).not.toMatch(/[CQ]/);
+      const samples = data.get(mark.key)!.samples;
+      expect(samples.map((sample) => sample.at)).toEqual(weeks.map((w) => w.week));
+      samples.forEach((sample, i) => {
+        const at = mark.path(sample.t);
+        expect(at.x).toBeCloseTo(80 * i, 9);
+        expect(at.y).toBeCloseTo(200 - 30 * weeks[i]![series], 9);
+      });
+    }
+  });
+
+  it("threshold below xG passes the conformance checks on both curves, with the adapter's samples", async () => {
+    const { marks, data } = d3CurveSource();
+    const twins = d3CurveSource(true);
+    const of = (mark: MarkGeometry) => (marks.includes(mark) ? data : twins.data).get(mark.key)!;
+    const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+    await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: of });
+    // Not vacuously: as on the straight lines, goals are below xG twice.
+    const ctx = testContext();
+    threshold({ compareTo: "xg" }).end(marks[0]!, data.get("goals")!, ctx);
+    expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);
+  });
+});
+
+describe("lines from a D3 curve with missing weeks through describe.shape", () => {
+  it("finds a curve for each series, with a gap at each move, where a week is missing", () => {
+    const { marks, data } = d3CurveGappedSource();
+    const [goals, xg] = marks as [MarkGeometry, MarkGeometry];
+    expect(goals.gaps).toHaveLength(1);
+    expect(goals.path(goals.gaps![0]![0])).toEqual({ x: 80, y: 200 - 30 * weeks[1]!.goals });
+    expect(goals.path(goals.gaps![0]![1])).toEqual({ x: 240, y: 200 - 30 * weeks[3]!.goals });
+    expect(xg.gaps).toHaveLength(1);
+    expect(xg.path(xg.gaps![0]![1])).toEqual({ x: 400, y: 200 - 30 * weeks[5]!.xg });
+    expect(goals.outline.d.match(/M/g)).toHaveLength(2);
+    // xG's week 6 is alone after its gap: nothing to stroke there.
+    expect(xg.outline.d.match(/M/g)).toHaveLength(1);
+    expect(data.get("goals")!.samples.map((sample) => [sample.at, sample.gapBefore === true])).toEqual([
+      [1, false],
+      [2, false],
+      [4, true],
+      [5, false],
+      [6, false]
+    ]);
+  });
+
+  it("threshold below xG passes the conformance checks on both curves, and colours nothing where either is missing", async () => {
+    const { marks, data } = d3CurveGappedSource();
+    const twins = d3CurveGappedSource(true);
+    const of = (mark: MarkGeometry) => (marks.includes(mark) ? data : twins.data).get(mark.key)!;
+    const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+    await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: of });
+    // As on the straight line: only weeks 1 and 2 are coloured.
+    const ctx = testContext();
+    threshold({ compareTo: "xg" }).end(marks[0]!, data.get("goals")!, ctx);
+    expect(ctx.layer.drawn.map((item) => (item.kind === "path" ? item.d : item.kind))).toEqual([marks[0]!.slice(0, marks[0]!.gaps![0]![0])]);
+  });
+});
+
+describe("areas from a D3 area through describe.shape", () => {
+  it("finds a closed area for each series, with no direction, sampled from its upper left", () => {
+    for (const mark of d3AreaMarks()) {
+      const series = mark.key as "goals" | "xg";
+      expect(mark.outline.closed).toBe(true);
+      expect(mark.length).toBe(0);
+      expect(mark.bounds).toMatchObject({ x: 0, width: 400 });
+      expect(mark.bounds.y + mark.bounds.height).toBe(200);
+      expect(mark.start).toEqual({ x: 200, y: mark.bounds.y + mark.bounds.height / 2 });
+      expect(mark.outline.sample(4)[0]).toEqual({ x: 0, y: 200 - 30 * weeks[0]![series] });
+      expect(mark.outline.d).not.toMatch(/[CQ]/);
+    }
+  });
+});
+
+describe("rings from D3 through describe.shape", () => {
+  it("finds a closed ring for each series, its hole in its outline, sampled round the outside", () => {
+    const marks = d3RingMarks();
+    expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg"]);
+    const [, xg] = marks as [MarkGeometry, MarkGeometry];
+    expect(xg.outline.closed).toBe(true);
+    expect(xg.center).toEqual({ x: 120, y: 0 });
+    expect(xg.bounds).toEqual({ x: 4, y: -116, width: 232, height: 232 });
+    expect(xg.outline.d.match(/M/g)).toHaveLength(2);
+    const k = 116 * Math.SQRT1_2;
+    const [corner] = xg.outline.sample(4);
+    expect(corner!.x).toBeCloseTo(120 - k, 9);
+    expect(corner!.y).toBeCloseTo(-k, 9);
+  });
+});
+
+/** Pairs of marks with a shape in each, for morph: from the sources above, and a bar and a slice. */
+function shapePairs(): Record<string, readonly [MarkGeometry, MarkGeometry]> {
+  const [curve, other] = d3CurveMarks() as [MarkGeometry, MarkGeometry];
+  const [gapped] = d3CurveGappedMarks() as [MarkGeometry];
+  const [straight] = d3LineMarks() as [MarkGeometry];
+  const [area, otherArea] = d3AreaMarks() as [MarkGeometry, MarkGeometry];
+  const [ring] = d3RingMarks() as [MarkGeometry];
+  const [slice] = pieMarks() as [MarkGeometry];
+  const [bar] = chartMarks() as [MarkGeometry];
+  return {
+    "two curves": [curve, other],
+    "a curve and a straight line": [curve, straight],
+    "a curve with a gap and one without": [gapped, curve],
+    "two areas": [area, otherArea],
+    "an area and a ring": [area, ring],
+    "a ring and a slice": [ring, slice],
+    "an area and a bar": [area, bar],
+    "a curve and an area": [curve, area]
+  };
+}
+
+describe("morph on shapes", () => {
+  it.each([
+    ["morph", morph()],
+    ["morph, unrolled", morph({ align: "unroll" })],
+    ["morph, dropped", morph({ align: "drop" })]
+  ] as const)("%s passes the transition checks between shapes, and from a shape to a bar and a slice", async (name, effect) => {
+    await checkTransition(effect, { name, pairs: shapePairs() });
   });
 });
 

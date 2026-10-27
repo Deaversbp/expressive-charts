@@ -96,3 +96,59 @@ describe("samplesAlong", () => {
     expect(() => samplesAlong({} as never, [])).toThrow(/needs a MarkGeometry/);
   });
 });
+
+describe("samplesAlong on a line with gaps", () => {
+  // Weeks 1 to 7 with no goals counted in week 3 or week 6: a D3 line drawn with .defined(), described by its defined points.
+  const season = [
+    { week: 1, goals: 0 },
+    { week: 2, goals: 3 },
+    { week: 4, goals: 10 },
+    { week: 5, goals: 12 },
+    { week: 7, goals: 15 }
+  ];
+  const points = season.map((d) => ({ x: x(d.week), y: y(d.goals), value: d.goals, at: d.week }));
+  const gapped = build.line({ key: "goals", series: "goals", points, breaks: [2, 4], width: 2 });
+
+  it("sets gapBefore on the first sample after each gap, and on no other", () => {
+    const samples = samplesAlong(gapped, points);
+    expect(samples.map((s) => s.at)).toEqual([1, 2, 4, 5, 7]);
+    expect(samples.map((s) => s.gapBefore === true)).toEqual([false, false, true, false, true]);
+    // Only where it's true, so a mark with no gaps gives the samples it always did.
+    expect(samples.filter((s) => "gapBefore" in s)).toHaveLength(2);
+    expect(samplesAlong(line, weeks.map((d) => ({ x: x(d.week), y: y(d.goals), value: d.goals }))).some((s) => "gapBefore" in s)).toBe(false);
+  });
+
+  it("puts each sample where it is on the walk, which runs straight across the gaps", () => {
+    const samples = samplesAlong(gapped, points);
+    expect(samples[1]!.t).toBeCloseTo(gapped.gaps![0]![0], 12);
+    expect(samples[2]!.t).toBeCloseTo(gapped.gaps![0]![1], 12);
+    expect(samples[4]!.t).toBe(1);
+  });
+
+  it("finds the first sample past a gap's middle whatever order the points come in, and with points between", () => {
+    const shuffled = [points[4]!, points[2]!, points[0]!, points[3]!, points[1]!];
+    expect(samplesAlong(gapped, shuffled).map((s) => s.gapBefore === true)).toEqual([false, false, true, false, true]);
+    // A point a host put inside the first gap, past its middle: it's the first sample after the gap.
+    const [from, to] = gapped.gaps![0]!;
+    const late = gapped.path(from + 0.8 * (to - from));
+    expect(samplesAlong(gapped, [...points, { ...late, value: 7, at: 3 }]).map((s) => [s.at, s.gapBefore === true])).toEqual([
+      [1, false],
+      [2, false],
+      [3, true],
+      [4, false],
+      [5, false],
+      [7, true]
+    ]);
+  });
+
+  it("marks one gap once, when two gaps lie between neighbouring samples", () => {
+    const sparse = samplesAlong(gapped, [points[0]!, points[4]!]);
+    expect(sparse.map((s) => s.gapBefore === true)).toEqual([false, true]);
+  });
+
+  it("never marks the first sample, even after a value alone at the start", () => {
+    const lone = build.line({ key: "goals", points, breaks: [1] });
+    expect(samplesAlong(lone, points.slice(1)).map((s) => s.gapBefore === true)).toEqual([false, false, false, false]);
+    expect(samplesAlong(lone, points).map((s) => s.gapBefore === true)).toEqual([false, true, false, false, false]);
+  });
+});

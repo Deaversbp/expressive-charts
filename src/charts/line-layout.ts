@@ -7,6 +7,7 @@
 // the plot sits) and each row's x and values. Transitions interpolate those numbers, and the place
 // functions draw any state in between, and any reveal, the same way the layout draws its own. On a
 // time axis an x is its Date's time in ms, and only its ticks, its wording and the samples' `at` know.
+// A missing value (null or undefined) is a gap in its line: the line runs on from the value after it.
 
 import { describe, type MarkData, type MarkGeometry, type Rect, type Sample } from "../core";
 import { clean, niceDomain, niceStep, type Tick } from "./bar-layout";
@@ -37,7 +38,8 @@ export interface LineEncoding<D> {
 
 export interface LineValue {
   readonly series: string;
-  readonly value: number;
+  /** Undefined where the series has no value (null or undefined in the data): a gap in its line. */
+  readonly value: number | undefined;
 }
 
 export interface LineRow<D> {
@@ -51,6 +53,14 @@ export interface LineRow<D> {
   readonly label: string;
   /** In series order. */
   readonly values: readonly LineValue[];
+  /** The series with no value here. */
+  readonly missing: ReadonlySet<string>;
+  /**
+   * Each series' level here, which a change animates: its value, or for a missing one where its line
+   * runs past this x (across the gap, or level with its nearest value; 0 with none), so a value that
+   * comes grows out of the line.
+   */
+  readonly levels: Readonly<Record<string, number>>;
 }
 
 /** The value axis: data `lo` sits at the box's `bottom`, data `hi` at its `top`. */
@@ -129,6 +139,8 @@ export interface RowState<D> {
   readonly datum: D;
   readonly x: number;
   readonly values: Readonly<Record<string, number>>;
+  /** The series with no value here: no point, and a gap in the line. Their `values` aren't drawn. */
+  readonly missing?: ReadonlySet<string>;
 }
 
 export interface PlacedLine<D> {
@@ -201,7 +213,7 @@ export function layoutLines<D>(input: LineLayoutInput<D>): LineLayout<D> {
   const height = input.height ?? HEIGHT;
   const { rows, time } = prepareRows(input);
   const series = input.encoding.series.map((s) => s.series);
-  const domain = niceDomain(rows.flatMap((row) => row.values.map((v) => v.value)));
+  const domain = niceDomain(rows.flatMap((row) => row.values.flatMap((v) => (v.value === undefined ? [] : [v.value]))));
   const yTexts = domain.ticks.map(input.format);
   const xLo = rows[0]?.x ?? 0;
   const xHi = rows[rows.length - 1]?.x ?? 0;
@@ -221,7 +233,7 @@ export function layoutLines<D>(input: LineLayoutInput<D>): LineLayout<D> {
 
   const decimalsBy: Record<string, number> = {};
   for (const name of series) decimalsBy[name] = 0;
-  for (const row of rows) for (const v of row.values) decimalsBy[v.series] = Math.max(decimalsBy[v.series]!, decimals(v.value));
+  for (const row of rows) for (const v of row.values) if (v.value !== undefined) decimalsBy[v.series] = Math.max(decimalsBy[v.series]!, decimals(v.value));
 
   const xTicks = xValues.map((value, i) => placeXTick(frame, value, xTexts[i]!));
   return {
@@ -255,6 +267,12 @@ export function positions(frame: LineFrame): { x(value: number): number; y(value
  * sample per vertex (`t` by distance along the walk, `at` its x: a Date on a `time` axis), and the
  * other lines as `related`. With `labels`, the end labels are placed together (placeEndLabels), and
  * each line's geometry has its own label's box as `labelBounds`: none when its text is "".
+ *
+ * A row missing a series is no vertex of its line: the line breaks there (`breaks`, so its geometry
+ * has a gap from the value before to the value after, and the sample after it has `gapBefore`), and
+ * a line revealed into a gap ends at its last value. Missing values before a line's first value or
+ * after its last are no gap. A line with no value up to the reveal is empty: no length, no samples
+ * and no label, at its level at the first x, and its datum the row at the reveal.
  */
 export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], series: readonly string[], through: number, time = false, labels?: EndLabels): PlacedLine<D>[] {
   const first = rows[0];
@@ -270,36 +288,70 @@ export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], se
   const datas = new Map<string, MarkData<D>>();
   const related = (own: string) => (name: string) => (name === own ? undefined : datas.get(name));
   const traced = series.map((name) => {
-    const vertices = shown.map((row) => ({ at: row.x, value: row.values[name] ?? 0 }));
-    if (share !== undefined) {
-      const from = end.values[name] ?? 0;
-      vertices.push({ at: through, value: from + share * ((next!.values[name] ?? 0) - from) });
+    const has = (row: RowState<D>): boolean => !row.missing?.has(name);
+    const vertices: { at: number; value: number; datum: D; gapBefore: boolean }[] = [];
+    let gap = false;
+    for (const row of shown) {
+      // A gap is only between values: none before the first.
+      if (!has(row)) gap = vertices.length > 0;
+      else {
+        vertices.push({ at: row.x, value: row.values[name] ?? 0, datum: row.datum, gapBefore: gap });
+        gap = false;
+      }
     }
-    return { name, vertices, points: vertices.map((v) => ({ x: at.x(v.at), y: at.y(v.value) })) };
+    if (share !== undefined && has(end) && has(next!)) {
+      const from = end.values[name] ?? 0;
+      vertices.push({ at: through, value: from + share * ((next!.values[name] ?? 0) - from), datum: end.datum, gapBefore: false });
+    }
+    const points = vertices.length > 0 ? vertices.map((v) => ({ x: at.x(v.at), y: at.y(v.value) })) : [{ x: at.x(first.x), y: at.y(first.values[name] ?? 0) }];
+    return { name, vertices, points };
   });
+  // An empty line has no label, and takes no room from the others'.
+  const named = traced.filter(({ vertices }) => vertices.length > 0);
   const placed = labels
     ? placeEndLabels(
         frame,
-        traced.map(({ name, vertices, points }) => ({ ...points[points.length - 1]!, text: labels.text(name, vertices[vertices.length - 1]!.value) }))
+        named.map(({ name, vertices, points }) => ({ ...points[points.length - 1]!, text: labels.text(name, vertices[vertices.length - 1]!.value) }))
       )
     : [];
-  const lines = traced.map(({ name, vertices, points }, i): PlacedLine<D> => {
-    const label = placed[i];
+  const lines = traced.map(({ name, vertices, points }): PlacedLine<D> => {
+    const tip = points[points.length - 1]!;
+    const label = labels ? (placed[named.findIndex((line) => line.name === name)] ?? { x: tip.x + LABEL_GAP, y: tip.y + VALUE_SIZE * CENTRE, anchor: "start", text: "" }) : undefined;
     const labelBounds = labels ? (label && label.text !== "" ? [textBox(label, labels.measure, "ec-value", VALUE_SIZE)] : []) : undefined;
-    const geometry = describe.line({ key: name, series: name, points, width: LINE_WIDTH, ...(labelBounds ? { labelBounds } : {}) });
-    // By distance, as the walk measures it; the last is exactly 1.
+    const breaks = vertices.flatMap((v, j) => (v.gapBefore ? [j] : []));
+    const geometry = describe.line({ key: name, series: name, points, width: LINE_WIDTH, ...(breaks.length > 0 ? { breaks } : {}), ...(labelBounds ? { labelBounds } : {}) });
+    // By distance, as the walk measures it, gaps and all; the last is exactly 1.
     let distance = 0;
     const samples: Sample[] = vertices.map((v, j) => {
       if (j > 0) distance += Math.hypot(points[j]!.x - points[j - 1]!.x, points[j]!.y - points[j - 1]!.y);
       const t = geometry.length > 0 ? (j === vertices.length - 1 ? 1 : Math.min(1, distance / geometry.length)) : 0;
-      return { t, value: v.value, at: sampleAt(v.at, time) };
+      return { t, value: v.value, at: sampleAt(v.at, time), ...(v.gapBefore ? { gapBefore: true } : {}) };
     });
-    const data: MarkData<D> = { datum: end.datum, samples, related: related(name) };
+    const last = vertices[vertices.length - 1];
+    const data: MarkData<D> = { datum: last ? last.datum : end.datum, samples, related: related(name) };
     datas.set(name, data);
-    const tip = vertices[vertices.length - 1]!;
-    return { series: name, geometry, data, end: { ...points[points.length - 1]!, value: tip.value }, label };
+    return { series: name, geometry, data, end: { ...tip, value: last ? last.value : (first.values[name] ?? 0) }, label };
   });
   return lines;
+}
+
+/**
+ * The points that show at rest: each value next to a gap with no other value beside it, so it has
+ * no stroke. Keyed as points are, from `rows` as they're drawn, in ascending x.
+ */
+export function loneValues<D>(rows: readonly RowState<D>[], series: readonly string[]): Set<string> {
+  const lone = new Set<string>();
+  // Every frame of a change asks: a chart with no gaps answers at once.
+  if (!rows.some((row) => row.missing !== undefined && row.missing.size > 0)) return lone;
+  const has = (row: RowState<D> | undefined, name: string): boolean => row !== undefined && !row.missing?.has(name);
+  rows.forEach((row, i) => {
+    for (const name of series) {
+      const before = rows[i - 1];
+      const after = rows[i + 1];
+      if (has(row, name) && !has(before, name) && !has(after, name) && (before !== undefined || after !== undefined)) lone.add(pointKey(name, row.key));
+    }
+  });
+  return lone;
 }
 
 /** The point mark's key: "<series>@<row key>". */
@@ -307,12 +359,12 @@ export function pointKey(series: string, row: string): string {
   return `${series}@${row}`;
 }
 
-/** Each series' point at the row: a dot, with the row's value as its one sample (`at` its x: a Date on a `time` axis) and the other series' points as `related`. */
+/** Each series' point at the row, but those missing there: a dot, with the row's value as its one sample (`at` its x: a Date on a `time` axis) and the other series' points as `related`. */
 export function placePoints<D>(frame: LineFrame, row: RowState<D>, series: readonly string[], time = false): PlacedPoint<D>[] {
   const at = positions(frame);
   const x = at.x(row.x);
   const datas = new Map<string, MarkData<D>>();
-  return series.map((name) => {
+  return series.filter((name) => !row.missing?.has(name)).map((name) => {
     const value = row.values[name] ?? 0;
     const key = pointKey(name, row.key);
     const data: MarkData<D> = { datum: row.datum, samples: [{ t: 0, value, at: sampleAt(row.x, time) }], related: (other) => (other === name ? undefined : datas.get(other)) };
@@ -453,7 +505,42 @@ function prepareRows<D>({ data, encoding }: LineLayoutInput<D>): { rows: LineRow
     }
   }
   const word = xWording(encoding, time, read.map((row) => row.x));
-  return { rows: read.map((row) => ({ ...row, label: word(row.x) })), time };
+  const levels = levelsOf(read, encoding.series.length);
+  return {
+    rows: read.map((row, i) => ({ ...row, label: word(row.x), missing: new Set(row.values.flatMap((v) => (v.value === undefined ? [v.series] : []))), levels: levels[i]! })),
+    time
+  };
+}
+
+/**
+ * Each row's level for each series, by series name: its value, or for a missing one where its line
+ * runs past the row's x: across the gap, in proportion to x, or level with its nearest value before
+ * its first or after its last. A series with no values is at 0.
+ */
+function levelsOf(rows: readonly { readonly x: number; readonly values: readonly LineValue[] }[], count: number): Record<string, number>[] {
+  const levels = rows.map((): Record<string, number> => ({}));
+  for (let s = 0; s < count; s++) {
+    let before = -1;
+    let after = -1;
+    rows.forEach((row, i) => {
+      const { series, value } = row.values[s]!;
+      if (value !== undefined) {
+        levels[i]![series] = value;
+        before = i;
+        return;
+      }
+      // The next value, found once for each run of missing ones, so a long run stays linear.
+      if (after <= i) {
+        after = i + 1;
+        while (after < rows.length && rows[after]!.values[s]!.value === undefined) after++;
+      }
+      const a = rows[before]?.values[s]!.value;
+      const b = rows[after]?.values[s]!.value;
+      levels[i]![series] =
+        a !== undefined && b !== undefined ? a + ((row.x - rows[before]!.x) / (rows[after]!.x - rows[before]!.x)) * (b - a) : (a ?? b ?? 0);
+    });
+  }
+  return levels;
 }
 
 /** A row's x as a number: a finite number, or on a time axis a valid Date's time. Every row's x is the same kind as the first's. */
@@ -484,10 +571,14 @@ function sampleAt(x: number, time: boolean): number | Date {
   return time ? new Date(x) : x;
 }
 
-/** A line can't skip a value yet (gaps are backlog), nor count a missing one as 0 as a bar does. */
-function numberOf(value: unknown, series: string, key: string): number {
+/**
+ * A value, or undefined for a missing one: null or undefined, a gap in the line. A line doesn't count
+ * a missing value as 0 as a bar does, and NaN and the infinities still throw: they're usually a mistake.
+ */
+function numberOf(value: unknown, series: string, key: string): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
-  throw new RangeError(`lineChart: "${series}" for "${key}" must be a finite number, got ${show(value)}. Lines can't skip a value yet.`);
+  if (value === null || value === undefined) return undefined;
+  throw new RangeError(`lineChart: "${series}" for "${key}" must be a finite number, or null or undefined where it has no value, got ${show(value)}.`);
 }
 
 /**
@@ -498,6 +589,7 @@ function distinctLabels<D>(rows: readonly LineRow<D>[], label: (series: string, 
   const shapes = new Map<string, string>();
   for (const row of rows) {
     for (const { series, value } of row.values) {
+      if (value === undefined) continue;
       const text = label(series, value);
       const shape = text.replace(/\d/g, "0");
       if (!shapes.has(shape)) shapes.set(shape, text);

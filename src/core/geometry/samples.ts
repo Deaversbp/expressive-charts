@@ -25,7 +25,9 @@ const GOLDEN = (Math.sqrt(5) - 1) / 2;
 /**
  * Projects each point onto the nearest point of the mark's walk and returns the samples in `t` order
  * (points at the same `t` keep their order). A point on the walk, such as a vertex of the polyline it
- * drew, lands exactly where it is. Throws a RangeError on a point whose x, y or value isn't finite.
+ * drew, lands exactly where it is. Where the mark has gaps, the first sample past each gap's middle
+ * has `gapBefore`, so a data effect doesn't join it to the one before. Throws a RangeError on a point
+ * whose x, y or value isn't finite.
  */
 export function samplesAlong(mark: MarkGeometry, points: readonly SamplePoint[]): Sample[] {
   if (typeof mark !== "object" || mark === null || typeof mark.path !== "function" || !Number.isFinite(mark.length)) {
@@ -41,10 +43,27 @@ export function samplesAlong(mark: MarkGeometry, points: readonly SamplePoint[])
 
   const n = mark.length > 0 ? Math.min(MAX_GRID, Math.ceil(mark.length) + 1) : 1;
   const grid = Array.from({ length: n }, (_, i): Point => mark.path(n === 1 ? 0 : i / (n - 1)));
-  return points
+  const samples = points
     .map((p, index) => ({ index, sample: { t: nearest(mark, grid, p), value: p.value, ...(p.at === undefined ? {} : { at: p.at }) } }))
     .sort((a, b) => a.sample.t - b.sample.t || a.index - b.index)
-    .map(({ sample }) => sample);
+    .map(({ sample }): Sample => sample);
+  return mark.gaps && mark.gaps.length > 0 ? gapped(samples, mark.gaps) : samples;
+}
+
+/**
+ * The samples with `gapBefore` on each that a gap's middle lies before, past the sample before it. A
+ * gap's ends are values, so samples there project to within float noise of them, either side: its
+ * middle is far from both.
+ */
+function gapped(samples: readonly Sample[], gaps: NonNullable<MarkGeometry["gaps"]>): Sample[] {
+  const middles = gaps.map(([from, to]) => (from + to) / 2).sort((a, b) => a - b);
+  let next = 0;
+  return samples.map((sample, k) => {
+    if (k === 0) return sample;
+    const before = samples[k - 1]!.t;
+    while (next < middles.length && middles[next]! <= before) next++;
+    return next < middles.length && middles[next]! <= sample.t ? { ...sample, gapBefore: true } : sample;
+  });
 }
 
 /** The t of the walk's nearest point to `p`: the nearest grid point, then a golden-section search on the stretch either side of it. */

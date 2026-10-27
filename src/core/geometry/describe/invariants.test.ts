@@ -129,3 +129,65 @@ describe.each(everyMark)("%s", (_name, mark) => {
     expect(measured.start!.y).toBeCloseTo(first.y, 2);
   });
 });
+
+// Lines with gaps keep the same contract, with slice() and the stroke leaving the gaps out.
+const zigzag = [
+  { x: 0, y: 50 },
+  { x: 40, y: 20 },
+  { x: 80, y: 35 },
+  { x: 120, y: 5 },
+  { x: 160, y: 40 },
+  { x: 200, y: 10 }
+];
+const gappedMarks: [string, MarkGeometry][] = [
+  ["line with a gap", build.line({ key: "n", points: zigzag, breaks: [2], width: 2.25 })],
+  ["line with two gaps", build.line({ key: "o", points: zigzag, breaks: [2, 4], width: 2.25 })],
+  ["line with a value alone at each end and between gaps", build.line({ key: "p", points: zigzag, breaks: [1, 3, 4, 5], width: 2.25 })]
+];
+
+/** The px of the gaps between t0 and t1. */
+const gapped = (mark: MarkGeometry, t0: number, t1: number): number =>
+  (mark.gaps ?? []).reduce((sum, [from, to]) => sum + Math.max(0, Math.min(to, t1) - Math.max(from, t0)) * mark.length, 0);
+
+describe.each(gappedMarks)("%s", (_name, mark) => {
+  it("has gaps in order and apart, inside [0, 1]", () => {
+    const gaps = mark.gaps ?? [];
+    expect(gaps.length).toBeGreaterThan(0);
+    gaps.forEach(([from, to], i) => {
+      expect(from).toBeGreaterThanOrEqual(i === 0 ? 0 : gaps[i - 1]![1]);
+      expect(to).toBeGreaterThan(from);
+      expect(to).toBeLessThanOrEqual(1);
+    });
+  });
+
+  it("starts at path(0), ends at path(1), and is arc-length uniform across its gaps", () => {
+    expect(mark.path(0)).toEqual(mark.start);
+    expect(mark.path(1)).toEqual(mark.end);
+    let total = 0;
+    for (let i = 0; i < 4000; i++) total += distance(mark.path(i / 4000), mark.path((i + 1) / 4000));
+    expect(total).toBeCloseTo(mark.length, 1);
+  });
+
+  it("draws slice(0, 1) at its length less its gaps, and part of it at its share less theirs", () => {
+    expect(measurePath(mark.slice(0, 1)).length).toBeCloseTo(mark.length - gapped(mark, 0, 1), 1);
+    expect(measurePath(mark.slice(0.25, 0.75)).length).toBeCloseTo(mark.length / 2 - gapped(mark, 0.25, 0.75), 1);
+    expect(mark.outline.d).toBe(mark.slice(0, 1));
+  });
+
+  it("starts each part of its stroke where a gap ends, and ends one where a gap starts", () => {
+    const moves = measurePath(mark.outline.d).commands.filter((c) => c.op === "M");
+    const starts = [0, ...(mark.gaps ?? []).map(([, to]) => to)].filter((t, i, all) => t < 1 && !(mark.gaps ?? []).some(([from]) => from === t) && all.indexOf(t) === i);
+    expect(moves).toHaveLength(Math.max(1, starts.length));
+    starts.forEach((t, i) => {
+      expect(moves[i]!.args[0]).toBeCloseTo(mark.path(t).x, 2);
+      expect(moves[i]!.args[1]).toBeCloseTo(mark.path(t).y, 2);
+    });
+  });
+
+  it("samples its outline along the whole walk, gaps and all, inside its bounds", () => {
+    const points = mark.outline.sample(50);
+    expect(points[0]).toEqual(mark.start);
+    expect(points[49]).toEqual(mark.end);
+    for (const p of points) expect(inside(p, mark.bounds)).toBe(true);
+  });
+});

@@ -969,14 +969,17 @@ function checkSamples(samples: unknown, mark: string): Sample[] {
   if (!Array.isArray(samples)) throw new TypeError(`expressive: samples for ${mark} must return an array of { t, value }, got ${describeValue(samples)}.`);
   let last = 0;
   return samples.map((sample: unknown, i): Sample => {
-    const { t, value, at } = (typeof sample === "object" && sample !== null ? sample : {}) as Partial<Sample>;
+    const { t, value, at, gapBefore } = (typeof sample === "object" && sample !== null ? sample : {}) as Partial<Sample>;
     if (typeof t !== "number" || !(t >= 0 && t <= 1)) throw new RangeError(`expressive: samples for ${mark}: samples[${i}].t must be in [0, 1], got ${describeValue(t)}.`);
     if (t < last) throw new RangeError(`expressive: samples for ${mark} must be in t order: samples[${i}].t is ${t}, after ${last}.`);
     if (typeof value !== "number" || !Number.isFinite(value)) {
       throw new RangeError(`expressive: samples for ${mark}: samples[${i}].value must be a finite number, got ${describeValue(value)}.`);
     }
+    if (gapBefore !== undefined && typeof gapBefore !== "boolean") {
+      throw new RangeError(`expressive: samples for ${mark}: samples[${i}].gapBefore must be true or false, got ${describeValue(gapBefore)}.`);
+    }
     last = t;
-    return at === undefined ? { t, value } : { t, value, at };
+    return { t, value, ...(at === undefined ? {} : { at }), ...(gapBefore ? { gapBefore } : {}) };
   });
 }
 

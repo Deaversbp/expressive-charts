@@ -305,6 +305,103 @@ describe("travel", () => {
     expect(() => travel("nope").end(bar(100), testContext())).toThrow(RangeError);
   });
 
+  describe("across a gap", () => {
+    /** A level line at y = 50 through these x's, broken at these indices. */
+    const level = (xs: readonly number[], breaks: readonly number[] = []): MarkGeometry =>
+      build.line({ key: "goals", series: "goals", points: xs.map((x) => ({ x, y: 50 })), breaks, width: 2 });
+    // Two runs of 100 px with 100 px of gap between: a slide of 90 px along each.
+    const gapped = level([0, 100, 200, 300], [2]);
+    const xs = (ctx: TestContext): number[] => placements(ctx).map((m) => anchorOf(flag, m).x);
+
+    it("jumps: it's never drawn over the gap, and goes from its start to its end at once", async () => {
+      const ctx = testContext();
+      await play(ctx.clock, travel(flag).run(gapped, ctx), { frame: 1 });
+      const along = xs(ctx);
+      expect(along[0]).toBe(5);
+      expect(along[along.length - 1]).toBeCloseTo(295, 9);
+      for (const x of along) expect(x <= 95 + 1e-9 || x >= 205 - 1e-9, `x = ${x}`).toBe(true);
+      // Inset by its footprint from each run's ends, as from the walk's: it leaves the first at 95 and lands on the second at 205.
+      const jump = along.findIndex((x) => x >= 205 - 1e-9);
+      expect(along[jump - 1]).toBeGreaterThan(94);
+      expect(along[jump]).toBeLessThan(206);
+      for (let i = 1; i < along.length; i++) expect(along[i]! - along[i - 1]!).toBeLessThan(i === jump ? 112 : 2);
+    });
+
+    it("takes the time of the walk it's drawn on, not of the gap", async () => {
+      // 180 px of slide: 500 ms, as on a bar whose trip is 180 px; without the gap it would be 290 px.
+      expect(await runToEnd(travel(flag), gapped, testContext())).toBe(500);
+      expect(await runToEnd(travel(flag), bar(190), testContext())).toBe(500);
+      expect(await runToEnd(travel(flag), level([0, 100, 200, 300]), testContext())).toBe(810);
+    });
+
+    it("rolls without slipping on the walk it's drawn on, and doesn't turn across the gap", async () => {
+      const ctx = testContext();
+      await runToEnd(travel(ball), gapped, ctx);
+      // 180 px on a radius of 5 is 36 radians.
+      expect(turnOf(only(ctx).transform!)).toBeCloseTo(normalizeAngle(36), 9);
+    });
+
+    it("heads along the run it's on, never smoothed across a gap that turns", async () => {
+      // Level runs either side of a gap that drops 100 px. Heel first, so it lands right at the second run's start.
+      const heel: Icon = { ...flag, name: "heel", footprint: [0, 20] };
+      const drop = build.line({ key: "goals", points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 100 }, { x: 300, y: 100 }], breaks: [2] });
+      const ctx = testContext();
+      await play(ctx.clock, travel(heel, { orient: "follow" }).run(drop, ctx), { frame: 1 });
+      const landed = anchorOf(heel, placements(ctx).find((m) => anchorOf(heel, m).x >= 200));
+      expect(landed.x).toBeLessThan(201);
+      expect(landed.y).toBe(100);
+      for (const m of placements(ctx)) expect(turnOf(m)).toBeCloseTo(0, 12);
+    });
+
+    it("passes a run shorter than the icon at once, and a value alone between gaps", async () => {
+      for (const line of [level([0, 100, 150, 155, 200, 300], [2, 4]), level([0, 100, 150, 200, 300], [2, 3])]) {
+        const ctx = testContext();
+        await play(ctx.clock, travel(flag).run(line, ctx), { frame: 1 });
+        for (const x of xs(ctx)) expect(x <= 95 + 1e-9 || x >= 205 - 1e-9, `x = ${x}`).toBe(true);
+        expect(await runToEnd(travel(flag), line, testContext())).toBe(500);
+      }
+    });
+
+    it("rests at the last value when the last run is shorter than the icon, as on a walk that short", async () => {
+      // A value alone at the end, and a run of 4 px: the icon's back at the run's start, hanging past its end.
+      for (const line of [level([0, 100, 200], [2]), level([0, 100, 200, 204], [2])]) {
+        const ctx = testContext();
+        travel(flag).end(line, ctx);
+        expect(anchorOf(flag, only(ctx).transform)).toEqual({ x: 205, y: 50 });
+      }
+    });
+
+    it("rides a revealed tip: it rests at the last value while the line is revealed into a gap, and moves on when the next comes", async () => {
+      const ctx = testContext();
+      await runToEnd(travel(flag, { ride: "on" }), level([0, 60]), ctx);
+      const at = (): Point => anchorOf(flag, only(ctx).transform);
+      expect(at()).toEqual({ x: 55, y: 44 });
+      // Revealed to its last value before the gap, and on into the gap, where a line ends at its last value.
+      ctx.change(level([0, 60, 100]));
+      expect(at()).toEqual({ x: 95, y: 44 });
+      // The next value comes: the icon rests there, then rides the next run's tip.
+      ctx.change(level([0, 60, 100, 200], [3]));
+      expect(at().x).toBeCloseTo(205, 9);
+      ctx.change(level([0, 60, 100, 200, 250], [3]));
+      expect(at().x).toBeCloseTo(245, 9);
+      expect(at().y).toBeCloseTo(44, 9);
+    });
+
+    it("draws nothing on a line whose values are all alone, and hides when a change leaves it one", async () => {
+      const alone = level([0, 100, 200], [1, 2]);
+      expect(alone.gaps).toHaveLength(2);
+      const ctx = testContext();
+      await runToEnd(travel(flag), alone, ctx);
+      expect(ctx.layer.drawn).toEqual([]);
+      const moving = testContext();
+      await runToEnd(travel(flag), gapped, moving);
+      moving.change(alone);
+      expect(moving.layer.drawn).toEqual([]);
+      moving.change(gapped);
+      expect(anchorOf(flag, only(moving).transform).x).toBeCloseTo(295, 9);
+    });
+  });
+
   it("checks its options when it's made", () => {
     expect(() => travel(42 as unknown as string)).toThrow(TypeError);
     expect(() => travel("")).toThrow(TypeError);

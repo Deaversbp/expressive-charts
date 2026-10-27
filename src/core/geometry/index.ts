@@ -23,4 +23,4 @@ export {
   type LineSegment,
   type PathSegment
 } from "./segment";
-export { createWalk, type Walk } from "./walk";
+export { createWalk, type Gaps, type Walk } from "./walk";

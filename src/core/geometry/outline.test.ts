@@ -71,4 +71,10 @@ describe("openOutline", () => {
     expect(() => outline.sample(1.5)).toThrow(RangeError);
     expect(() => outline.sample(-1)).toThrow(RangeError);
   });
+
+  it("leaves the walk's gaps out of the stroke, but samples along the whole walk", () => {
+    const gapped = openOutline(createWalk(walk.segments, [[0.25, 0.5]]));
+    expect(gapped.d).toBe("M0,0L10,0M10,10L10,30");
+    expect(gapped.sample(5)).toEqual(openOutline(walk).sample(5));
+  });
 });

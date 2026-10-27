@@ -46,7 +46,8 @@ Every mark, whoever drew it, is described with the same shape. It has two parts.
 | `length` | the walk's length in px; 0 for a point |
 | `path(t)` | the point at `t` in [0, 1], by distance: `t = 0.5` is halfway along on screen |
 | `angle(t)` | the direction of travel at `t`, in radians |
-| `slice(t0, t1)` | SVG path data for that part of the walk |
+| `slice(t0, t1)` | SVG path data for that part of the walk, less its gaps |
+| `gaps` | optional: the stretches with no data, as `[from, to]` values of `t`, in order ([below](#drawing-along-a-walk-with-gaps)) |
 
 **The body**:
 
@@ -81,6 +82,26 @@ A mark the library didn't draw has no `labelBounds` unless the page's `geometry`
 - **Never branch on the kind of chart.** There is no `mark.type`, on purpose. If an effect needs something the contract doesn't give, the contract is missing it: open an issue rather than guessing from the shape.
 
 `describe.bar`, `.arc`, `.line` and `.point` build marks by hand, for tests or for `expressive({ geometry })`.
+
+### Drawing along a walk with gaps
+
+A line that skips a value has a gap in its walk, from the value before to the value after: `mark.gaps`, as `[from, to]` values of `t`. The walk runs straight across a gap, so `path(t)` and `angle(t)` work there as anywhere, but there's no data there, and the line's stroke leaves it out.
+
+- **Draw along the walk with `slice(t0, t1)`.** It leaves the gaps out, with a move across each, so a stroke drawn with it has the line's own gaps. A path you build yourself from `path(t)` would draw across them.
+- **Put things on the walk outside the gaps.** An icon or a label placed at `path(t)` for a `t` inside a gap sits where there's no data. `travel` jumps from one side of a gap to the other; check `mark.gaps` before you place something at a `t` of your own.
+- **`outline.sample(n)` runs along the whole walk**, gaps and all, so a morph between two lines joins across their gaps part way.
+- **In data, a gap is `gapBefore`:** `true` on the first sample after it. Don't interpolate between a sample with `gapBefore` and the one before.
+- Most marks have no gaps: `mark.gaps` is unset, and `slice()` is the whole stretch. A line described with `describe.line({ points, breaks })` has them, `breaks` being the indices of the points that start a new run.
+
+```ts
+// The stroke so far, with the line's gaps left out.
+path.update(mark.slice(0, progress));
+
+// Whether a place along the walk is in a gap, where there's no data to put anything on.
+const inGap = (mark: MarkGeometry, t: number): boolean => (mark.gaps ?? []).some(([from, to]) => t > from && t < to);
+```
+
+The `fixtures` include a `"gapped line"`, so `checkEffect` runs your effect on a mark with a gap by default.
 
 ## The context and drawing API
 
@@ -206,7 +227,7 @@ const belowTarget = defineDataEffect<Region>({
 | Field | What it is |
 | --- | --- |
 | `datum` | the row behind the mark: a bar's or a slice's row, a line point's row, and for a line the row at its revealed end |
-| `samples` | values along the walk, `{ t, value, at? }`, t ascending: on `barChart`, from 0 at the baseline to the total at the tip; on the donut, from 0 to the slice's share; on `lineChart`, one per revealed row with its x as `at`, plus the end part way to the next row, and a point's one value. On `expressive()`, the page's `samples` option (`samplesAlong` gives a host's line its own from the points that drew it), or without it the bar chart's samples on rects with a numeric `value`, and none on other marks |
+| `samples` | values along the walk, `{ t, value, at?, gapBefore? }`, t ascending, with `gapBefore` on the first after a gap: on `barChart`, from 0 at the baseline to the total at the tip; on the donut, from 0 to the slice's share; on `lineChart`, one per revealed value with its x as `at`, plus the end part way to the next row, a missing value left out with `gapBefore` on the value after it, and a point's one value. On `expressive()`, the page's `samples` option (`samplesAlong` gives a host's line its own from the points that drew it), or without it the bar chart's samples on rects with a numeric `value`, and none on other marks |
 | `related(series)` | another series of the same mark or chart, as `MarkData`, if there is one |
 | `previous` | the values before this update, in the `update` slot |
 
@@ -231,6 +252,7 @@ const belowXg = only("goals", threshold({ compareTo: "xg" }));
 - **What it draws.** One overlay path per run of the walk where the mark's values are below `compareTo` (or above it, with `when: "above"`): `mark.slice(t0, t1)`, stroked in `color` (default `"negative"`) at the mark's `thickness` with butt caps, so a coloured part ends exactly where the values cross. Equal values aren't coloured, and a walk under 0.5 px, such as a point, draws nothing.
 - **What it compares.** A number is compared with every sample as it is. A series' name goes in `needs.related`, so a chart without that series throws when it's created. The series is matched by `at` when every sample of both has a number or a `Date` there, the reference interpolated between its samples and nothing coloured outside its range; otherwise by `t`.
 - **Crossings** are interpolated linearly in `t` between neighbouring samples, and between the places where the reference bends. That's exact where the walk is straight between samples: bars, our lines, and a host polyline sampled at its vertices. Along a curve, values aren't linear in distance, so a crossing between two samples is approximate; denser samples narrow the error.
+- **Gaps.** Nothing is interpolated across a sample with `gapBefore`, the mark's or the reference's: where either has no value, nothing is coloured.
 - **An encoding, not motion.** It draws at once, with no tween, because a fade would flicker as a line extends. It redraws on every `onChange`, with the latest data, so it follows a mark that moves and a line as it's revealed. `end()` draws the same picture, so the colour shows with motion off. Put it in `on.decorate`, which runs from enter until the mark exits.
 - `compareTo` must be a finite number or a non-empty series name, `when` `"below"` or `"above"`, and `color` a non-empty string, or it throws a `RangeError` when it's made.
 
@@ -240,7 +262,7 @@ What it compares on each chart, from the samples the chart gives:
 | --- | --- | --- |
 | `barChart` | 0 at the baseline to the bar's total at the tip, so `compareTo: 10` colours the part past 10 | that series' segment of the stack, with samples over the segment's own walk |
 | `donutChart` | 0 to the slice's share of the total, so `compareTo: 0.25, when: "above"` colours the part past a quarter | its own series only |
-| `lineChart` | a line's value at each revealed row, with the row's x as `at`, plus its end part way to the next row, so `compareTo: "xg"` colours the goals line below xG and follows every frame of a reveal. A point has its one value, and draws nothing | the other line; for a point, the other series' point at the same x |
+| `lineChart` | a line's value at each revealed row, with the row's x as `at`, plus its end part way to the next row, so `compareTo: "xg"` colours the goals line below xG and follows every frame of a reveal. Where either line is missing a value, nothing is coloured. A point has its one value, and draws nothing | the other line; for a point, the other series' point at the same x |
 | `expressive()` | the page's `samples` option: on a D3 line, `samplesAlong` on the points that drew it, so `compareTo: "xg"` colours it below the xG line. Without it, rects with a numeric `value` get `barChart`'s samples, and other marks none, so it draws nothing | the mark's own segment of that series, else the first other mark of that series (another line path) |
 
 ## Composing
@@ -287,7 +309,7 @@ On every mark, it checks that:
 A failure reads like this:
 
 ```
-checkEffect found 24 problems with delta:
+checkEffect found 27 problems with delta:
 - on the bar, a full run should end with the same picture and mark style as end(): item 1 drawn after the run is {"kind":"text","content":"+1","style":{"at":{"x":210,"y":10},"anchor":"start","opacity":1}} but end() draws {"kind":"text","content":"+1","style":{"at":{"x":210,"y":10},"anchor":"start"}}
 - on the bar, with motion off, no frames should run and the end state should be drawn: item 1 drawn after the run with motion off is …
 - on the bar, a change() to the moved mark should leave what end() draws on it: item 1 drawn after a full run and a change() is {"kind":"text","content":"+1","style":{"at":{"x":210,"y":10},"anchor":"start","opacity":1}} but end() draws {"kind":"text","content":"+1","style":{"at":{"x":170,"y":40},"anchor":"start"}}; item 1 drawn after end() and a change() is …
@@ -305,7 +327,7 @@ Options:
 | `batch` | `{ index, count }`, for effects that read `ctx.batch` | the only mark |
 | `name` | what the report calls the effect | "the effect" |
 
-- `fixtures` are one of each kind of mark: `bar`, `negative bar`, `column`, `stacked`, `short bar`, `slice`, `line` and `point`. Each has a moved twin for check 5, with the same key and series, somewhere else and another size.
+- `fixtures` are one of each kind of mark: `bar`, `negative bar`, `column`, `stacked`, `short bar`, `slice`, `line`, `gapped line` (the line with a gap after its second point) and `point`. Each has a moved twin for check 5, with the same key and series, somewhere else and another size.
 - A data effect typed for its own rows needs `data` that gives them (a type error otherwise), and so does one that `needs` related series (checkEffect throws otherwise).
 - On real marks: `checkEffect(effect, { marks: chart.marks() })`, in a DOM environment such as jsdom. Check 5 needs the marks moved: draw them again at another size and pass `moved: (mark) => resized.marks().find((m) => m.key === mark.key)`, or it's skipped.
 - With a data effect, check 5 gives `change()` and `end()` the moved mark's data, `data(moved)`.
@@ -504,7 +526,7 @@ function place(mark: MarkGeometry, rise: number): Pick<TextStyle, "at" | "anchor
 Before you publish an effect, or review one:
 
 - [ ] It reads only `MarkGeometry` (and `MarkData` for a data effect). No chart-type checks, no DOM, no importing icons: icons come by name through `ctx.icons` or as an option.
-- [ ] It draws only through `ctx.layer` and `ctx.mark`.
+- [ ] It draws only through `ctx.layer` and `ctx.mark`, and along a walk with `slice()`, so nothing it draws is inside a line's gaps.
 - [ ] Every duration is a base value through `ctx.tween`, with `"effect"` timing (or `"stagger"` for a wait). No timers, frames or clocks of its own.
 - [ ] `end()` draws exactly what a full run ends with, and anything that informs the viewer is still there.
 - [ ] Data stays readable: decorations in the overlay, changes to the mark small and bounded, nothing hidden or resized while it's read.

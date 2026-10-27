@@ -45,7 +45,7 @@ interface Trip {
   readonly icon: Icon;
   /** Drawn length along the walk, px. */
   readonly size: number;
-  /** How far the anchor moves, px; 0 when the walk is shorter than the icon. */
+  /** How far the anchor moves, px, across no gap; 0 when every part of the walk is shorter than the icon. */
   readonly span: number;
   /** Base ms, before the motion mode scales it. */
   readonly duration: number;
@@ -58,6 +58,11 @@ interface Trip {
  * Moves an icon along the walk, or along one segment, inset by the icon's footprint so it stays
  * inside the mark. Its end state is the icon resting at the end. An icon given by name is looked up
  * in `ctx.icons` when it runs, and an unknown name throws there.
+ *
+ * Across a gap in the walk it jumps: it's inset from each part's ends as from the walk's, and goes
+ * from one part to the next at once, so it's never drawn over a gap. The trip's time counts only the
+ * parts it's drawn on, and a part shorter than the icon is skipped, unless it's the last: the icon
+ * rests there, at the last value.
  */
 export function travel(icon: Icon | string, options: TravelOptions = {}): GeometryEffect {
   checkOptions(icon, options);
@@ -67,7 +72,7 @@ export function travel(icon: Icon | string, options: TravelOptions = {}): Geomet
     const resolved = typeof icon === "string" ? ctx.icons.get(icon) : icon;
     if (!resolved) throw new RangeError(`travel: unknown icon "${String(icon)}". Register it with registerIcon(icon), or pass the icon itself.`);
     const walk = pick(mark, options.along);
-    if (!walk || !(walk.length >= MIN_WALK)) return undefined;
+    if (!walk || !(drawn(walk) >= MIN_WALK)) return undefined;
     const scale =
       options.size === undefined ? 1 : options.size === "fit" ? (FIT * walk.thickness) / resolved.box.height : options.size / resolved.size;
     if (!(scale > 0)) return undefined;
@@ -133,13 +138,27 @@ export function travel(icon: Icon | string, options: TravelOptions = {}): Geomet
   };
 }
 
+/** A part of the walk between gaps, in px along it, with how far the icon's anchor moves along it. */
+interface Leg {
+  readonly from: number;
+  readonly to: number;
+  readonly span: number;
+  /** The span of the legs before it. */
+  readonly before: number;
+}
+
 function trip(walk: MarkGeometry, icon: Icon, scale: number, options: TravelOptions): Trip {
   const gait = typeof options.gait === "function" ? options.gait : gaits[options.gait ?? icon.gait ?? "slide"]();
   const length = walk.length;
   const behind = icon.footprint[0] * scale;
   const ahead = icon.footprint[1] * scale;
-  // A walk shorter than the icon: it rests at the start (which may hang past the end) and doesn't move.
-  const span = Math.max(0, length - behind - ahead);
+  // A part shorter than the icon: the icon rests at its start (which may hang past its end) and doesn't move along it.
+  let span = 0;
+  const legs: Leg[] = parts(walk).map(([from, to]) => {
+    const leg = { from, to, span: Math.max(0, to - from - behind - ahead), before: span };
+    span += leg.span;
+    return leg;
+  });
   const smoothing = Math.max(MIN_SMOOTHING, (behind + ahead) / 2);
   const radius = icon.radius ?? icon.box.height / 2;
   const { anchor } = icon;
@@ -156,10 +175,15 @@ function trip(walk: MarkGeometry, icon: Icon, scale: number, options: TravelOpti
     duration: Math.min(LONGEST, Math.max(SHORTEST, (span / SPEED) * 1000) * (gait.pace ?? 1)),
     gait,
     transform(progress) {
-      const distance = behind + progress * span;
-      const pose = gait({ distance: (progress * span) / scale, length: span / scale, progress, radius });
+      const travelled = progress * span;
+      // The last leg the icon has reached: a leg it can't move along is passed at once, unless it's the last.
+      let index = legs.length - 1;
+      while (index > 0 && legs[index]!.before > travelled) index--;
+      const leg = legs[index]!;
+      const distance = leg.from + behind + Math.min(leg.span, travelled - leg.before);
+      const pose = gait({ distance: travelled / scale, length: span / scale, progress, radius });
       const at = pointAt(walk, distance);
-      const direction = heading(walk, Math.min(distance, length), smoothing);
+      const direction = heading(walk, Math.min(distance, length), smoothing, leg);
       // Mirroring keeps an upright icon's top up when the walk heads left.
       const mirror = orient === "auto" && icon.upright === true && Math.cos(direction) < -1e-9;
       const turn = orient === "level" ? 0 : mirror ? normalizeAngle(direction - Math.PI) : direction;
@@ -181,6 +205,26 @@ function pick(mark: MarkGeometry, along: string | undefined): MarkGeometry | und
   return mark.series === along ? mark : undefined;
 }
 
+/** The walk's parts between its gaps, as [from, to] px along it, in order. A walk with no gaps is one part. */
+function parts(walk: MarkGeometry): [number, number][] {
+  const { length } = walk;
+  const found: [number, number][] = [];
+  let at = 0;
+  for (const [from, to] of walk.gaps ?? []) {
+    // Taken as the contract has them, in order and apart; any that aren't are read as far as they go.
+    if (!(to > from) || !(to > at)) continue;
+    if (from > at) found.push([at * length, Math.min(1, from) * length]);
+    at = Math.min(1, to);
+  }
+  found.push([at * length, length]);
+  return found;
+}
+
+/** How much of the walk is drawn: its length less its gaps. */
+function drawn(walk: MarkGeometry): number {
+  return parts(walk).reduce((sum, [from, to]) => sum + (to - from), 0);
+}
+
 /** The point `distance` px along the walk; past the end, it carries on in the end's direction. */
 function pointAt(walk: MarkGeometry, distance: number): Point {
   const { length } = walk;
@@ -190,11 +234,12 @@ function pointAt(walk: MarkGeometry, distance: number): Point {
 /**
  * The direction of travel at `distance`, smoothed over a window either side: the chord between the
  * window's ends. On straight legs and circular arcs the chord is exactly the tangent; across a
- * polyline corner it turns gradually. The window shrinks near the ends so it stays on the walk.
+ * polyline corner it turns gradually. The window shrinks near the ends of the leg so it stays on it,
+ * never across a gap.
  */
-function heading(walk: MarkGeometry, distance: number, window: number): number {
+function heading(walk: MarkGeometry, distance: number, window: number, leg: Leg): number {
   const { length } = walk;
-  const reach = Math.min(window, distance, length - distance);
+  const reach = Math.min(window, distance - leg.from, leg.to - distance);
   if (reach > 1e-6) {
     const a = walk.path((distance - reach) / length);
     const b = walk.path((distance + reach) / length);

@@ -847,6 +847,14 @@ describe("expressive: data on host marks", () => {
     expect(attach("0 to 1")).toThrow(TypeError);
     // A step, two values at one t, is fine.
     expect(attach([{ t: 0, value: 1 }, { t: 0.5, value: 1 }, { t: 0.5, value: 2 }])).not.toThrow();
+    expect(attach([{ t: 0, value: 1 }, { t: 1, value: 2, gapBefore: "yes" }])).toThrow(/samples\[1\]\.gapBefore must be true or false, got "yes"/);
+  });
+
+  it("keeps gapBefore on the samples it's given, so data effects see the gaps", () => {
+    const decoration = dataRecorder();
+    const given: Sample[] = [{ t: 0, value: 1 }, { t: 0.4, value: 2, gapBefore: false }, { t: 0.6, value: 3, gapBefore: true, at: 4 }, { t: 1, value: 4 }];
+    setup<Trace>(d3Lines().paths, { ...traced, samples: () => given, on: { decorate: decoration.effect } });
+    expect(decoration.last("goals")!.samples).toEqual([{ t: 0, value: 1 }, { t: 0.4, value: 2 }, { t: 0.6, value: 3, at: 4, gapBefore: true }, { t: 1, value: 4 }]);
   });
 
   it("throws on bad samples in refresh() before anything changes", () => {

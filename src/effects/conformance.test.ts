@@ -1,11 +1,13 @@
 // The conformance checks from plan §8, through checkEffect, for every built-in effect on every kind
 // of mark (the testing entry's fixtures): a full run ends with the same picture and mark style as
 // end(), clearing leaves nothing, an abort mid-run settles, with motion off no frames run, and a
-// change() to the fixture's moved twin leaves what end() draws there. Transition effects go through
-// checkTransition, on the fixture pairs.
+// change() to the fixture's moved twin leaves what end() draws there. On the gapped line, nothing is
+// drawn inside the gap, on any frame. Transition effects go through checkTransition, on the fixture pairs.
 
-import type { AnyMarkEffect, Icon, MarkData, Sample, TransitionEffect } from "../core";
+import type { AnyMarkEffect, Icon, MarkData, MarkGeometry, Sample, TransitionEffect } from "../core";
+import { drawnInGaps, flush, testContext, type TestContext } from "../core/testing";
 import { checkEffect, checkTransition, type CheckEffectOptions } from "../testing";
+import { fixtures, movedFixtures } from "../testing/fixtures";
 import { only, parallel, sequence, stagger } from "./combinators";
 import { delta } from "./delta";
 import { flash } from "./flash";
@@ -97,9 +99,55 @@ const options: Record<string, CheckEffectOptions> = {
   "delta with a flash": { data: updated }
 };
 
+/** checkEffect's default data: no datum, values 0 to 1 along the walk, no related series. */
+const plain = (): MarkData => ({ datum: undefined, samples: [{ t: 0, value: 0 }, { t: 1, value: 1 }], related: () => undefined });
+
+/**
+ * What the effect draws inside a gap of the gapped line, each described with when: on every frame of
+ * a run, after it, after a change() to the moved twin and the frames that follow, and after end().
+ */
+async function insideGaps(effect: AnyMarkEffect, more: CheckEffectOptions = {}): Promise<string[]> {
+  const mark = fixtures["gapped line"];
+  const moved = movedFixtures["gapped line"];
+  const dataOf = (geometry: MarkGeometry): MarkData => (more.data ?? plain)(geometry);
+  const context = (): TestContext => testContext({ icons: more.icons, batch: more.batch });
+  const start = (on: MarkGeometry, ctx: TestContext): Promise<void> => (effect.kind === "data" ? effect.run(on, dataOf(on), ctx) : effect.run(on, ctx));
+  const problems: string[] = [];
+  const look = (on: MarkGeometry, ctx: TestContext, when: string): void => {
+    for (const problem of drawnInGaps(on, ctx.layer.drawn)) problems.push(`${when}, ${problem}`);
+  };
+  const frames = async (on: MarkGeometry, ctx: TestContext, when: string, done: () => boolean): Promise<void> => {
+    await flush();
+    for (let ms = 0; !done() && ms < 10_000; ms += 16) {
+      look(on, ctx, `${when} ${ms} ms in`);
+      ctx.clock.advance(16);
+      await flush();
+    }
+  };
+
+  const ctx = context();
+  let settled = false;
+  void start(mark, ctx).finally(() => (settled = true));
+  await frames(mark, ctx, "in a run", () => settled);
+  look(mark, ctx, "after the run");
+  ctx.change(moved, dataOf(moved));
+  await frames(moved, ctx, "after a change()", () => ctx.clock.idle);
+  look(moved, ctx, "after a change() and its frames");
+
+  const ended = context();
+  if (effect.kind === "data") effect.end(mark, dataOf(mark), ended);
+  else effect.end(mark, ended);
+  look(mark, ended, "after end()");
+  return problems;
+}
+
 describe.each(Object.entries(effects))("%s", (name, effect) => {
   it("passes the conformance checks on every kind of mark", async () => {
     await checkEffect(effect, { name, ...options[name] });
+  });
+
+  it("draws nothing inside the gapped line's gap, on any frame", async () => {
+    expect(await insideGaps(effect, options[name])).toEqual([]);
   });
 });
 

@@ -1,5 +1,6 @@
-import { describe as geometry } from "../core";
-import { barEncoding, layoutBars, niceDomain, type BarLayoutInput } from "./bar-layout";
+import { describe as geometry, type Rect } from "../core";
+import { barEncoding, layoutBars, niceDomain, placeRow, type BarLayout, type BarLayoutInput, type BarRow } from "./bar-layout";
+import { textBox } from "./render/text";
 import type { BarChartOptions } from "./types";
 
 interface Player {
@@ -212,6 +213,139 @@ describe("layoutBars, room", () => {
     expect(added({ data: rows(-6, -3), x: "k", y: "v" })).toEqual({ start: 28, end: 0, label: -28 });
     const negative = layout({ data: rows(-6, -3), x: "k", y: "v" }, { room: 28 });
     expect(negative.height - negative.rows[0]!.label.y).toBeGreaterThanOrEqual(28);
+  });
+
+  it("keeps it with the labels thinned, the value labels' space too", () => {
+    // Every bar the same, so their value labels meet.
+    const many = (sign: number) => Array.from({ length: 100 }, (_, i) => ({ k: `r${i}`, v: sign * 5 }));
+    for (const data of [many(1), many(-1), [...many(1).slice(0, 50), ...many(-1).slice(50)]]) {
+      const bars = { data, y: "k", x: "v", height: 300 } as const;
+      const columns = { data, x: "k", y: "v" } as const;
+      for (const options of [bars, columns]) {
+        const { labels } = layout(options, { room: 28 });
+        expect(labels.every).toBeGreaterThan(1);
+        expect(labels.values).toBe(false);
+      }
+      const positive = data.some((row) => row.v > 0) ? 28 : 0;
+      const negative = data.some((row) => row.v < 0) ? 28 : 0;
+      expect(added(bars)).toEqual({ start: negative, end: positive, label: negative });
+      expect(added(columns)).toEqual({ start: negative, end: positive, label: negative === 0 ? 0 : -negative });
+    }
+  });
+});
+
+describe("layoutBars, thinning", () => {
+  type Row = { name: string; value: number };
+  /** "Bar 1" to "Bar n", their values from `lo` up to 100 and round again. */
+  const bars = (n: number, lo = 1): Row[] => Array.from({ length: n }, (_, i) => ({ name: `Bar ${i + 1}`, value: lo + ((i * 37) % (101 - lo)) }));
+  const intersect = (a: Rect, b: Rect): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  /** Every pair, the slow way, so it doesn't share the layout's sweep. */
+  function anyOverlap(boxes: readonly Rect[]): boolean {
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) if (intersect(boxes[i]!, boxes[j]!)) return true;
+    return false;
+  }
+  /** Each row's labels as they'd be drawn without thinning: its category's box, then its value's. */
+  const unthinned = (result: BarLayout<Row>) =>
+    result.rows.map((row) => {
+      const [category, value] = placeRow(result.frame, { ...row, text: String(row.total), drawn: { label: true, value: true } }, measure).geometry.labelBounds!;
+      return { category: category!, value: value! };
+    });
+  const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+
+  /** Thinning as the plan says it: none overlapping, the first kept, every nth with n as small as it can be, values all or none. */
+  function check(result: BarLayout<Row>): void {
+    const { rows, labels } = result;
+    const drawn = rows.flatMap((row) => row.geometry.labelBounds ?? []);
+    expect(anyOverlap(drawn)).toBe(false);
+    expect(steps).toContain(labels.every);
+    expect(rows[0]!.label.text).toBe(rows[0]!.category);
+    rows.forEach((row, slot) => {
+      expect(row.drawn).toEqual({ label: slot % labels.every === 0, value: labels.values });
+      expect(row.label.text).toBe(row.drawn.label ? row.category : "");
+      expect(row.value.text).toBe(row.drawn.value ? String(row.total) : "");
+      // labelBounds has the labels drawn, and only those.
+      expect(row.geometry.labelBounds).toHaveLength(Number(row.drawn.label) + Number(row.drawn.value));
+    });
+    const full = unthinned(result);
+    const previous = steps[steps.indexOf(labels.every) - 1];
+    if (previous !== undefined) expect(anyOverlap(full.filter((_, slot) => slot % previous === 0).map((row) => row.category))).toBe(true);
+    expect(anyOverlap(full.map((row) => row.value))).toBe(!labels.values);
+  }
+
+  it("leaves none overlapping, from 10 to 1,000 bars and columns, at 320 px and wide", () => {
+    const seen = new Set<string>();
+    for (const n of [10, 20, 40, 50, 100, 200, 500, 1000]) {
+      for (const width of [320, 1200]) {
+        const options = [
+          { data: bars(n), y: "name", x: "value" },
+          { data: bars(n), y: "name", x: "value", height: 300 },
+          { data: bars(n, -50), y: "name", x: "value", height: 300 },
+          { data: bars(n), x: "name", y: "value" },
+          { data: bars(n), x: "name", y: "value", height: 150 },
+          // The same value every 5th, so value labels meet sooner.
+          { data: bars(n).map((row, i) => ({ ...row, value: 10 * (1 + (i % 5)) })), x: "name", y: "value" }
+        ] as const;
+        for (const option of options) {
+          const result = layout<Row>(option, { width });
+          check(result);
+          seen.add(`${result.labels.every > 1 ? "thinned" : "every"} ${result.labels.values ? "values" : "no values"}`);
+        }
+      }
+    }
+    expect([...seen].sort()).toEqual(["every values", "thinned no values", "thinned values"]);
+  });
+
+  it("draws every nth category label from the first, n the smallest of 1, 2, 5, 10, 20, 50 and so on that fits", () => {
+    // Columns all named "AAAA", 28 px at 7 px a character, so their boxes are 32 px across (2 px
+    // either side). Every value is 1, so the widest tick is "0.5", 21 px, and the plot starts at 31.
+    const every = (n: number, plot = 600): number => {
+      const data = Array.from({ length: n }, (_, id) => ({ id, name: "AAAA", value: 1 }));
+      const result = layout({ data, x: "name", y: "value", key: "id" }, { width: 31 + plot + 8 });
+      expect(result.frame.bands.span).toBe(plot);
+      return result.labels.every;
+    };
+    // n columns in 600 px are 600 / n px apart, and every nth label n times that.
+    expect([10, 18, 19, 37, 38, 93, 94, 100, 300, 600, 1000].map((n) => every(n))).toEqual([1, 1, 2, 2, 5, 5, 10, 10, 20, 50, 100]);
+    // Boxes that touch don't overlap: 40 columns in 640 px are 16 px apart, so every 2nd is 32 px.
+    expect([every(40, 640), every(41, 640)]).toEqual([2, 5]);
+  });
+
+  it("draws every value label or none: none when any two would overlap, wherever they are", () => {
+    const rows = (...values: number[]): Row[] => values.map((value, i) => ({ name: `r${i}`, value }));
+    // Bars 15 px apart, so value labels' boxes, 16.25 px high, overlap where the bars end together.
+    const tight = (...values: number[]) => layout<Row>({ data: rows(...values), y: "name", x: "value", height: 4 + 26 + 15 * values.length });
+    expect(tight(10, 100, 10, 100).labels).toEqual({ every: 2, values: true });
+    expect(tight(10, 100, 10, 100, 100).labels).toEqual({ every: 2, values: false });
+    // Columns 12 px apart: a "100" two along is 24 px away and 25 px across. A short column between
+    // keeps each pair beside each other apart, but not the two tall ones.
+    const columns = (...values: number[]) => layout<Row>({ data: rows(...values), x: "name", y: "value" }, { width: 31 + 12 * values.length + 8 });
+    expect(columns(100, 1, 1, 100).labels).toEqual({ every: 2, values: true });
+    expect(columns(100, 1, 100).labels).toEqual({ every: 2, values: false });
+    for (const result of [tight(10, 100, 10, 100), tight(10, 100, 10, 100, 100), columns(100, 1, 1, 100), columns(100, 1, 100)]) check(result);
+  });
+
+  it("keeps every name, value and datum on the rows, with only the drawn labels' boxes in labelBounds", () => {
+    // Rows 2.7 px apart, the same value every 4th.
+    const data = bars(100).map((row, i) => ({ ...row, value: 1 + (i % 4) }));
+    const result = layout<Row>({ data, y: "name", x: "value", height: 300 });
+    expect(result.labels).toEqual({ every: 10, values: false });
+    expect(result.rows.map((row) => [row.category, row.total, row.datum])).toEqual(data.map((row) => [row.name, row.value, row]));
+    const [first, second] = result.rows;
+    expect(first!.geometry.labelBounds).toEqual([textBox(first!.label, measure, "ec-label", 12.5)]);
+    expect(second!.geometry.labelBounds).toEqual([]);
+    expect([second!.label.text, second!.value.text]).toEqual(["", ""]);
+  });
+
+  it("draws every label where none overlap, and lets placeRow draw a state as its layout thinned it", () => {
+    const result = layout({ data: players, y: "name", x: "goals" });
+    expect(result.labels).toEqual({ every: 1, values: true });
+    expect(result.rows.map((row) => [row.label.text, row.value.text])).toEqual(players.map((p) => [p.name, String(p.goals)]));
+    const row = result.rows[1]!;
+    const state = { ...row, text: "6" };
+    const drawn = (placed: BarRow<unknown>) => [placed.category, placed.drawn, placed.label, placed.value, placed.geometry.labelBounds];
+    expect(drawn(placeRow(result.frame, state, measure))).toEqual(drawn(row));
+    expect(placeRow(result.frame, { ...state, drawn: { label: false, value: true } }, measure).label.text).toBe("");
+    expect(placeRow(result.frame, { ...state, drawn: { label: true, value: false } }, measure).geometry.labelBounds).toEqual([textBox(row.label, measure, "ec-label", 12.5)]);
   });
 });
 

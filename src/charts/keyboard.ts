@@ -1,8 +1,9 @@
 // Keyboard focus for a chart's marks, delegated from the root <svg> like pointer hover. The chart is
-// one tab stop (a roving tabindex): arrow keys move between marks in visual order, Home and End jump
-// to the ends, and Escape leaves. Focus that follows a key press shows the ring and plays the hover
-// story; focus from a click or tap does neither (the pointer's own hover is playing), as with
-// :focus-visible. barChart and expressive() share it.
+// one tab stop (a roving tabindex): arrow keys move between marks in visual order, Page Up and Page
+// Down by a page, Home and End jump to the ends, and Escape leaves. Focus that follows a key press
+// shows the ring and plays the hover story; focus from a click or tap does neither (the pointer's own
+// hover is playing), as with :focus-visible. The charts (through shell/hover.ts) and expressive()
+// share it.
 
 export interface KeyboardFocusOptions {
   /** The mark an event target belongs to, if any (leaving marks don't count). */
@@ -23,6 +24,12 @@ export interface KeyboardFocusOptions {
   blur(key: string): void;
   /** Escape on a focused mark. Returns whether it did anything. */
   escape(key: string): boolean;
+  /**
+   * Where a page goes from `key`: on (`by` 1, Page Down) or back (-1, Page Up), for an axis whose page
+   * isn't a count of marks. A line chart's time axis gives the first x a calendar month or more away.
+   * Undefined, or a key not in the order, keeps the default: a tenth of the marks, rounded up.
+   */
+  page?(key: string, by: 1 | -1): string | undefined;
 }
 
 export interface KeyboardFocus {
@@ -143,6 +150,13 @@ export function keyboardFocus(svg: () => SVGSVGElement | undefined, options: Key
       case "ArrowLeft":
         next = keys[Math.max(0, index - 1)];
         break;
+      case "PageDown":
+      case "PageUp": {
+        const by = event.key === "PageDown" ? 1 : -1;
+        const paged = options.page?.(key, by);
+        next = paged !== undefined && keys.includes(paged) ? paged : keys[Math.min(keys.length - 1, Math.max(0, index + by * Math.ceil(keys.length / 10)))];
+        break;
+      }
       case "Home":
         next = keys[0];
         break;
@@ -155,7 +169,7 @@ export function keyboardFocus(svg: () => SVGSVGElement | undefined, options: Key
       default:
         return;
     }
-    // Arrows at either end stay put, without scrolling the page.
+    // Arrows and pages at either end stay put, without scrolling the page.
     event.preventDefault();
     if (next !== undefined && next !== key) focusKey(next);
   };

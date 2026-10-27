@@ -37,6 +37,8 @@ export interface ChartHoverOptions<D> {
   live(key: string): boolean;
   /** The live targets' keys, in visual order: the keyboard's order. */
   order(): readonly string[];
+  /** Where Page Down (`by` 1) or Page Up (-1) goes from the target `key`. Default, or undefined: a tenth of the targets on or back (../keyboard.ts). */
+  page?(key: string, by: 1 | -1): string | undefined;
   /**
    * The keys of the marks a live target stands for, in the batch's order: a line chart's x gives each
    * series' point there. Default: the target alone, as a bar or a slice is its own mark.
@@ -211,6 +213,7 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
   const keyboard = keyboardFocus(() => svg, {
     find: (eventTarget) => options.find(eventTarget)?.key,
     order: options.order,
+    page: (key, by) => options.page?.(key, by),
     element: options.element,
     focus(key, visible) {
       ringKey = visible ? key : undefined;

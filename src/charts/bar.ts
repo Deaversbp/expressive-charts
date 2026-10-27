@@ -293,14 +293,14 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   /** The tooltip beside the hovered mark as it is on screen, moved with its effects, with the text for where it's heading. */
   function showTooltip(record: MarkRecord<D>): void {
     const { row } = record;
-    tooltip.show(record.shown.geometry, row, () => summaryContent(row.label.text, labelled(row.values, current), format(current)), record.handle.style.transform);
+    tooltip.show(record.shown.geometry, row, () => summaryContent(row.category, labelled(row.values, current), format(current)), record.handle.style.transform);
   }
 
   /** The legend for `next`: the series or, coloured by category, each bar's category in visual order. */
   function syncLegend(next: BarLayout<D>): void {
     if (byCategory(current)) {
       legend.categories(
-        next.rows.map((row) => ({ key: row.key, label: row.label.text })),
+        next.rows.map((row) => ({ key: row.key, label: row.category })),
         colors,
         current.legend
       );
@@ -323,7 +323,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       category: typeof field === "string" ? field : undefined,
       series: encoding.series.map((s) => s.series),
       label: (series) => seriesLabel(opts.seriesLabels, series),
-      rows: next.rows.map((row) => ({ key: row.key, category: row.label.text, datum: row.datum, index: row.index, values: row.values, total: row.total })),
+      rows: next.rows.map((row) => ({ key: row.key, category: row.category, datum: row.datum, index: row.index, values: row.values, total: row.total })),
       format: format(opts)
     });
   }
@@ -335,7 +335,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const series = barEncoding(current).series.map((s) => s.series);
     const before = barEncoding(previous).series.map((s) => s.series);
     const sort = sortName(current.sort);
-    const name = (record: MarkRecord<D>): string => record.row.label.text;
+    const name = (record: MarkRecord<D>): string => record.row.category;
     const changed = diff.changed.map(({ record }) => record);
     const text = changeText({
       ...(current.label !== previous.label ? { label: current.label } : {}),
@@ -369,7 +369,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const values = record.series.map((series) => ({ series, value: now[series] ?? 0 }));
     const total = values.reduce((sum, v) => sum + v.value, 0);
     const text = record.count === undefined ? row.value.text : format(current)(round(total, record.count));
-    return placeRow(frame, { key: row.key, datum: row.datum, index: row.index, category: row.label.text, values, slot: record.slot.value, text }, measure);
+    return placeRow(frame, { key: row.key, datum: row.datum, index: row.index, category: row.category, values, slot: record.slot.value, text, drawn: row.drawn }, measure);
   }
 
   function addTick(value: number, opacity: number): void {
@@ -777,10 +777,10 @@ function markLabel<D>(row: BarRow<D>, options: BarChartOptions<D>): string {
   const formatted = format(options);
   const values = labelled(row.values, options);
   const lone = values.length === 1 && values[0]!.series === "value" && values[0]!.label === "value";
-  const text = `${row.label.text}: ${values.map((v) => (lone ? formatted(v.value) : `${formatted(v.value)} ${v.label}`)).join(", ")}`;
+  const text = `${row.category}: ${values.map((v) => (lone ? formatted(v.value) : `${formatted(v.value)} ${v.label}`)).join(", ")}`;
   if (!options.markLabel) return text;
   try {
-    const named: unknown = options.markLabel(row.datum, { key: row.key, category: row.label.text, values, total: row.total, format: formatted, text });
+    const named: unknown = options.markLabel(row.datum, { key: row.key, category: row.category, values, total: row.total, format: formatted, text });
     if (named !== undefined && named !== null && String(named).trim() !== "") return String(named);
   } catch (error) {
     report(error);

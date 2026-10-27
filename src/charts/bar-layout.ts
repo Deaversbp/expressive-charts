@@ -4,6 +4,9 @@
 // A layout is drawn from a few numbers: the frame (the value scale and the category bands) and each
 // row's values and slot. Transitions interpolate those numbers, and placeRow and placeTick draw any
 // state in between the same way the layout draws its own.
+//
+// Labels that would overlap are thinned: every nth category label is drawn, and the value labels all
+// or none. The frame keeps room for every label, so thinning moves nothing.
 
 import { describe, type MarkData, type MarkGeometry, type Rect } from "../core";
 import { textBox, type TextPlacement } from "./render/text";
@@ -32,6 +35,12 @@ export interface BarValue {
   readonly value: number;
 }
 
+/** Which of a row's labels are drawn. */
+export interface DrawnLabels {
+  readonly label: boolean;
+  readonly value: boolean;
+}
+
 export interface BarRow<D> {
   readonly key: string;
   readonly datum: D;
@@ -43,9 +52,13 @@ export interface BarRow<D> {
   readonly total: number;
   readonly geometry: MarkGeometry;
   readonly data: MarkData<D>;
-  /** The category label. */
+  /** The row's name, which the tooltip, the mark's name and the table say, its label drawn or not. */
+  readonly category: string;
+  /** Which of its labels are drawn: thinning leaves some out. */
+  readonly drawn: DrawnLabels;
+  /** The category label: its text is empty when it isn't drawn. */
   readonly label: TextPlacement;
-  /** The total, at the bar's tip. */
+  /** The total, at the bar's tip: its text is empty when it isn't drawn. */
   readonly value: TextPlacement;
   /** The pointer target: the row's whole band. */
   readonly hit: Rect;
@@ -89,6 +102,14 @@ export interface BarFrame {
   readonly bands: BarBands;
 }
 
+/** Which labels a layout draws, so that no two overlap. */
+export interface BarLabels {
+  /** Every nth category label is drawn, from the first: n is 1, 2, 5, 10, 20, 50 and so on. */
+  readonly every: number;
+  /** Whether the value labels are drawn: none are when any two would overlap. */
+  readonly values: boolean;
+}
+
 export interface BarLayout<D> {
   readonly width: number;
   readonly height: number;
@@ -97,6 +118,7 @@ export interface BarLayout<D> {
   /** In visual order: top to bottom, or left to right. A row's slot is its index here. */
   readonly rows: readonly BarRow<D>[];
   readonly ticks: readonly Tick[];
+  readonly labels: BarLabels;
 }
 
 /** What placeRow draws a row from: a laid-out row, or a state in between two. */
@@ -104,6 +126,7 @@ export interface BarRowState<D> {
   readonly key: string;
   readonly datum: D;
   readonly index: number;
+  /** The row's name: its category label's text. */
   readonly category: string;
   /** Signed, from the baseline. */
   readonly values: readonly BarValue[];
@@ -111,6 +134,8 @@ export interface BarRowState<D> {
   readonly slot: number;
   /** The value label's text. */
   readonly text: string;
+  /** Which of its labels are drawn, as its layout thinned them. Default: both. */
+  readonly drawn?: DrawnLabels;
 }
 
 export interface BarLayoutInput<D> {
@@ -143,6 +168,8 @@ const AXIS = 26;
 const TOP = 4;
 /** Between a label and what it labels. */
 const PAD = 6;
+/** A row's labels when its layout didn't thin them. */
+const BOTH: DrawnLabels = { label: true, value: true };
 /** Moves a text baseline down by this share of the font size to centre the text on a line. */
 const CENTRE = 0.36;
 
@@ -199,20 +226,90 @@ export function layoutBars<D>(input: BarLayoutInput<D>): BarLayout<D> {
   const texts = rows.map((row) => input.format(row.total));
   const ticks = domain.ticks.map(input.format);
   const frame = (input.encoding.orientation === "horizontal" ? horizontalFrame : verticalFrame)(input, rows, domain, texts, ticks);
+  const labels = thinLabels(frame, rows, texts, input.measure);
   return {
     width: frame.bands.width,
     height: frame.bands.height,
     orientation: frame.orientation,
     frame,
-    rows: rows.map((row, slot) => placeRow(frame, { ...row, slot, text: texts[slot]! }, input.measure)),
-    ticks: domain.ticks.map((value, i) => placeTick(frame, value, ticks[i]!))
+    rows: rows.map((row, slot) => placeRow(frame, { ...row, slot, text: texts[slot]!, drawn: { label: slot % labels.every === 0, value: labels.values } }, input.measure)),
+    ticks: domain.ticks.map((value, i) => placeTick(frame, value, ticks[i]!)),
+    labels
   };
 }
 
 /**
- * Draws a row in a frame: its bar (described with describe.bar, its labels' boxes as `labelBounds`),
- * labels and pointer target. In between two states of opposite sign a stack can mix signs; values
- * against the total's sign then draw as 0.
+ * Which labels to draw so that no two overlap, by their boxes as `labelBounds` gives them: every nth
+ * category label from the first, with n the smallest of 1, 2, 5, 10, 20, 50 and so on that leaves none
+ * overlapping, and the value labels only if no two would overlap. A category label and a value label
+ * aren't compared: within a row they sit apart.
+ */
+function thinLabels<D>(frame: BarFrame, rows: readonly Prepared<D>[], texts: readonly string[], measure: Measure): BarLabels {
+  const placed = rows.map((row, slot) => placeLabels(frame, slot, row.total, row.category, texts[slot]!));
+  const horizontal = frame.orientation === "horizontal";
+  const values = !overlaps(boxesOf(placed.map(({ value }) => value), measure, "ec-value", VALUE_SIZE), horizontal);
+  const categories = (every: number): Rect[] =>
+    boxesOf(
+      placed.filter((_, slot) => slot % every === 0).map(({ label }) => label),
+      measure,
+      "ec-label",
+      LABEL_SIZE
+    );
+  let k = 0;
+  // Past the last row only the first is drawn, and one label can't overlap.
+  while (thinStep(k) < rows.length && overlaps(categories(thinStep(k)), horizontal)) k++;
+  return { every: thinStep(k), values };
+}
+
+/** The kth n thinning tries: 1, 2, 5, 10, 20, 50 and so on. */
+const thinStep = (k: number): number => [1, 2, 5][k % 3]! * 10 ** Math.floor(k / 3);
+
+/** The boxes of the labels that have text. */
+function boxesOf(labels: readonly TextPlacement[], measure: Measure, className: string, size: number): Rect[] {
+  return labels.filter((label) => label.text !== "").map((label) => textBox(label, measure, className, size));
+}
+
+/**
+ * Whether any two boxes overlap (touching doesn't count). A sweep along the category axis (y for
+ * bars, x for columns), so each box is checked only against those it reaches along it.
+ */
+function overlaps(boxes: readonly Rect[], horizontal: boolean): boolean {
+  // Columns as given; bars turned on their side, so the sweep runs along x either way.
+  const along = horizontal ? boxes.map(({ x, y, width, height }) => ({ x: y, y: x, width: height, height: width })) : [...boxes];
+  along.sort((a, b) => a.x - b.x);
+  const open: Rect[] = [];
+  for (const box of along) {
+    for (let i = open.length - 1; i >= 0; i--) if (open[i]!.x + open[i]!.width <= box.x) open.splice(i, 1);
+    if (open.some((other) => other.y < box.y + box.height && box.y < other.y + other.height)) return true;
+    open.push(box);
+  }
+  return false;
+}
+
+/** A row's labels in a frame: its category beside the axis, and its value past the bar's tip. */
+function placeLabels(frame: BarFrame, slot: number, total: number, category: string, text: string): { readonly label: TextPlacement; readonly value: TextPlacement } {
+  const { scale, bands } = frame;
+  const negative = total < 0;
+  const tip = position(scale)(total);
+  const band = bands.start + slot * bands.band;
+  if (frame.orientation === "horizontal") {
+    const line = band + bands.band / 2 + LABEL_SIZE * CENTRE;
+    return {
+      label: { x: scale.label, y: line, anchor: "end", text: category },
+      value: { x: negative ? tip - PAD : tip + PAD, y: line, anchor: negative ? "end" : "start", text }
+    };
+  }
+  const centre = band + bands.band / 2;
+  return {
+    label: { x: centre, y: scale.label, anchor: "middle", text: category },
+    value: { x: centre, y: negative ? tip + PAD + VALUE_SIZE * 0.8 : tip - PAD, anchor: "middle", text }
+  };
+}
+
+/**
+ * Draws a row in a frame: its bar (described with describe.bar, its drawn labels' boxes as
+ * `labelBounds`), labels and pointer target. In between two states of opposite sign a stack can mix
+ * signs; values against the total's sign then draw as 0.
  */
 export function placeRow<D>(frame: BarFrame, row: BarRowState<D>, measure: Measure): BarRow<D> {
   const { scale, bands } = frame;
@@ -230,19 +327,13 @@ export function placeRow<D>(frame: BarFrame, row: BarRowState<D>, measure: Measu
     gap: GAP,
     segments: row.values.map((v) => ({ series: v.series, size: Math.max(0, negative ? -v.value : v.value) * unit }))
   };
-  const fields = { key: row.key, datum: row.datum, index: row.index, slot: row.slot, values: row.values, total };
+  const drawn = row.drawn ?? BOTH;
+  const fields = { key: row.key, datum: row.datum, index: row.index, slot: row.slot, values: row.values, total, category: row.category, drawn };
+  const { label, value } = placeLabels(frame, row.slot, total, drawn.label ? row.category : "", drawn.value ? row.text : "");
   /** The labels' boxes, leaving out a label with no text. */
-  const boxes = (label: TextPlacement, value: TextPlacement): Rect[] => {
-    const out: Rect[] = [];
-    if (label.text !== "") out.push(textBox(label, measure, "ec-label", LABEL_SIZE));
-    if (value.text !== "") out.push(textBox(value, measure, "ec-value", VALUE_SIZE));
-    return out;
-  };
+  const boxes = (): Rect[] => [...boxesOf([label], measure, "ec-label", LABEL_SIZE), ...boxesOf([value], measure, "ec-value", VALUE_SIZE)];
 
   if (frame.orientation === "horizontal") {
-    const line = band + bands.band / 2 + LABEL_SIZE * CENTRE;
-    const label: TextPlacement = { x: scale.label, y: line, anchor: "end", text: row.category };
-    const value: TextPlacement = { x: negative ? tip - PAD : tip + PAD, y: line, anchor: negative ? "end" : "start", text: row.text };
     const geometry = describe.bar({
       ...bar,
       x: Math.min(zero, tip),
@@ -250,7 +341,7 @@ export function placeRow<D>(frame: BarFrame, row: BarRowState<D>, measure: Measu
       width: Math.abs(tip - zero),
       height: bands.thickness,
       baseline: negative ? "right" : "left",
-      labelBounds: boxes(label, value)
+      labelBounds: boxes()
     });
     return {
       ...fields,
@@ -263,8 +354,6 @@ export function placeRow<D>(frame: BarFrame, row: BarRowState<D>, measure: Measu
   }
 
   const centre = band + bands.band / 2;
-  const label: TextPlacement = { x: centre, y: scale.label, anchor: "middle", text: row.category };
-  const value: TextPlacement = { x: centre, y: negative ? tip + PAD + VALUE_SIZE * 0.8 : tip - PAD, anchor: "middle", text: row.text };
   const geometry = describe.bar({
     ...bar,
     x: centre - bands.thickness / 2,
@@ -272,7 +361,7 @@ export function placeRow<D>(frame: BarFrame, row: BarRowState<D>, measure: Measu
     width: bands.thickness,
     height: Math.abs(tip - zero),
     baseline: negative ? "top" : "bottom",
-    labelBounds: boxes(label, value)
+    labelBounds: boxes()
   });
   return {
     ...fields,

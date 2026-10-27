@@ -1676,7 +1676,7 @@ interface StyleOptions {
 
 ### Charts
 
-The reference charts: bars, a donut and a line, and a switch between views ([architecture.md](architecture.md#reference-charts)). Each draws an `<svg>` in its container, sized to it, with theme colours, a legend, a tooltip, keyboard focus and a data table, and gives every mark a key, so effects and transitions follow the mark, not its place. Each animates its updates by the motion mode: in Presentation the values change first and then the positions, about half a second each; Analysis does both at once in at most 200 ms; Off jumps.
+The reference charts: bars, a donut and a line, and a switch between views ([architecture.md](architecture.md#reference-charts)). Each draws an `<svg>` in its container, sized to it, with theme colours, a legend, a tooltip, keyboard focus and a data table, and gives every mark a key, so effects and transitions follow the mark, not its place. A chart is one tab stop: the arrow keys move between its marks in visual order, Page Down and Page Up a page on or back (a tenth of the marks, rounded up, or a month on a line's time axis), Home and End to the ends, and Escape ends the hover. Pages and arrows stop at the ends. Each animates its updates by the motion mode: in Presentation the values change first and then the positions, about half a second each; Analysis does both at once in at most 200 ms; Off jumps.
 
 The charts behave alike, so their options and handle are shared: [`ChartOptions<D>`](#chartoptionsd) and [`Chart<D, O>`](#chartd-o).
 
@@ -1686,7 +1686,7 @@ The charts behave alike, so their options and handle are shared: [`ChartOptions<
 barChart<D>(target: string | Element, options: BarChartOptions<D>): BarChart<D>
 ```
 
-A bar chart in `target`, an element or a selector: horizontal bars or columns, plain or stacked ([architecture.md](architecture.md#bar-chart)). The axis whose values aren't numbers is the category. Options: [`BarChartOptions<D>`](#barchartoptionsd). Returns its handle, [`BarChart<D>`](#barchartd). Options it can't draw throw: a missing value counts as 0, but one that isn't a finite number throws, and so do duplicate keys and a stack that mixes signs.
+A bar chart in `target`, an element or a selector: horizontal bars or columns, plain or stacked ([architecture.md](architecture.md#bar-chart)). The axis whose values aren't numbers is the category. Options: [`BarChartOptions<D>`](#barchartoptionsd). Returns its handle, [`BarChart<D>`](#barchartd). Options it can't draw throw: a missing value counts as 0, but one that isn't a finite number throws, and so do duplicate keys and a stack that mixes signs. Labels that would overlap are thinned: every nth category label is drawn, from the first, with n the smallest of 1, 2, 5, 10, 20, 50 and so on that leaves none overlapping, and the value labels all or none. The names, the tooltip and the table keep every one.
 
 ```ts
 import { barChart } from "expressive-charts";
@@ -1795,7 +1795,7 @@ The donut is 300 px high, and as large as the room its labels leave.
 lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D>
 ```
 
-A line chart in `target`: a line per series through one row per x, each ending in a dot and a label that counts as the line moves ([architecture.md](architecture.md#line-chart)). The pointer anywhere over it hovers every series at the nearest x, with a crosshair and a tooltip, and nothing dimmed. It's one tab stop whose arrow keys go x by x, each x read as one image ("12: 15 goals, 14.2 xg"). Each line is a line mark keyed by its series, and each row's value a point mark keyed `"<series>@<row key>"` (`goals@12`), so `only("goals", …)` matches both; an effect meant for a line does nothing on a point. `reveal(x)` shows the data up to x, which is how [`playback()`](#playback) plays it. An `x` that gives `Date`s makes a time axis. A missing value, `null` or `undefined`, is a gap in its line with no point, while its x stays a stop whose name, tooltip and table say it's missing ([architecture.md](architecture.md#missing-values)). Options: [`LineChartOptions<D>`](#linechartoptionsd). Returns [`LineChart<D>`](#linechartd). `NaN` and the infinities throw, and so do repeated x values and numbers mixed with dates.
+A line chart in `target`: a line per series through one row per x, each ending in a dot and a label that counts as the line moves ([architecture.md](architecture.md#line-chart)). The pointer anywhere over it hovers every series at the nearest x, with a crosshair and a tooltip, and nothing dimmed. It's one tab stop whose arrow keys go x by x, each x read as one image ("12: 15 goals, 14.2 xg"); on a time axis Page Down and Page Up go a calendar month on or back, in its `timeZone`, to the first x that far. Each line is a line mark keyed by its series, and each row's value a point mark keyed `"<series>@<row key>"` (`goals@12`), so `only("goals", …)` matches both; an effect meant for a line does nothing on a point. `reveal(x)` shows the data up to x, which is how [`playback()`](#playback) plays it. An `x` that gives `Date`s makes a time axis. A missing value, `null` or `undefined`, is a gap in its line with no point, while its x stays a stop whose name, tooltip and table say it's missing ([architecture.md](architecture.md#missing-values)). Options: [`LineChartOptions<D>`](#linechartoptionsd). Returns [`LineChart<D>`](#linechartd). `NaN` and the infinities throw, and so do repeated x values and numbers mixed with dates.
 
 ```ts
 import { lineChart, only, parallel, threshold, travel } from "expressive-charts";
@@ -1860,7 +1860,7 @@ What every chart's handle has. `O` is its options.
 - `marks()`: `readonly MarkGeometry[]`. The marks on screen, in visual order, part way there while a change plays. Leaving marks are left out.
 - `focus(key)`: moves keyboard focus to the mark `key` as a key press would, whatever the last input was: the focus ring shows and its hover plays. On a line chart it's the x's focus stop, for the x's key or one of its points'. A key that isn't on screen does nothing.
 - `leave()`: ends the hover, pointer or keyboard, as the viewer moving away would: the emphasis, the dimming, the tooltip and the hover effects end, and `leave` fires for each mark that was hovered. Focus stays where it is, with its ring, as after Escape.
-- `labels()`: `readonly ChartLabel[]`. Each mark's labels as drawn now, in the marks' visual order ([`ChartLabel`](#chartlabel)).
+- `labels()`: `readonly ChartLabel[]`. Each mark's labels as drawn now, in the marks' visual order ([`ChartLabel`](#chartlabel)). A bar's label that thinning leaves out isn't there.
 - `element`: `SVGSVGElement`. The chart's `<svg>`.
 - `destroy()`: clears every effect and removes the chart.
 
@@ -2240,7 +2240,7 @@ interface ExpressiveOptions<D>
 - `baseline`: `Baseline | "auto"`. Default `"auto"`: the line every rect has an edge on. A rect whose other edge is on it grows the other way, as a negative bar.
 - `motion`: `Motion | MotionMode`. As on a chart.
 - `on`: `EffectSlots<D>`. As on a chart.
-- `keyboard`: `boolean`. Default false. Makes marks focusable as one tab stop: the arrow keys, Home and End move between them in visual order (round a pie, clockwise from 12 o'clock), focus plays the hover effects, and a ring shows.
+- `keyboard`: `boolean`. Default false. Makes marks focusable as one tab stop: the arrow keys, Home and End move between them in visual order (round a pie, clockwise from 12 o'clock), and Page Down and Page Up a tenth of the marks, rounded up; focus plays the hover effects, and a ring shows.
 - `dim`: `boolean`. Default false: the host owns its styling. True dims the other marks while one is hovered, and gives the hovered one its strong colour.
 - `markLabel`: `(datum: D, mark: HostMark<D>) => string`. Names each mark for screen readers as one item: its first part becomes `role="img"` with the text as its name, and its other parts are hidden, so a stack isn't read in pieces. Default: the adapter writes no ARIA. With `keyboard`, give it, since a focusable element needs a name. Make the `<svg>` `role="group"`, not `role="img"`.
 - `watch`: `boolean`. Default false. Follows the host's own transitions frame by frame, without `refresh()`: once a frame, the marks whose geometry attributes (or whose ancestors' `transform` or `style`) changed are read again, and their effects follow, with no events. Call `refresh()` when the host joins new data, before its transition starts. A `geometry` or `samples` callback should read the element, or rows the host updates every frame: one that reads rows bound once, as a transition's targets, sees only the end. Its cost grows with the marks that move: about 17–19 µs a moving column a frame at 500 columns, which halves the most that stay smooth ([Limits](architecture.md#limits)).

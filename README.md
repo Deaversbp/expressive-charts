@@ -193,7 +193,7 @@ The package lists its CSS under `sideEffects`, so bundlers keep that import. Cha
 ## Accessibility
 
 - **Names.** Each chart is a `role="group"` named by its `label`, and each mark one image named by what it shows: "Okafor: 16 goals, 4 assists", or a slice's "Saved: 112 shots, 28%". `markLabel` words the names ("1 goal") and `markDescription` adds what they don't say.
-- **Keyboard.** A chart is one tab stop: the arrow keys move between its marks, Home and End go to the ends, and focus shows a ring and plays the same effects as hover. Escape ends a hover, and so does `leave()`.
+- **Keyboard.** A chart is one tab stop: the arrow keys move between its marks, Page Up and Page Down by a page (a month on a line's time axis), Home and End go to the ends, and focus shows a ring and plays the same effects as hover. Escape ends a hover, and so does `leave()`.
 - **Fallbacks.** A data table after every chart, which every screen reader can read, and with `announce: true` a polite live region that says what each update changed.
 - **Motion.** Reduced motion jumps every animation to its end state unless the viewer picks a mode on the page, with `motionSwitch()`. Nothing plays by itself, and a playback has its pause control in `playButton()` (WCAG 2.2.2).
 - **Other people's charts.** `expressive()` adds the same keyboard focus with `keyboard: true`, and one name per mark with `markLabel`.

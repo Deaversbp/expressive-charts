@@ -171,6 +171,7 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-end) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; }
 :where(.ec-chart .ec-dot) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; opacity: 0; transition: opacity var(--ec-hover-duration, 100ms) ease-out, fill var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-dot) { fill: var(--ec-mark-strong); opacity: 1; }
+:where(.ec-chart .ec-alone .ec-dot) { opacity: 1; }
 :where(.ec-chart .ec-crosshair) { stroke: var(--ec-axis, ${TOKENS.axis}); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
 :where(.ec-chart .ec-column:focus) { outline: none; }
 :where(.ec-chart .ec-lines, .ec-chart .ec-points) { pointer-events: none; }

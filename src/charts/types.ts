@@ -258,9 +258,11 @@ export interface LineChartOptions<D> extends ChartOptions<D> {
   readonly xFormat?: (x: Date | number) => string;
   /**
    * The numeric fields drawn as lines, in order. Each is a line mark keyed by its field, plus a point
-   * mark per row keyed "<series>@<row key>" ("goals@12"). A missing or non-finite value throws.
+   * mark per row keyed "<series>@<row key>" ("goals@12"). A missing value, null or undefined, is a gap
+   * in its line, with no point; the x is still a stop, whose name, tooltip and table row say the
+   * series is missing there. NaN and the infinities throw.
    */
-  readonly series: readonly NumericKey<D>[];
+  readonly series: readonly KeyOfType<D, number | null | undefined>[];
   /**
    * The label at each line's end, in the right margin: by default its value in `format` with its
    * series' label ("52 goals"), counting between values while a change or a reveal plays. `false`

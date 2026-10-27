@@ -1792,7 +1792,7 @@ The donut is 300 px high, and as large as the room its labels leave.
 lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D>
 ```
 
-A line chart in `target`: a line per series through one row per x, each ending in a dot and a label that counts as the line moves ([architecture.md](architecture.md#line-chart)). The pointer anywhere over it hovers every series at the nearest x, with a crosshair and a tooltip, and nothing dimmed. It's one tab stop whose arrow keys go x by x, each x read as one image ("12: 15 goals, 14.2 xg"). Each line is a line mark keyed by its series, and each row's value a point mark keyed `"<series>@<row key>"` (`goals@12`), so `only("goals", …)` matches both; an effect meant for a line does nothing on a point. `reveal(x)` shows the data up to x, which is how [`playback()`](#playback) plays it. An `x` that gives `Date`s makes a time axis. Options: [`LineChartOptions<D>`](#linechartoptionsd). Returns [`LineChart<D>`](#linechartd). A missing or non-finite value throws, and so do repeated x values and numbers mixed with dates.
+A line chart in `target`: a line per series through one row per x, each ending in a dot and a label that counts as the line moves ([architecture.md](architecture.md#line-chart)). The pointer anywhere over it hovers every series at the nearest x, with a crosshair and a tooltip, and nothing dimmed. It's one tab stop whose arrow keys go x by x, each x read as one image ("12: 15 goals, 14.2 xg"). Each line is a line mark keyed by its series, and each row's value a point mark keyed `"<series>@<row key>"` (`goals@12`), so `only("goals", …)` matches both; an effect meant for a line does nothing on a point. `reveal(x)` shows the data up to x, which is how [`playback()`](#playback) plays it. An `x` that gives `Date`s makes a time axis. A missing value, `null` or `undefined`, is a gap in its line with no point, while its x stays a stop whose name, tooltip and table say it's missing ([architecture.md](architecture.md#missing-values)). Options: [`LineChartOptions<D>`](#linechartoptionsd). Returns [`LineChart<D>`](#linechartd). `NaN` and the infinities throw, and so do repeated x values and numbers mixed with dates.
 
 ```ts
 import { lineChart, only, parallel, threshold, travel } from "expressive-charts";
@@ -1836,7 +1836,7 @@ interface LineChartOptions<D> extends ChartOptions<D>
 The [shared options](#chartoptionsd), and:
 
 - `x`: `Accessor<D, number | Date>`, required. Each row's x. Rows are drawn in ascending x, and x values must be unique. `key` defaults to it, a `Date` by its `toISOString()`.
-- `series`: `readonly NumericKey<D>[]`, required. The numeric fields drawn as lines, in order.
+- `series`: `readonly KeyOfType<D, number | null | undefined>[]`, required. The numeric fields drawn as lines, in order. A value that's `null` or `undefined` is missing: a gap in its line, from the value before to the value after, with no point, and "missing" in the x's name ("3: goals missing, 3.6 xg"), the tooltip and the table. A value alone between gaps shows its point at rest. A line revealed into a gap ends at its last value, and a line with no values is empty. Its samples leave the missing values out, with `gapBefore` on the first after each gap.
 - `labels`: `false | ((value, series, format) => string)`. The label at each line's end. Default: its value in `format` with its series' label ("52 goals"). `false` turns them off; an empty string shows none.
 - `timeZone`: `"UTC" | "local"`. Default `"UTC"`. A time axis's zone: ticks fall on its boundaries, and names, the tooltip and the table say times in it. A date-only value such as `new Date("2026-01-05")` is UTC midnight, so in UTC it's 5 January on every machine. `"local"` follows the viewer's clock.
 - `xFormat`: `(x: Date | number) => string`. Words an x for people: in its name, the tooltip's title, the table's row headers and announcements. Default: a medium date in the page's locale ("Jan 5, 2026"), with the time when any x has one; a number as it is. The ticks keep their own wording.
@@ -1929,7 +1929,7 @@ What `markLabel` is given beside the row: the mark as it's heading.
 
 - `key`: `string`.
 - `category`: `string`. The category as the axis shows it (a line chart's x, worded).
-- `values`: `readonly { series, label, value }[]`. Each series the mark shows, from the baseline, with its name for people and its signed value.
+- `values`: `readonly { series, label, value }[]`. Each series the mark shows, from the baseline, with its name for people and its signed value. A line chart's x leaves out a series missing there.
 - `total`: `number`. The values added up.
 - `format`: `(value: number) => string`. The chart's `format`.
 - `text`: `string`. The name the chart gives by default.

@@ -3,7 +3,8 @@
 // (describe.point), shown where its x is hovered or focused; a measured layout with gridlines and ticks
 // in theme colours; a crosshair that hovers every series at the nearest x, from the pointer, touch or
 // keyboard, with a tooltip; a legend, a data table and, with `announce`, a live region for screen
-// readers. reveal(x) shows the data up to x, as playback drives it. update() animates the change:
+// readers. A missing value (null or undefined) is a gap in its line, with no point; the x is still a
+// stop. reveal(x) shows the data up to x, as playback drives it. update() animates the change:
 // staged in presentation (values, then positions), in one short stage in analysis, at once when
 // motion is off. x is numbers or Dates: a time axis has its own ticks and wording (time.ts), and is
 // otherwise drawn in ms like any number.
@@ -26,6 +27,7 @@ import {
   LINE_WIDTH,
   layoutLines,
   lineEncoding,
+  loneValues,
   placeColumns,
   placeCrosshair,
   placeLines,
@@ -61,7 +63,7 @@ import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffec
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
 import { chartTable, tableModel, type TableModel } from "./table";
-import { chartTooltip, summaryContent } from "./tooltip";
+import { chartTooltip, summaryContent, type TooltipContent } from "./tooltip";
 import type { LineChart, LineChartOptions } from "./types";
 
 export type { LineChart } from "./types";
@@ -96,6 +98,8 @@ interface RowRecord<D> {
   leaving: boolean;
   /** Whether its column is shown: live and revealed. */
   shown: boolean;
+  /** Where its x is drawn now, px: the crosshair's place when it has no point. */
+  px: number;
 }
 
 interface MarkBase<D> {
@@ -378,12 +382,13 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       column,
       hit: svgElement("rect", { class: "ec-hit" }, column),
       x: animated(row.x, interpolateNumber, env),
-      values: animated(valuesOf(row.values), interpolateRecord, env),
+      values: animated(row.levels, interpolateRecord, env),
       presence: animated(entering ? 0 : 1, interpolateNumber, env),
       anchor: undefined,
       points: [],
       leaving: false,
-      shown: true
+      shown: true,
+      px: 0
     };
     byColumn.set(column, record);
     return record;
@@ -468,10 +473,11 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       return state;
     };
     const drawnRows = [...rowOrder, ...[...leavingRows.values()].filter((record) => record.presence.value > 0 && record.anchor)];
+    // A gap opens or closes as the change starts: the rows' missing values are where they're heading.
     return drawnRows
       .map((record) => {
         const { x, values } = stateOf(record);
-        return { record, state: { key: record.key, datum: record.row.datum, x, values } };
+        return { record, state: { key: record.key, datum: record.row.datum, x, values, missing: record.row.missing } };
       })
       .sort((a, b) => a.state.x - b.state.x);
   }
@@ -486,8 +492,10 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     paintLines(frame, states.map((s) => s.state));
     for (const { record, state } of states) {
       const placed = new Map(placePoints(frame, state, record.points.map((point) => point.series), laidOut.time).map((point) => [point.key, point]));
-      showAll(record.points.filter(drawn).map((point) => ({ record: point, placed: placed.get(point.key)! })));
+      // A point whose value went missing stays where it was while it leaves.
+      showAll(record.points.filter(drawn).flatMap((point) => (placed.has(point.key) ? [{ record: point, placed: placed.get(point.key)! }] : [])));
     }
+    paintAlone(states.map((s) => s.state));
     paintColumns(frame, states);
     followHover();
   }
@@ -550,6 +558,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     paintLabels(new Map(lineOrder.flatMap((line) => (placed.lines.has(line.series) ? [[line, placed.lines.get(line.series)!] as const] : []))));
     const states = rowOrder.map((record) => ({ record, state: restState(record.row) }));
     for (const { record } of states) settle(livePoints(record), (point) => placed.points.get(point.key));
+    paintAlone(states.map((s) => s.state));
     paintColumns(frame, states);
     followHover();
     dirty = false;
@@ -610,7 +619,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     record.shown = placed;
     const { geometry } = placed;
     paint(record, seriesColors(colors.slot(record.series)), { visible: geometry.length >= VISIBLE, open: { width: geometry.thickness } });
-    setAttributes(record.end, { cx: geometry.end.x, cy: geometry.end.y });
+    // A line with no value up to the reveal is empty: no end dot.
+    setAttributes(record.end, { cx: geometry.end.x, cy: geometry.end.y, visibility: placed.data.samples.length === 0 ? "hidden" : undefined });
     const presence = record.presence.value;
     setAttributes(record.group, { opacity: presence < 1 ? presence : undefined });
     if (moved) runner.change(geometry, placed.data);
@@ -638,6 +648,17 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     if (before && recolored) surface.recolor(record.key);
   }
 
+  /** Whether a point showed at rest in the frame before: a chart with no gaps skips the points. */
+  let anyAlone = false;
+
+  /** A value with a gap on either side and no other value beside it has no stroke, so its point shows at rest. */
+  function paintAlone(states: readonly RowState<D>[]): void {
+    const lone = loneValues(states, laidOut.series);
+    if (lone.size === 0 && !anyAlone) return;
+    for (const point of points.values()) point.group.classList.toggle("ec-alone", lone.has(point.key));
+    anyAlone = lone.size > 0;
+  }
+
   /**
    * Each revealed x's hit column, halfway to its neighbours, at the rows as they are; and the points
    * past the reveal hidden, their overlays too. A column that isn't live or revealed is hidden, so it
@@ -647,7 +668,10 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     const { x } = positions(frame);
     const shown = states.filter(({ record }) => revealed(record));
     const columns = placeColumns(frame, shown.map(({ state }) => x(state.x)));
-    shown.forEach(({ record }, i) => setAttributes(record.hit, { ...columns[i]! }));
+    shown.forEach(({ record, state }, i) => {
+      setAttributes(record.hit, { ...columns[i]! });
+      record.px = x(state.x);
+    });
     const visible = new Set(shown.map(({ record }) => record));
     for (const record of [...rowOrder, ...leavingRows.values()]) {
       const show = visible.has(record);
@@ -667,13 +691,15 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
   // ── Hover ──────────────────────────────────────────────────────────────────
 
-  /** The crosshair at the hovered x, and the tooltip above its highest point, as they are on screen. */
+  /**
+   * The crosshair at the hovered x, and the tooltip above its highest point, as they are on screen.
+   * An x with every value missing has no point: the tooltip sits at the crosshair's top.
+   */
   function showHover(key: string): void {
     const record = rows.get(key);
-    const marks = record && revealed(record) ? livePoints(record) : [];
-    const first = marks[0];
-    if (!record || !first) return;
-    const x = first.shown.geometry.center.x;
+    if (!record || !revealed(record)) return;
+    const marks = livePoints(record);
+    const x = marks[0]?.shown.geometry.center.x ?? record.px;
     setAttributes(crosshair, { ...placeCrosshair(drawnFrame, x), visibility: undefined });
     // Moved with each point's effects, as the focus ring is.
     const ys = marks.map((point) => {
@@ -682,9 +708,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       return (transform ? matrix.apply(transform, center) : center).y;
     });
     const { row } = record;
-    tooltip.showAt({ x, top: Math.min(...ys) - DOT_RADIUS, bottom: Math.max(...ys) + DOT_RADIUS }, row, () =>
-      summaryContent(row.label, labelled(row.values, current), format(current), { total: false })
-    );
+    const at = ys.length > 0 ? { top: Math.min(...ys) - DOT_RADIUS, bottom: Math.max(...ys) + DOT_RADIUS } : { top: drawnFrame.box.top, bottom: drawnFrame.box.top };
+    tooltip.showAt({ x, ...at }, row, () => summary(row, current));
   }
 
   function hideHover(): void {
@@ -777,7 +802,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       category: typeof opts.x === "string" ? opts.x : undefined,
       series: next.series,
       label: (series) => seriesLabel(opts.seriesLabels, series),
-      rows: next.rows.map((row) => ({ key: row.key, category: row.label, datum: row.datum, index: row.index, values: row.values, total: total(row.values) })),
+      rows: next.rows.map((row) => ({ key: row.key, category: row.label, datum: row.datum, index: row.index, values: present(row.values), missing: row.missing, total: total(row.values) })),
       format: format(opts),
       total: false
     });
@@ -835,17 +860,20 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     // What goes: lines first, then points by x.
     const before = rowOrder;
     const was = new Map(before.map((record) => [record, record.row]));
+    const nextRows = new Map(next.rows.map((row) => [row.key, row]));
     const exitingLines = lineOrder.filter((line) => !series.includes(line.series));
     const exitingPoints: PointRecord<D>[] = [];
     for (const record of before) {
       const goes = !keys.has(record.key);
+      const missing = nextRows.get(record.key)?.missing;
       if (goes) {
         rows.delete(record.key);
         record.leaving = true;
         leavingRows.set(record.key, record);
         changes.removed.push(record);
       }
-      for (const point of livePoints(record)) if (goes || !series.includes(point.series)) exitingPoints.push(point);
+      // A point goes with its row, its series, or its value.
+      for (const point of livePoints(record)) if (goes || !series.includes(point.series) || missing?.has(point.series)) exitingPoints.push(point);
     }
     for (const line of exitingLines) lines.delete(line.series);
     for (const point of exitingPoints) points.delete(point.key);
@@ -867,7 +895,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
         leavingRows.delete(row.key);
         record.leaving = false;
         record.x.set(row.x);
-        record.values.set(valuesOf(row.values));
+        record.values.set(row.levels);
         rows.set(row.key, record);
         changes.added.push(record);
         rowsMoved = true;
@@ -898,10 +926,10 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       return line;
     });
 
-    // The points, by x: a point changed when its own value did.
+    // The points, by x: a point changed when its own value did. A missing value has none.
     for (const record of rowOrder) {
       const old = stayed.has(record) ? was.get(record) : undefined;
-      const live = series.map((name) => {
+      const live = series.filter((name) => !record.row.missing.has(name)).map((name) => {
         const key = pointKey(name, record.key);
         const target = placed.points.get(key)!;
         let point = points.get(key);
@@ -966,7 +994,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     const values =
       busy(scale, frame.scale, sameFields) ||
       [...yTicks.values()].some((tick) => busy(tick.opacity, tick.wanted ? 1 : 0, same)) ||
-      rowOrder.some((record) => busy(record.values, valuesOf(record.row.values), sameFields)) ||
+      rowOrder.some((record) => busy(record.values, record.row.levels, sameFields)) ||
       lineOrder.some((line) => busy(line.presence, 1, same)) ||
       goingLines.some((line) => busy(line.presence, 0, same));
     const positions =
@@ -995,7 +1023,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     for (const tick of yTicks.values()) move(tick.opacity, tick.wanted ? 1 : 0, same, first);
     for (const tick of xTicks.values()) move(tick.opacity, tick.wanted ? 1 : 0, same, second);
     for (const record of rowOrder) {
-      move(record.values, valuesOf(record.row.values), sameFields, first);
+      move(record.values, record.row.levels, sameFields, first);
       move(record.x, record.row.x, same, second);
       // With nothing to grow out of, a row is in place at once.
       move(record.presence, 1, same, record.anchor ? second : undefined);
@@ -1074,7 +1102,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     rowOrder = laidOut.rows.map((row) => {
       const record = createRow(row, false);
       rows.set(row.key, record);
-      record.points = laidOut.series.map((name) => {
+      record.points = laidOut.series.filter((name) => !row.missing.has(name)).map((name) => {
         const point = createPoint(record, placed.points.get(pointKey(name, row.key))!);
         points.set(point.key, point);
         return point;
@@ -1220,13 +1248,14 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   });
 }
 
-/** A row at rest, as laid out. */
+/** A row at rest, as laid out: its values, and its levels where it has none. */
 function restState<D>(row: LineRow<D>): RowState<D> {
-  return { key: row.key, datum: row.datum, x: row.x, values: valuesOf(row.values) };
+  return { key: row.key, datum: row.datum, x: row.x, values: row.levels, missing: row.missing };
 }
 
-function valuesOf(values: readonly LineValue[]): Values {
-  return Object.fromEntries(values.map((v) => [v.series, v.value]));
+/** The values a row has, leaving out the missing ones. */
+function present(values: readonly LineValue[]): { series: string; value: number }[] {
+  return values.flatMap((v) => (v.value === undefined ? [] : [{ series: v.series, value: v.value }]));
 }
 
 function valueIn<D>(row: LineRow<D>, series: string): number | undefined {
@@ -1234,7 +1263,7 @@ function valueIn<D>(row: LineRow<D>, series: string): number | undefined {
 }
 
 function total(values: readonly LineValue[]): number {
-  return values.reduce((sum, v) => sum + v.value, 0);
+  return values.reduce((sum, v) => sum + (v.value ?? 0), 0);
 }
 
 /** The nearest record to index `i` in `order` that's in `among`: before it first, then after it. */
@@ -1254,7 +1283,7 @@ function sameData<D>(a: MarkData<D>, b: MarkData<D>): boolean {
   if (a.datum !== b.datum || a.samples.length !== b.samples.length) return false;
   return a.samples.every((s, i) => {
     const o = b.samples[i]!;
-    return s.t === o.t && s.value === o.value && sameAt(s.at, o.at);
+    return s.t === o.t && s.value === o.value && sameAt(s.at, o.at) && s.gapBefore === o.gapBefore;
   });
 }
 
@@ -1263,9 +1292,24 @@ function sameAt(a: Sample["at"], b: Sample["at"]): boolean {
   return a === b || (a instanceof Date && b instanceof Date && a.getTime() === b.getTime());
 }
 
-/** Each series' value with its label: what the tooltip and the x's name say. Copies, so a page can't change the layout's. */
+/** Each series' value with its label, leaving out the missing ones: what `markLabel` is given. Copies, so a page can't change the layout's. */
 function labelled<D>(values: readonly LineValue[], options: LineChartOptions<D>): { series: string; label: string; value: number }[] {
-  return values.map((v) => ({ series: v.series, label: seriesLabel(options.seriesLabels, v.series), value: v.value }));
+  return present(values).map((v) => ({ series: v.series, label: seriesLabel(options.seriesLabels, v.series), value: v.value }));
+}
+
+/** Each series at the row, as the x's name and the tooltip say it: its value with its label ("15 goals"), or "xg missing". */
+function said<D>(values: readonly LineValue[], options: LineChartOptions<D>): string[] {
+  const formatted = format(options);
+  return values.map((v) => {
+    const label = seriesLabel(options.seriesLabels, v.series);
+    return v.value === undefined ? `${label} missing` : `${formatted(v.value)} ${label}`;
+  });
+}
+
+/** The default tooltip: the x, then each series' value or that it's missing. */
+function summary<D>(row: LineRow<D>, options: LineChartOptions<D>): TooltipContent {
+  if (row.missing.size === 0) return summaryContent(row.label, labelled(row.values, options), format(options), { total: false });
+  return { title: row.label, lines: [said(row.values, options).join(" · ")] };
 }
 
 /**
@@ -1278,7 +1322,7 @@ function namesFor<D>(options: LineChartOptions<D>, layout: LineLayout<D>): Reado
   return new Map(
     layout.rows.map((row) => {
       const values = labelled(row.values, options);
-      const text = `${row.label}: ${values.map((v) => `${formatted(v.value)} ${v.label}`).join(", ")}`;
+      const text = `${row.label}: ${said(row.values, options).join(", ")}`;
       if (!options.markLabel) return [row.key, text];
       try {
         const named: unknown = options.markLabel(row.datum, { key: row.key, category: row.label, values, total: total(row.values), format: formatted, text });

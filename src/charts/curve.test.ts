@@ -287,4 +287,29 @@ describe("lineCurve", () => {
     // With every row there, presence changes nothing.
     expect(polylines(at, values, 1, s, at.map(() => 1))).toEqual(polylines(at, values, 1, s));
   });
+
+  it("never goes above or below the values either side while a row comes or goes", () => {
+    const s = SCALES[0]![1];
+    /** Every piece of the curve stays between its two values: at its bends, and at 20 points across it. */
+    const within = (xs: readonly number[], values: readonly number[], presence: readonly number[]): void => {
+      const curve = lineCurve(xs, values, 1, s, presence);
+      for (let i = 0; i + 1 < xs.length; i++) {
+        const [lo, hi] = [Math.min(values[i]!, values[i + 1]!), Math.max(values[i]!, values[i + 1]!)];
+        const inside = (value: number) => expect(value >= lo - 1e-9 && value <= hi + 1e-9, `${value} between rows ${i} and ${i + 1}`).toBe(true);
+        for (const bend of curve.between(i, i + 1)) inside(bend.value);
+        for (let k = 1; k < 20; k++) inside(curve.valueAt(i, i + 1, xs[i]! + ((xs[i + 1]! - xs[i]!) * k) / 20));
+      }
+    };
+    for (let p = 0.05; p < 1; p += 0.05) {
+      // A flat row growing out of a valley after a peak, which the curve without it leaves on a steep slope.
+      within([0, 1, 2, 2 + p], [0, 10, 0, 0], [1, 1, 1, p]);
+      // A week growing out of the last, one growing out of the first, and one folding into its neighbour between two.
+      for (let n = 3; n < 38; n += 5) {
+        within([...xs.slice(0, n), n + p], [...perMatch.slice(0, n), perMatch[n - 1]! + p * (perMatch[n]! - perMatch[n - 1]!)], [...xs.slice(0, n).map(() => 1), p]);
+        within([1 - p, ...xs.slice(0, n)], [perMatch[0]! - p * 2, ...perMatch.slice(0, n)], [p, ...xs.slice(0, n).map(() => 1)]);
+        const middle = [...perMatch.slice(0, n), perMatch[n - 1]! + p * (perMatch[n]! - perMatch[n - 1]!), ...perMatch.slice(n + 1, n + 4)];
+        within([...xs.slice(0, n), n + p, ...xs.slice(n + 1, n + 4)], middle, [...xs.slice(0, n).map(() => 1), p, 1, 1, 1].slice(0, middle.length));
+      }
+    }
+  });
 });

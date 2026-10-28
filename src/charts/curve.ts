@@ -96,7 +96,13 @@ export function lineCurve(xs: readonly number[], values: readonly (number | unde
     }
   }
 
-  /** The piece's control values, as d3's Bézier has them, or undefined when there's no piece. */
+  /**
+   * The piece's control values, as d3's Bézier has them, or undefined when there's no piece. Each end's
+   * tangent is kept between 0 and 3 times the piece's slope (Fritsch and Carlson's square), so the
+   * piece is monotone, between its two values. Steffen's tangents, and their ease from straight, are
+   * inside it already; a tangent faded for a row coming or going may not be, on the piece beside it,
+   * which then has a corner at that end until the row is there in full.
+   */
   const piece = (from: number, to: number): [number, number, number, number, number] | undefined => {
     const k = knotOf[from]!;
     if (k < 0 || knotOf[to] !== k + 1 || run[k + 1] !== run[k]) return undefined;
@@ -104,7 +110,8 @@ export function lineCurve(xs: readonly number[], values: readonly (number | unde
     const v0 = kv[k]!;
     const v1 = kv[k + 1]!;
     const slope = (v1 - v0) / h;
-    const ease = (tangent: number): number => (amount === 1 ? tangent : slope + amount * (tangent - slope));
+    const [lo, hi] = slope < 0 ? [3 * slope, 0] : [0, 3 * slope];
+    const ease = (tangent: number): number => Math.min(hi, Math.max(lo, amount === 1 ? tangent : slope + amount * (tangent - slope)));
     const a = tangents ? ease(tangents[k]!) : slope;
     const b = tangents ? ease(tangents[k + 1]!) : slope;
     return [v0, v0 + (h * a) / 3, v1 - (h * b) / 3, v1, k];
@@ -119,18 +126,18 @@ export function lineCurve(xs: readonly number[], values: readonly (number | unde
       const h = kx[k + 1]! - x0;
       const left = scales.x(x0);
       const right = scales.x(kx[k + 1]!);
-      let n = cubicPieces(
-        { x: left, y: scales.y(v0) },
-        { x: left + (right - left) / 3, y: scales.y(c1) },
-        { x: right - (right - left) / 3, y: scales.y(c2) },
-        { x: right, y: scales.y(v1) }
+      // The piece is monotone (piece()), so the chord of any part of it passes every value that part
+      // does within that part's width: it never strays further. So it needs no more pieces than its
+      // width in tenths of a px, and one narrower than FLAT is straight.
+      const n = Math.min(
+        cubicPieces(
+          { x: left, y: scales.y(v0) },
+          { x: left + (right - left) / 3, y: scales.y(c1) },
+          { x: right - (right - left) / 3, y: scales.y(c2) },
+          { x: right, y: scales.y(v1) }
+        ),
+        Math.max(1, Math.ceil(Math.abs(right - left) / FLAT))
       );
-      // With its control values between its ends, a piece's tangents are at most 3 times its slope, so
-      // it's monotone (Fritsch and Carlson's square), and the chord of any part of it passes every
-      // value that part does within that part's width: it never strays further. So it needs no more
-      // pieces than its width in tenths of a px, and one narrower than FLAT is straight.
-      const [lo, hi] = v0 < v1 ? [v0, v1] : [v1, v0];
-      if (c1 >= lo && c1 <= hi && c2 >= lo && c2 <= hi) n = Math.min(n, Math.max(1, Math.ceil(Math.abs(right - left) / FLAT)));
       const bends: Bend[] = [];
       for (let j = 1; j < n; j++) {
         // The curve's x runs evenly with its parameter: its control points are a third of the way apart.

@@ -2,7 +2,7 @@
 // twenty sources: bars from the reference barChart, from expressive() on bars drawn by other code and
 // from a stacked Observable Plot bar through expressive(), the slices of the reference donutChart, the
 // slices of a D3 pie through expressive(), the lines and points of the reference lineChart, on a full
-// season and on one with missing weeks, the lines of a D3 line chart, of a D3 line with missing
+// season and on one with missing weeks, each straight and curved, the lines of a D3 line chart, of a D3 line with missing
 // weeks and of a Plot line through expressive(), and shapes through expressive(), each described from
 // its own path data with describe.shape: a D3 curve, the same with missing weeks, a D3 area, and D3
 // rings, areas with holes. And marks expressive() reads by tag, with no geometry: a D3 scatter's
@@ -160,11 +160,11 @@ const weeks: Week[] = [
 /**
  * The reference line chart's marks (the lines, then the points by x), each with the data its enter
  * event gave it: drawn from no data and updated to the season, with motion off so it lands at once.
- * Narrower and shorter when moved, so every point moves too.
+ * Narrower and shorter when moved, so every point moves too. Curved with `curve: "monotone"`.
  */
-function lineSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<MarkGeometry, MarkData<Week>> } {
+function lineSource(moved = false, curve: "linear" | "monotone" = "linear"): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<MarkGeometry, MarkData<Week>> } {
   const container = document.body.appendChild(document.createElement("div"));
-  const chart = lineChart<Week>(container, { label: "Goals vs xG", data: [], x: "week", series: ["goals", "xg"], width: moved ? 480 : 640, height: moved ? 240 : 300, motion: "off" });
+  const chart = lineChart<Week>(container, { label: "Goals vs xG", data: [], x: "week", series: ["goals", "xg"], width: moved ? 480 : 640, height: moved ? 240 : 300, motion: "off", curve });
   const data = new Map<MarkGeometry, MarkData<Week>>();
   chart.on("enter", (event) => data.set(event.mark, event.data));
   void chart.update({ data: weeks });
@@ -259,9 +259,9 @@ const d3GappedMarks = (moved = false): readonly MarkGeometry[] => d3GappedSource
  * The reference line chart on the patchy season: each line with a gap, and the points of the values
  * there are, each with the data its enter event gave it, as lineSource has them.
  */
-function lineGappedSource(moved = false): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<MarkGeometry, MarkData<Patchy>> } {
+function lineGappedSource(moved = false, curve: "linear" | "monotone" = "linear"): { readonly marks: readonly MarkGeometry[]; readonly data: ReadonlyMap<MarkGeometry, MarkData<Patchy>> } {
   const container = document.body.appendChild(document.createElement("div"));
-  const chart = lineChart<Patchy>(container, { label: "Goals vs xG", data: [], x: "week", series: ["goals", "xg"], width: moved ? 480 : 640, height: moved ? 240 : 300, motion: "off" });
+  const chart = lineChart<Patchy>(container, { label: "Goals vs xG", data: [], x: "week", series: ["goals", "xg"], width: moved ? 480 : 640, height: moved ? 240 : 300, motion: "off", curve });
   const data = new Map<MarkGeometry, MarkData<Patchy>>();
   chart.on("enter", (event) => data.set(event.mark, event.data));
   void chart.update({ data: patchy });
@@ -548,6 +548,7 @@ const bars: Record<string, Source> = { barChart: chartMarks, "expressive() bars"
 /** The sources whose lines have gaps. */
 const gapped: Record<string, Source> = {
   "lineChart with missing weeks": lineGappedMarks,
+  "lineChart with missing weeks, curved": (moved) => lineGappedSource(moved, "monotone").marks,
   "D3 line with missing weeks through expressive()": d3GappedMarks,
   "D3 curve with missing weeks through describe.shape": d3CurveGappedMarks,
   "D3 curve with missing weeks read by tag": (moved) => d3CurveTagMarks(patchy, moved)
@@ -573,6 +574,7 @@ const sources: Record<string, Source> = {
   donutChart: donutMarks,
   "D3 pie through expressive()": pieMarks,
   lineChart: lineMarks,
+  "lineChart, curved": (moved) => lineSource(moved, "monotone").marks,
   "D3 line through expressive()": d3LineMarks,
   ...gapped,
   "Plot line through expressive()": plotLineMarks,
@@ -632,6 +634,34 @@ describe("lines and points from lineChart", () => {
     const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
     await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: (mark) => all.get(mark)! });
     // Not vacuously: goals are below xG up to week 2's crossing and again from week 4's.
+    const ctx = testContext();
+    threshold({ compareTo: "xg" }).end(marks[0]!, data.get(marks[0]!)!, ctx);
+    expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);
+  });
+});
+
+describe("lines and points from lineChart, curved", () => {
+  it("finds a line per series, bending between the weeks, and a point at each week on it", () => {
+    const { marks, data } = lineSource(false, "monotone");
+    expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg", ...weeks.flatMap((w) => [`goals@${w.week}`, `xg@${w.week}`])]);
+    for (const line of marks.slice(0, 2)) {
+      const { samples } = data.get(line)!;
+      expect(samples.length).toBeGreaterThan(weeks.length);
+      for (const point of marks.filter((mark) => mark.key.startsWith(`${line.key}@`))) {
+        const at = line.path(samples.find((sample) => `${line.key}@${sample.at}` === point.key)!.t);
+        expect(at.x).toBeCloseTo(point.center.x, 6);
+        expect(at.y).toBeCloseTo(point.center.y, 6);
+      }
+    }
+  });
+
+  it("threshold below xG passes the conformance checks on every line and point, with the chart's data", async () => {
+    const { marks, data } = lineSource(false, "monotone");
+    const twins = lineSource(true, "monotone");
+    const all = new Map([...data, ...twins.data]);
+    const moved = (mark: MarkGeometry) => twins.marks.find((twin) => twin.key === mark.key);
+    await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: (mark) => all.get(mark)! });
+    // Not vacuously: goals are below xG up to near week 2 and again from near week 4.
     const ctx = testContext();
     threshold({ compareTo: "xg" }).end(marks[0]!, data.get(marks[0]!)!, ctx);
     expect(ctx.layer.drawn.filter((drawn) => drawn.kind === "path")).toHaveLength(2);

@@ -25,6 +25,21 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`curve` on `lineChart`.** `"linear"`, the default, draws straight lines as before, the same marks byte for byte. `"monotone"` is d3's `curveMonotoneX`: a smooth curve through every value, flat between two equal ones, that never goes above or below the values either side, so a line shows no value the data doesn't have. Each run between gaps is curved on its own, and a run of two values is straight.
+  - A curved line is a polyline within 0.1 px of the curve, so its walk, gaps and reveal work as a straight line's, and no effect needs to change. Its samples are its rows' and one at each bend between them, each with its `at` and `value` on the curve, so `threshold` changes colour exactly where the drawn lines cross. A data effect that counts samples sees more than the rows on a curved line; `delta` and `label` read the ends, which are rows or the reveal.
+  - A reveal between two rows ends the line on the curve, so playback draws it in. A change eases the curve with the rows, and `update({ curve })` eases each line from straight to curved, or back, without going past its values; Off jumps.
+  - Anything but `"linear"` or `"monotone"` throws a `TypeError` naming it, and `update()` rejects it, changing nothing.
+
+  It's a new option, and a line without it has the samples it had, so no page needs to change.
+
+### Changed
+
+### Fixed
+
 ## 0.4.0 (27 October 2026)
 
 Attachments that swap their effects and end their hover as charts do, `expressive()` reading circles and other SVG shapes through the new `describe.shape`, a chart switch in a link, Vega lines with gaps, the icon sets' faded parts, and a build with tsdown. In the effect-author API, `describe.shape`, `ShapeSpec`, and `fillOpacity` and `strokeOpacity` on `IconShape` are additions, and `checkEffect`'s default data on a gap is a fix, under Fixed: an effect that joins across a gap can now fail, as it should. The other changes are outside the promise, and each says what to write instead, if anything.

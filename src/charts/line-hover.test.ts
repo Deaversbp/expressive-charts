@@ -304,6 +304,77 @@ describe('lineChart({ hover: "point" }): the tooltip', () => {
   });
 });
 
+describe('lineChart({ hover: "point" }): onto the tooltip', () => {
+  /** A dot's radius, as the chart draws it. */
+  const DOT = 4.5;
+  /** At week 2, xG's point is drawn a little above goals', nearer than a dot's radius. */
+  function close(options: Partial<LineChartOptions<Week>> = {}) {
+    const chart = setup(options);
+    const events = listen(chart.chart);
+    const goals = chart.at("goals@2");
+    const xg = chart.at("xg@2");
+    expect(xg.x).toBe(goals.x);
+    expect(goals.y - xg.y).toBeGreaterThan(1);
+    expect(goals.y - xg.y).toBeLessThan(DOT);
+    return { ...chart, events, goals, xg };
+  }
+  /** Nearer xG's point than goals', straight above goals'. */
+  const nearerXg = (goals: { y: number }, xg: { y: number }, y: number) => Math.abs(y - xg.y) < Math.abs(y - goals.y);
+
+  it("keeps the hovered point while the pointer is on its dot, though another is nearer, up to the bridge", () => {
+    const { pointTo, events, goals, xg } = close();
+    pointTo(goals.x, goals.y, "pointerover");
+    expect(events).toEqual(["hover goals@2 pointer 1/1"]);
+    // Straight up, a px at a time, to the dot's top edge: past half way it's nearer xG's.
+    for (let up = 1; up <= DOT; up++) pointTo(goals.x, goals.y - up);
+    expect(nearerXg(goals, xg, goals.y - Math.floor(DOT))).toBe(true);
+    expect(events).toEqual(["hover goals@2 pointer 1/1"]);
+    // The bridge starts inside the dot, so the pointer meets it before it's off the dot.
+    const bridge = document.querySelector<HTMLElement>(".ec-tooltip-bridge")!;
+    expect(bridge.hidden).toBe(false);
+    expect(document.querySelector(".ec-tooltip")!.getAttribute("data-side")).toBe("above");
+    expect(parseFloat(bridge.style.top) + parseFloat(bridge.style.height)).toBeGreaterThan(goals.y - DOT);
+    // Off the dot, the nearest point is hovered, as before.
+    pointTo(goals.x, goals.y - DOT - 0.5);
+    expect(events).toEqual(["hover goals@2 pointer 1/1", "leave goals@2", "hover xg@2 pointer 1/1"]);
+  });
+
+  it("follows the dot as an effect moves it", () => {
+    let lift = 0;
+    const hover = recorder((_, ctx) => ctx.mark.set({ transform: [1, 0, 0, 1, 0, -lift] }));
+    const { pointTo, events, goals, xg } = close({ on: { hover: hover.effect } });
+    // Goals' dot lifted onto xG's, and the pointer above both.
+    lift = goals.y - xg.y;
+    pointTo(goals.x, goals.y, "pointerover");
+    pointTo(goals.x, xg.y - 3);
+    expect(nearerXg(goals, xg, xg.y - 3)).toBe(true);
+    expect(events).toEqual(["hover goals@2 pointer 1/1"]);
+  });
+
+  it("holds nothing without a tooltip, or once the hover has ended", () => {
+    const off = close({ tooltip: false });
+    off.pointTo(off.goals.x, off.goals.y, "pointerover");
+    off.pointTo(off.goals.x, off.goals.y - 3);
+    expect(nearerXg(off.goals, off.xg, off.goals.y - 3)).toBe(true);
+    expect(off.events).toEqual(["hover goals@2 pointer 1/1", "leave goals@2", "hover xg@2 pointer 1/1"]);
+    document.body.textContent = "";
+    const { chart, pointTo, events, goals } = close();
+    pointTo(goals.x, goals.y, "pointerover");
+    chart.leave();
+    pointTo(goals.x, goals.y - 3);
+    expect(events).toEqual(["hover goals@2 pointer 1/1", "leave goals@2", "hover xg@2 pointer 1/1"]);
+  });
+
+  it("moves the tab stop to the hovered point on a click on its dot, though another is nearer", () => {
+    const { svg, pointTo, goals, xg } = close();
+    pointTo(goals.x, goals.y, "pointerover");
+    pointerDown();
+    svg.querySelector(".ec-stops > .ec-hit")!.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: goals.x, clientY: goals.y - 3 }));
+    expect(nearerXg(goals, xg, goals.y - 3)).toBe(true);
+    expect(focused()).toBe("goals@2");
+  });
+});
+
 describe('lineChart({ hover: "point", curve: "monotone" })', () => {
   it("hovers, dims and moves between the points on curved lines, its stops following them through a change of curve", async () => {
     const { chart, svg, line, stop, at, pointTo, settle } = setup({ curve: "monotone" });

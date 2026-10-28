@@ -469,12 +469,13 @@ describe("chartTooltip: the bridge to the mark", () => {
     const left = Math.round(Math.min(box.left, x));
     const right = Math.round(Math.max(box.left + TIP.width, x + width));
     expect(bridge(container).hidden).toBe(false);
-    expect(bridge(container).style.top).toBe(px(box.top + TIP.height));
-    expect(bridge(container).style.height).toBe(px(79 + 1 - (box.top + TIP.height)));
+    // A px into the box, and a px into the bar.
+    expect(bridge(container).style.top).toBe(px(box.top + TIP.height - 1));
+    expect(bridge(container).style.height).toBe(px(79 + 1 - (box.top + TIP.height - 1)));
     expect(bridge(container).style.left).toBe(px(left));
     expect(bridge(container).style.width).toBe(px(right - left));
     const at = (value: number) => px(Math.round(value) - left);
-    expect(bridge(container).style.getPropertyValue("clip-path")).toBe(`polygon(${at(box.left)} 0px, ${at(box.left + TIP.width)} 0px, ${at(x + width)} 13px, ${at(x)} 13px)`);
+    expect(bridge(container).style.getPropertyValue("clip-path")).toBe(`polygon(${at(box.left)} 0px, ${at(box.left + TIP.width)} 0px, ${at(x + width)} 14px, ${at(x)} 14px)`);
   });
 
   it("spans the gap from the mark down to the box below it", () => {
@@ -486,9 +487,10 @@ describe("chartTooltip: the bridge to the mark", () => {
     const { x, width } = geometry("Okafor").bounds;
     const left = Math.round(Math.min(box.left, x));
     const at = (value: number) => px(Math.round(value) - left);
+    // A px into the bar, and a px into the box.
     expect(bridge(container).style.top).toBe(px(30));
-    expect(bridge(container).style.height).toBe(px(13));
-    expect(bridge(container).style.getPropertyValue("clip-path")).toBe(`polygon(${at(x)} 0px, ${at(x + width)} 0px, ${at(box.left + TIP.width)} 13px, ${at(box.left)} 13px)`);
+    expect(bridge(container).style.height).toBe(px(14));
+    expect(bridge(container).style.getPropertyValue("clip-path")).toBe(`polygon(${at(x)} 0px, ${at(x + width)} 0px, ${at(box.left + TIP.width)} 14px, ${at(box.left)} 14px)`);
   });
 
   it("follows an effect that moves the mark", () => {
@@ -546,6 +548,18 @@ describe("chartTooltip: under a pointer that didn't move onto it", () => {
     const { center } = geometry("Lindqvist");
     // Under the box's middle, in the gap above the bar (79): the bridge.
     at("pointerover", hit("Lindqvist"), center.x, 74);
+    expect(tip()!.parentElement!.classList.contains("ec-tooltip-through")).toBe(true);
+  });
+
+  it("leaves no sliver between the box and the bridge, though the box is a fraction of a px shorter than offsetHeight says", () => {
+    // offsetHeight is a whole number of px: the box is drawn 49.6 px tall, its bottom 0.4 px above where 50 puts it.
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (!this.classList.contains("ec-tooltip")) return new DOMRect(0, 0, 0, 0);
+      return new DOMRect(parseFloat(this.style.left) || 0, parseFloat(this.style.top) || 0, TIP.width, TIP.height - 0.4);
+    });
+    const { hit, geometry, tip } = setup();
+    // The third bar's box: 17 down to 66.6, over the bar's top at 79. Below 66.6 and above 67, the bridge.
+    at("pointerover", hit("Lindqvist"), geometry("Lindqvist").center.x, 66.8);
     expect(tip()!.parentElement!.classList.contains("ec-tooltip-through")).toBe(true);
   });
 

@@ -3,8 +3,9 @@
 // and its accessible description is `markDescription`'s text or, by default, a tooltip function's.
 // Its text is only ever set as text, never parsed as HTML, so a tooltip function can't inject markup.
 // While it shows it takes the pointer, so it can be hovered (WCAG 1.4.13): beside a mark, a clear
-// bridge spans the gap to the mark, so the pointer can cross from one to the other. One that comes up
-// under a pointer that didn't move onto it lets the pointer through until the pointer is off it.
+// bridge spans the gap to the mark, a px into both, so the pointer can cross from one to the other.
+// One that comes up under a pointer that didn't move onto it lets the pointer through until the
+// pointer is off it.
 
 import { matrix, type Matrix, type MarkGeometry, type MotionView } from "../core";
 import { report } from "../core/report";
@@ -80,7 +81,10 @@ export interface Tooltip {
 
 /** Px between the mark and the box, as in the prototype. */
 const GAP = 12;
-/** Px the bridge reaches into the mark, so no sliver is left between them. */
+/**
+ * Px the bridge reaches into the mark and into the box, so no sliver is left between them: the box's
+ * height is a whole number of px (`offsetHeight`), and its edge may be a fraction of a px from that.
+ */
 const OVERLAP = 1;
 /** Base ms for showing and hiding: hover feedback. */
 const FADE = 100;
@@ -347,9 +351,9 @@ function inside({ top, bottom, upper, lower }: Trapezoid, x: number, y: number):
 
 /**
  * Spans the bridge across the gap between the box and `mark`, in the layer's px: a trapezoid from the
- * box's edge to the mark's, a px into it, so the pointer can go straight from one to the other without
- * leaving the hover. It's clear, and takes only the pointer. At a point there's none: a crosshair's
- * target is its whole column, which reaches the box. Gives the trapezoid, if there's one.
+ * box's edge to the mark's, a px into each, so the pointer can go straight from one to the other
+ * without leaving the hover. It's clear, and takes only the pointer. At a point there's none: a
+ * crosshair's target is its whole column, which reaches the box. Gives the trapezoid, if there's one.
  */
 function span(bridge: HTMLElement, box: { readonly left: number; readonly top: number; readonly width: number; readonly height: number }, mark: Edges | undefined, side: TooltipPlacement["side"]): Trapezoid | undefined {
   bridge.hidden = mark === undefined;
@@ -357,7 +361,7 @@ function span(bridge: HTMLElement, box: { readonly left: number; readonly top: n
   const edge = { left: box.left, right: box.left + box.width };
   // The upper edge and the lower one, with their y's.
   const [upper, lower, top, bottom] =
-    side === "above" ? [edge, mark, box.top + box.height, Math.round(mark.top + OVERLAP)] : [mark, edge, Math.round(mark.bottom - OVERLAP), box.top];
+    side === "above" ? [edge, mark, box.top + box.height - OVERLAP, Math.round(mark.top + OVERLAP)] : [mark, edge, Math.round(mark.bottom - OVERLAP), box.top + OVERLAP];
   const left = Math.round(Math.min(upper.left, lower.left));
   const width = Math.round(Math.max(upper.right, lower.right)) - left;
   const height = Math.max(0, bottom - top);

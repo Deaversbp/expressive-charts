@@ -19,6 +19,7 @@
 
 import type { AnimateOptions, Animated, MarkData, MarkGeometry, Sample, TweenResult } from "../core";
 import { animated, defaultClock, interpolateNumber, interpolateRecord, matrix } from "../core";
+import { invert } from "../core/geometry";
 import { resolveEffects } from "../core/registry";
 import { report } from "../core/report";
 import { createRunner, type RunInput } from "../core/runner";
@@ -809,7 +810,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   }
 
   // With `hover: "point"`, the points are the targets and the focus stops. Each has a stop of its own,
-  // an image above the hidden x's, and the pointer anywhere over the plot hovers the nearest.
+  // an image above the hidden x's, and the pointer anywhere over the plot hovers the nearest, or keeps
+  // the hovered one while it's on its dot.
 
   /** The points' stops, with the plot's hit area under them; made when the hover is first "point". */
   let stopsLayer: SVGGElement | undefined;
@@ -849,6 +851,34 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     return best;
   }
 
+  /**
+   * The hovered point, while its tooltip shows and `at` is on its dot as drawn, moved by its effects:
+   * there the pointer stays on it, though another point is nearer, so it can go straight from the dot
+   * onto the tooltip's bridge, which starts a px inside the dot (WCAG 1.4.13).
+   */
+  function heldPoint(at: { readonly x: number; readonly y: number }): PointRecord<D> | undefined {
+    const point = hover.key === undefined || !tooltip.element() ? undefined : points.get(hover.key);
+    if (!point || !revealed(point.row)) return undefined;
+    const { transform } = point.handle.style;
+    let on = at;
+    if (transform) {
+      try {
+        on = matrix.apply(invert(transform), at);
+      } catch {
+        // A transform with no area leaves no dot to be on.
+        return undefined;
+      }
+    }
+    const { center } = point.shown.geometry;
+    return (on.x - center.x) ** 2 + (on.y - center.y) ** 2 <= DOT_RADIUS ** 2 ? point : undefined;
+  }
+
+  /** The point the pointer at client px is on: the hovered one on its dot, otherwise the nearest. */
+  function pointAt(clientX: number, clientY: number): PointRecord<D> | undefined {
+    const at = fromClient(clientX, clientY);
+    return heldPoint(at) ?? nearestPoint(at);
+  }
+
   /** Client px in the <svg>'s units: it may be scaled to fit its container. */
   function fromClient(x: number, y: number): { x: number; y: number } {
     const box = svg.getBoundingClientRect();
@@ -878,7 +908,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       plotHit = svgElement("rect", { class: "ec-hit" }, stopsLayer);
       // A click or tap on the plot takes focus to the point it hovers, as one on an x's column does.
       stopsLayer.addEventListener("click", (event) => {
-        const point = nearestPoint(fromClient(event.clientX, event.clientY));
+        const point = pointAt(event.clientX, event.clientY);
         if (point) stops.get(point.key)?.element.focus();
       });
     }
@@ -1003,7 +1033,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       const element = eventTarget as Element | null;
       if (!stopsLayer || typeof element?.closest !== "function" || !stopsLayer.contains(element)) return undefined;
       if (pointer) {
-        const point = nearestPoint(fromClient(pointer.x, pointer.y));
+        const point = pointAt(pointer.x, pointer.y);
         return point && { key: point.key };
       }
       const stop = element.closest(".ec-stop");

@@ -10,8 +10,14 @@ import { matrix, type Matrix, type MarkGeometry, type MotionView } from "../core
 import { report } from "../core/report";
 import { svgElement } from "./render/svg";
 
-/** The `tooltip` option: on (the default text), off, or a function giving a row's text. */
-export type TooltipOption<D> = boolean | ((d: D) => string);
+/** The `tooltip` option: on (the default text), off, or a function giving a row's text, given a line chart's point's series too. */
+export type TooltipOption<D> = boolean | ((d: D, point?: { readonly series: string }) => string);
+
+/** What a tooltip's text is for: a row and, for one series' point at it, that series. Its text is kept by this object. */
+export interface TooltipRow {
+  readonly datum: unknown;
+  readonly series?: string;
+}
 
 /** Plain text (a function's, with "\n" for line breaks), or a bold title over lines. */
 export type TooltipContent = string | { readonly title: string; readonly lines: readonly string[] };
@@ -49,20 +55,20 @@ export interface Tooltip {
    * when `row` or the option changes: the default `summary`, a function's result, or nothing with
    * `tooltip: false`.
    */
-  show(mark: MarkGeometry, row: { readonly datum: unknown }, summary: () => TooltipContent, transform?: Matrix): void;
+  show(mark: MarkGeometry, row: TooltipRow, summary: () => TooltipContent, transform?: Matrix): void;
   /**
    * Shows the tooltip at `point` instead of beside a mark, or moves it there: centred on its x, above
    * its top or, without room there, below its bottom. A line chart's crosshair gives its x and the
    * highest and lowest points it crosses. The text is worked out as show()'s is.
    */
-  showAt(point: TooltipPoint, row: { readonly datum: unknown }, summary: () => TooltipContent): void;
+  showAt(point: TooltipPoint, row: TooltipRow, summary: () => TooltipContent): void;
   /**
    * Gives the mark's `element` its accessible description for `row` (aria-describedby, to a <desc>
    * inside it): `markDescription`'s text when it's a function, nothing when it's false, and otherwise
    * a tooltip function's text, so what a custom tooltip adds beyond the values reaches screen readers.
    * The default tooltip text says nothing the mark's aria-label doesn't, so it describes nothing.
    */
-  describe(element: SVGElement, row: { readonly datum: unknown }): void;
+  describe(element: SVGElement, row: TooltipRow): void;
   /**
    * The tooltip while it shows, or undefined: its layer, holding the box and, beside a mark, the
    * bridge to it. Both take the pointer.
@@ -192,11 +198,11 @@ export function chartTooltip<D>(
     return box;
   }
 
-  function contentFor(row: { readonly datum: unknown }, summary: () => TooltipContent): TooltipContent | undefined {
+  function contentFor(row: TooltipRow, summary: () => TooltipContent): TooltipContent | undefined {
     const option = options.option();
     const known = texts.get(row);
     if (known && known.option === option) return known.content;
-    const content = text(option, row.datum as D, summary);
+    const content = text(option, row.datum as D, summary, row.series);
     texts.set(row, { option, content });
     return content;
   }
@@ -213,7 +219,7 @@ export function chartTooltip<D>(
    * box's px with `toPx`, at rest or, with `moved`, as an effect has moved the mark. An anchor with a
    * left and right edge is a mark, and gets a bridge.
    */
-  function place(row: { readonly datum: unknown }, summary: () => TooltipContent, anchor: (toPx: ToPx, moved: boolean) => Anchored, moved: boolean): void {
+  function place(row: TooltipRow, summary: () => TooltipContent, anchor: (toPx: ToPx, moved: boolean) => Anchored, moved: boolean): void {
     const content = contentFor(row, summary);
     if (content === undefined) {
       hide();
@@ -366,11 +372,12 @@ function span(bridge: HTMLElement, box: { readonly left: number; readonly top: n
 }
 
 /** None with `false`; a function's text, where an empty string or a throw shows none; otherwise the default. */
-function text<D>(option: TooltipOption<D> | undefined, datum: D, summary: () => TooltipContent): TooltipContent | undefined {
+function text<D>(option: TooltipOption<D> | undefined, datum: D, summary: () => TooltipContent, series: string | undefined): TooltipContent | undefined {
   if (option === false) return undefined;
   if (typeof option !== "function") return summary();
   try {
-    const result = option(datum);
+    // A line chart's point gives its series too; anything else, the row alone.
+    const result = series === undefined ? option(datum) : option(datum, { series });
     return result === undefined || result === null || result === "" ? undefined : String(result);
   } catch (error) {
     report(error);

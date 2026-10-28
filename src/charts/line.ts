@@ -12,7 +12,9 @@
 // The chart never names an effect: it resolves `on` through the presets it's handed and plays them
 // through the runner, which draws on the SVG surface. What doesn't depend on lines (events, hover and
 // focus, transitions and leaving marks, DOM order, size and fonts) is in shell/. Each x is a hover
-// target standing for every series' point there; the lines themselves are never hovered.
+// target standing for every series' point there; the lines themselves are never hovered. With
+// `hover: "point"`, each point is a target instead: the pointer hovers the nearest, the others
+// dim, and the keys go along its line and between lines.
 
 import type { AnimateOptions, Animated, MarkData, MarkGeometry, Sample, TweenResult } from "../core";
 import { animated, defaultClock, interpolateNumber, interpolateRecord, matrix } from "../core";
@@ -55,7 +57,7 @@ import { injectStyles, markColorStyles, seriesColors, type SeriesColors } from "
 import { seriesLabel } from "./series";
 import { chartEvents } from "./shell/events";
 import { decimals, format, round } from "./shell/format";
-import { chartHover } from "./shell/hover";
+import { chartHover, type ChartHover } from "./shell/hover";
 import { chartLabel } from "./shell/labels";
 import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
@@ -64,8 +66,8 @@ import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, 
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
 import { chartTable, tableModel, type TableModel } from "./table";
 import { monthsOn } from "./time";
-import { chartTooltip, summaryContent, type TooltipContent } from "./tooltip";
-import type { LineChart, LineChartOptions } from "./types";
+import { chartTooltip, summaryContent, type TooltipContent, type TooltipRow } from "./tooltip";
+import type { LineChart, LineChartOptions, MarkSummary } from "./types";
 
 export type { LineChart } from "./types";
 
@@ -156,6 +158,20 @@ interface TickRecord {
   wanted: boolean;
 }
 
+/** With `hover: "point"`, a point's focus stop: an image named for its x and value, round the point. */
+interface StopRecord {
+  readonly element: SVGGElement;
+  /** A circle round the point, the size of its focus ring: the stop's bounds. */
+  readonly bounds: SVGCircleElement;
+  /** Where the point was drawn when the stop was last painted. */
+  x: number;
+  y: number;
+  hidden: boolean | undefined;
+}
+
+/** What the pointer, touch and the keys hover: an x, standing for every series' point there, or a point alone. */
+type HoverKind = "x" | "point";
+
 /** What an update changed, by mark. */
 type Diff<D> = ChartDiff<MarkRecord<D>>;
 
@@ -177,6 +193,7 @@ const VISIBLE = 0.5;
 export function lineChart<D>(target: string | Element, options: LineChartOptions<D>, env: ChartEnv): LineChart<D> {
   const container = resolveTarget(target, "lineChart");
   checkChartOptions(options, "lineChart");
+  let hoverKind = hoverOf(options);
   let current = options;
   const motion = chartMotion(options.motion, env.motion);
   let effects = resolveEffects(options.on, env.presets);
@@ -185,8 +202,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   const doc = container.ownerDocument;
   injectStyles(doc);
 
-  // A named group of x's, each an image with its own name; the lines and points are aria-hidden:
-  // see "ARIA structure" in docs/architecture.md.
+  // A named group of x's (or, with `hover: "point"`, of points' stops), each an image with its own
+  // name; the lines and points are aria-hidden: see "ARIA structure" in docs/architecture.md.
   const svg = svgElement("svg", { class: "ec-chart ec-line-chart", role: "group" }, container);
   const grid = svgElement("g", { class: "ec-grid", "aria-hidden": "true" }, svg);
   const axis = svgElement("g", { class: "ec-axis", "aria-hidden": "true" }, svg);
@@ -227,12 +244,15 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   let firstTable: TableModel | undefined;
   /** Each x's accessible name, by row key, for the latest layout. */
   let names: ReadonlyMap<string, string>;
+  /** With `hover: "point"`, each point's, by its key. */
+  let pointNames: ReadonlyMap<string, string> | undefined;
   try {
     // Throws on data it can't draw, a table column it can't read, or a `format` that throws. Nothing
     // but the <svg> is in place yet (no listeners, observers or elements beside it), so that's all to undo.
     laidOut = layout(current);
     firstTable = tableFor(current, laidOut);
     names = namesFor(current, laidOut);
+    pointNames = hoverKind === "point" ? pointNamesFor(current, laidOut) : undefined;
   } catch (error) {
     svg.remove();
     throw error;
@@ -663,7 +683,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   /**
    * Each revealed x's hit column, halfway to its neighbours, at the rows as they are; and the points
    * past the reveal hidden, their overlays too. A column that isn't live or revealed is hidden, so it
-   * can't be hovered or focused.
+   * can't be hovered or focused. With `hover: "point"`, the points' stops and the plot's hit area too.
    */
   function paintColumns(frame: LineFrame, states: readonly { readonly record: RowRecord<D>; readonly state: RowState<D> }[]): void {
     const { x } = positions(frame);
@@ -688,15 +708,24 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
         surface.hide(point.key, hidden);
       }
     }
+    if (stopsLayer) paintStops(frame);
   }
 
   // ── Hover ──────────────────────────────────────────────────────────────────
 
   /**
-   * The crosshair at the hovered x, and the tooltip above its highest point, as they are on screen.
-   * An x with every value missing has no point: the tooltip sits at the crosshair's top.
+   * The hovered target as it is on screen. An x: the crosshair, and the tooltip above its highest
+   * point (at the crosshair's top for an x with every value missing). A point: the tooltip above it, or
+   * below without room, moved with its effects as a bar's is, and no crosshair.
    */
   function showHover(key: string): void {
+    const point = points.get(key);
+    if (point) {
+      if (!revealed(point.row)) return;
+      const { row } = point.row;
+      tooltip.show(point.shown.geometry, about(row, point.series), () => pointSummary(row, point.series, current), point.handle.style.transform);
+      return;
+    }
     const record = rows.get(key);
     if (!record || !revealed(record)) return;
     const marks = livePoints(record);
@@ -722,14 +751,16 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   let ringLine: SVGLineElement | undefined;
 
   /**
-   * A ring round each point at the focused x, as it is on screen, moved with its body when an effect
-   * moves it. An x with every value missing has no point to ring: a line in the ring's colour shows
-   * its focus where the crosshair is, and stays when Escape hides the crosshair.
+   * A ring round each point at the focused x, or round the focused point, as it is on screen, moved
+   * with its body when an effect moves it. An x with every value missing has no point to ring: a
+   * line in the ring's colour shows its focus where the crosshair is, and stays when Escape hides
+   * the crosshair.
    */
   function drawRing(key: string | undefined): void {
-    const record = key === undefined ? undefined : rows.get(key);
+    const point = key === undefined ? undefined : points.get(key);
+    const record = key === undefined ? undefined : (point?.row ?? rows.get(key));
     const live = record !== undefined && revealed(record);
-    const marks = live ? livePoints(record) : [];
+    const marks = live ? (point ? [point] : livePoints(record)) : [];
     if (live && marks.length === 0) {
       ringLine ??= svgElement("line", { class: "ec-focus-ring", "stroke-width": RING }, ring);
       if (ring.childElementCount > 1 || ring.firstElementChild !== ringLine) ring.replaceChildren(ringLine);
@@ -753,7 +784,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     setAttributes(ring, { visibility: marks.length > 0 ? undefined : "hidden" });
   }
 
-  /** The tooltip, crosshair and ring follow the hovered and focused x as it moves. */
+  /** The tooltip, crosshair and ring follow the hovered and focused x or point as it moves. */
   function followHover(): void {
     if (hover.key !== undefined) showHover(hover.key);
     if (hover.ringKey !== undefined) drawRing(hover.ringKey);
@@ -772,38 +803,242 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     return record && rows.get(record.key) === record && revealed(record) ? record : undefined;
   }
 
+  // With `hover: "point"`, the points are the targets and the focus stops. Each has a stop of its own,
+  // an image above the hidden x's, and the pointer anywhere over the plot hovers the nearest.
+
+  /** The points' stops, with the plot's hit area under them; made when the hover is first "point". */
+  let stopsLayer: SVGGElement | undefined;
+  let plotHit: SVGRectElement | undefined;
+  const stops = new Map<string, StopRecord>();
+  /** The stops' elements in DOM order: the keyboard's. */
+  let stopOrder: SVGGElement[] = [];
+  const byStop = new WeakMap<Element, string>();
+
+  /** The live points line by line, each in ascending x: the stops' order. */
+  function pointOrder(): PointRecord<D>[] {
+    const bySeries = new Map(laidOut.series.map((series) => [series, [] as PointRecord<D>[]]));
+    for (const record of rowOrder) for (const point of livePoints(record)) bySeries.get(point.series)?.push(point);
+    return [...bySeries.values()].flat();
+  }
+
+  /** A line's revealed points, in ascending x: where Left, Right, Home, End and the pages go. */
+  const along = (series: string): PointRecord<D>[] => rowOrder.filter(revealed).flatMap((record) => livePoints(record).filter((point) => point.series === series));
+
+  /**
+   * The revealed point nearest `at`, in the <svg>'s units, by distance: of two as near, the series
+   * first in `series`, then the first x. A missing value has no point.
+   */
+  function nearestPoint(at: { readonly x: number; readonly y: number }): PointRecord<D> | undefined {
+    let best: PointRecord<D> | undefined;
+    let far = Infinity;
+    let rank = Infinity;
+    for (const record of rowOrder) {
+      if (!revealed(record)) continue;
+      for (const point of livePoints(record)) {
+        const { x, y } = point.shown.geometry.center;
+        const d = (x - at.x) ** 2 + (y - at.y) ** 2;
+        const r = laidOut.series.indexOf(point.series);
+        if (d < far || (d === far && r < rank)) [best, far, rank] = [point, d, r];
+      }
+    }
+    return best;
+  }
+
+  /** Client px in the <svg>'s units: it may be scaled to fit its container. */
+  function fromClient(x: number, y: number): { x: number; y: number } {
+    const box = svg.getBoundingClientRect();
+    const k = box.width > 0 && drawnFrame.box.width > 0 ? box.width / drawnFrame.box.width : 1;
+    return { x: (x - box.left) / k, y: (y - box.top) / k };
+  }
+
+  /** One object per row and series: what a point's tooltip words, and keeps its text by. */
+  const abouts = new WeakMap<LineRow<D>, Map<string, TooltipRow>>();
+  function about(row: LineRow<D>, series: string): TooltipRow {
+    let bySeries = abouts.get(row);
+    if (!bySeries) abouts.set(row, (bySeries = new Map()));
+    let known = bySeries.get(series);
+    if (!known) bySeries.set(series, (known = { datum: row.datum, series }));
+    return known;
+  }
+
+  /**
+   * With `hover: "point"`, a stop for each live point, in the keyboard's order, named by its x and its
+   * value and described by a tooltip function given its series; the stops of points that went go.
+   */
+  function syncStops(): void {
+    if (hoverKind !== "point") return;
+    if (!stopsLayer) {
+      stopsLayer = svgElement("g", { class: "ec-stops" }, svg);
+      svg.insertBefore(stopsLayer, overlay);
+      plotHit = svgElement("rect", { class: "ec-hit" }, stopsLayer);
+      // A click or tap on the plot takes focus to the point it hovers, as one on an x's column does.
+      stopsLayer.addEventListener("click", (event) => {
+        const point = nearestPoint(fromClient(event.clientX, event.clientY));
+        if (point) stops.get(point.key)?.element.focus();
+      });
+    }
+    const live = pointOrder();
+    const keep = new Set(live.map((point) => point.key));
+    for (const [key, stop] of stops) {
+      if (keep.has(key)) continue;
+      stop.element.remove();
+      stops.delete(key);
+    }
+    const order = live.map((point) => {
+      let stop = stops.get(point.key);
+      if (!stop) {
+        const element = svgElement("g", { class: "ec-stop", "data-key": point.key, role: "img" }, stopsLayer);
+        // Its bounds, for a screen reader's highlight and a magnifier: the ring's.
+        stop = { element, bounds: svgElement("circle", { r: DOT_RADIUS + RING_GAP + RING, fill: "none" }, element), x: NaN, y: NaN, hidden: undefined };
+        stops.set(point.key, stop);
+        byStop.set(element, point.key);
+      }
+      const name = pointNames?.get(point.key) ?? point.key;
+      if (stop.element.getAttribute("aria-label") !== name) stop.element.setAttribute("aria-label", name);
+      tooltip.describe(stop.element, about(point.row.row, point.series));
+      return stop.element;
+    });
+    orderElements(stopsLayer, stopOrder, order, hover.active);
+    stopOrder = order;
+  }
+
+  /** The plot's hit area, reaching a dot's radius past the plot, and each stop round its point, hidden past the reveal. */
+  function paintStops(frame: LineFrame): void {
+    const { left, right, top, bottom } = frame.box;
+    setAttributes(plotHit!, { x: left - DOT_RADIUS, y: top - DOT_RADIUS, width: right - left + 2 * DOT_RADIUS, height: bottom - top + 2 * DOT_RADIUS });
+    for (const [key, stop] of stops) {
+      const point = points.get(key);
+      if (!point) continue;
+      const hidden = !revealed(point.row);
+      if (stop.hidden !== hidden) {
+        stop.hidden = hidden;
+        setAttributes(stop.element, { visibility: hidden ? "hidden" : undefined });
+      }
+      const { x, y } = point.shown.geometry.center;
+      if (stop.x === x && stop.y === y) continue;
+      stop.x = x;
+      stop.y = y;
+      setAttributes(stop.bounds, { cx: x, cy: y });
+    }
+  }
+
+  /** The stop of the other kind nearest a key's: a point's x, or an x's first series' point, or else the nearest x's with one. */
+  function counterpart(key: string): string | undefined {
+    const point = points.get(key);
+    if (point) return point.row.key;
+    const shown = rowOrder.filter(revealed);
+    const i = shown.findIndex((record) => record.key === key);
+    for (let step = 0; i >= 0 && step < shown.length; step++) {
+      for (const at of [i + step, i - step]) {
+        const first = shown[at] && livePoints(shown[at])[0];
+        if (first) return first.key;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Changes what's hovered, at once: the hover held ends, and the tab stop and focus go to the nearest
+   * stop of the new kind, the ring with them. The new stops show before focus moves, the old go after.
+   */
+  function rehover(kind: HoverKind): void {
+    if (kind === hoverKind) return;
+    hover.leave();
+    hoverKind = kind;
+    if (kind === "point") {
+      syncStops();
+      paintStops(drawnFrame);
+    } else columnsLayer.removeAttribute("display");
+    hover.retarget(counterpart);
+    if (kind === "point") columnsLayer.setAttribute("display", "none");
+    else {
+      stopsLayer?.remove();
+      stopsLayer = plotHit = undefined;
+      stops.clear();
+      stopOrder = [];
+    }
+  }
+
+  /** With `hover: "point"`, each hot point's line, by the point's key: it stays at full strength, with its decorations, while the rest dims. */
+  const hotLines = new Map<string, string>();
+  function heat(key: string, on: boolean): void {
+    const series = on ? (hoverKind === "point" ? findMark(key)?.series : undefined) : hotLines.get(key);
+    if (series === undefined) return;
+    if (on) hotLines.set(key, series);
+    else hotLines.delete(key);
+    surface.hot(key, on);
+    // A line stays hot while any of its points is.
+    if (!on && [...hotLines.values()].includes(series)) return;
+    findMark(series)?.group.classList.toggle("ec-hot-line", on);
+    surface.hot(series, on);
+  }
+
+  /** Whether `key` is a live target: a revealed x, or with `hover: "point"` a revealed point. */
+  function live(key: string): boolean {
+    const point = hoverKind === "point" ? points.get(key) : undefined;
+    const record = hoverKind === "point" ? point?.row : rows.get(key);
+    return record !== undefined && revealed(record);
+  }
+
   // Pointer, touch and keyboard focus share one hover: see shell/hover.ts. An x is the target, and
-  // stands for each series' point there. Nothing dims: every series is read at once.
-  const hover = chartHover<D>({
+  // stands for each series' point there, so nothing dims: every series is read at once. With
+  // `hover: "point"` the point is, alone, and the rest dims.
+  const hover: ChartHover = chartHover<D>({
     svg,
     runner,
     events,
-    dim: () => false,
-    find(eventTarget) {
-      const record = liveRowOf(eventTarget);
-      return record && { key: record.key };
+    // A link's hover shows as an x's does: nothing dims.
+    dim: () => hoverKind === "point" && current.dim !== false && hover.key !== undefined,
+    hot: heat,
+    find(eventTarget, pointer) {
+      if (hoverKind === "x") {
+        const record = liveRowOf(eventTarget);
+        return record && { key: record.key };
+      }
+      const element = eventTarget as Element | null;
+      if (!stopsLayer || typeof element?.closest !== "function" || !stopsLayer.contains(element)) return undefined;
+      if (pointer) {
+        const point = nearestPoint(fromClient(pointer.x, pointer.y));
+        return point && { key: point.key };
+      }
+      const stop = element.closest(".ec-stop");
+      const key = stop ? byStop.get(stop) : undefined;
+      return key !== undefined && live(key) ? { key } : undefined;
     },
-    live(key) {
-      const record = rows.get(key);
-      return record !== undefined && revealed(record);
-    },
-    order: () => rowOrder.filter(revealed).map((record) => record.key),
+    moves: () => hoverKind === "point",
+    live,
+    order: () => (hoverKind === "point" ? pointOrder().filter((point) => revealed(point.row)) : rowOrder.filter(revealed)).map((record) => record.key),
     // On a time axis a page is a calendar month in its zone: the first x a month or more on, or back,
-    // or the last one that way. On numbers it's the keyboard's own.
+    // or the last one that way. On numbers it's the keyboard's own, or along a point's line a tenth of
+    // its points.
     page(key, by) {
-      const from = rows.get(key);
-      if (!laidOut.time || !from) return undefined;
-      const stops = rowOrder.filter(revealed);
-      const to = monthsOn(from.row.x, by, lineEncoding(current).timeZone);
-      if (by > 0) return (stops.find((record) => record.row.x >= to) ?? stops[stops.length - 1])?.key;
-      for (let i = stops.length - 1; i >= 0; i--) if (stops[i]!.row.x <= to) return stops[i]!.key;
+      const point = hoverKind === "point" ? points.get(key) : undefined;
+      const stops = point ? along(point.series).map((p) => ({ key: p.key, x: p.row.row.x })) : rowOrder.filter(revealed).map((record) => ({ key: record.key, x: record.row.x }));
+      const i = stops.findIndex((stop) => stop.key === key);
+      if (i < 0) return undefined;
+      if (!laidOut.time) return point ? stops[Math.min(stops.length - 1, Math.max(0, i + by * Math.ceil(stops.length / 10)))]!.key : undefined;
+      const to = monthsOn(stops[i]!.x, by, lineEncoding(current).timeZone);
+      if (by > 0) return (stops.find((stop) => stop.x >= to) ?? stops[stops.length - 1])?.key;
+      for (let j = stops.length - 1; j >= 0; j--) if (stops[j]!.x <= to) return stops[j]!.key;
       return stops[0]?.key;
+    },
+    // With `hover: "point"`, Left, Right, Home and End go along the point's line, passing over its
+    // missing values, and Up and Down to the point above or below at its x, by where they're drawn.
+    move(key, press) {
+      const point = hoverKind === "point" ? points.get(key) : undefined;
+      if (!point) return undefined;
+      // Top to bottom, in series order where two are drawn at one height: the sort is stable.
+      const stops = press === "ArrowUp" || press === "ArrowDown" ? livePoints(point.row).sort((a, b) => a.shown.geometry.center.y - b.shown.geometry.center.y) : along(point.series);
+      const i = stops.indexOf(point);
+      const to = press === "Home" ? 0 : press === "End" ? stops.length - 1 : i + (press === "ArrowDown" || press === "ArrowRight" ? 1 : -1);
+      return stops[Math.max(0, Math.min(stops.length - 1, to))]?.key;
     },
     marks: (key) => {
       const record = rows.get(key);
-      return record ? livePoints(record).map((point) => point.key) : [];
+      if (record) return livePoints(record).map((point) => point.key);
+      return points.has(key) ? [key] : [];
     },
-    element: (key) => (rows.get(key) ?? leavingRows.get(key))?.column,
+    element: (key) => (rows.get(key) ?? leavingRows.get(key))?.column ?? stops.get(key)?.element,
     markElement: (key) => findMark(key)?.group,
     onScreen(key) {
       const record = findMark(key);
@@ -977,6 +1212,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     }
 
     for (const record of rowOrder) labelColumn(record);
+    syncStops();
     // DOM order follows visual order, for screen readers.
     orderElements(
       columnsLayer,
@@ -1140,6 +1376,9 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     });
     lineOrder = laidOut.rows.length > 0 ? laidOut.series.map((name) => createLine(name, placed.lines.get(name)!, false)) : [];
     for (const line of lineOrder) lines.set(line.series, line);
+    // With `hover: "point"`, the points' stops in place of the x's.
+    syncStops();
+    if (hoverKind === "point") columnsLayer.setAttribute("display", "none");
     land();
   }
   /** The live marks as they're heading, in the runner's order: the lines, then each x's points. */
@@ -1155,17 +1394,20 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       if (next.motion !== undefined && next.motion !== current.motion) throw new TypeError("lineChart: `motion` can't be changed by update() yet.");
       const merged: LineChartOptions<D> = { ...current, ...next };
       checkChartOptions(merged, "lineChart");
+      const kind = hoverOf(merged);
       // Throws on an effect it can't resolve, data it can't draw, a table column it can't read, or a
       // `format` that throws, before anything changes.
       const swapped = "on" in next ? nextEffects(effects, current.on, merged.on, env.presets) : effects;
       const nextLayout = layout(merged, swapped);
       const nextTable = tableFor(merged, nextLayout);
       const nextNames = namesFor(merged, nextLayout);
+      const nextPointNames = kind === "point" ? pointNamesFor(merged, nextLayout) : undefined;
       if ("colors" in next) colors = toColorAssignment(merged.colors);
       const previous = current;
       const seriesBefore = laidOut.series;
       current = merged;
       names = nextNames;
+      pointNames = nextPointNames;
       describeChart(svg, current);
       table.render(nextTable);
       // A region that appears with its first text is often missed: it announces from the next update.
@@ -1175,6 +1417,9 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
         announcer.destroy();
         announcer = undefined;
       }
+      // A new kind of hover takes over at once, on the marks as they are; this update's change then plays with it.
+      rehover(kind);
+      hover.syncDim();
       transitions.supersede();
       const swapping = swapped !== effects;
       effects = swapped;
@@ -1232,9 +1477,16 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
     focus(key) {
       if (destroyed) return;
-      // An x takes focus, for its own key or one of its points'.
-      const record = rows.get(key) ?? points.get(key)?.row;
-      if (record) hover.focus(record.key);
+      // An x takes focus, for its own key or one of its points'; with `hover: "point"`, a point, for
+      // its own key or its x's, whose first series' point it is.
+      const row = rows.get(key);
+      if (hoverKind === "x") {
+        const record = row ?? points.get(key)?.row;
+        if (record) hover.focus(record.key);
+        return;
+      }
+      const point = points.get(key) ?? (row && livePoints(row)[0]);
+      if (point) hover.focus(point.key);
     },
 
     leave() {
@@ -1341,6 +1593,23 @@ function summary<D>(row: LineRow<D>, options: LineChartOptions<D>): TooltipConte
   return { title: row.label, lines: [said(row.values, options).join(" · ")] };
 }
 
+/** A point's default tooltip: the x, then its series' value with its label. */
+function pointSummary<D>(row: LineRow<D>, series: string, options: LineChartOptions<D>): TooltipContent {
+  return summaryContent(row.label, labelled(row.values, options).filter((v) => v.series === series), format(options), { total: false });
+}
+
+/** The page's wording for a focus stop from `markLabel`, given `mark`; or, without one, or for an empty name or a throw (reported), `mark.text`. */
+function worded<D>(options: LineChartOptions<D>, datum: D, mark: MarkSummary): string {
+  if (!options.markLabel) return mark.text;
+  try {
+    const named: unknown = options.markLabel(datum, mark);
+    if (named !== undefined && named !== null && String(named).trim() !== "") return String(named);
+  } catch (error) {
+    report(error);
+  }
+  return mark.text;
+}
+
 /**
  * Every x's name in `layout`, by key, worked out before anything changes: "12: 15 goals, 14.2 xg",
  * each series' value with its label, or the page's wording from `markLabel`. An empty name, or a throw
@@ -1350,16 +1619,32 @@ function namesFor<D>(options: LineChartOptions<D>, layout: LineLayout<D>): Reado
   const formatted = format(options);
   return new Map(
     layout.rows.map((row) => {
-      const values = labelled(row.values, options);
       const text = `${row.label}: ${said(row.values, options).join(", ")}`;
-      if (!options.markLabel) return [row.key, text];
-      try {
-        const named: unknown = options.markLabel(row.datum, { key: row.key, category: row.label, values, total: total(row.values), format: formatted, text });
-        if (named !== undefined && named !== null && String(named).trim() !== "") return [row.key, String(named)];
-      } catch (error) {
-        report(error);
-      }
-      return [row.key, text];
+      return [row.key, worded(options, row.datum, { key: row.key, category: row.label, values: labelled(row.values, options), total: total(row.values), format: formatted, text })];
     })
   );
+}
+
+/**
+ * With `hover: "point"`, every point's name in `layout`, by its key: its x and its value with its
+ * label, "12: 15 goals", or the page's wording from `markLabel`, given that series alone in `values`.
+ */
+function pointNamesFor<D>(options: LineChartOptions<D>, layout: LineLayout<D>): ReadonlyMap<string, string> {
+  const formatted = format(options);
+  return new Map(
+    layout.rows.flatMap((row) =>
+      labelled(row.values, options).map((value) => {
+        const key = pointKey(value.series, row.key);
+        const text = `${row.label}: ${formatted(value.value)} ${value.label}`;
+        return [key, worded(options, row.datum, { key, category: row.label, values: [value], total: value.value, format: formatted, text })] as const;
+      })
+    )
+  );
+}
+
+/** The `hover` option: "x" by default, or "point". Anything else throws a TypeError. */
+function hoverOf<D>(options: LineChartOptions<D>): HoverKind {
+  const { hover = "x" } = options;
+  if (hover !== "x" && hover !== "point") throw new TypeError(`lineChart: hover must be "x" or "point", got ${typeof hover === "string" ? JSON.stringify(hover) : String(hover)}.`);
+  return hover;
 }

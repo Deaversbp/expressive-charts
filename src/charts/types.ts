@@ -276,6 +276,23 @@ export interface LineChartOptions<D> extends ChartOptions<D> {
    * the chart's `format`; an empty string shows none, and a throw (reported) keeps the default.
    */
   readonly labels?: false | ((value: number, series: string, format: (value: number) => string) => string);
+  /**
+   * What the pointer, touch and the keys hover. "x", the default: every series' point at the nearest
+   * x, with a crosshair, nothing dimmed, and the x's as focus stops. "point": the revealed point nearest
+   * the pointer, by distance, anywhere over the plot (of two as near, the series first in `series`),
+   * alone. Its line stays at full strength and every other line and point dims, unless `dim` is false;
+   * there's no crosshair, and the tooltip sits above the point. The points are the focus stops: Left
+   * and Right go along the line, Up and Down to the point above or below. Links still go by x. Anything
+   * else throws a TypeError. update({ hover }) changes it at once: a held hover ends, and focus moves
+   * to the nearest stop of the new kind.
+   */
+  readonly hover?: "x" | "point";
+  /**
+   * A box beside the hovered or focused x or point, as on every chart. A function is given the row
+   * and, with `hover: "point"`, the point's series as a second argument: (d, { series }) => text. With
+   * "x" it's given the row alone.
+   */
+  readonly tooltip?: boolean | ((d: NoInfer<D>, point?: { readonly series: string }) => string);
 }
 
 export interface LineChart<D> extends Chart<D, LineChartOptions<D>> {
@@ -327,7 +344,8 @@ export interface Chart<D, O> {
   /**
    * Moves focus to the mark `key` as a key press would, whatever the last input was: the focus ring
    * shows and its hover plays. On a line chart it's the x's focus stop: `key` is the x's key, or one
-   * of its points'. A key that isn't on screen (unknown, leaving, or past a line's reveal) does nothing.
+   * of its points'. With `hover: "point"` it's the point's: its own key, or an x's, for its first
+   * series' point there. A key that isn't on screen (unknown, leaving, or past a line's reveal) does nothing.
    */
   focus(key: string): void;
   /**

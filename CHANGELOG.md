@@ -25,6 +25,22 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **A hover on one point on the line chart,** `lineChart({ hover: "point" })`. The pointer anywhere over the plot, and touch, hover the revealed point nearest it, alone (of two as near, the series first in `series`), and leaving the plot leaves. Its line and their decorations stay at full strength, and every other line and point dims, with its decorations, unless `dim` is false; text keeps its contrast. There's no crosshair: the tooltip sits above the point, or below it without room, with the x and that series' value.
+  - The points are the focus stops, one tab stop, each named by its x and its value, or by `markLabel` given that series alone. Left and Right go along the line, passing over its missing values, Up and Down to the point above or below, by where they're drawn, Home and End to the line's ends, and Page Up and Page Down a page along it.
+  - Links still go by x, and a link's hover shows at every point there with nothing dimmed. `focus(key)` takes a point's key, or an x's.
+  - `update({ hover })` changes it at once: a held hover ends, and focus moves to the nearest stop of the new kind. Anything but `"x"` or `"point"` throws a `TypeError`, and `update()` rejects it.
+
+  The default, `"x"`, hovers every series at an x with the crosshair, as before, so no page needs to change.
+- **A line chart's tooltip function is given the point's series** with `hover: "point"`, as a second argument, `(d, { series })`, for the tooltip's text and each point's description. With `"x"` it's given the row alone, so a function that takes the row alone still fits.
+
+### Changed
+
+### Fixed
+
 ## 0.4.0 (27 October 2026)
 
 Attachments that swap their effects and end their hover as charts do, `expressive()` reading circles and other SVG shapes through the new `describe.shape`, a chart switch in a link, Vega lines with gaps, the icon sets' faded parts, and a build with tsdown. In the effect-author API, `describe.shape`, `ShapeSpec`, and `fillOpacity` and `strokeOpacity` on `IconShape` are additions, and `checkEffect`'s default data on a gap is a fix, under Fixed: an effect that joins across a gap can now fail, as it should. The other changes are outside the promise, and each says what to write instead, if anything.

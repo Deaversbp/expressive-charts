@@ -16,8 +16,8 @@ Chart components (bar, line, donut, and later more). Each chart gives every mark
 | `colors.ts` | `colorAssignment`: palette slots that follow the entity |
 | `series.ts` | `seriesLabels`: a series' name for people, and checking the option |
 | `motion.ts` | A chart's motion from its `motion` option |
-| `keyboard.ts` | Keyboard focus, shared by the charts and `expressive()`: the roving tabindex, arrow keys, Page Up and Page Down, Home, End and Escape, whether focus followed a key press, and where focus goes when its mark leaves or its element is replaced |
-| `interaction.ts` | Pointer and touch hover, delegated from the `<svg>` |
+| `keyboard.ts` | Keyboard focus, shared by the charts and `expressive()`: the roving tabindex, arrow keys (or where a chart says they go, as a line chart's points do), Page Up and Page Down, Home, End and Escape, whether focus followed a key press, and where focus goes when its mark leaves, its element is replaced or the marks change kind |
+| `interaction.ts` | Pointer and touch hover, delegated from the `<svg>`; a target that isn't an element (a line chart's nearest point) is found from where the pointer is |
 | `tooltip.ts`, `legend.ts` | The tooltip beside the hovered or focused mark, and the series legend |
 | `table.ts` | The data table: its contents from the chart's rows (`tableModel`, pure), with its headers (`table.series` heads each series' column, else its `seriesLabels` name), and the `<details>` or visually hidden table that shows them, kept by key |
 | `announce.ts` | With `announce`, the polite live region and the chart's summary of an update |

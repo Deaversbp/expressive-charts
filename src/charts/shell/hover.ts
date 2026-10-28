@@ -6,7 +6,8 @@
 //
 // What's hovered is a target: what the pointer is over and what takes focus. A target stands for one
 // mark or several, hovered together in one batch: a bar or a slice is its own mark, while a line
-// chart's x stands for every series' point there. The keyboard moves between targets.
+// chart's x stands for every series' point there (or, with `hover: "point"`, each point is its own,
+// found from where the pointer is). The keyboard moves between targets.
 //
 // The chart says which targets and marks there are and draws them: it finds a live target from an
 // event target, gives a target's marks, their elements and how they are on screen, draws the ring
@@ -18,7 +19,7 @@
 
 import type { RunInput, Runner } from "../../core/runner";
 import { pointerHover, type HoverTarget } from "../interaction";
-import { keyboardFocus } from "../keyboard";
+import { keyboardFocus, type MoveKey } from "../keyboard";
 import { own, type LinkListener, type LinkPort } from "../link";
 import type { MarkEvents } from "../types";
 import type { ChartEvents } from "./events";
@@ -31,14 +32,21 @@ export interface ChartHoverOptions<D> {
   readonly events: Pick<ChartEvents<D>, "emit">;
   /** Whether the other marks dim while one is hovered: the `dim` option as it is now. */
   dim(): boolean;
-  /** The live target an event target belongs to, with the segment under the pointer; leaving ones don't count. */
-  find(target: EventTarget | null): HoverTarget | undefined;
+  /**
+   * The live target an event target belongs to, with the segment under the pointer; leaving ones don't
+   * count. `pointer` is where the pointer is, in client px; focus and key presses give none.
+   */
+  find(target: EventTarget | null, pointer?: { readonly x: number; readonly y: number }): HoverTarget | undefined;
+  /** Whether the target under the pointer can change as it moves over one element, as a line chart's nearest point does. */
+  moves?(): boolean;
   /** Whether the target `key` is live: on screen and not leaving. */
   live(key: string): boolean;
   /** The live targets' keys, in visual order: the keyboard's order. */
   order(): readonly string[];
   /** Where Page Down (`by` 1) or Page Up (-1) goes from the target `key`. Default, or undefined: a tenth of the targets on or back (../keyboard.ts). */
   page?(key: string, by: 1 | -1): string | undefined;
+  /** Where an arrow key, Home or End goes from the target `key`. Default, or undefined: the order's next, previous or ends (../keyboard.ts). */
+  move?(key: string, press: MoveKey): string | undefined;
   /**
    * The keys of the marks a live target stands for, in the batch's order: a line chart's x gives each
    * series' point there. Default: the target alone, as a bar or a slice is its own mark.
@@ -84,6 +92,12 @@ export interface ChartHover {
   dropGone(): void;
   /** After the marks changed: the tab stop stays on its key, or moves to its nearest neighbour, and focus follows. */
   sync(): void;
+  /**
+   * After the targets changed kind (a line chart's `hover`), with the hover ended (leave()): the tab
+   * stop goes to `to` of its key, and focus with it, keeping its ring, without hovering; then a link's
+   * hover from another source shows again, in the new targets.
+   */
+  retarget(to: (key: string) => string | undefined): void;
   /** Moves focus to the live target `key` as a key press would: the ring shows and its hover plays. Does nothing for a key that isn't live. */
   focus(key: string): void;
   /**
@@ -204,6 +218,7 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
 
   const interaction = pointerHover(svg, {
     find: options.find,
+    moves: () => options.moves?.() ?? false,
     hover(target: HoverTarget, source) {
       // Already playing for keyboard focus: it goes on.
       if (!options.live(target.key) || (own(hovered) && hovered.keys[0] === target.key)) return;
@@ -222,6 +237,7 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     find: (eventTarget) => options.find(eventTarget)?.key,
     order: options.order,
     page: (key, by) => options.page?.(key, by),
+    move: (key, press) => options.move?.(key, press),
     element: options.element,
     focus(key, visible) {
       ringKey = visible ? key : undefined;
@@ -325,6 +341,14 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       });
     },
     sync: () => keyboard.sync(),
+    retarget(to) {
+      const key = keyboard.retarget(to);
+      if (ringKey !== undefined) {
+        ringKey = key;
+        options.ring(ringKey);
+      }
+      linked?.shown();
+    },
     focus(key) {
       if (options.live(key)) keyboard.focus(key);
     },

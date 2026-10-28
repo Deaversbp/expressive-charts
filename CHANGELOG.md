@@ -29,6 +29,8 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Added
 
+- **Curved Vega lines.** `fromVegaView()` reads a line Vega draws with any `interpolate` but `"linear"`, such as `"monotone"`, `"basis"`, `"step"` or `"natural"`: the path Vega drew, read with `describe.shape` from its `d`, moved into the marks' coordinates as the items are, at the item's stroke width. Its gaps come with it, one at each move, and a curve Vega closes on itself (the `-closed` ones) is a closed shape. Its samples are at the items drawn, on the curve, so `threshold`'s crossings between them are approximate, as on a D3 curve. It used to throw. A straight line is read from its items as before, the same mark, so no page needs to change.
+
 ### Changed
 
 - **Smaller pages that import only the motion core or `describe`.** A page that imports `motion` and `animated` is 1.7 KB gzipped, not 2.4, and one that imports `describe` and `matrix` 6.5 KB, not 7.2. They kept the tables the charts build when the package loads, such as the stylesheet's text and the time axis's steps, which are now marked so a bundler drops them when they aren't used. Pages that import charts are up to 0.1 KB smaller, and the script-tag bundle 0.2 KB. Nothing to write instead.

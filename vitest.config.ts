@@ -7,7 +7,11 @@ const config: ViteUserConfig = defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    include: ["src/**/*.test.ts"]
+    include: ["src/**/*.test.ts"],
+    // 15 s, not Vitest's 5: on a loaded machine, and on CI's slower runner, a few heavy tests (1,000
+    // bars laid out 96 ways in bar-layout.test.ts) come near 5 s, though each takes about 1 s alone.
+    // Tests that time themselves keep their own limits.
+    testTimeout: 15_000
   }
 });
 

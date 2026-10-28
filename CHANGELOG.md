@@ -25,6 +25,16 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+### Changed
+
+- **Smaller pages that import only the motion core or `describe`.** A page that imports `motion` and `animated` is 1.7 KB gzipped, not 2.4, and one that imports `describe` and `matrix` 6.5 KB, not 7.2. They kept the tables the charts build when the package loads, such as the stylesheet's text and the time axis's steps, which are now marked so a bundler drops them when they aren't used. Pages that import charts are up to 0.1 KB smaller, and the script-tag bundle 0.2 KB. Nothing to write instead.
+
+### Fixed
+
 ## 0.4.0 (27 October 2026)
 
 Attachments that swap their effects and end their hover as charts do, `expressive()` reading circles and other SVG shapes through the new `describe.shape`, a chart switch in a link, Vega lines with gaps, the icon sets' faded parts, and a build with tsdown. In the effect-author API, `describe.shape`, `ShapeSpec`, and `fillOpacity` and `strokeOpacity` on `IconShape` are additions, and `checkEffect`'s default data on a gap is a fix, under Fixed: an effect that joins across a gap can now fail, as it should. The other changes are outside the promise, and each says what to write instead, if anything.

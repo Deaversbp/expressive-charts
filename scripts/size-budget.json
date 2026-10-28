@@ -10,8 +10,8 @@
     "dist/testing.js": 24.5
   },
   "importSets": {
-    "motion, animated": 3,
-    "describe, matrix": 8,
+    "motion, animated": 2,
+    "describe, matrix": 7.5,
     "expressive, travel": 34,
     "barChart": 34,
     "lineChart, threshold, playback, playButton": 41,

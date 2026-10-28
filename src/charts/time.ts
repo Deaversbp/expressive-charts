@@ -39,8 +39,8 @@ const DAY = 24 * HOUR;
  */
 const LONGEST: Readonly<Record<Unit, number>> = { second: SECOND, minute: MINUTE, hour: HOUR, day: DAY + HOUR, week: 7 * DAY + HOUR, month: 31 * DAY, year: 366 * DAY };
 
-/** The steps shorter than a year, in order. Years go on in the number axis's nice steps. */
-const STEPS: readonly TimeStep[] = [
+/** The steps shorter than a year, in order. Years go on in the number axis's nice steps. Built in a call marked pure, so a page with no time axis leaves it out. */
+const STEPS: readonly TimeStep[] = /* @__PURE__ */ (() => [
   ...[1, 5, 15, 30].map((count) => ({ unit: "second" as const, count })),
   ...[1, 5, 15, 30].map((count) => ({ unit: "minute" as const, count })),
   ...[1, 3, 6, 12].map((count) => ({ unit: "hour" as const, count })),
@@ -49,7 +49,7 @@ const STEPS: readonly TimeStep[] = [
   { unit: "week", count: 1 },
   { unit: "month", count: 1 },
   { unit: "month", count: 3 }
-];
+])();
 
 /** From the coarsest. */
 const LEVELS: readonly TimeLevel[] = ["year", "month", "day", "hour", "minute", "second", "millisecond"];

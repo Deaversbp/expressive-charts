@@ -45,7 +45,7 @@ function setup(mode: MotionMode = "presentation", data: readonly Week[] = weeks)
   const chart = lineChart<Week>(container, { label: "Goals vs xG", data, x: "week", series: ["goals", "xg"], width: 640, on: { decorate: story() } }, env);
   const run = () => chart.element.querySelector('.ec-overlay > .ec-run[data-key="goals"]');
   /** The red parts threshold draws on the goals line. */
-  const reds = (): string[] => Array.from(run()?.querySelectorAll(":scope > path.ec-path") ?? [], (path) => path.getAttribute("d")!);
+  const reds = (): string[] => Array.from(run()?.querySelectorAll(":scope > .ec-follow > path.ec-path") ?? [], (path) => path.getAttribute("d")!);
   const ball = () => run()?.querySelector('.ec-icon[data-icon="soccer-ball"]')?.getAttribute("transform") ?? undefined;
   const line = (): MarkGeometry => chart.marks()[0]!;
   /**

@@ -1,9 +1,11 @@
 // The runner's surface in SVG: one overlay group per run, above the marks, and the marks' style handles.
+// A run's paths and icons follow its mark: they take the transform an effect gives the mark's body,
+// and dim with it while another mark is hovered. Its text stays put, as the mark's labels do.
 
-import type { MarkHandle } from "../../core";
+import type { MarkHandle, Matrix } from "../../core";
 import type { RunnerSurface } from "../../core/runner";
-import { svgLayer } from "./layer";
-import { setAttributes, setStyles, svgElement } from "./svg";
+import { FOLLOW, svgLayer } from "./layer";
+import { setAttributes, setStyles, svgElement, transformAttribute } from "./svg";
 import { markColorStyles, type SeriesColors } from "./theme";
 
 export interface SvgSurfaceOptions {
@@ -20,6 +22,11 @@ export interface SvgSurface extends RunnerSurface {
   recolor(key: string): void;
   /** Hides the key's groups, and any it gets later, or shows them again: a line chart's points past its reveal. */
   hide(key: string, hidden: boolean): void;
+  /**
+   * Gives the key's groups, and any it gets later, the hover's emphasis (`ec-hot`), or takes it away:
+   * inside `.ec-hovering`, the paths and icons of the groups without it dim, as their marks do.
+   */
+  hot(key: string, on: boolean): void;
 }
 
 export function svgSurface(options: SvgSurfaceOptions): SvgSurface {
@@ -28,9 +35,19 @@ export function svgSurface(options: SvgSurfaceOptions): SvgSurface {
   /** Live groups by mark key. */
   const groups = new Map<string, Set<SVGGElement>>();
   const hidden = new Set<string>();
+  const hotKeys = new Set<string>();
+  /** Each mark's transform, as an effect set it on its body. */
+  const transforms = new Map<string, Matrix>();
+  const follow = (key: string, transform: Matrix | undefined): void => {
+    if (transform) transforms.set(key, transform);
+    else if (!transforms.delete(key)) return;
+    for (const group of groups.get(key) ?? []) {
+      for (const child of Array.from(group.children)) if (child.getAttribute("class") === FOLLOW) setAttributes(child, { transform: transform && transformAttribute(transform) });
+    }
+  };
   return {
     group(key, slot, order) {
-      const group = svgElement("g", { class: "ec-run", "data-key": key, "data-slot": slot, visibility: hidden.has(key) ? "hidden" : undefined }, overlay);
+      const group = svgElement("g", { class: hotKeys.has(key) ? "ec-run ec-hot" : "ec-run", "data-key": key, "data-slot": slot, visibility: hidden.has(key) ? "hidden" : undefined }, overlay);
       setStyles(group, markColorStyles(options.colors(key)));
       orders.set(group, order);
       // Stacked by start order, not by when the group was asked for: a decoration may first draw late.
@@ -41,7 +58,7 @@ export function svgSurface(options: SvgSurfaceOptions): SvgSurface {
       live.add(group);
       const owner = live;
       return {
-        ...svgLayer(group),
+        ...svgLayer(group, () => transforms.get(key)),
         clear() {
           group.remove();
           owner.delete(group);
@@ -49,7 +66,19 @@ export function svgSurface(options: SvgSurfaceOptions): SvgSurface {
         }
       };
     },
-    mark: (key) => options.mark(key),
+    mark(key) {
+      const handle = options.mark(key);
+      return {
+        set(style) {
+          handle.set(style);
+          if ("transform" in style) follow(key, style.transform);
+        },
+        reset() {
+          handle.reset();
+          follow(key, undefined);
+        }
+      };
+    },
     recolor(key) {
       const live = groups.get(key);
       if (!live) return;
@@ -60,6 +89,11 @@ export function svgSurface(options: SvgSurfaceOptions): SvgSurface {
       if (hide) hidden.add(key);
       else hidden.delete(key);
       for (const group of groups.get(key) ?? []) setAttributes(group, { visibility: hide ? "hidden" : undefined });
+    },
+    hot(key, on) {
+      if (on) hotKeys.add(key);
+      else hotKeys.delete(key);
+      for (const group of groups.get(key) ?? []) group.classList.toggle("ec-hot", on);
     }
   };
 }

@@ -148,7 +148,8 @@ ${declarations(themes.dark, "  ")}
 
 // Hover dims the parts in each other mark's body, not the whole mark, so its labels keep their
 // contrast. Not the body itself either: an effect's opacity is an attribute there, which a rule would
-// override. On the parts, the two multiply.
+// override. On the parts, the two multiply. The paths and icons the mark's runs draw in the overlay
+// dim with it, through their group (render/surface.ts); their text keeps its contrast, as labels do.
 const STYLES = `/* expressive-charts: theme tokens and default styles. Every rule has zero specificity, so your CSS wins. */
 ${TOKEN_RULES}
 :where(.ec-chart) { display: block; max-width: 100%; height: auto; overflow: visible; touch-action: pan-y; -webkit-tap-highlight-color: transparent; }
@@ -181,6 +182,8 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-center-value) { fill: var(--ec-text, ${TOKENS.text}); font-size: 26px; font-weight: 600; }
 :where(.ec-chart .ec-center-label) { fill: var(--ec-text-muted, ${TOKENS["text-muted"]}); font-size: 12.5px; }
 :where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot) > .ec-body > *) { opacity: var(--ec-dim-opacity, 0.3); }
+:where(.ec-hovering .ec-run:not(.ec-hot) > .ec-follow) { opacity: var(--ec-dim-opacity, 0.3); }
+:where(.ec-follow) { transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart.ec-morphing .ec-marks) { visibility: hidden; }
 :where(.ec-switch) { display: grid; grid-template-columns: minmax(0, 1fr); position: relative; }
 :where(.ec-switch-view) { grid-area: 1 / 1; min-width: 0; }

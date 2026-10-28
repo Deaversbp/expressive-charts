@@ -48,6 +48,8 @@ export interface ChartHoverOptions<D> {
   element(key: string): SVGElement | undefined;
   /** A mark's element, live or leaving: it takes the hover's emphasis (`ec-hot`). Default: `element`, for targets that are their own marks. */
   markElement?(key: string): SVGElement | undefined;
+  /** The mark's overlay groups take the hover's emphasis too, or lose it, so the others' decorations dim with them (the surface's `hot`). */
+  hot?(key: string, on: boolean): void;
   /** A mark as it is on screen, live or leaving: what hover and leave report, so mid-change they match what's under the pointer. */
   onScreen(key: string): RunInput<D> | undefined;
   /** Draws the focus ring around the live target `key` as it is on screen, or hides it. */
@@ -107,6 +109,11 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
   const { svg, runner, events } = options;
   const marksOf = (key: string): readonly string[] => options.marks?.(key) ?? [key];
   const markElement = (key: string): SVGElement | undefined => (options.markElement ?? options.element)(key);
+  /** The mark takes the hover's emphasis, or loses it, with its overlay groups. */
+  const heat = (key: string, on: boolean): void => {
+    markElement(key)?.classList.toggle("ec-hot", on);
+    options.hot?.(key, on);
+  };
   let hovered: Hovered | undefined;
   let ringKey: string | undefined;
   /** The link the chart is in, which hears its own hovers. */
@@ -132,9 +139,10 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
 
   /** The marks lose their emphasis, their hover runs end in one batch, and each gets a leave event. */
   function leaveMarks(keys: readonly string[]): void {
+    // Every key, on screen or not, so a mark that comes back with the same key isn't hot.
+    for (const key of keys) heat(key, false);
     const marks = onScreen(keys);
     if (marks.length === 0) return;
-    for (const { key } of marks) markElement(key)?.classList.remove("ec-hot");
     runner.leave(marks.map(({ key }) => key));
     const count = marks.length;
     marks.forEach(({ input }, index) => events.emit("leave", { ...input, batch: { index, count } }));
@@ -148,7 +156,7 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     const marks = onScreen(marksFor(keys));
     const started: Hovered = { keys, source, marks: marks.map((mark) => mark.key), effects };
     hovered = started;
-    for (const { key: mark } of marks) markElement(mark)?.classList.add("ec-hot");
+    for (const { key: mark } of marks) heat(mark, true);
     if (options.dim()) svg.classList.add("ec-hovering");
     if (source !== "linked") {
       options.tooltip.show(keys[0]!);
@@ -302,8 +310,8 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       const kept = new Set(now.map((mark) => mark.key));
       const gone = onScreen(before.filter((key) => !kept.has(key)));
       hovered = { ...hovered, marks: now.map((mark) => mark.key) };
-      for (const { key } of gone) markElement(key)?.classList.remove("ec-hot");
-      for (const { key } of now) if (!had.has(key)) markElement(key)?.classList.add("ec-hot");
+      for (const key of before) if (!kept.has(key)) heat(key, false);
+      for (const { key } of now) if (!had.has(key)) heat(key, true);
       // The runner hears the targets' whole new batch, in order. Mid-change (playUpdate interrupts
       // first), it holds hovers and replays every hovered mark as one batch when the change settles, so
       // a joined mark's run gets the place its event gives; at rest, the marks that stayed start again

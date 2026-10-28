@@ -60,7 +60,7 @@ function setup(mode: MotionMode = "presentation") {
   const run = () => chart.element.querySelector('.ec-overlay > .ec-run[data-key="goals"]');
   /** The red runs drawn on the goals line, each as its first and last x. */
   const runs = (): [number, number][] =>
-    Array.from(run()?.querySelectorAll(":scope > path.ec-path") ?? [], (path) => {
+    Array.from(run()?.querySelectorAll(":scope > .ec-follow > path.ec-path") ?? [], (path) => {
       const xs = (path.getAttribute("d")!.match(/-?[\d.]+,-?[\d.]+/g) ?? []).map((pair) => Number(pair.split(",")[0]));
       return [xs[0]!, xs[xs.length - 1]!];
     });

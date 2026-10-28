@@ -583,6 +583,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     live: (key) => records.has(key),
     order: () => order.map((record) => record.key),
     element: (key) => find(key)?.group,
+    hot: surface.hot,
     onScreen(key) {
       const record = find(key);
       return record && onScreen(record);

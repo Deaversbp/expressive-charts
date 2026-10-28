@@ -755,7 +755,7 @@ interface MarkStyle {
 }
 ```
 
-- `transform`: moves the mark's body, in chart space. Its labels and pointer target stay put.
+- `transform`: moves the mark's body, in chart space. Its labels and pointer target stay put. The paths and icons the mark's effects draw in the overlay move with it; their text stays put.
 - `opacity`: of the mark's body.
 - `emphasis`: from 0 to 1, toward the series' strong colour.
 - `halo`: a stroke along the outline, behind the mark: `width` is the stroke's, so half of it shows outside. Its colour defaults to the mark's own.
@@ -1925,7 +1925,7 @@ What every chart takes. The bar, donut and line charts add their own.
 - `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots (1 to 8) by series, pinned (`{ goals: 1, assists: 4 }`) or shared ([`colorAssignment()`](#colorassignment)). Colours follow the entity, never its rank. Default: slots in the order series are first seen.
 - `seriesLabels`: `Record<string, string>`. Names for people, by series: `{ xg: "Expected goals" }`, used as given wherever the chart names a series (the legend, the table's headers, the default tooltip and names, announcements). A series without one goes by its field's name, and a value read by a function is the series `"value"`.
 - `width`, `height`: `number`. Fixed size in px. Default: the container's width, followed as it changes, and each chart's own height.
-- `dim`: `boolean`. Default true. Dims the other marks' bodies while one is hovered (to `--ec-dim-opacity`), not their labels, which keep their contrast. The hovered mark's emphasis stays either way.
+- `dim`: `boolean`. Default true. Dims the other marks' bodies while one is hovered (to `--ec-dim-opacity`), with the paths and icons their effects draw, not their labels or text effects draw, which keep their contrast. The hovered mark's emphasis stays either way.
 - `legend`: `boolean | LegendOptions`. Default true: a swatch and a name for each series above the chart, when there are two entries or more. A donut, or bars with `colorBy: "category"`, list their categories instead, even one. `{ entries }` adds the page's own ([`LegendOptions`](#legendoptions)); `false` turns it off.
 - `tooltip`: `boolean | ((d: D) => string)`. Default true: the category, each value in `format` with its label, and a stack's total, beside the hovered or focused mark. A function gives a row's text instead, with `"\n"` for line breaks, set as text and never as HTML; an empty string shows none. Escape hides it. The pointer can move onto it, to read or select its text, and the hover stays while it's there; beside a mark, a clear bridge across the gap leads to it ([architecture.md](architecture.md#reference-charts)).
 - `markLabel`: `(d: D, mark: MarkSummary) => string`. Words each mark's accessible name, which by default is the category and each value: "Okafor: 16 goals, 4 assists" ([`MarkSummary`](#marksummary)). An empty result, or a throw (reported), keeps the default, so a mark is never unnamed.
@@ -2318,7 +2318,7 @@ interface ExpressiveOptions<D>
 - `motion`: `Motion | MotionMode`. As on a chart.
 - `on`: `EffectSlots<D>`. As on a chart.
 - `keyboard`: `boolean`. Default false. Makes marks focusable as one tab stop: the arrow keys, Home and End move between them in visual order (round a pie, clockwise from 12 o'clock), and Page Down and Page Up a tenth of the marks, rounded up; focus plays the hover effects, and a ring shows.
-- `dim`: `boolean`. Default false: the host owns its styling. True dims the other marks while one is hovered, and gives the hovered one its strong colour.
+- `dim`: `boolean`. Default false: the host owns its styling. True dims the other marks while one is hovered, with the paths and icons their effects draw (not text), and gives the hovered one its strong colour.
 - `markLabel`: `(datum: D, mark: HostMark<D>) => string`. Names each mark for screen readers as one item: its first part becomes `role="img"` with the text as its name, and its other parts are hidden, so a stack isn't read in pieces. Default: the adapter writes no ARIA. With `keyboard`, give it, since a focusable element needs a name. Make the `<svg>` `role="group"`, not `role="img"`.
 - `watch`: `boolean`. Default false. Follows the host's own transitions frame by frame, without `refresh()`: once a frame, the marks whose geometry attributes (`d`, `x`, `y`, `width`, `height`, `cx`, `cy`, `r`, `rx`, `ry`, `x1`, `y1`, `x2`, `y2`, `points`, `transform`, or their ancestors' `transform` or `style`) changed are read again, and their effects follow, with no events. Call `refresh()` when the host joins new data, before its transition starts. A `geometry` or `samples` callback should read the element, or rows the host updates every frame: one that reads rows bound once, as a transition's targets, sees only the end. Its cost grows with the marks that move: about 17–19 µs a moving column a frame at 500 columns, which halves the most that stay smooth ([Limits](architecture.md#limits)).
 
@@ -2922,6 +2922,6 @@ Every rule is inside `:where()`, so any rule of the page's wins. The colours are
 | `--ec-negative` | `threshold`'s default colour |
 | `--ec-ring` | hairline borders on the tooltip and controls |
 | `--ec-series-1` … `--ec-series-8`, each with `-strong` | the palette slots, and a hovered mark's stronger colour |
-| `--ec-dim-opacity` | the opacity of the other marks' bodies while one is hovered (0.3). Their labels keep theirs |
+| `--ec-dim-opacity` | the opacity of the other marks' bodies, and the paths and icons effects draw for them, while one is hovered (0.3). Their labels, and text effects draw, keep theirs |
 
 `--ec-hover-duration` is set by each chart from its motion, so hover feedback is instant with motion off. The text effects draw (`delta`, `label`) is `.ec-text` in an `.ec-overlay`: 12.5 px, weight 600, with tabular digits, in `--ec-text`, on our charts and on attachments alike; a page's own rule, such as `#slope .ec-text { font-size: 11px }`, wins. The eight series colours are checked for 3:1 contrast and for colour-vision deficiencies in both themes. A page that puts a chart on a darker background than `--ec-surface` should set `--ec-text-muted` darker there too, since it's 4.6:1 on the light surface.

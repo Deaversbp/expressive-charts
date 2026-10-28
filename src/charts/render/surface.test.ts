@@ -1,6 +1,6 @@
 import { matrix, type Icon, type IconShape, type MarkHandle } from "../../core";
 import { svgSurface } from "./surface";
-import { svgElement } from "./svg";
+import { svgElement, transformAttribute } from "./svg";
 import { seriesColors } from "./theme";
 
 const ball: Icon = {
@@ -29,7 +29,7 @@ function setup() {
     mark: (key) => marks.get(key) ?? { set() {}, reset() {} },
     colors: (key) => (slots.has(key) ? seriesColors(slots.get(key)!) : undefined)
   });
-  return { svg, overlay, surface, slots };
+  return { svg, overlay, surface, slots, marks };
 }
 
 afterEach(() => {
@@ -93,6 +93,77 @@ describe("svgSurface groups", () => {
     expect(visibility()).toEqual(["a:null", "b:null", "a:null"]);
     surface.group("a", "enter", 4);
     expect(overlay.lastElementChild!.getAttribute("visibility")).toBeNull();
+  });
+});
+
+describe("svgSurface groups follow their mark", () => {
+  it("gives a run's paths and icons the transform the mark's body has, and not its text", () => {
+    const { overlay, surface, marks } = setup();
+    const seen: unknown[] = [];
+    marks.set("a", { set: (style) => seen.push(style), reset: () => seen.push("reset") });
+    const run = surface.group("a", "decorate", 1);
+    run.path("M0,0L40,0", { stroke: "negative", width: 3 });
+    run.icon(ball).place(matrix.translate(40, 0));
+    run.text("+1", { at: { x: 40, y: -8 } });
+    surface.group("b", "decorate", 2).path("M0,10L40,10", { stroke: "negative" });
+    const turn = matrix.rotate(0.05, { x: 0, y: 0 });
+    const mark = surface.mark("a");
+    mark.set({ transform: turn });
+    const group = overlay.firstElementChild!;
+    expect(Array.from(group.children, (child) => child.getAttribute("class"))).toEqual(["ec-follow", "ec-text"]);
+    const follow = group.firstElementChild!;
+    expect(follow.getAttribute("transform")).toBe(transformAttribute(turn));
+    expect(Array.from(follow.children, (child) => child.getAttribute("class"))).toEqual(["ec-path", "ec-icon"]);
+    // The icon keeps its own place inside it; the text and the other mark's run stay put.
+    expect(follow.querySelector(".ec-icon")!.getAttribute("transform")).toBe("matrix(1 0 0 1 40 0)");
+    expect(group.querySelector("text")!.hasAttribute("transform")).toBe(false);
+    expect(overlay.querySelector('[data-key="b"] .ec-follow')!.hasAttribute("transform")).toBe(false);
+    // The mark's own handle gets the style as given.
+    expect(seen).toEqual([{ transform: turn }]);
+    // A group asked for later takes it at once.
+    surface.group("a", "hover", 3).icon(ball);
+    expect(overlay.querySelector('[data-slot="hover"] .ec-follow')!.getAttribute("transform")).toBe(transformAttribute(turn));
+    // Other fields leave it alone; undefined, or a reset, takes it away.
+    mark.set({ emphasis: 1 });
+    expect(follow.getAttribute("transform")).toBe(transformAttribute(turn));
+    mark.set({ transform: undefined });
+    expect(follow.hasAttribute("transform")).toBe(false);
+    mark.set({ transform: turn });
+    mark.reset();
+    expect(Array.from(overlay.querySelectorAll(".ec-follow"), (g) => g.getAttribute("transform"))).toEqual([null, null, null]);
+    expect(seen[seen.length - 1]).toBe("reset");
+  });
+
+  it("keeps what a run draws in the order it was drawn: text between paths starts another group", () => {
+    const { overlay, surface } = setup();
+    const run = surface.group("a", "decorate", 1);
+    run.path("M0,0L10,0", { fill: "surface" });
+    run.icon(ball);
+    const name = run.text("Okafor", { at: { x: 2, y: 4 } });
+    run.path("M0,0L10,0", { stroke: "mark" });
+    const group = overlay.firstElementChild!;
+    const drawn = () => Array.from(group.children, (child) => `${child.getAttribute("class")}:${Array.from(child.children, (c) => c.getAttribute("class")).join(" ")}`);
+    expect(drawn()).toEqual(["ec-follow:ec-path ec-icon", "ec-text:", "ec-follow:ec-path"]);
+    // Once the text has gone, the next path joins the group before it.
+    name.remove();
+    run.path("M0,0L5,0", { stroke: "mark" });
+    expect(drawn()).toEqual(["ec-follow:ec-path ec-icon", "ec-follow:ec-path ec-path"]);
+    // A transform reaches each of them.
+    surface.mark("a").set({ transform: matrix.translate(0, 2) });
+    expect(Array.from(group.children, (g) => g.getAttribute("transform"))).toEqual(["matrix(1 0 0 1 0 2)", "matrix(1 0 0 1 0 2)"]);
+  });
+
+  it("gives a key's groups the hover's emphasis, and the ones it gets later, until it's taken away", () => {
+    const { overlay, surface } = setup();
+    surface.group("a", "decorate", 1);
+    surface.group("b", "decorate", 2);
+    surface.hot("a", true);
+    surface.group("a", "hover", 3);
+    const hot = () => Array.from(overlay.children, (g) => `${g.getAttribute("data-key")}:${g.classList.contains("ec-hot")}`);
+    expect(hot()).toEqual(["a:true", "b:false", "a:true"]);
+    surface.hot("a", false);
+    surface.group("a", "enter", 4);
+    expect(hot()).toEqual(["a:false", "b:false", "a:false", "a:false"]);
   });
 });
 

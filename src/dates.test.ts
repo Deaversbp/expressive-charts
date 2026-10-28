@@ -70,7 +70,7 @@ describe("threshold on a dated line", () => {
     const px = (n: number) => first + ((n - 1) / 7) * (last - first);
     // Below from the 1st to halfway to the 2nd, then from two thirds of the way from the 2nd to the
     // 4th until halfway to the 8th.
-    const runs = Array.from(chart.element.querySelectorAll('.ec-overlay > .ec-run[data-key="goals"] > path.ec-path'), (path) => ends(path.getAttribute("d")!));
+    const runs = Array.from(chart.element.querySelectorAll('.ec-overlay > .ec-run[data-key="goals"] > .ec-follow > path.ec-path'), (path) => ends(path.getAttribute("d")!));
     expect(runs).toHaveLength(2);
     const expected = [
       [px(1), px(1.5)],

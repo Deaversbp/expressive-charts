@@ -2362,7 +2362,7 @@ What `markLabel` is given beside the row: the mark's key, and its parts from the
 fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, options: VegaOptions<D>): VegaAttachment<D>
 ```
 
-Attaches effects to a Vega or Vega-Lite chart rendered as SVG, which is vega-embed's default ([architecture.md](architecture.md#vega-and-vega-lite-fromvegaview)). It reads the marks from the View's scenegraph rather than the DOM: rects are bars (stacks included), arcs slices, symbols points and lines lines. It follows the View's own renders, new data or a resize, so there's no `refresh()` to call. The library imports nothing from Vega. A line breaks where Vega leaves a point out (`defined: false`), as Vega-Lite does at a missing value by default, so it has gaps, and a line with no point drawn has no mark. A renderer other than SVG, a mark that isn't there, an unreadable mark type and a curved line throw when attaching. Options: [`VegaOptions<D>`](#vegaoptionsd). Returns [`VegaAttachment<D>`](#vegaattachmentd).
+Attaches effects to a Vega or Vega-Lite chart rendered as SVG, which is vega-embed's default ([architecture.md](architecture.md#vega-and-vega-lite-fromvegaview)). It reads the marks from the View's scenegraph rather than the DOM: rects are bars (stacks included), arcs slices, symbols points and lines lines. It follows the View's own renders, new data or a resize, so there's no `refresh()` to call. The library imports nothing from Vega. A line breaks where Vega leaves a point out (`defined: false`), as Vega-Lite does at a missing value by default, so it has gaps, and a line with no point drawn has no mark. A line drawn as a curve (any `interpolate` but `"linear"`) is the path Vega drew, read with [`describe.shape`](#shapespec): a gap at each move, and closed where Vega closes it on itself (the `-closed` curves). Its samples are at the items drawn, on the curve, so `threshold`'s crossings between them are approximate, as on a D3 curve. A straight line is read from its items, as before. A renderer other than SVG, a mark that isn't there and an unreadable mark type throw when attaching. Options: [`VegaOptions<D>`](#vegaoptionsd). Returns [`VegaAttachment<D>`](#vegaattachmentd).
 
 ```ts
 import { fromVegaView, only, parallel, threshold, travel } from "expressive-charts";
@@ -2432,7 +2432,7 @@ A mark in Vega's scenegraph: its type, its name and its items.
 interface VegaItem
 ```
 
-An item of a Vega mark, as its encoders left it: `mark`, `datum` (the row), and the numbers the adapter reads (`x`, `y`, `width`, `height`, `startAngle`, `endAngle`, `innerRadius`, `outerRadius`, `size`, `strokeWidth`, `cornerRadius`, `defined`, `interpolate`). A group's `items` hold the marks inside it. A line's item with `defined: false` is a point Vega leaves out, where the line breaks.
+An item of a Vega mark, as its encoders left it: `mark`, `datum` (the row), and the numbers the adapter reads (`x`, `y`, `width`, `height`, `startAngle`, `endAngle`, `innerRadius`, `outerRadius`, `size`, `strokeWidth`, `cornerRadius`, `defined`, `interpolate`). A group's `items` hold the marks inside it. A line's item with `defined: false` is a point Vega leaves out, where the line breaks. A line's first item's `interpolate` says how it's drawn: `"linear"`, or none, is read from the items, and any other curve from the path Vega draws.
 
 #### `VegaSample`
 

@@ -1,5 +1,5 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// twenty sources: bars from the reference barChart, from expressive() on bars drawn by other code and
+// twenty-two sources: bars from the reference barChart, from expressive() on bars drawn by other code and
 // from a stacked Observable Plot bar through expressive(), the slices of the reference donutChart, the
 // slices of a D3 pie through expressive(), the lines and points of the reference lineChart, on a full
 // season and on one with missing weeks, each straight and curved, the lines of a D3 line chart, of a D3 line with missing
@@ -7,7 +7,8 @@
 // its own path data with describe.shape: a D3 curve, the same with missing weeks, a D3 area, and D3
 // rings, areas with holes. And marks expressive() reads by tag, with no geometry: a D3 scatter's
 // circles and Plot's dots as points, the D3 curves and area again, and a line, a polyline, a polygon,
-// an ellipse, a D3 symbol and a stretched circle as shapes. Lines have samples from samplesAlong. Each source also draws its marks at another size, as a resize would,
+// an ellipse, a D3 symbol and a stretched circle as shapes. And a Vega-Lite line drawn as a curve
+// through fromVegaView(), on the season and with missing weeks. Lines have samples from samplesAlong. Each source also draws its marks at another size, as a resize would,
 // for the check that effects follow onChange. On lines with gaps, no effect draws inside one, on any
 // frame. This test brings charts and effects together, so it lives beside src/index.ts, the only
 // module allowed to.
@@ -15,6 +16,8 @@
 import { barX, dot, lineY, plot, type Plot } from "@observablehq/plot";
 import { select } from "d3-selection";
 import { arc, area, curveMonotoneX, line, pie, symbol, symbolStar, type PieArcDatum } from "d3-shape";
+import { View, parse } from "vega";
+import { compile, type TopLevelSpec } from "vega-lite";
 import {
   barChart,
   delta,
@@ -22,6 +25,7 @@ import {
   donutChart,
   expressive,
   flash,
+  fromVegaView,
   label,
   lineChart,
   matrix,
@@ -367,6 +371,47 @@ function d3CurveGappedSource(moved = false): { readonly marks: readonly MarkGeom
 
 const d3CurveGappedMarks = (moved = false): readonly MarkGeometry[] => d3CurveGappedSource(moved).marks;
 
+/** The Vega-Lite curves' marks, by season and size: Vega renders in a promise, so they're read before the tests. */
+const vegaCurves = new Map<string, readonly MarkGeometry[]>();
+
+/**
+ * A Vega-Lite line drawn with interpolate "monotone", through fromVegaView(): each series the path
+ * Vega drew, read with describe.shape, with a gap at each move on the patchy season. 80 px a week and
+ * 30 px a goal (64 and 24 when moved).
+ */
+async function readVegaCurves(rows: readonly Patchy[], moved: boolean): Promise<readonly MarkGeometry[]> {
+  const [across, up] = moved ? [64, 24] : [80, 30];
+  const spec: TopLevelSpec = {
+    width: 5 * across,
+    height: 8 * up,
+    data: { values: rows.flatMap((w) => (["goals", "xg"] as const).map((series) => ({ week: w.week, series, value: w[series] ?? null }))) },
+    mark: { type: "line", strokeWidth: 2, interpolate: "monotone" },
+    encoding: {
+      x: { field: "week", type: "quantitative", scale: { domain: [1, 6], nice: false, zero: false } },
+      y: { field: "value", type: "quantitative", scale: { domain: [0, 8], nice: false } },
+      color: { field: "series", type: "nominal" }
+    }
+  };
+  const view = new View(parse(compile(spec).spec), { renderer: "svg", container: document.body.appendChild(document.createElement("div")) });
+  await view.runAsync();
+  const fx = fromVegaView<{ series: string }>(view, { key: (d) => d.series });
+  const marks = fx.marks();
+  fx.destroy();
+  view.finalize();
+  return marks;
+}
+
+beforeAll(async () => {
+  for (const [name, rows] of [["season", weeks], ["patchy", patchy]] as const) {
+    for (const moved of [false, true]) vegaCurves.set(`${name}${moved ? " moved" : ""}`, await readVegaCurves(rows, moved));
+  }
+});
+
+const vegaCurveMarks =
+  (name: "season" | "patchy") =>
+  (moved = false): readonly MarkGeometry[] =>
+    vegaCurves.get(`${name}${moved ? " moved" : ""}`)!;
+
 /** A D3 area under each series' curve, down to 0, each described from its own path data: closed shapes. Smaller when moved. */
 function d3AreaMarks(moved = false): readonly MarkGeometry[] {
   const [across, up] = moved ? [64, 24] : [80, 30];
@@ -551,7 +596,8 @@ const gapped: Record<string, Source> = {
   "lineChart with missing weeks, curved": (moved) => lineGappedSource(moved, "monotone").marks,
   "D3 line with missing weeks through expressive()": d3GappedMarks,
   "D3 curve with missing weeks through describe.shape": d3CurveGappedMarks,
-  "D3 curve with missing weeks read by tag": (moved) => d3CurveTagMarks(patchy, moved)
+  "D3 curve with missing weeks read by tag": (moved) => d3CurveTagMarks(patchy, moved),
+  "Vega-Lite curve with missing weeks through fromVegaView()": vegaCurveMarks("patchy")
 };
 /** The sources described with describe.shape. */
 const shapes: Record<string, Source> = {
@@ -578,6 +624,7 @@ const sources: Record<string, Source> = {
   "D3 line through expressive()": d3LineMarks,
   ...gapped,
   "Plot line through expressive()": plotLineMarks,
+  "Vega-Lite curve through fromVegaView()": vegaCurveMarks("season"),
   ...shapes,
   ...byTag
 };
@@ -852,6 +899,17 @@ describe("lines from a D3 curve with missing weeks through describe.shape", () =
     const ctx = testContext();
     threshold({ compareTo: "xg" }).end(marks[0]!, data.get("goals")!, ctx);
     expect(ctx.layer.drawn.map((item) => (item.kind === "path" ? item.d : item.kind))).toEqual([marks[0]!.slice(0, marks[0]!.gaps![0]![0])]);
+  });
+});
+
+describe("lines from a Vega-Lite curve through fromVegaView()", () => {
+  it("finds a curve for each series, open, as wide as its stroke, with a gap at each move where a week is missing", () => {
+    for (const marks of [vegaCurveMarks("season")(), vegaCurveMarks("patchy")()]) {
+      expect(marks.map((mark) => mark.key)).toEqual(["goals", "xg"]);
+      for (const mark of marks) expect(mark).toMatchObject({ series: mark.key, thickness: 2, outline: { closed: false } });
+    }
+    expect(vegaCurveMarks("season")().map((mark) => mark.gaps)).toEqual([undefined, undefined]);
+    expect(vegaCurveMarks("patchy")().map((mark) => mark.gaps?.length)).toEqual([1, 1]);
   });
 });
 

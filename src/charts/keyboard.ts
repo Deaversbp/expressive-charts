@@ -30,7 +30,16 @@ export interface KeyboardFocusOptions {
    * Undefined, or a key not in the order, keeps the default: a tenth of the marks, rounded up.
    */
   page?(key: string, by: 1 | -1): string | undefined;
+  /**
+   * Where an arrow key, Home or End goes from `key`, for marks that aren't in one row: a line chart's
+   * points go along their line, and Up and Down between lines. `key` itself stays put. Undefined, or
+   * a key not in the order, keeps the default: the next or previous mark in the order, or its ends.
+   */
+  move?(key: string, press: MoveKey): string | undefined;
 }
+
+/** The keys a chart can say where they go. */
+export type MoveKey = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight" | "Home" | "End";
 
 export interface KeyboardFocus {
   /** The element with focus in the chart's document or shadow root, even while the window is in the background. */
@@ -44,6 +53,12 @@ export interface KeyboardFocus {
    * <svg> as it is now: a host may draw a new one, or move it into or out of a shadow root.
    */
   sync(): void;
+  /**
+   * After the marks changed kind (a line chart's `hover`): the tab stop goes to `to` of its key, or
+   * else the first mark, and focus on a mark goes with it, without `focus` being told, so nothing
+   * hovers. Gives the key with focus now, if a mark has it.
+   */
+  retarget(to: (key: string) => string | undefined): string | undefined;
   destroy(): void;
 }
 
@@ -139,16 +154,21 @@ export function keyboardFocus(svg: () => SVGSVGElement | undefined, options: Key
     if (key === undefined || event.altKey || event.ctrlKey || event.metaKey) return;
     const keys = options.order();
     const index = keys.indexOf(key);
+    /** Where the chart says `press` goes, or else `fallback`. */
+    const moved = (press: MoveKey, fallback: string | undefined): string | undefined => {
+      const to = options.move?.(key, press);
+      return to !== undefined && keys.includes(to) ? to : fallback;
+    };
     let next: string | undefined;
     switch (event.key) {
       // Down or right is next whatever the orientation: rows run top to bottom, columns left to right.
       case "ArrowDown":
       case "ArrowRight":
-        next = keys[Math.min(keys.length - 1, index + 1)];
+        next = moved(event.key, keys[Math.min(keys.length - 1, index + 1)]);
         break;
       case "ArrowUp":
       case "ArrowLeft":
-        next = keys[Math.max(0, index - 1)];
+        next = moved(event.key, keys[Math.max(0, index - 1)]);
         break;
       case "PageDown":
       case "PageUp": {
@@ -158,10 +178,10 @@ export function keyboardFocus(svg: () => SVGSVGElement | undefined, options: Key
         break;
       }
       case "Home":
-        next = keys[0];
+        next = moved(event.key, keys[0]);
         break;
       case "End":
-        next = keys[keys.length - 1];
+        next = moved(event.key, keys[keys.length - 1]);
         break;
       case "Escape":
         if (options.escape(key)) event.preventDefault();
@@ -237,6 +257,32 @@ export function keyboardFocus(svg: () => SVGSVGElement | undefined, options: Key
       applyTabIndex(keys);
       for (const key of gone) setTabIndex(key, undefined);
       last = keys;
+    },
+    retarget(to) {
+      listen();
+      const keys = options.order();
+      const live = new Set(keys);
+      // The mark with focus: the one focus events told of or, while the window is in the background and
+      // none come, the one whose element is active.
+      const active = on?.scope.activeElement ?? null;
+      const had = focused?.element === active ? focused.key : last.find((key) => options.element(key) === active);
+      const from = had ?? tabStop;
+      const moved = from === undefined ? undefined : to(from);
+      tabStop = moved !== undefined && live.has(moved) ? moved : keys[0];
+      // The new marks take focus before the old ones lose their tabindex. Focus moves as if it had been
+      // there: its focusout finds the new mark, and its focusin the key it has already.
+      applyTabIndex(keys);
+      if (had !== undefined) {
+        current = tabStop;
+        if (tabStop !== undefined) options.element(tabStop)?.focus();
+        else {
+          (active as SVGElement).blur();
+          focused = undefined;
+        }
+      }
+      for (const key of last) if (!live.has(key)) setTabIndex(key, undefined);
+      last = keys;
+      return had === undefined ? undefined : current;
     },
     destroy() {
       current = undefined;

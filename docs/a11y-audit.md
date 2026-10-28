@@ -19,7 +19,7 @@ It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since 
   - **forced**: under forced colours, each legend's swatches keep their own colours, and a pressed toggle shows in the viewer's selection colours.
 - **The rest of the visual suite**: reduced motion and Off on each page, Play and Pause, the scrubber, the switch's timing, and what a screen reader can reach mid-switch (Chrome's accessibility tree, read over CDP).
 - **Contrast of SVG text and marks**, which axe reports as "incomplete" rather than judging: worked out from the theme's tokens ([Contrast](#contrast)), and validated for the marks by `src/charts/render/theme.test.ts`.
-- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. Section H, the season page's linked hover and change labels, passed on 26 October 2026. Section I, M8's missing weeks, Page Up and Page Down, and the season page again, passed on 27 October 2026. Section J, M9's shapes page, the D3 pie's picker and the morph page's link, hasn't been run yet. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
+- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. Section H, the season page's linked hover and change labels, passed on 26 October 2026. Section I, M8's missing weeks, Page Up and Page Down, and the season page again, passed on 27 October 2026. Section J, M9's shapes page, the D3 pie's picker and the morph page's link, passed on 27 October 2026. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
 - **By hand**, in headless Chromium: the pages at 320 px, with the text spacing, and under forced colours, looked at as pictures; the tooltip's place against every focused mark; the target sizes of every control and mark; and Chrome's accessibility tree for each chart.
 
 ## What it found
@@ -340,7 +340,7 @@ The library's `barChart`, twice (goals per matchweek, and goals by player), and 
 
 ### shapes.html
 
-A D3 scatter and an Observable Plot dot chart, whose dots are `<circle>`s, and a D3 curved line and a D3 area, whose marks are `<path>`s, each through `expressive()`, which reads them by their tags (M9). The curved line has `threshold` and a riding ball, and a picker swaps the four charts' hover effect in place. The charts are attachments, so they draw no tooltip and no data table.
+A D3 scatter and an Observable Plot dot chart, whose dots are `<circle>`s, and a D3 curved line and a D3 area, whose marks are `<path>`s, each through `expressive()`, which reads them by their tags (M9). The curved line has `threshold` and a riding ball, and a picker swaps the four charts' hover effect in place. The charts are attachments, so they draw no tooltip and no data table. Script J's steps passed with NVDA + Chrome on 27 October 2026.
 
 | Criterion | Result | Evidence |
 | --- | --- | --- |

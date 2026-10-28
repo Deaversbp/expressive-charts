@@ -681,11 +681,14 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
    * With `dim`, this attachment's other marks fade while one is hovered, and the hovered one takes its
    * strong colour (its fill, or its stroke on a line), as on our charts. The fade is classes, so host
    * CSS can override it, and only on its own marks, so attachments sharing an <svg> leave each other alone.
-   * Both are CSS transitions timed by motion, like the charts'.
+   * The paths and icons their runs draw fade with them, as on our charts: the overlay is `ec-hovering`,
+   * and the hovered marks' groups `ec-hot`. All are CSS transitions timed by motion, like the charts'.
    */
   function applyDim(): void {
     if (!dim) return;
     const duration = `${motion.duration(100, "feedback")}ms`;
+    overlay.classList.toggle("ec-hovering", hovered !== undefined);
+    setStyles(overlay, { "--ec-hover-duration": duration });
     for (const record of order) {
       const hot = hovered?.keys.includes(record.key) === true;
       for (const part of record.mark.parts) {
@@ -694,8 +697,12 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         edits.style(part.element, "--ec-hover-duration", duration);
       }
       record.handle.hot(hot);
+      surface.hot(record.key, hot);
     }
-    for (const record of leaving.values()) record.handle.hot(false);
+    for (const record of leaving.values()) {
+      record.handle.hot(false);
+      surface.hot(record.key, false);
+    }
   }
 
   const unsubscribeMotion = dim ? motion.subscribe(applyDim) : undefined;

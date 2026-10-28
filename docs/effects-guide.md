@@ -129,7 +129,7 @@ Each run gets its own context. Everything an effect touches goes through it.
 **The mark** (`ctx.mark`):
 
 - `mark.set({ transform, opacity, emphasis, halo })` changes only the fields given, so effects running in parallel don't undo each other. A field given as `undefined` goes back to the mark's own.
-- `transform` and `opacity` apply to the mark's body; its labels and pointer target stay put. `emphasis` (0–1) mixes toward the series' strong colour. `halo: { width, opacity, color? }` strokes the outline behind the mark, half of `width` showing outside.
+- `transform` and `opacity` apply to the mark's body; its labels and pointer target stay put. The paths and icons you draw in the overlay take the mark's `transform` too, so they stay on a mark that another effect turns. Your text stays put, as the mark's labels do. `emphasis` (0–1) mixes toward the series' strong colour. `halo: { width, opacity, color? }` strokes the outline behind the mark, half of `width` showing outside.
 
 **Colours** are theme tokens or any CSS colour: `"text"`, `"text-muted"`, `"surface"`, `"negative"`, `"series-3"`, `"series-3-strong"`, and `"mark"` / `"mark-strong"` for this mark's own colours. Text uses text colours, never series colours.
 
@@ -177,7 +177,7 @@ Effects add personality or explain a change. They never misstate the data:
 
 - **Decorations go in the overlay** (`ctx.layer`) or the halo. Icons, labels and strokes sit on top and leave the mark as it is.
 - **Changes to the mark itself stay small and bounded.** `wiggle` turns a mark so no point of its outline moves more than 3 px, about its pivot, and ends with no transform. `pulse` only sets the halo: it never scales a mark, which would make a value look bigger than it is. Don't move, resize or hide a mark while it's being read, and don't fade it out to make room for a decoration.
-- **Hover feedback is quick** (about 100 ms) and nothing should move under the cursor in a way that hides data. The chart dims the other marks itself.
+- **Hover feedback is quick** (about 100 ms) and nothing should move under the cursor in a way that hides data. The chart dims the other marks itself, with the paths and icons drawn for them; text keeps its contrast.
 - Validate options when the effect is made, with a `RangeError` that names the option, so a bad `swing` fails at once rather than mid-animation.
 
 ## Effects are stateless

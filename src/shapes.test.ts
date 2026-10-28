@@ -13,7 +13,8 @@ import { area, curveMonotoneX, line, symbol, symbolDiamond } from "d3-shape";
 import { expressive, type ChartEnv, type ExpressiveOptions } from "./charts";
 import { createMotion, describe as build, manualClock, samplesAlong, type DataEffect, type MarkData, type MarkGeometry } from "./core";
 import { drawnInGaps, type Drawn } from "./core/testing";
-import { label, only, threshold } from "./effects";
+import { label, only, parallel, threshold, travel, wiggle } from "./effects";
+import { soccerBall } from "./icons/sport";
 import { iconRegistry, presetRegistry } from "./registries";
 
 interface Player {
@@ -330,6 +331,39 @@ describe("a D3 curve through expressive(), read by tag", () => {
     expressive(fresh.paths, { ...curves, on: { decorate: only("goals", threshold({ compareTo: "xg" })) } }, env());
     expect(runsOn(host.svg).map((drawn) => (drawn as { d: string }).d)).toEqual(runsOn(fresh.svg).map((drawn) => (drawn as { d: string }).d));
     expect(runsOn(host.svg).length).toBeGreaterThan(0);
+  });
+
+  it("keeps the goals curve's red and its ball on it: they dim with it while xG is hovered, and rock with its wiggle", () => {
+    const host = d3Curves();
+    const e = env();
+    const story = only("goals", parallel(threshold({ compareTo: "xg" }), travel(soccerBall, { ride: "on" })));
+    expressive(host.paths, { ...curves, dim: true, on: { decorate: story, hover: wiggle() } }, e);
+    for (let ms = 0; ms < 3000; ms += 16) e.clock.advance(16);
+    const [goals, xg] = host.paths.nodes() as [SVGPathElement, SVGPathElement];
+    // The red and the ball are drawn in one group, which follows the curve.
+    const follows = () => [...overlayOf(host.svg).querySelectorAll('.ec-run[data-key="goals"] > .ec-follow')];
+    expect(follows().flatMap((group) => Array.from(group.children, (drawn) => drawn.getAttribute("class")))).toEqual(["ec-path", "ec-icon"]);
+    /** What the stylesheet sets, as jsdom cascades it. */
+    const opacity = (element: Element) => getComputedStyle(element).opacity;
+
+    pointer("pointerover", xg);
+    expect(goals.classList.contains("ec-dimmed")).toBe(true);
+    expect(follows().map(opacity)).toEqual(["var(--ec-dim-opacity, 0.3)"]);
+    pointer("pointerleave", host.svg);
+    expect(follows().map(opacity)).toEqual(["1"]);
+
+    pointer("pointerover", goals);
+    for (let i = 0; i < 4; i++) e.clock.advance(16);
+    // The curve's parent is the overlay's space, so the two turn by the same matrix.
+    const numbers = (transform: string | null | undefined): number[] => (transform?.match(/-?\d+(?:\.\d+)?(?:e-?\d+)?/g) ?? []).map(Number);
+    const rocked = numbers(goals.style.getPropertyValue("transform"));
+    expect(rocked).toHaveLength(6);
+    expect(rocked[1]).not.toBe(0);
+    for (const group of follows()) numbers(group.getAttribute("transform")).forEach((value, i) => expect(value).toBeCloseTo(rocked[i]!, 2));
+    expect(follows().map(opacity)).toEqual(["1"]);
+    for (let ms = 0; ms < 1000; ms += 16) e.clock.advance(16);
+    expect(goals.style.getPropertyValue("transform")).toBe("");
+    expect(follows().map((group) => group.getAttribute("transform"))).toEqual([null]);
   });
 });
 

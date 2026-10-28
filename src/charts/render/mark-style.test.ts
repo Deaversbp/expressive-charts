@@ -1,4 +1,4 @@
-import { createMotion, manualClock, matrix, type GeometryEffect } from "../../core";
+import { createMotion, manualClock, matrix, type EffectContext, type GeometryEffect, type Icon, type MarkGeometry } from "../../core";
 import { createRegistry, type PresetFactory } from "../../core/registry";
 import { barChart } from "../bar";
 import { donutChart } from "../donut";
@@ -181,6 +181,76 @@ describe("svgMarkHandle", () => {
       expect(opacity(body)).toBe("1");
       expect(opacity(body.querySelector(".ec-segment"))).toBe(DIM);
       chart.destroy();
+    });
+
+    describe("the marks' decorations in the overlay", () => {
+      const dot: Icon = {
+        name: "dot",
+        shapes: [{ d: "M-3,0A3,3 0 1 1 3,0A3,3 0 1 1 -3,0Z", fill: "mark" }],
+        box: { x: -3, y: -3, width: 6, height: 6 },
+        size: 6,
+        anchor: { x: 0, y: 0 },
+        pivot: { x: 0, y: 0 },
+        footprint: [3, 3]
+      };
+      /** A path along the mark, a dot at its end and a label above it, kept until the mark goes. */
+      const draw = (mark: MarkGeometry, ctx: EffectContext): void => {
+        ctx.layer.path(mark.outline.d, { stroke: "mark", width: 2 });
+        ctx.layer.icon(dot).place(matrix.translate(mark.end.x, mark.end.y));
+        ctx.layer.text("+1", { at: { x: mark.end.x, y: mark.end.y - 8 } });
+      };
+      const decorations: GeometryEffect = { kind: "geometry", run: async (mark, ctx) => draw(mark, ctx), end: draw, clear() {} };
+      const runOf = (svg: Element, key: string) => svg.querySelector(`.ec-overlay .ec-run[data-key="${key}"]`)!;
+
+      it("dim with their bar, all but their text, which keeps its contrast as the bar's labels do", () => {
+        const chart = barChart(container(), { label: "Goals", data: players, y: "name", x: "goals", width: 600, on: { decorate: decorations } }, env());
+        const run = (key: string) => runOf(chart.element, key);
+        hover(chart.element.querySelector('.ec-mark[data-key="Okafor"] .ec-segment')!);
+        expect([run("Tanaka").querySelector(".ec-follow"), run("Tanaka").querySelector("text")].map(opacity)).toEqual([DIM, "1"]);
+        expect(Array.from(run("Tanaka").querySelectorAll(".ec-follow > *"), (drawn) => drawn.getAttribute("class"))).toEqual(["ec-path", "ec-icon"]);
+        // The hovered bar's stay as they were.
+        expect(opacity(run("Okafor").querySelector(".ec-follow"))).toBe("1");
+        chart.element.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" }));
+        expect(opacity(run("Tanaka").querySelector(".ec-follow"))).toBe("1");
+        chart.destroy();
+      });
+
+      it("dim with their slice", () => {
+        const shots = [
+          { outcome: "Goal", shots: 58 },
+          { outcome: "Saved", shots: 112 },
+          { outcome: "Off target", shots: 149 }
+        ];
+        const chart = donutChart(container(), { label: "Shot outcomes", data: shots, category: "outcome", value: "shots", width: 640, on: { decorate: decorations } }, env());
+        hover(chart.element.querySelector('.ec-mark[data-key="Saved"] .ec-slice')!);
+        expect(shots.map(({ outcome }) => opacity(runOf(chart.element, outcome).querySelector(".ec-follow")))).toEqual([DIM, "1", DIM]);
+        chart.destroy();
+      });
+
+      it("turn with their bar's body, all but their text, as an effect turns it", () => {
+        // An effect that tilts the hovered bar about its pivot until the hover ends.
+        const tilt: GeometryEffect = {
+          kind: "geometry",
+          run(mark, ctx) {
+            ctx.mark.set({ transform: matrix.rotate(0.02, mark.pivot) });
+            return new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve()));
+          },
+          end() {},
+          clear() {}
+        };
+        const chart = barChart(container(), { label: "Goals", data: players, y: "name", x: "goals", width: 600, on: { decorate: decorations, hover: tilt } }, env());
+        const run = (key: string) => runOf(chart.element, key);
+        const body = chart.element.querySelector('.ec-mark[data-key="Okafor"] .ec-body')!;
+        hover(body.querySelector(".ec-segment")!);
+        expect(body.getAttribute("transform")).toMatch(/^matrix\(/);
+        expect(run("Okafor").querySelector(".ec-follow")!.getAttribute("transform")).toBe(body.getAttribute("transform"));
+        expect(run("Okafor").querySelector("text")!.hasAttribute("transform")).toBe(false);
+        expect(run("Tanaka").querySelector(".ec-follow")!.hasAttribute("transform")).toBe(false);
+        chart.element.dispatchEvent(new PointerEvent("pointerleave", { pointerType: "mouse" }));
+        expect(body.hasAttribute("transform")).toBe(false);
+        expect(run("Okafor").querySelector(".ec-follow")!.hasAttribute("transform")).toBe(false);
+        chart.destroy();
+      });
     });
   });
 

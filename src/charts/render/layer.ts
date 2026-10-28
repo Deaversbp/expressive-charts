@@ -1,20 +1,36 @@
 // The drawing API's Layer in SVG: one run's overlay group. See src/core/contracts/drawing.ts.
 
-import { matrix, type Icon, type IconHandle, type IconShape, type Layer, type Paint, type PathHandle, type TextHandle, type TextStyle } from "../../core";
+import { matrix, type Icon, type IconHandle, type IconShape, type Layer, type Matrix, type Paint, type PathHandle, type TextHandle, type TextStyle } from "../../core";
 import { mergeFields } from "../../core/merge";
 import { setAttributes, setStyles, svgElement, transformAttribute } from "./svg";
 import { cssColor } from "./theme";
 
+/** The class of the groups that hold a run's paths and icons when they follow their mark. */
+export const FOLLOW = "ec-follow";
+
 let clipIds = 0;
 
-/** Draws into `group`. Handles keep working on removed elements, so calls after a clear are harmless. */
-export function svgLayer(group: SVGGElement): Layer {
+/**
+ * Draws into `group`. Handles keep working on removed elements, so calls after a clear are harmless.
+ *
+ * With `follow`, the mark's transform now, paths and icons go in a `FOLLOW` group that takes it, so
+ * they move (and dim) with the mark's body, while text stays put, as the mark's labels do. Text drawn
+ * between them starts another group, so everything stays in the order it was drawn.
+ */
+export function svgLayer(group: SVGGElement, follow?: () => Matrix | undefined): Layer {
+  const into = (): SVGGElement => {
+    if (!follow) return group;
+    const last = group.lastElementChild;
+    if (last?.getAttribute("class") === FOLLOW) return last as SVGGElement;
+    const m = follow();
+    return svgElement("g", { class: FOLLOW, transform: m && transformAttribute(m) }, group);
+  };
   return {
     icon(icon, options) {
       const size = options?.size;
       if (size !== undefined && !(size >= 0)) throw new RangeError(`layer.icon: size must be a non-negative number, got ${String(size)}.`);
       // Hidden until the first place().
-      const placed = svgElement("g", { class: "ec-icon", "data-icon": icon.name, visibility: "hidden" }, group);
+      const placed = svgElement("g", { class: "ec-icon", "data-icon": icon.name, visibility: "hidden" }, into());
       // The size rule: scale by size / icon.size about the anchor, in icon space, before place().
       const k = size === undefined || !(icon.size > 0) ? 1 : size / icon.size;
       const body = k === 1 ? placed : svgElement("g", { transform: transformAttribute(matrix.scale(k, k, icon.anchor)) }, placed);
@@ -29,7 +45,7 @@ export function svgLayer(group: SVGGElement): Layer {
     },
 
     path(d, paint) {
-      const element = svgElement("path", { class: "ec-path", d }, group);
+      const element = svgElement("path", { class: "ec-path", d }, into());
       let current: Paint = { ...paint };
       paintPath(element, current);
       const handle: PathHandle = {

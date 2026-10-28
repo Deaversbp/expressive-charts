@@ -29,6 +29,7 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Added
 
+- **Curved Vega lines.** `fromVegaView()` reads a line Vega draws with any `interpolate` but `"linear"`, such as `"monotone"`, `"basis"`, `"step"` or `"natural"`: the path Vega drew, read with `describe.shape` from its `d`, moved into the marks' coordinates as the items are, at the item's stroke width. Its gaps come with it, one at each move, and a curve Vega closes on itself (the `-closed` ones) is a closed shape. Its samples are at the items drawn, on the curve, so `threshold`'s crossings between them are approximate, as on a D3 curve. It used to throw. A straight line is read from its items as before, the same mark, so no page needs to change.
 - **`nearbyLabels` on `MarkGeometry`**, under the 0.x promise, and on each builder's spec (`BarSpec`, `ArcSpec`, `LineSpec`, `PointSpec` and `ShapeSpec`): the boxes of other marks' text near a mark, which an effect's text should keep clear of as well as its own. `labelBounds` stays the boxes of the mark's own. Our line chart gives each line every other line's end label, and the donut each slice its neighbours' labels, the nearest each way round; bars and adapters give none. It's an optional field, an addition: code that builds a `MarkGeometry` needs no change, and an effect that ignores it works as before. The builders check it as they check `labelBounds`, with a `RangeError` naming the field, such as `nearbyLabels[0].x`.
 
 ### Changed

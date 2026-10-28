@@ -94,6 +94,7 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // fromVegaView() reads a line Vega breaks at a missing value, with its gaps. M9 step 6 made expressive()
 // read <circle>s as points and <path>, <line>, <polyline>, <polygon> and <ellipse> as shapes, with
 // describe.shape, so `geometry` is only for other elements, or to say more than an element shows.
+// M10 step 4 made fromVegaView() read a line Vega draws as a curve, from its path, with describe.shape.
 
 // ── Reference charts ─────────────────────────────────────────────────────────
 

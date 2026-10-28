@@ -2,14 +2,27 @@
 // ones): a two-series line, bars, a stack, a donut and points, rendered as SVG in jsdom. This is M4's
 // proof on a third library's marks: threshold colours the goals line below xG, a ball rides its
 // leading edge, the keyboard goes from line to line, and every built-in effect passes checkEffect on
-// the View's own marks. The View's re-renders (new data, a resize) are followed with no refresh(), no
+// the View's own marks. A line Vega draws as a curve is the path it drew, through describe.shape, with
+// its samples at the items. The View's re-renders (new data, a resize) are followed with no refresh(), no
 // change to effect code, and nothing imported from Vega in src/ outside the tests. It brings charts and
 // effects together, so it lives beside src/index.ts, the only module allowed to.
 
-import { View, parse } from "vega";
+import { View, parse, type Spec } from "vega";
 import { compile, type TopLevelSpec } from "vega-lite";
 import { fromVegaView, type ChartEnv, type VegaOptions } from "./charts";
-import { createMotion, manualClock, matrix, type DataEffect, type GeometryEffect, type MarkData, type MarkGeometry, type MotionMode, type Point } from "./core";
+import {
+  describe as build,
+  createMotion,
+  manualClock,
+  matrix,
+  type DataEffect,
+  type GeometryEffect,
+  type MarkData,
+  type MarkGeometry,
+  type MotionMode,
+  type Point,
+  type Sample
+} from "./core";
 import { parseTransform } from "./core/geometry";
 import { drawnInGaps, measurePath, type Drawn } from "./core/testing";
 import { flash, only, parallel, pulse, stagger, threshold, travel, wiggle } from "./effects";
@@ -137,6 +150,79 @@ function key(name: string): void {
 /** Records each mark's data, as a data effect gets it. */
 function recorder(seen: Map<string, MarkData>): DataEffect {
   return { kind: "data", run: async (mark, data) => void seen.set(mark.key, data), end: (mark, data) => void seen.set(mark.key, data), clear() {} };
+}
+
+/** Records each mark's data, as a data effect gets it, and again whenever it changes, in its run or its end state. */
+function follower(seen: Map<string, MarkData>): DataEffect {
+  const follow = (mark: MarkGeometry, data: MarkData, ctx: { onChange(listener: (mark: MarkGeometry, data?: MarkData) => void): void }): void => {
+    seen.set(mark.key, data);
+    ctx.onChange((moved, next) => void (next && seen.set(moved.key, next)));
+  };
+  return { kind: "data", run: async (mark, data, ctx) => follow(mark, data, ctx), end: follow, clear() {} };
+}
+
+/** The points Vega drew a series' line through: its items' numbers. */
+const itemsOf = (path: SVGPathElement): Point[] =>
+  (path as unknown as { __data__: { mark: { items: { x: number; y: number }[] } } }).__data__.mark.items.map((item) => ({ x: item.x, y: item.y }));
+
+/** What effects can read of a mark: its fields, its outline's samples, and its walk, heading and slices at eleven points. */
+const shown = (mark: MarkGeometry) => ({
+  key: mark.key,
+  series: mark.series,
+  d: mark.outline.d,
+  closed: mark.outline.closed,
+  outline: mark.outline.sample(12),
+  length: mark.length,
+  thickness: mark.thickness,
+  bounds: mark.bounds,
+  center: mark.center,
+  pivot: mark.pivot,
+  start: mark.start,
+  end: mark.end,
+  gaps: mark.gaps,
+  along: Array.from({ length: 11 }, (_, i) => i / 10).map((t) => ({ at: mark.path(t), angle: mark.angle(t), slice: mark.slice(0, t) }))
+});
+
+/** The path Vega drew for a series' line. */
+const pathOf = (svg: SVGSVGElement, series: Series): SVGPathElement => linePaths(svg).find((path) => seriesOf(path) === series)!;
+
+/**
+ * Where threshold puts week `week` on a line, in weeks across: at a sample's point, or between the
+ * two either side, linear in t, as it interpolates. On a curve that's near the week, not at it.
+ */
+function placed(mark: MarkGeometry, samples: readonly Sample[], week: number): number {
+  const i = samples.findIndex((sample) => (sample.at as number) >= week);
+  const [a, b] = [samples[Math.max(0, i - 1)]!, samples[i]!];
+  const f = b.at === week || a === b ? 1 : (week - (a.at as number)) / ((b.at as number) - (a.at as number));
+  return mark.path(a.t + f * (b.t - a.t)).x / 60 + 1;
+}
+
+/** A line's height at x, from its walk at 4,001 points: for a line drawn left to right, as Vega-Lite draws a monotone curve over x. */
+function heightOf(mark: MarkGeometry): (x: number) => number {
+  const points = Array.from({ length: 4001 }, (_, i) => mark.path(i / 4000));
+  return (x) => {
+    let [lo, hi] = [0, points.length - 1];
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (points[mid]!.x <= x) lo = mid;
+      else hi = mid;
+    }
+    const [p, q] = [points[lo]!, points[hi]!];
+    return q.x === p.x ? p.y : p.y + ((x - p.x) / (q.x - p.x)) * (q.y - p.y);
+  };
+}
+
+/** Where two lines drawn left to right across the plot cross, in px across, every 0.05 px. */
+function drawnCrossings(a: MarkGeometry, b: MarkGeometry): number[] {
+  const [ya, yb] = [heightOf(a), heightOf(b)];
+  const found: number[] = [];
+  let before = ya(0) - yb(0);
+  for (let step = 1; step <= 540 * 20; step++) {
+    const difference = ya(step / 20) - yb(step / 20);
+    if (difference !== 0 && Math.sign(difference) !== Math.sign(before)) found.push(step / 20);
+    before = difference;
+  }
+  return found;
 }
 
 afterEach(() => {
@@ -524,6 +610,285 @@ describe("fromVegaView: a Vega-Lite line with missing values", () => {
       await checkEffect(threshold({ compareTo: "xg" }), { name: "threshold below xG", marks, moved, data: (mark) => all.get(mark)! });
     });
   });
+
+  describe("drawn as a monotone curve", () => {
+    const curved = (invalid?: string): TopLevelSpec => {
+      const spec = patchySpec(PATCHY, invalid) as TopLevelSpec & { mark: object };
+      return { ...spec, mark: { ...spec.mark, interpolate: "monotone" } } as TopLevelSpec;
+    };
+
+    it.each(BREAKING)("in %s mode, reads the path Vega draws, with a gap at each move and its samples at the weeks there are", async (_name, invalid) => {
+      const { view, svg } = await render(curved(invalid));
+      const seen = new Map<string, MarkData>();
+      const fx = fromVegaView(view, { ...patchy, on: { decorate: recorder(seen) } }, env());
+      const goals = goalsOf(fx);
+      const d = pathOf(svg, "goals").getAttribute("d")!;
+      // Weeks 1–2 and 4–5 are runs of two, which Vega draws straight; weeks 8–10 curve.
+      expect(d.match(/M/g)).toHaveLength(3);
+      expect(d).toMatch(/C/);
+      expect(shown(goals)).toEqual(shown(build.shape({ key: "goals", series: "goals", d, width: WIDTH })));
+      expect(goals.gaps).toHaveLength(2);
+      gapWeeks(goals).forEach((weeks, k) => weeks.forEach((week, end) => expect(week).toBeCloseTo([[2, 4], [5, 8]][k]![end]!, 6)));
+      const { samples } = seen.get("goals")!;
+      expect(samples.map((s) => s.at)).toEqual([1, 2, 4, 5, 8, 9, 10]);
+      expect(samples.map((s) => s.gapBefore === true)).toEqual([false, false, true, false, true, false, false]);
+      samples.forEach((sample) => {
+        expect(goals.path(sample.t).x).toBeCloseTo(x(sample.at as number), 6);
+        expect(goals.path(sample.t).y).toBeCloseTo(y(sample.value), 6);
+      });
+      expect(fx.marks().find((mark) => mark.key === "xg")!.gaps).toBeUndefined();
+    });
+
+    it.each(BREAKING.flatMap(([name, invalid]) => (["presentation", "off"] as const).map((mode) => [name, mode, invalid] as const)))(
+      "in %s mode and %s, threshold colours goals below xG within each run, and nothing it or the riding ball draws is inside a gap",
+      async (_name, mode, invalid) => {
+        const { view, svg } = await render(curved(invalid));
+        const e = env(mode);
+        const seen = new Map<string, MarkData>();
+        const fx = fromVegaView(view, { ...patchy, on: { decorate: parallel(recorder(seen), story()) } }, e);
+        const goals = goalsOf(fx);
+        let frames = 0;
+        for (; frames < 400 && !e.clock.idle; frames++) {
+          expect(drawnInGaps(goals, drawnOnGoals(svg)), `frame ${frames}`).toEqual([]);
+          e.clock.advance(16);
+        }
+        expect(e.clock.idle).toBe(true);
+        if (mode === "presentation") expect(frames).toBeGreaterThan(10);
+        expect(drawnInGaps(goals, drawnOnGoals(svg))).toEqual([]);
+        // The runs of two are straight, so their crossings are exact; week 8's is placed between the samples on the curve.
+        const { samples } = seen.get("goals")!;
+        expectClose(
+          runs(svg),
+          BELOW.map(([from, to]) => [placed(goals, samples, from), placed(goals, samples, to)])
+        );
+        expect(runs(svg).slice(0, 2)).toEqual(BELOW.slice(0, 2).map(([from, to]) => [expect.closeTo(from, 4), expect.closeTo(to, 4)]));
+        expect(goals.end.x - ball(svg)!.x).toBeLessThan(2 * soccerBall.radius!);
+      }
+    );
+  });
+});
+
+describe("fromVegaView: a Vega-Lite line drawn as a curve", () => {
+  /** The season drawn with `interpolate`, as Vega-Lite names its curves. */
+  function curveSpec(interpolate: string | { expr: string }, scale = 1, strokeWidth = WIDTH): TopLevelSpec {
+    return { ...lineSpec(scale), mark: { type: "line", strokeWidth, interpolate } } as TopLevelSpec;
+  }
+  /** The curves the plan names: one that never overshoots, one that misses its points, steps, and one that overshoots. */
+  const CURVES = ["monotone", "basis", "step", "natural"] as const;
+  /** The ones that pass through every point Vega draws them from. */
+  const THROUGH: readonly string[] = ["monotone", "step", "natural"];
+
+  it.each(CURVES)("reads a line drawn %s from the path Vega draws: the same mark as describe.shape gives its d", async (interpolate) => {
+    const { view, svg } = await render(curveSpec(interpolate));
+    const fx = fromVegaView(view, lineOptions, env());
+    expect(fx.marks().map((mark) => mark.key)).toEqual(["goals", "xg"]);
+    for (const mark of fx.marks()) {
+      const d = pathOf(svg, mark.key as Series).getAttribute("d")!;
+      expect(shown(mark)).toEqual(shown(build.shape({ key: mark.key, series: mark.key, d, width: WIDTH })));
+      expect(mark).toMatchObject({ series: mark.key, thickness: WIDTH, outline: { closed: false } });
+      expect(mark.gaps).toBeUndefined();
+      // Flattened: straight pieces only, from where Vega starts the line to where it ends it.
+      expect(mark.outline.d).not.toMatch(/[CQ]/);
+      const items = itemsOf(pathOf(svg, mark.key as Series));
+      for (const [end, item] of [[mark.start, items[0]!], [mark.end, items[9]!]] as const) {
+        expect(end.x).toBeCloseTo(item.x, 3);
+        expect(end.y).toBeCloseTo(item.y, 3);
+      }
+    }
+    if (interpolate !== "step") expect(pathOf(svg, "goals").getAttribute("d")).toMatch(/C/);
+  });
+
+  it.each(CURVES)("on a line drawn %s, gives a sample at each week, where it's on the curve", async (interpolate) => {
+    const { view } = await render(curveSpec(interpolate));
+    const seen = new Map<string, MarkData>();
+    const fx = fromVegaView(view, { ...lineOptions, on: { decorate: recorder(seen) } }, env());
+    for (const mark of fx.marks()) {
+      const values = mark.key === "goals" ? GOALS : XG;
+      const { samples } = seen.get(mark.key)!;
+      expect(samples.map((s) => s.at)).toEqual(values.map((_, i) => i + 1));
+      expect(samples.map((s) => s.value)).toEqual(values);
+      const grid = Array.from({ length: 2001 }, (_, i) => mark.path(i / 2000));
+      samples.forEach((sample, i) => {
+        const item = { x: x(i + 1), y: y(values[i]!) };
+        const at = mark.path(sample.t);
+        if (THROUGH.includes(interpolate)) {
+          // Through the week's point, as Vega drew it.
+          expect(at.x).toBeCloseTo(item.x, 6);
+          expect(at.y).toBeCloseTo(item.y, 6);
+        } else {
+          // A basis curve misses its points: the sample is the nearest point of it.
+          const nearest = Math.min(...grid.map((p) => Math.hypot(p.x - item.x, p.y - item.y)));
+          expect(Math.hypot(at.x - item.x, at.y - item.y)).toBeLessThanOrEqual(nearest + 1e-6);
+        }
+      });
+    }
+    expect(seen.get("goals")!.related("xg")!.samples).toEqual(seen.get("xg")!.samples);
+  });
+
+  it.each(["presentation", "off"] as const)(
+    "in %s, threshold colours a monotone goals line below xG, placed between the weeks along the curve, near where the drawn lines cross, and a ball rides it",
+    async (mode) => {
+      const { view, svg } = await render(curveSpec("monotone"));
+      const e = env(mode);
+      const seen = new Map<string, MarkData>();
+      const fx = fromVegaView(view, { ...lineOptions, on: { decorate: parallel(recorder(seen), story()) } }, e);
+      for (let frame = 0; frame < 400 && !e.clock.idle; frame++) e.clock.advance(16);
+      expect(e.clock.idle).toBe(true);
+      const goals = goalsOf(fx);
+      const { samples } = seen.get("goals")!;
+      expectClose(
+        runs(svg),
+        expectedRuns().map(([from, to]) => [placed(goals, samples, from), placed(goals, samples, to)])
+      );
+      // Approximate: the data cross between two weeks, linear in t along the curve. On this season
+      // that's up to 8 px from where the curves Vega drew cross, at 60 px a week.
+      const crossings = drawnCrossings(goals, fx.marks().find((mark) => mark.key === "xg")!);
+      expect(crossings).toHaveLength(6);
+      runs(svg)
+        .flat()
+        .forEach((week, i) => expect(Math.abs(x(week) - crossings[i]!)).toBeLessThan(10));
+      for (const path of runPaths(svg)) expect(path.getAttribute("stroke-width")).toBe(String(WIDTH));
+      // Resting just behind the tip, above the stroke.
+      const rest = ball(svg)!;
+      expect(goals.end.x - rest.x).toBeGreaterThan(0);
+      expect(goals.end.x - rest.x).toBeLessThan(2 * soccerBall.radius!);
+      expect(rest.y).toBeLessThan(goals.end.y);
+    }
+  );
+
+  it.each(["basis-closed", "linear-closed"])("reads a line Vega closes on itself (%s) as a closed shape, as describe.shape reads its d", async (interpolate) => {
+    const { view, svg } = await render(curveSpec(interpolate));
+    const seen = new Map<string, MarkData>();
+    const fx = fromVegaView(view, { ...lineOptions, on: { decorate: recorder(seen) } }, env());
+    for (const mark of fx.marks()) {
+      // basis-closed ends where it started, and linear-closed with a Z.
+      const d = pathOf(svg, mark.key as Series).getAttribute("d")!;
+      expect(d.match(/M/g)).toHaveLength(1);
+      expect(shown(mark)).toEqual(shown(build.shape({ key: mark.key, series: mark.key, d, width: WIDTH })));
+      expect(mark.outline.closed).toBe(true);
+      expect(mark.length).toBe(0);
+      // With no walk to place them along, its samples are all at its start, week by week.
+      expect(seen.get(mark.key)!.samples.map((s) => [s.t, s.at])).toEqual((mark.key === "goals" ? GOALS : XG).map((_, i) => [0, i + 1]));
+    }
+  });
+
+  it("moves a curve by its group's place, as the items' numbers are, with its samples", async () => {
+    // A Vega spec with each line in a group of its own, 30 px in and 10 or 310 px down.
+    const spec: Spec = {
+      width: 540,
+      height: 600,
+      data: (["goals", "xg"] as const).map((series) => ({ name: series, values: (series === "goals" ? GOALS : XG).map((value, i) => ({ week: i + 1, series, value })) })),
+      scales: [
+        { name: "x", type: "linear", domain: [1, 10], zero: false, range: [0, 540] },
+        { name: "y", type: "linear", domain: [0, 12], range: [240, 0] }
+      ],
+      marks: (["goals", "xg"] as const).map((series, i) => ({
+        type: "group",
+        encode: { enter: { x: { value: 30 }, y: { value: 10 + 300 * i } } },
+        marks: [
+          {
+            type: "line",
+            name: "marks",
+            from: { data: series },
+            encode: { enter: { x: { scale: "x", field: "week" }, y: { scale: "y", field: "value" }, stroke: { value: "black" }, strokeWidth: { value: 3 }, interpolate: { value: "monotone" } } }
+          }
+        ]
+      }))
+    };
+    const host = document.body.appendChild(document.createElement("div"));
+    const view = new View(parse(spec), { renderer: "svg", container: host });
+    await view.runAsync();
+    const seen = new Map<string, MarkData>();
+    const fx = fromVegaView(view, { ...lineOptions, on: { decorate: recorder(seen) } }, env());
+    const paths = Array.from(host.querySelectorAll<SVGPathElement>(".mark-line path"));
+    expect(fx.marks().map((mark) => mark.key)).toEqual(["goals", "xg"]);
+    fx.marks().forEach((mark, i) => {
+      const moved = build.shape({ key: mark.key, series: mark.key, d: paths[i]!.getAttribute("d")!, matrix: matrix.translate(30, 10 + 300 * i), width: 3 });
+      expect(shown(mark)).toEqual(shown(moved));
+      expect(mark.start.x).toBeCloseTo(30, 6);
+      seen.get(mark.key)!.samples.forEach((sample, week) => {
+        expect(mark.path(sample.t).x).toBeCloseTo(30 + x(week + 1), 6);
+        expect(mark.path(sample.t).y).toBeCloseTo(10 + 300 * i + y((mark.key === "goals" ? GOALS : XG)[week]!), 6);
+      });
+    });
+  });
+
+  it("reads a curve drawn with no stroke width as 1 px wide, as expressive() reads a shape", async () => {
+    const { view } = await render(curveSpec("monotone", 1, 0));
+    expect(fromVegaView(view, lineOptions, env()).marks().map((mark) => mark.thickness)).toEqual([1, 1]);
+  });
+
+  it.each([
+    ["no interpolate", undefined],
+    ['interpolate "linear"', "linear"]
+  ] as const)("reads a straight line, with %s, from its items as before: the same mark as describe.line gives Vega's points", async (_name, interpolate) => {
+    const { view, svg } = await render(interpolate === undefined ? lineSpec() : curveSpec(interpolate));
+    const fx = fromVegaView(view, lineOptions, env());
+    expect(fx.marks()).toHaveLength(2);
+    for (const mark of fx.marks()) {
+      const straight = build.line({ key: mark.key, series: mark.key, points: itemsOf(pathOf(svg, mark.key as Series)), width: WIDTH });
+      expect(shown(mark)).toEqual(shown(straight));
+    }
+  });
+
+  it("follows a render that changes the curve, straight to curved and back, each a move, not an update", async () => {
+    const spec = { ...curveSpec({ expr: "curve" }), params: [{ name: "curve", value: "linear" }] } as TopLevelSpec;
+    const { view, svg } = await render(spec);
+    const e = env("off");
+    const seen = new Map<string, MarkData>();
+    const fx = fromVegaView(view, { ...lineOptions, on: { decorate: parallel(follower(seen), story()) } }, e);
+    const events: string[] = [];
+    for (const type of ["enter", "update", "exit"] as const) fx.on(type, (event) => events.push(`${type} ${event.mark.key}`));
+    const linear = shown(goalsOf(fx));
+    expectClose(runs(svg), expectedRuns());
+
+    for (const interpolate of ["monotone", "step", "linear"]) {
+      await view.signal("curve", interpolate).runAsync();
+      await delivered();
+      e.clock.advance(16);
+      const goals = goalsOf(fx);
+      const d = pathOf(svg, "goals").getAttribute("d")!;
+      if (interpolate === "linear") expect(shown(goals)).toEqual(linear);
+      else expect(shown(goals)).toEqual(shown(build.shape({ key: "goals", series: "goals", d, width: WIDTH })));
+      const { samples } = seen.get("goals")!;
+      expectClose(
+        runs(svg),
+        expectedRuns().map(([from, to]) => [placed(goals, samples, from), placed(goals, samples, to)])
+      );
+      expect(goals.end.x - ball(svg)!.x).toBeLessThan(2 * soccerBall.radius!);
+    }
+    expect(events).toEqual([]);
+  });
+
+  it("swaps a curved line's effects with update({ on }), focus and the tab stop staying, and follows new data", async () => {
+    const { view, svg } = await render(curveSpec("monotone"));
+    const e = env("off");
+    const seen = new Map<string, MarkData>();
+    const fx = fromVegaView(view, { ...lineOptions, on: { decorate: only("goals", travel("soccer-ball", { ride: "on" })) } }, e);
+    expect(ball(svg)).toBeDefined();
+    fx.focus("xg");
+    await fx.update({ on: { decorate: parallel(follower(seen), only("goals", threshold({ compareTo: "xg" }))) } });
+    expect(ball(svg)).toBeUndefined();
+    /** The runs below xG up to week `weeks`, placed on the curve as it is now. */
+    const place = (weeks?: number): [number, number][] => {
+      const { samples } = seen.get("goals")!;
+      return expectedRuns(weeks).map(([from, to]) => [placed(goalsOf(fx), samples, from), placed(goalsOf(fx), samples, to)]);
+    };
+    expectClose(runs(svg), place());
+    expect(seriesOf(document.activeElement)).toBe("xg");
+    expect(linePaths(svg).map((path) => path.getAttribute("tabindex"))).toEqual(["-1", "0"]);
+
+    await view.data("season", rowsUpTo(5)).runAsync();
+    await delivered();
+    e.clock.advance(16);
+    expect(shown(goalsOf(fx))).toEqual(shown(build.shape({ key: "goals", series: "goals", d: pathOf(svg, "goals").getAttribute("d")!, width: WIDTH })));
+    expect(goalsOf(fx).end.x).toBeCloseTo(x(5), 6);
+    expectClose(runs(svg), place(5));
+    expect(seriesOf(document.activeElement)).toBe("xg");
+
+    await expect(fx.update({ on: { decorate: "nope" } })).rejects.toThrow(/Unknown preset "nope"/);
+    expectClose(runs(svg), place(5));
+  });
 });
 
 describe("fromVegaView: update({ on }) and leave()", () => {
@@ -708,11 +1073,6 @@ describe("fromVegaView: what it can't read", () => {
   it("names the marks it has when the one asked for isn't there", async () => {
     const { view } = await render(lineSpec());
     expect(() => fromVegaView(view, { ...lineOptions, mark: "lines" }, env())).toThrow(/no mark named "lines". Its named marks: "marks"/);
-  });
-
-  it.each(["monotone", "basis", "step"])("refuses a line Vega draws as a curve (%s), rather than describing straight segments", async (interpolate) => {
-    const { view } = await render({ ...lineSpec(), mark: { type: "line", strokeWidth: WIDTH, interpolate } } as TopLevelSpec);
-    expect(() => fromVegaView(view, lineOptions, env())).toThrow(new RegExp(`interpolate "${interpolate}", but only straight lines can be read`));
   });
 
   it("reads a line drawn with interpolate \"linear\", the default", async () => {

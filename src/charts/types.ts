@@ -276,6 +276,16 @@ export interface LineChartOptions<D> extends ChartOptions<D> {
    * the chart's `format`; an empty string shows none, and a throw (reported) keeps the default.
    */
   readonly labels?: false | ((value: number, series: string, format: (value: number) => string) => string);
+  /**
+   * How each line runs between its values. "linear", the default, is straight from value to value.
+   * "monotone" is d3's curveMonotoneX: a smooth curve through every value that's flat between two
+   * equal ones and never goes above or below the values either side, so it shows no value the data
+   * doesn't have. Each run between gaps is curved on its own, and a run of two values is straight. A
+   * curved line's samples are its rows' and one at each bend between them, so `threshold` changes
+   * colour where the drawn lines cross. A change of curve plays as a change; anything else throws a
+   * TypeError, and update() rejects it.
+   */
+  readonly curve?: "linear" | "monotone";
 }
 
 export interface LineChart<D> extends Chart<D, LineChartOptions<D>> {

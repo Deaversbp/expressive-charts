@@ -5,7 +5,7 @@
     "dist/icons/sport.cjs": 3.5,
     "dist/icons/sport.js": 4.5,
     "dist/index.cjs": 110.5,
-    "dist/index.js": 111,
+    "dist/index.js": 123.5,
     "dist/testing.cjs": 19,
     "dist/testing.js": 24.5
   },
@@ -16,6 +16,6 @@
     "barChart": 34,
     "lineChart, threshold, playback, playButton": 41,
     "chartSwitch, donutChart, barChart": 45,
-    "everything": 76.5
+    "everything": 86
   }
 }

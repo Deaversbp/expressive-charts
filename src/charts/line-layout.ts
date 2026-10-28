@@ -8,11 +8,13 @@
 // functions draw any state in between, and any reveal, the same way the layout draws its own. On a
 // time axis an x is its Date's time in ms, and only its ticks, its wording and the samples' `at` know.
 // A missing value (null or undefined) is a gap in its line: the line runs on from the value after it.
+// With `curve: "monotone"`, each line bends between its rows (curve.ts), as more vertices.
 
 import type { MarkData, MarkGeometry, Rect, Sample } from "../core";
 import { describeLine } from "../core/geometry/describe/line";
 import { describePoint } from "../core/geometry/describe/point";
 import { clean, niceDomain, niceStep, type Tick } from "./bar-layout";
+import { CURVES, lineCurve, type Curve } from "./curve";
 import { textBox, type TextPlacement } from "./render/text";
 import { decimals } from "./shell/format";
 import { TIME_ZONES, timeName, timeTicks, type TimeZone } from "./time";
@@ -36,6 +38,8 @@ export interface LineEncoding<D> {
   readonly timeZone: TimeZone;
   /** Words an x for people instead of the default. */
   readonly xFormat: ((x: Date | number) => string) | undefined;
+  /** How the lines run between their values. */
+  readonly curve: Curve;
 }
 
 export interface LineValue {
@@ -112,6 +116,8 @@ export interface LineLayout<D> {
   readonly xTicks: readonly XTick[];
   /** Per series, the decimals its values are given to: an end label counts rounded to these. */
   readonly decimals: Readonly<Record<string, number>>;
+  /** How the lines run between their values. */
+  readonly curve: Curve;
 }
 
 export interface LineLayoutInput<D> {
@@ -143,6 +149,11 @@ export interface RowState<D> {
   readonly values: Readonly<Record<string, number>>;
   /** The series with no value here: no point, and a gap in the line. Their `values` aren't drawn. */
   readonly missing?: ReadonlySet<string>;
+  /**
+   * Less than 1 while the row grows out of a neighbour or folds into one, where it is at 0: a curve
+   * bends through it only that much, so it doesn't jump as the row comes or goes. Default 1.
+   */
+  readonly presence?: number;
 }
 
 export interface PlacedLine<D> {
@@ -201,12 +212,15 @@ export function lineEncoding<D>(options: LineChartOptions<D>): LineEncoding<D> {
   if (!TIME_ZONES.includes(timeZone as TimeZone)) throw new TypeError(`lineChart: timeZone must be "UTC" or "local", got ${show(timeZone)}.`);
   const xFormat: unknown = options.xFormat;
   if (xFormat !== undefined && typeof xFormat !== "function") throw new TypeError("lineChart: xFormat must be a function that turns an x into text.");
+  const curve: unknown = options.curve ?? "linear";
+  if (!CURVES.includes(curve as Curve)) throw new TypeError(`lineChart: curve must be "linear" or "monotone", got ${show(curve)}.`);
   return {
     x: accessor(x),
     key: key === undefined ? undefined : accessor(key),
     series: series.map((field) => ({ series: field, value: accessor<D, unknown>(field) })),
     timeZone: timeZone as TimeZone,
-    xFormat: options.xFormat
+    xFormat: options.xFormat,
+    curve: curve as Curve
   };
 }
 
@@ -247,7 +261,8 @@ export function layoutLines<D>(input: LineLayoutInput<D>): LineLayout<D> {
     series,
     yTicks: domain.ticks.map((value, i) => placeYTick(frame, value, yTexts[i]!)),
     xTicks: spaced(xTicks, xWidths),
-    decimals: decimalsBy
+    decimals: decimalsBy,
+    curve: input.encoding.curve
   };
 }
 
@@ -275,8 +290,13 @@ export function positions(frame: LineFrame): { x(value: number): number; y(value
  * a line revealed into a gap ends at its last value. Missing values before a line's first value or
  * after its last are no gap. A line with no value up to the reveal is empty: no length, no samples
  * and no label, at its level at the first x, and its datum the row at the reveal.
+ *
+ * With `bend` more than 0, each line curves between its rows, `bend` of the way from straight to
+ * monotone (curve.ts): the curve goes through every row, revealed or not, so a reveal doesn't change
+ * it, and each bend between two rows is a vertex too, with its sample, so the samples are exact on
+ * the line as drawn. A line revealed part way between two rows ends on the curve.
  */
-export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], series: readonly string[], through: number, time = false, labels?: EndLabels): PlacedLine<D>[] {
+export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], series: readonly string[], through: number, time = false, labels?: EndLabels, bend = 0): PlacedLine<D>[] {
   const first = rows[0];
   if (!first) return [];
   const at = positions(frame);
@@ -286,24 +306,33 @@ export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], se
   const next = rows[last + 1];
   const share = next && next.x > end.x && through > end.x ? (through - end.x) / (next.x - end.x) : undefined;
   const shown = rows.slice(0, last + 1);
+  const xs = bend > 0 ? rows.map((row) => row.x) : [];
+  const presence = bend > 0 && rows.some((row) => row.presence !== undefined && row.presence < 1) ? rows.map((row) => row.presence ?? 1) : undefined;
 
   const datas = new Map<string, MarkData<D>>();
   const related = (own: string) => (name: string) => (name === own ? undefined : datas.get(name));
   const traced = series.map((name) => {
     const has = (row: RowState<D>): boolean => !row.missing?.has(name);
+    const curve = bend > 0 ? lineCurve(xs, rows.map((row) => (has(row) ? (row.values[name] ?? 0) : undefined)), bend, at, presence) : undefined;
     const vertices: { at: number; value: number; datum: D; gapBefore: boolean }[] = [];
     let gap = false;
-    for (const row of shown) {
+    /** The last row with a value, by index. */
+    let before = -1;
+    shown.forEach((row, i) => {
       // A gap is only between values: none before the first.
       if (!has(row)) gap = vertices.length > 0;
       else {
+        if (curve && before >= 0) for (const b of curve.between(before, i)) vertices.push({ at: b.x, value: b.value, datum: rows[before]!.datum, gapBefore: false });
         vertices.push({ at: row.x, value: row.values[name] ?? 0, datum: row.datum, gapBefore: gap });
         gap = false;
+        before = i;
       }
-    }
+    });
     if (share !== undefined && has(end) && has(next!)) {
+      if (curve) for (const b of curve.between(last, last + 1, through)) vertices.push({ at: b.x, value: b.value, datum: end.datum, gapBefore: false });
       const from = end.values[name] ?? 0;
-      vertices.push({ at: through, value: from + share * ((next!.values[name] ?? 0) - from), datum: end.datum, gapBefore: false });
+      const value = curve ? curve.valueAt(last, last + 1, through) : from + share * ((next!.values[name] ?? 0) - from);
+      vertices.push({ at: through, value, datum: end.datum, gapBefore: false });
     }
     const points = vertices.length > 0 ? vertices.map((v) => ({ x: at.x(v.at), y: at.y(v.value) })) : [{ x: at.x(first.x), y: at.y(first.values[name] ?? 0) }];
     return { name, vertices, points };

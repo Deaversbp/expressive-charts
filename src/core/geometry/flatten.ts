@@ -100,10 +100,8 @@ export function flattenPath(commands: readonly PathCommand[]): Subpath[] {
  * and 6 times the larger of |P0 − 2P1 + P2| and |P1 − 2P2 + P3| for a cubic.
  */
 function bezier(...p: Point[]): Point[] {
-  const bend = (a: Point, b: Point, c: Point): number => Math.hypot(a.x - 2 * b.x + c.x, a.y - 2 * b.y + c.y);
   const cubic = p.length === 4;
-  const second = cubic ? 6 * Math.max(bend(p[0]!, p[1]!, p[2]!), bend(p[1]!, p[2]!, p[3]!)) : 2 * bend(p[0]!, p[1]!, p[2]!);
-  const n = pieces(1, second);
+  const n = cubic ? cubicPieces(p[0]!, p[1]!, p[2]!, p[3]!) : pieces(1, 2 * bend(p[0]!, p[1]!, p[2]!));
   const points = [p[0]!];
   for (let k = 1; k < n; k++) {
     const t = k / n;
@@ -116,6 +114,20 @@ function bezier(...p: Point[]): Point[] {
   }
   points.push(p[p.length - 1]!);
   return points;
+}
+
+/**
+ * How many equal steps of its parameter a cubic Bézier takes for the straight pieces between them to
+ * stay within FLAT of it: at least 1, as bezier() flattens it. Internal: the line chart's curve
+ * flattens its pieces by it too (src/charts/curve.ts).
+ */
+export function cubicPieces(p0: Point, p1: Point, p2: Point, p3: Point): number {
+  return pieces(1, 6 * Math.max(bend(p0, p1, p2), bend(p1, p2, p3)));
+}
+
+/** |a − 2b + c|: how far b is from halfway between a and c, twice over. */
+function bend(a: Point, b: Point, c: Point): number {
+  return Math.hypot(a.x - 2 * b.x + c.x, a.y - 2 * b.y + c.y);
 }
 
 /** Pieces for a parameter that runs `span`, with the curve's second derivative at most `second`: see bezier(). */

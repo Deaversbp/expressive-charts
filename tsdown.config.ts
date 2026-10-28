@@ -72,8 +72,9 @@ const config: UserConfig[] = defineConfig([
     globalName: "ExpressiveCharts",
     minify: true,
     dts: false,
-    // tsdown would name it expressive-charts.iife.js.
-    outputOptions: { ...output, entryFileNames: "[name].global.js" }
+    // tsdown would name it expressive-charts.iife.js. Nothing tree-shakes a script-tag bundle, so it leaves out the
+    // `@__PURE__` marks the ES modules keep for a page's bundler.
+    outputOptions: { ...output, comments: { ...output.comments, annotation: false }, entryFileNames: "[name].global.js" }
   }
 ]);
 

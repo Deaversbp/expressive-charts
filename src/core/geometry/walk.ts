@@ -29,7 +29,7 @@ export interface Walk {
 }
 
 const clamp01 = (t: number): number => (t > 0 ? (t < 1 ? t : 1) : 0);
-const NONE: Gaps = Object.freeze([]);
+const NONE: Gaps = /* @__PURE__ */ Object.freeze([]);
 
 /** The segments must connect: each starts where the one before ends. The gaps are taken as given. */
 export function createWalk(segments: readonly PathSegment[], gaps: Gaps = NONE): Walk {

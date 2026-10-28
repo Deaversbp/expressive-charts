@@ -48,6 +48,8 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Changed
 
+- **Smaller pages that import only the motion core or `describe`.** A page that imports `motion` and `animated` is 1.7 KB gzipped, not 2.4, and one that imports `describe` and `matrix` 6.6 KB, not 7.2. They kept the tables the charts build when the package loads, such as the stylesheet's text and the time axis's steps, which are now marked so a bundler drops them when they aren't used. The same marks make pages that import charts up to 0.1 KB smaller, and the script-tag bundle 0.2 KB. Nothing to write instead.
+
 ### Fixed
 
 - **`delta` and `label` keep off other marks' labels.** When two lines ended close together, with their end labels pushed apart, one line's text could land on the other's end label; now it goes past both. They still pick their way from the mark's own labels, so another mark's label only takes the text further that way, never turns it. And text centred on a point, within 45° of vertical, goes 6 px past a label's top or bottom, not past the side its way leaves through, where it could sit on the label it was placed past.

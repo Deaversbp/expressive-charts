@@ -14,6 +14,8 @@ npm run size       # bundle sizes against their budgets, after a build
 npm run pack-check # after a build: the packed tarball, installed and used as a consumer would
 ```
 
+Vitest gives each test 15 s (`vitest.config.ts`), not its default 5: a few heavy tests take several seconds when other suites run on the same machine, or on CI's slower runner, though each takes about 1 s alone. A test that times itself keeps its own limit.
+
 Three TypeScripts are dev dependencies, each pinned exactly:
 
 - `typescript` (7.0.2), the native compiler, runs `typecheck`.
@@ -22,7 +24,7 @@ Three TypeScripts are dev dependencies, each pinned exactly:
 
 Each has a `tsc`, so `npx tsc` could run any of them: run TypeScript through the npm scripts, or by its path (`node node_modules/typescript/bin/tsc`).
 
-The build uses none of them. tsdown (`tsdown.config.ts`) bundles the package with Rolldown, whose oxc writes the declarations from each file alone, so **a new export needs an explicit type** wherever TypeScript would have to look at another file to infer it. `typecheck` says so (`isolatedDeclarations` in `tsconfig.json`): `export const describe = { bar: describeBar }` fails, and `export const describe: { bar: typeof describeBar } = { bar: describeBar }` passes. An exported function needs its return type.
+The build uses none of them. tsdown (`tsdown.config.ts`), 0.23.3 pinned exactly, bundles the package with Rolldown, whose oxc writes the declarations from each file alone, so **a new export needs an explicit type** wherever TypeScript would have to look at another file to infer it. `typecheck` says so (`isolatedDeclarations` in `tsconfig.json`): `export const describe = { bar: describeBar }` fails, and `export const describe: { bar: typeof describeBar } = { bar: describeBar }` passes. An exported function needs its return type.
 
 `pack-check` (`scripts/pack-check.mjs`) packs the package, installs the tarball in a new project in the system's temporary folder, imports every entry in Node as ES modules and as CommonJS with no DOM, and typechecks a small consumer against it with each of the three TypeScripts, under `bundler`, `node16` (ES module) and `node16` (CommonJS) resolution. Each must read its own declarations: `.d.ts` for `import`, `.d.cts` for `require`, the stylesheet's included. CI runs it after the build. `-- --keep` keeps the temporary project.
 
@@ -75,7 +77,7 @@ The capture runs on the fake clock, so a run draws the same frames each time, an
 `npm run size` measures the build (run `npm run build` first) and fails when a size is over its budget in `scripts/size-budget.json`. CI runs it on Node 24 and puts its tables in the job's summary. It measures:
 
 - each published JS file and the stylesheet, raw, gzip and brotli. An ES module entry counts the chunks it imports;
-- import sets: what a page that imports a few names pays, bundled from `dist/index.js` with Vite and minified. When a small set grows and you didn't change what it imports, something has broken tree-shaking, such as code that runs on import.
+- import sets: what a page that imports a few names pays, bundled from `dist/index.js` with Vite and minified. When a small set grows and you didn't change what it imports, something has broken tree-shaking, such as code that runs on import. A value built at a module's top level, with a call, a template with values in it or a spread, stays in every page that imports `dist/index.js`, so build it in a call marked `/* @__PURE__ */`, as `src/charts/render/theme.ts` does.
 
 Budgets are gzip sizes in KB (1,024 bytes). [architecture.md](docs/architecture.md#bundle-size) has today's sizes.
 

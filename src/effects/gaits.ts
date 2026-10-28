@@ -42,7 +42,7 @@ export interface StepOptions {
   readonly tilt?: number;
 }
 
-const STILL: GaitPose = Object.freeze({ lift: 0, spin: 0, tilt: 0 });
+const STILL: GaitPose = /* @__PURE__ */ Object.freeze({ lift: 0, spin: 0, tilt: 0 });
 
 /** Rolls without slipping: the spin is the distance over the radius. */
 function roll(): Gait {

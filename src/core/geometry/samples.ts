@@ -20,7 +20,8 @@ const MAX_GRID = 4096;
  * the walk, and to well under 1e-6 px for one off it, where the nearest point is a flat minimum.
  */
 const REFINE = 48;
-const GOLDEN = (Math.sqrt(5) - 1) / 2;
+/** The golden section, in a call marked pure, so a page that never samples leaves it out. */
+const GOLDEN = /* @__PURE__ */ (() => (Math.sqrt(5) - 1) / 2)();
 
 /**
  * Projects each point onto the nearest point of the mark's walk and returns the samples in `t` order

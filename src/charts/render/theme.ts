@@ -3,6 +3,7 @@
 // prefers-color-scheme, and on any element with data-theme="light" or "dark". Hosts theme a chart by
 // setting the custom properties; every default rule uses :where(), so host CSS overrides it without
 // specificity fights. The same text is injected as a <style> and shipped as dist/expressive-charts.css.
+// The values built at import are in calls marked pure, so a page that draws no chart leaves them out.
 
 import type { Color } from "../../core";
 
@@ -83,7 +84,7 @@ const COLOR_TOKENS = ["surface", "text", "text-muted", "grid", "axis", "focus", 
 type ColorToken = (typeof COLOR_TOKENS)[number];
 
 /** Light's colour tokens: the fallbacks in rules and inline styles, for a page that sets some tokens but has no stylesheet. */
-const TOKENS: Readonly<Record<string, string>> = Object.fromEntries(COLOR_TOKENS.map((name) => [name, themes.light[name]])) as Record<ColorToken, string>;
+const TOKENS: Readonly<Record<string, string>> = /* @__PURE__ */ Object.fromEntries(/* @__PURE__ */ COLOR_TOKENS.map((name) => [name, themes.light[name]])) as Record<ColorToken, string>;
 
 /** A series' colours as CSS: the mark colour and the stronger one used for hover emphasis. */
 export interface SeriesColors {
@@ -134,7 +135,7 @@ function declarations(theme: Theme, indent: string): string {
  * root says data-theme="light"; dark on data-theme="dark". In that order, so data-theme on any element
  * sets its subtree's theme. :where() keeps all of it at zero specificity.
  */
-const TOKEN_RULES = `:where(:root, [data-theme="light"]) {
+const TOKEN_RULES = /* @__PURE__ */ (() => `:where(:root, [data-theme="light"]) {
 ${declarations(themes.light, "  ")}
 }
 @media (prefers-color-scheme: dark) {
@@ -144,13 +145,13 @@ ${declarations(themes.dark, "    ")}
 }
 :where([data-theme="dark"]) {
 ${declarations(themes.dark, "  ")}
-}`;
+}`)();
 
 // Hover dims the parts in each other mark's body, not the whole mark, so its labels keep their
 // contrast. Not the body itself either: an effect's opacity is an attribute there, which a rule would
 // override. On the parts, the two multiply. The paths and icons the mark's runs draw in the overlay
 // dim with it, through their group (render/surface.ts); their text keeps its contrast, as labels do.
-const STYLES = `/* expressive-charts: theme tokens and default styles. Every rule has zero specificity, so your CSS wins. */
+const STYLES = /* @__PURE__ */ (() => `/* expressive-charts: theme tokens and default styles. Every rule has zero specificity, so your CSS wins. */
 ${TOKEN_RULES}
 :where(.ec-chart) { display: block; max-width: 100%; height: auto; overflow: visible; touch-action: pan-y; -webkit-tap-highlight-color: transparent; }
 :where(.ec-chart text) { font-variant-numeric: tabular-nums; }
@@ -228,7 +229,7 @@ ${TOKEN_RULES}
 :where(.ec-table thead th) { color: var(--ec-text-muted, ${TOKENS["text-muted"]}); font-size: 12px; font-weight: 600; }
 :where(.ec-table .ec-num) { text-align: right; }
 :where(.ec-table-caption, .ec-visually-hidden) { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
-`;
+`)();
 
 const MARKER = "data-expressive-charts";
 

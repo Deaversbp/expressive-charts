@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M8 are complete (§9). M8 built a tooltip that can be hovered, change labels that hold up, gaps in lines, long axes, the icon sets' fills and TypeScript 7. M9, for 0.4.0, is planned in §9: attachments on a par with charts, circles and shapes, Vega lines with gaps, the icon sets' faded parts, and TypeScript 7 building the declarations. **0.3.0 is on npm**, published from CI through npm's trusted publishing with provenance on 27 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.3.0)), after 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M9 are complete (§9). M9 built attachments on a par with charts, circles and shapes, Vega lines with gaps, the icon sets' faded parts, and TypeScript 7 building the declarations. **0.4.0 is on npm**, published from CI through npm's trusted publishing with provenance on 27 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.4.0)), after 0.3.0 earlier the same day, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -2551,7 +2551,7 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 
 **Status: complete (27 October 2026).** Every item on the list holds. Steps 1 to 7 built and checked the first eight, and 0.3.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 8).
 
-### M9: Attachments on a par with charts, and circles and shapes (0.4.0)
+### M9: Attachments on a par with charts, and circles and shapes (0.4.0) ✅
 
 Effects on more of what other libraries draw: attachments that change their effects and end their hover as charts do, a chart switch in a link, circles and any SVG shape read by `expressive()`, Vega lines with gaps, the icon sets' faded parts, TypeScript 7 building the declarations, and last, 0.4.0 on npm.
 
@@ -2912,11 +2912,19 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 
 **Wave 4:**
 
-8. **Publish 0.4.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.4.0 entry, README's status, its script tag (`@0.4`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.4.0's code, and this plan's status line and M9's ✅.
+8. ✅ **Publish 0.4.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.4.0 entry, README's status, its script tag (`@0.4`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.4.0's code, and this plan's status line and M9's ✅.
    - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you, compared with 0.3.0's, since tsdown builds it) and `npm publish --dry-run`. The PR has its results.
    - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com.
    - **Then, on your go-ahead in that session:** the `v0.4.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
    - **After:** check npm (the version, README, provenance), install 0.4.0 in a fresh project and load each entry as an ES module and as CommonJS, and check jsDelivr's `@0.4`.
+   - **Built** (27 October 2026): [0.4.0 is on npm](https://www.npmjs.com/package/expressive-charts/v/0.4.0) through trusted publishing with provenance, and [its release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.4.0) is on GitHub.
+     - **The release PR** ([#106](https://github.com/Deaversbp/expressive-charts/pull/106)): 0.4.0 in `package.json`, the lockfile and `VERSION`; CHANGELOG's 0.4.0 entry, the Unreleased lists under a short summary; README's status, its script tag at `expressive-charts@0.4` (api.md's too), since `@0.3` keeps serving 0.3.x, and its sizes as measured, a bar chart about 30 KB gzipped and everything 76 KB; and architecture.md's size tables, measured again on 0.4.0's code, without the 0.3.0 column step 5 put beside them. `release.yml` and CONTRIBUTING didn't change: the workflow runs CI's checks on Node 24, the tsdown build among them.
+     - **CHANGELOG's lists,** which seven steps and #105 wrote, needed two edits: `expressive()` reading circles and shapes moved up in Added, beside `describe.shape`, and the tsdown entry gives its saving on the same code, 6.6 KB gzipped, not step 5's size for the script-tag bundle, 72 KB, since it's 75.8 on 0.4.0's code.
+     - **The dry run** passed on `322cded` with the PR: `typecheck`, 2,452 tests, the build, every size within its budget, so none changed (`barChart` 30.5 KB, the line page's set 37.1, `expressive` and `travel` 31.1, everything 76.0 of 76.5 and the script-tag bundle 75.8), `pack-check` on TypeScript 5.4, 6 and 7, `npm pack` and `npm publish --dry-run`.
+     - **The first tarball tsdown built** has 37 files, as 0.3.0's: the same files but the hashed chunks, named by their first module (`define-…`, `path-data-…` and `transition-…`, not `chunk-…`), and every path that `exports`, `main`, `module` and `types` name. Built on Windows it's 1.5 MB packed and 5.4 MB unpacked, since the checkout's CRLF goes into the source maps. Built from an LF copy, as CI builds it, it's 1.44 and 5.29 MB, and npm's is 5,288,569 bytes unpacked, the same.
+     - **You** checked that the trusted publisher was still on npmjs.com, and approved the release notes.
+     - **The release.** Main's CI was green on `5254690`. On your go-ahead, `v0.4.0` was created there at 06:21 UTC on 28 October (23:21 on the 27th, Pacific time), and its run published with provenance at 06:23 ([Sigstore's log](https://search.sigstore.dev/?logIndex=3533951497)), first time, with no `ENEEDAUTH`.
+     - **After.** npm shows 0.4.0 as `latest`, with README, its four GIFs, and "Built and signed on GitHub Actions" from `5254690` and `release.yml`. Its provenance is SLSA v1, from `refs/tags/v0.4.0`. A fresh project installs it with no dependencies, `npm audit signatures` verifies its registry signature and its attestation, and all three entries load as ES modules and as CommonJS, with the same names both ways, `VERSION` 0.4.0 and the stylesheet. jsDelivr serves the script tag at `expressive-charts@0.4` at once, the same bytes as the build, and the demo pages load. No placeholder version came.
 
 **Done when:**
 - **Attachments.** `expressive()` and `fromVegaView()` have `update({ on })` and `leave()`, and `donut.html`'s D3 pie swaps its effects without being attached again.
@@ -2929,6 +2937,8 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **The demos** show all of it, with their screenshots and the audit, and script J passed with NVDA + Chrome.
 - **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise changes only by `describe.shape`, `ShapeSpec` and the icon fields, which are additions, and by `checkEffect`'s data on a gap, a fix.
 - **0.4.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M9 is done.
+
+**Status: complete (27 October 2026).** Every item on the list holds. Steps 1 to 7 built and checked the first nine, and 0.4.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 8).
 
 ### Backlog (after 0.1)
 

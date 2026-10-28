@@ -304,6 +304,30 @@ describe('lineChart({ hover: "point" }): the tooltip', () => {
   });
 });
 
+describe('lineChart({ hover: "point", curve: "monotone" })', () => {
+  it("hovers, dims and moves between the points on curved lines, its stops following them through a change of curve", async () => {
+    const { chart, svg, line, stop, at, pointTo, settle } = setup({ curve: "monotone" });
+    const events = listen(chart);
+    // The points sit at the rows, on the curve: the nearest is found among them, as on straight lines.
+    const goals = at("goals@3");
+    pointTo(goals.x + 2, goals.y - 3, "pointerover");
+    expect(events).toEqual(["hover goals@3 pointer 1/1"]);
+    expect([svg.classList.contains("ec-hovering"), line("goals").classList.contains("ec-hot-line"), line("xg").classList.contains("ec-hot-line")]).toEqual([true, true, false]);
+    chart.leave();
+    chart.focus("goals@2");
+    press(document.activeElement!, "ArrowUp");
+    expect(focused()).toBe("xg@2");
+    press(document.activeElement!, "ArrowRight");
+    expect(focused()).toBe("xg@3");
+    // Straightening the lines moves no point, and keeps focus and each stop on its point.
+    await settle(chart.update({ curve: "linear" }));
+    expect(focused()).toBe("xg@3");
+    const xg = at("xg@3");
+    expect([Number(stop("xg@3").querySelector("circle")!.getAttribute("cx")), Number(stop("xg@3").querySelector("circle")!.getAttribute("cy"))]).toEqual([xg.x, xg.y]);
+    expect(events.slice(-1)).toEqual(["hover xg@3 keyboard 1/1"]);
+  });
+});
+
 describe('lineChart({ hover: "point" }): a tooltip function written for points', () => {
   /** A function that needs the point's series, as `(d, { series })` would. */
   const forPoints = (d: Week, point?: { readonly series: string }) => {

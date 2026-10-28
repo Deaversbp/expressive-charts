@@ -7,7 +7,8 @@
 // stop. reveal(x) shows the data up to x, as playback drives it. update() animates the change:
 // staged in presentation (values, then positions), in one short stage in analysis, at once when
 // motion is off. x is numbers or Dates: a time axis has its own ticks and wording (time.ts), and is
-// otherwise drawn in ms like any number.
+// otherwise drawn in ms like any number. With `curve: "monotone"` the lines bend between their rows
+// (curve.ts), and a change of curve eases them from straight to curved or back.
 //
 // The chart never names an effect: it resolves `on` through the presets it's handed and plays them
 // through the runner, which draws on the SVG surface. What doesn't depend on lines (events, hover and
@@ -23,6 +24,7 @@ import { report } from "../core/report";
 import { createRunner, type RunInput } from "../core/runner";
 import { chartAnnouncer, changeText, type Announcer } from "./announce";
 import { toColorAssignment } from "./colors";
+import { bendOf } from "./curve";
 import { chartLegend } from "./legend";
 import {
   DOT_RADIUS,
@@ -281,9 +283,9 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   let announcer: Announcer | undefined = current.announce ? chartAnnouncer(svg) : undefined;
 
   // ── Animated state ─────────────────────────────────────────────────────────
-  // Each row has its x, its values and its presence, and the chart has the scale and the box, so a
-  // new update() mid-flight retargets each from where it is and nothing jumps. Where a line is comes
-  // from them: through every row as it is now, up to the reveal.
+  // Each row has its x, its values and its presence, and the chart has the scale, the box and how far
+  // its lines are curved, so a new update() mid-flight retargets each from where it is and nothing
+  // jumps. Where a line is comes from them: through every row as it is now, up to the reveal.
 
   /** Something moved since the last frame was drawn. A line depends on every row, so a frame draws everything. */
   let dirty = false;
@@ -292,6 +294,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   };
   const scale = animated(laidOut.frame.scale, interpolateRecord, { clock, motion, onChange: changed });
   const box = animated(laidOut.frame.box, interpolateRecord, { clock, motion, onChange: changed });
+  /** How far the lines are curved: 0 straight, 1 the monotone curve. */
+  const curved = animated(bendOf(laidOut.curve), interpolateNumber, { clock, motion, onChange: changed });
   const yTicks = new Map<number, TickRecord>();
   const xTicks = new Map<number, TickRecord>();
   /** Per series, the decimals an end label counts in: the values' own, or both sides' while a change plays. */
@@ -367,7 +371,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   function placedFor(next: LineLayout<D>): { readonly lines: Map<string, PlacedLine<D>>; readonly points: Map<string, PlacedPoint<D>> } {
     const states = next.rows.map(restState);
     return {
-      lines: new Map(placeLines(next.frame, states, next.series, drawnThrough(next), next.time, endLabels(next.decimals)).map((line) => [line.series, line])),
+      lines: new Map(placeLines(next.frame, states, next.series, drawnThrough(next), next.time, endLabels(next.decimals), bendOf(next.curve)).map((line) => [line.series, line])),
       points: new Map(states.flatMap((state) => placePoints(next.frame, state, next.series, next.time)).map((point) => [point.key, point]))
     };
   }
@@ -498,7 +502,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     return drawnRows
       .map((record) => {
         const { x, values } = stateOf(record);
-        return { record, state: { key: record.key, datum: record.row.datum, x, values, missing: record.row.missing } };
+        const presence = record.anchor && record.presence.value < 1 ? { presence: record.presence.value } : {};
+        return { record, state: { key: record.key, datum: record.row.datum, x, values, missing: record.row.missing, ...presence } };
       })
       .sort((a, b) => a.state.x - b.state.x);
   }
@@ -607,7 +612,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   function paintLines(frame: LineFrame, states: readonly RowState<D>[]): void {
     const drawnLines = [...lineOrder, ...leavingLines()];
     if (states.length === 0 || drawnLines.length === 0) return;
-    const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut), laidOut.time, endLabels(counting));
+    const placed = placeLines(frame, states, drawnLines.map((line) => line.series), drawnThrough(laidOut), laidOut.time, endLabels(counting), curved.value);
     showAll(drawnLines.map((line, i) => ({ record: line, placed: placed[i]! })));
     paintLabels(new Map(drawnLines.map((line, i) => [line, placed[i]!])));
   }
@@ -1240,8 +1245,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   /**
    * Sends every animated value toward `next`, and returns the animations started. Presentation stages
    * the change: values first (the rows' values and the value scale, ticks fading, series' lines fading
-   * in or out), then positions (rows move along x, new rows grow out of their anchors and leaving rows
-   * fold into theirs, the x range and the box follow). A stage with nothing to do is skipped. Analysis
+   * in or out, the lines' curve), then positions (rows move along x, new rows grow out of their anchors
+   * and leaving rows fold into theirs, the x range and the box follow). A stage with nothing to do is skipped. Analysis
    * runs it all as one stage, which its scaling keeps short. A jump (motion off, a resize) lands at once.
    */
   function retarget(next: LineLayout<D>, jump: boolean): Promise<TweenResult>[] {
@@ -1264,7 +1269,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       [...yTicks.values()].some((tick) => busy(tick.opacity, tick.wanted ? 1 : 0, same)) ||
       rowOrder.some((record) => busy(record.values, record.row.levels, sameFields)) ||
       lineOrder.some((line) => busy(line.presence, 1, same)) ||
-      goingLines.some((line) => busy(line.presence, 0, same));
+      goingLines.some((line) => busy(line.presence, 0, same)) ||
+      busy(curved, bendOf(next.curve), same);
     const positions =
       busy(box, frame.box, sameFields) ||
       [...xTicks.values()].some((tick) => busy(tick.opacity, tick.wanted ? 1 : 0, same)) ||
@@ -1287,6 +1293,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       else value.set(to);
     };
     move(scale, frame.scale, sameFields, first);
+    move(curved, bendOf(next.curve), same, first);
     move(box, frame.box, sameFields, second);
     for (const tick of yTicks.values()) move(tick.opacity, tick.wanted ? 1 : 0, same, first);
     for (const tick of xTicks.values()) move(tick.opacity, tick.wanted ? 1 : 0, same, second);
@@ -1519,6 +1526,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       for (const record of leaving.values()) record.leave?.resolve();
       scale.stop();
       box.stop();
+      curved.stop();
       for (const tick of [...yTicks.values(), ...xTicks.values()]) tick.opacity.stop();
       events.clear();
       rows.clear();

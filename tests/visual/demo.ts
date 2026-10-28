@@ -68,12 +68,27 @@ export const lineDemo: Demo = {
   }
 };
 
-/** demo/morph.html: the donut and the columns in one chartSwitch. */
+/** demo/morph.html: the donut and the columns in one chartSwitch, and the bars linked with it. */
 export const morphDemo: Demo = {
   path: "/morph.html",
   async ready(page) {
     await expect(page.locator('#shots .ec-switch-view[data-view="donut"] .ec-mark')).toHaveCount(4);
     await expect(page.locator('#shots .ec-switch-view[data-view="columns"] .ec-mark')).toHaveCount(4);
+    await expect(page.locator("#ranked .ec-mark")).toHaveCount(4);
+  }
+};
+
+/** demo/shapes.html: a D3 scatter, Plot's dots, D3 curves and D3 areas, each through expressive(). */
+export const shapesDemo: Demo = {
+  path: "/shapes.html",
+  // About 2,080 px at 1,000 px wide.
+  height: 2200,
+  async ready(page) {
+    // expressive() has named each chart's circles or paths, so it's attached to all four.
+    await expect(page.locator('#d3-scatter circle[role="img"]')).toHaveCount(8);
+    await expect(page.locator('#plot-dots circle[role="img"]')).toHaveCount(8);
+    await expect(page.locator('#d3-curve path.line[role="img"]')).toHaveCount(2);
+    await expect(page.locator('#d3-area path.area[role="img"]')).toHaveCount(2);
   }
 };
 

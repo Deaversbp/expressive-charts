@@ -1,11 +1,11 @@
 // Screenshots of demo/morph.html on a stopped clock: each view in light and dark, a switch half way
 // with each mapping, and the focus ring after a switch. Beside them, DOM checks: how long a switch
 // takes in each mode, reduced motion, a switch back mid-way, the labels swapping their text, the
-// announcement, the mapping control, and only the view shown being readable. Names start with
-// "morph-", since screenshot names are shared across files.
+// announcement, the mapping control, only the view shown being readable, and the bars linked with the
+// switch, across a switch. Names start with "morph-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { FRAME, morphDemo, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
+import { FRAME, hoverShape, morphDemo, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
 
 type View = "donut" | "columns";
 type Align = "Drop" | "Unroll";
@@ -21,6 +21,13 @@ const announcer = (page: Page): Locator => shots(page).getByRole("status");
 const alignButton = (page: Page, align: Align): Locator => page.getByRole("group", { name: "Morph" }).getByRole("button", { name: align, exact: true });
 /** An outcome's mark in a view: the focusable element. */
 const mark = (page: Page, name: View, outcome: string): Locator => view(page, name).locator(`.ec-mark[data-key="${outcome}"]`);
+
+/** The bars beside the switch, in one link() with it, and an outcome's bar there. */
+const ranked = (page: Page): Locator => page.locator("#ranked");
+const rankedBar = (page: Page, outcome: string): Locator => ranked(page).locator(`.ec-mark[data-key="${outcome}"]`);
+
+/** The keys a chart shows hovered, its own hover or a link's. */
+const hot = (chart: Locator): Promise<(string | null)[]> => chart.locator(".ec-hot").evaluateAll((marks) => marks.map((mark) => mark.getAttribute("data-key")));
 
 /** A switch at 950 ms base: 950 in Presentation, 200 in Analysis. */
 const SWITCH = { Presentation: 950, Analysis: 200 } as const;
@@ -230,25 +237,93 @@ async function readable(page: Page): Promise<string[]> {
 test.describe("the screen reader", () => {
   const donutView = ["group: Shot outcomes, share of total", "image: Goal: 58 shots, 14%", "image: Saved: 112 shots, 28%", "image: Off target: 149 shots, 37%", "image: Blocked: 87 shots, 21%", "DisclosureTriangle: Data table"];
   const columnsView = ["group: Shot outcomes, counts", "image: Goal: 58 shots", "image: Saved: 112 shots", "image: Off target: 149 shots", "image: Blocked: 87 shots", "DisclosureTriangle: Data table"];
+  // The bars beside the switch, largest first, which can always be read.
+  const bars = ["group: Shot outcomes, largest first", "image: Off target: 149 shots", "image: Saved: 112 shots", "image: Blocked: 87 shots", "image: Goal: 58 shots", "DisclosureTriangle: Data table"];
+  /**
+   * What can be read, in any order: Chrome lists the two charts' nodes interleaved, by when they were
+   * made, not in the document's order. Each list says how many of each there are.
+   */
+  const sorted = (lines: readonly string[]): string[] => [...lines].sort();
 
   test("only the view shown can be read, and the switch announces the new one", async ({ page, browserName }) => {
     test.skip(browserName !== "chromium", "It reads Chrome's accessibility tree, over CDP.");
     await openDemo(page, morphDemo);
-    expect(await readable(page)).toEqual(donutView);
+    expect(sorted(await readable(page))).toEqual(sorted([...donutView, ...bars]));
 
     await toggle(page).click();
     // Mid-switch, neither view can be read: both are inert, and the new one is hidden until it lands.
     await page.clock.runFor(300);
-    expect(await readable(page)).toEqual([]);
+    expect(sorted(await readable(page))).toEqual(sorted(bars));
     await page.clock.runFor(REST);
     // The announcer adds a no-break space every other time, so the same text twice is still a change.
     await expect(announcer(page)).toHaveText(/^Shot outcomes, counts\s?$/);
-    expect(await readable(page)).toEqual(columnsView);
+    expect(sorted(await readable(page))).toEqual(sorted([...columnsView, ...bars]));
 
     await toggle(page).click();
     await page.clock.runFor(REST);
     await expect(announcer(page)).toHaveText(/^Shot outcomes, share of total\s?$/);
-    expect(await readable(page)).toEqual(donutView);
+    expect(sorted(await readable(page))).toEqual(sorted([...donutView, ...bars]));
+  });
+});
+
+test.describe("the link", () => {
+  test("hovering a slice hovers its bar, and a bar its slice, by the pointer and the keyboard", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    await hoverShape(page, mark(page, "donut", "Saved").locator(".ec-slice"));
+    expect(await hot(ranked(page))).toEqual(["Saved"]);
+    // A linked mark shows no tooltip: the chart under the pointer has it.
+    await expect(ranked(page).locator(".ec-tooltip-shown")).toHaveCount(0);
+    await pointerAway(page);
+    expect(await hot(ranked(page))).toEqual([]);
+
+    await rankedBar(page, "Goal").locator(".ec-segment").hover();
+    expect(await hot(view(page, "donut"))).toEqual(["Goal"]);
+    // The view that isn't shown is never hovered.
+    expect(await hot(view(page, "columns"))).toEqual([]);
+    await pointerAway(page);
+    expect(await hot(view(page, "donut"))).toEqual([]);
+
+    // The bars are largest first, and the keys follow them.
+    await tabInto(page, ranked(page));
+    await expect(rankedBar(page, "Off target")).toBeFocused();
+    expect(await hot(view(page, "donut"))).toEqual(["Off target"]);
+    await page.keyboard.press("ArrowRight");
+    await expect(rankedBar(page, "Saved")).toBeFocused();
+    expect(await hot(view(page, "donut"))).toEqual(["Saved"]);
+    await page.keyboard.press("Escape");
+    expect(await hot(view(page, "donut"))).toEqual([]);
+  });
+
+  test("follows the switch: a held hover shows in the view that lands, the columns link back, and so does a rebuilt switch", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    // The pointer rests on a bar while the switch is pressed from the keyboard.
+    await rankedBar(page, "Blocked").locator(".ec-segment").hover();
+    expect(await hot(view(page, "donut"))).toEqual(["Blocked"]);
+    await toggle(page).focus();
+    await page.keyboard.press("Enter");
+    // Mid-switch, neither view can be reached, so neither shows it.
+    await page.clock.runFor(300);
+    await expectSwitching(page);
+    expect([...(await hot(view(page, "donut"))), ...(await hot(view(page, "columns")))]).toEqual([]);
+    await page.clock.runFor(REST);
+    await expectLanded(page, "columns");
+    expect(await hot(view(page, "columns"))).toEqual(["Blocked"]);
+    await pointerAway(page);
+    expect(await hot(view(page, "columns"))).toEqual([]);
+
+    await mark(page, "columns", "Saved").locator(".ec-segment").hover();
+    expect(await hot(ranked(page))).toEqual(["Saved"]);
+    await pointerAway(page);
+
+    // A new mapping builds the switch again, and links the new one.
+    await alignButton(page, "Drop").focus();
+    await page.keyboard.press("Space");
+    await morphDemo.ready(page);
+    await expectLanded(page, "columns");
+    await mark(page, "columns", "Goal").locator(".ec-segment").hover();
+    expect(await hot(ranked(page))).toEqual(["Goal"]);
+    await rankedBar(page, "Off target").locator(".ec-segment").hover();
+    expect(await hot(view(page, "columns"))).toEqual(["Off target"]);
   });
 });
 

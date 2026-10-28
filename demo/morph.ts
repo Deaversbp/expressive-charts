@@ -1,8 +1,21 @@
 // The prototype's shot outcomes as a donutChart and as category columns on barChart, in one
 // chartSwitch: each slice morphs into its own column and back (morph()), its labels moving with it. A
 // toggle button switches, and a click mid-way reverses; the align control rebuilds the switch with the
-// other mapping, so the two can be compared.
-import { barChart, chartSwitch, donutChart, morph, motionSwitch, type ChartSwitch, type ColorAssignment, type MorphAlign } from "../src/index";
+// other mapping, so the two can be compared. Beside it, the same outcomes as bars, largest first, in
+// one link() with the switch: hovering a bar hovers its slice or column, and the other way round.
+import {
+  barChart,
+  chartSwitch,
+  colorAssignment,
+  donutChart,
+  link,
+  morph,
+  motionSwitch,
+  type ChartSwitch,
+  type ColorAssignment,
+  type Link,
+  type MorphAlign
+} from "../src/index";
 
 interface Outcome {
   readonly outcome: string;
@@ -46,9 +59,26 @@ const views = {
 };
 type View = keyof typeof views;
 
+/** Each outcome's palette slot, pinned, and shared by the switch's views and the bars beside it, so an outcome has one colour in all three. */
+const colors = colorAssignment({ Goal: 1, Saved: 2, "Off target": 3, Blocked: 4 });
+
+/** Beside the switch: the same outcomes as bars, largest first, coloured by category as the columns are. */
+const ranked = barChart<Outcome>("#ranked", {
+  label: "Shot outcomes, largest first",
+  data: outcomes,
+  // Bars, not columns, so they can't be taken for the switch's other view: the outcome down the side.
+  y: "outcome",
+  x: "shots",
+  sort: "value",
+  colorBy: "category",
+  colors,
+  table: { category: "Outcome" }
+});
+
 /** morph()'s default mapping. The control picks either; the page starts on the library's default. */
 let align: MorphAlign = "unroll";
 let shots: ChartSwitch<typeof views> | undefined;
+let linked: Link | undefined;
 
 const toggleButton = document.querySelector<HTMLButtonElement>("#toggle");
 
@@ -58,13 +88,18 @@ function showToggle(): void {
 }
 
 /**
- * Builds the switch with the picked mapping, in `initial`. A switch's transition can't change while
- * it lives, so a new pick destroys it and builds it again, landed on the view it was showing or
- * heading for. Focus stays on the picker, which isn't rebuilt.
+ * Builds the switch with the picked mapping, in `initial`, and links it with the bars. A switch's
+ * transition can't change while it lives, so a new pick destroys it and builds it again, landed on the
+ * view it was showing or heading for, and links the new one. Focus stays on the picker, which isn't
+ * rebuilt.
  */
 function build(initial: View): void {
+  linked?.destroy();
   shots?.destroy();
-  shots = chartSwitch("#shots", { views, initial, transition: morph({ align }), announce: true });
+  shots = chartSwitch("#shots", { views, initial, transition: morph({ align }), colors, announce: true });
+  // Linked by outcome, each mark's key. The switch takes part through its view on show, so the link
+  // holds across a switch: a hover held in the bars shows in the view that lands.
+  linked = link([shots, ranked]);
   showToggle();
 }
 build("donut");

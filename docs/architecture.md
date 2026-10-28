@@ -1108,7 +1108,7 @@ Each published JS file and the stylesheet:
 | File | raw | gzip | brotli | gzip budget |
 | --- | ---: | ---: | ---: | ---: |
 | `dist/expressive-charts.css` | 10.7 KB | 2.4 KB | 2.0 KB | 2.5 KB |
-| `dist/expressive-charts.global.js` | 230.0 KB | 75.8 KB | 64.9 KB | 79.5 KB |
+| `dist/expressive-charts.global.js` | 230.0 KB | 75.8 KB | 64.9 KB | 88 KB |
 | `dist/icons/sport.cjs` | 7.3 KB | 2.6 KB | 2.4 KB | 3.5 KB |
 | `dist/icons/sport.js` + 2 chunks | 10.8 KB | 4.0 KB | 3.6 KB | 4.5 KB |
 | `dist/index.cjs` | 417.4 KB | 108.0 KB | 85.2 KB | 124 KB |

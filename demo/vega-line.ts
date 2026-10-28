@@ -16,10 +16,15 @@ export interface Row {
   readonly value: number;
 }
 
+/** How Vega draws the lines between their points: its `interpolate`. */
+export type Curve = "linear" | "monotone";
+
 export interface VegaLine {
   readonly view: View;
   /** Draws it again at the box's width. */
   resize(): Promise<void>;
+  /** Draws it again straight or curved, through the spec's `curve` signal. */
+  curve(curve: Curve): Promise<void>;
 }
 
 /** The colours Vega is given; line.html's CSS maps them to the theme, light or dark. */
@@ -50,7 +55,9 @@ function spec(season: readonly Week[], width: number): TopLevelSpec {
     autosize: { type: "pad" },
     background: "transparent",
     data: { name: "season", values: rowsOf(season) },
-    mark: { type: "line", strokeWidth: STROKE, strokeCap: "butt", strokeJoin: "round" },
+    // Straight to start with: the page sets the signal to "monotone" for a curve, and Vega redraws the paths.
+    params: [{ name: "curve", value: "linear" }],
+    mark: { type: "line", strokeWidth: STROKE, strokeCap: "butt", strokeJoin: "round", interpolate: { expr: "curve" } },
     encoding: {
       x: {
         field: "week",
@@ -80,6 +87,9 @@ export async function drawVegaLine(box: HTMLElement, season: readonly Week[]): P
       if (next === width) return;
       width = next;
       await view.width(width - 44).runAsync();
+    },
+    async curve(curve) {
+      await view.signal("curve", curve).runAsync();
     }
   };
 }

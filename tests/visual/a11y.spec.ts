@@ -1,6 +1,7 @@
 // The accessibility audit's automatic checks (docs/a11y-audit.md has the rest, and the results).
 // axe-core, a pinned dev dependency, runs its WCAG 2.2 A and AA rules on every demo page: in light and
-// dark, at 320 px wide, under forced colours, and on morph.html mid-switch. Beside it, DOM checks for
+// dark, at 320 px wide, under forced colours, on morph.html mid-switch, and on line.html with Curved and
+// Nearest point picked. Beside it, DOM checks for
 // what axe can't see: the tab order with a visible focus at every stop, no sideways scroll at 320 px,
 // the tooltip clear of the focus ring, dismissed by Escape and hoverable, every label at 4.5:1 while
 // another mark is hovered, nothing moving by itself after 5 s, and legends keeping their colours under
@@ -47,7 +48,8 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
     demo: lineDemo,
     stops: [
       ...MOTION,
-      ...["Play season", "Matchweek", "Matchweek 1: 0 goals, 0.6 xG", "Data table", "Goals scored: 56 goals by matchweek 38"],
+      ...["Play season", "Matchweek", "Straight", "Curved", "Each week", "Nearest point"],
+      ...["Matchweek 1: 0 goals, 0.6 xG", "Data table", "Goals scored: 56 goals by matchweek 38"],
       ...["Matchweek 1: 0 goals, 0.6 xG", "Data table", "Goals scored: 56 goals by matchweek 38, matchweeks 9 and 10 missing"],
       "Goals scored: 56 goals by matchweek 38"
     ],
@@ -167,14 +169,28 @@ test.describe("axe", () => {
     }
 
     test(`${name}.html at 320 px, with no sideways scroll`, async ({ page }) => {
-      // Tall enough that openDemo's check passes: the page is several screens long at this width.
-      await page.setViewportSize({ width: 320, height: 6000 });
+      // Tall enough that openDemo's check passes: the page is several screens long at this width, the
+      // line page about 6,200 px.
+      await page.setViewportSize({ width: 320, height: 7000 });
       await openAtRest(page, demo);
       const { scrollWidth, clientWidth } = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
         clientWidth: document.documentElement.clientWidth
       }));
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+      expect(await axeViolations(page)).toEqual([]);
+    });
+  }
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`line.html with Curved and Nearest point picked, a point focused, ${colorScheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openAtRest(page, lineDemo);
+      for (const name of ["Curved", "Nearest point"]) await page.getByRole("button", { name, exact: true }).click();
+      await page.clock.runFor(REST);
+      await tabInto(page, page.locator("#line"));
+      await page.clock.runFor(REST);
+      await expect(page.locator('#line .ec-stop[data-key="goals@1"]')).toBeFocused();
       expect(await axeViolations(page)).toEqual([]);
     });
   }

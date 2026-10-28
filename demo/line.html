@@ -27,6 +27,9 @@
   @media (min-width: 860px) {
     .pair { grid-template-columns: 1fr 1fr; }
     .pair > .card { grid-row: span 3; grid-template-rows: subgrid; }
+    /* The first chart's toggles take a row of their own, which the D3 line's card leaves empty, so the two charts still start at the same height. */
+    .pair.toggled > .card { grid-row: span 4; }
+    .pair.toggled > .card > :last-child { grid-row: 4; }
     /* The Vega-Lite line and the differences share a row, but not their rows: one card has a chart, the other a list. */
     .pair.free > .card { grid-row: auto; grid-template-rows: none; }
   }
@@ -35,11 +38,21 @@
   .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
   .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
   .note { font-size: 14px; }
-  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .bar, .toggles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
   /* playButton() appends its button here, first in the bar. */
   .slot { display: contents; }
   .status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 17ch; }
   input[type="range"] { flex: 1 1 200px; min-width: 0; max-width: 520px; accent-color: var(--accent); }
+  /* The first chart's toggles, as the shapes page's picker: each with a visible label naming its group, kept on one line with it. */
+  .pick { display: inline-flex; align-items: center; gap: 8px; }
+  .label { font-size: 13px; color: var(--muted); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
+  /* A whole number of px high, so the charts below the toggles keep their place on the pixel grid. */
+  .seg button { font: inherit; font-size: 13px; line-height: 20px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+  /* Forced colours drop the wash, which leaves only the weight: the pressed button takes the viewer's selection colours, as the motion switch does. */
+  @media (forced-colors: active) { .seg button[aria-pressed="true"] { background: Highlight; color: HighlightText; } }
+  .seg button:hover { background: var(--wash); }
   /* The page's own controls only: the charts draw their own focus rings. */
   button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
@@ -107,10 +120,26 @@
       <span class="status" id="week-status">Through matchweek 38</span>
     </div>
 
-    <div class="pair">
+    <div class="pair toggled">
       <section class="card" aria-labelledby="line-title">
         <h2 id="line-title">Goals vs expected goals, season to date</h2>
-        <p class="note">The library's own <code>lineChart</code>. The goals line turns red wherever the team has scored fewer goals than its chances were worth, and the ball rides its leading edge as the season plays. Hover anywhere, or Tab in and use the arrow keys, to read both lines and the gap week by week.</p>
+        <p class="note">The library's own <code>lineChart</code>. The goals line turns red wherever the team has scored fewer goals than its chances were worth, and the ball rides its leading edge as the season plays. Hover anywhere, or Tab in and use the arrow keys, to read both lines and the gap week by week. The toggles curve its lines with <code>update({ curve })</code>, and hover the nearest point instead of the week with <code>update({ hover })</code>, here and on the chart with missing weeks.</p>
+        <div class="toggles">
+          <span class="pick">
+            <span class="label" id="curve-label">Line</span>
+            <span class="seg" id="curve" role="group" aria-labelledby="curve-label">
+              <button type="button" data-value="linear" aria-pressed="true">Straight</button>
+              <button type="button" data-value="monotone" aria-pressed="false">Curved</button>
+            </span>
+          </span>
+          <span class="pick">
+            <span class="label" id="hover-label">Hover</span>
+            <span class="seg" id="hover" role="group" aria-labelledby="hover-label">
+              <button type="button" data-value="x" aria-pressed="true">Each week</button>
+              <button type="button" data-value="point" aria-pressed="false">Nearest point</button>
+            </span>
+          </span>
+        </div>
         <div id="line"></div>
       </section>
 
@@ -147,7 +176,7 @@
   <div class="pair free">
     <section class="card" aria-labelledby="vega-title">
       <h2 id="vega-title">And on a Vega-Lite line</h2>
-      <p class="note">Drawn by Vega as SVG. <code>fromVegaView()</code> reads its line mark from the View's scenegraph and adds the same decoration. It shows the whole season, since Vega redraws its marks on every data change.</p>
+      <p class="note">Drawn by Vega as SVG. <code>fromVegaView()</code> reads its line mark from the View's scenegraph and adds the same decoration. It shows the whole season, since Vega redraws its marks on every data change. It follows the first chart's Straight or Curved toggle: Vega draws it again with <code>interpolate</code> <code>"linear"</code> or <code>"monotone"</code>, from a signal, and <code>fromVegaView()</code> reads the curve from the path Vega draws, with no <code>refresh()</code>.</p>
       <div class="vega-box">
         <div class="legend"><span><i class="swatch-goals"></i>Goals scored</span><span><i class="swatch-xg"></i>Expected goals (xG)</span><span><i class="swatch-below"></i>Goals below xG</span></div>
         <div id="vega-line"></div>
@@ -164,6 +193,10 @@
         <li>The table's headers are the series' names, "Goals scored" and "Expected goals (xG)", and its values share the chart's one format, so an xG of 20.0 reads "20".</li>
         <li>A missing week is <code>null</code>, never 0: a zero would pull the season-to-date line down to the axis and back. The names, the tooltip and the table say "missing", since "no goals" reads as none scored.</li>
         <li>Matchweeks 3 to 6 have goals below xG, but no red: with no xG for weeks 4 and 5, there's nothing to compare, so <code>threshold</code> colours nothing rather than guess.</li>
+        <li>Curved is <code>curve: "monotone"</code>, d3's <code>curveMonotoneX</code>. It goes through every week's value, and between two weeks it stays between their values, so it never overshoots: the line never shows a total the season didn't have. Basis, cardinal and natural curves overshoot or cut past the values, and a step's corners would jolt the ball.</li>
+        <li>On a curve, the red still starts and ends where the drawn lines cross, since the chart samples each bend. The Vega-Lite line is sampled at its weeks, so its red can start a few px from the crossing between them.</li>
+        <li>Nearest point hovers one point, not a week, with no crosshair. Its line, the red and the ball stay at full strength, and the other line, its points and its decorations dim. Text doesn't dim: the end labels, the axes and the tooltip keep their contrast. The tooltip and each point's name give its one value.</li>
+        <li>The toggles drive both <code>lineChart</code>s. With missing weeks, each run between gaps curves on its own, and with Nearest point, Left and Right pass over a missing week to the line's next point, and Up and Down do nothing where the other line is missing.</li>
       </ul>
     </section>
   </div>
@@ -174,6 +207,8 @@
       <li>Press <b>Play season</b>: the goals line turns red wherever it falls below xG as it's drawn, and the ball rides its leading edge. Pause, or drag the scrubber to any week.</li>
       <li>Play in each mode: the season takes about 6.5 s in Presentation and 2 s in Analysis, and Off goes straight to the end, with the red still showing.</li>
       <li>Tab into the line chart, then use the arrow keys to read both lines and the gap week by week.</li>
+      <li>Pick <b>Curved</b>: the first chart's lines ease into curves through every week's value, the red follows where they cross, and the Vega-Lite line curves too. Focus stays on the toggle.</li>
+      <li>Pick <b>Nearest point</b>, then hover near a line: the nearest point is hovered and the other line dims. Tab in, and Left and Right go along the line, Up and Down to the other line at that week, and Escape ends the hover. On the chart with missing weeks, Right from matchweek 8 goes to 11.</li>
       <li>Open the line chart's data table: its Difference column says how far goals are above or below xG each week.</li>
       <li>Play the season and watch the charts with missing weeks: the ball waits at matchweek 8 while 9 and 10 are revealed, then jumps across the gap.</li>
       <li>Hover matchweek 9 on the chart with missing weeks, or reach it with the arrow keys: the crosshair stops there, and the tooltip and the week's name say both values are missing.</li>

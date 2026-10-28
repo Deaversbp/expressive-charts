@@ -3,7 +3,8 @@
 // `__data__` (an internal the adapter spike found, so the tests pin Vega's version), the row is
 // `item.datum`, and the item's numbers give the geometry: rects become bars, arcs slices, symbols
 // points and lines lines, whose items give each vertex with its row, so samples come with them. A
-// line breaks where Vega leaves a point out, as Vega-Lite does at a missing value.
+// line breaks where Vega leaves a point out, as Vega-Lite does at a missing value. A curved line is
+// the path Vega drew, through describe.shape, with its samples at its items.
 // Duck-typed on the View: nothing here imports Vega, so it stays a dev dependency.
 
 import type { Baseline, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
@@ -11,6 +12,7 @@ import { defaultClock, matrix, samplesAlong } from "../../core";
 import { describeArc } from "../../core/geometry/describe/arc";
 import { describeLine } from "../../core/geometry/describe/line";
 import { describePoint } from "../../core/geometry/describe/point";
+import { describeShape } from "../../core/geometry/describe/shape";
 import { report } from "../../core/report";
 import { linkable, portOf } from "../link";
 import type { ChartEnv } from "../shell/setup";
@@ -56,7 +58,7 @@ export interface VegaItem {
   readonly cornerRadius?: number;
   /** False for a line's point Vega leaves out, which breaks the line there. */
   readonly defined?: boolean;
-  /** How a line is drawn between its points: only "linear" (or unset) can be read. */
+  /** How a line is drawn between its points: "linear" (or unset) is read from the items, any other curve from the path Vega draws. */
   readonly interpolate?: string;
 }
 
@@ -390,22 +392,19 @@ const lineItems = (first: VegaItem): readonly VegaItem[] => first.mark?.items ??
 /** Whether a line has a point to draw: Vega draws nothing for one whose every item is left out. */
 const drawsLine = (first: VegaItem): boolean => lineItems(first).some((item) => item.defined !== false);
 
+/** Whether Vega draws a line straight between its points: with interpolate "linear", or none. It reads the first item's. */
+const straight = (first: VegaItem): boolean => {
+  const interpolate = lineItems(first)[0]?.interpolate;
+  return interpolate === undefined || interpolate === "linear";
+};
+
 /**
- * A line's points, from its mark's items. Lines are straight between their points (M4 decision 5),
- * so a curve Vega interpolates (monotone, basis, step and the rest; it reads the first item's) would
- * be described as a different path from the one drawn, and throws instead. A point Vega leaves out
- * (`defined: false`, as Vega-Lite does for a missing value) is left out here too, and the next point
- * Vega draws starts a new run after a gap (`gapBefore`). Points left out before the first or after the
- * last only shorten the line.
+ * A line's points, from its mark's items. A point Vega leaves out (`defined: false`, as Vega-Lite does
+ * for a missing value) is left out here too, and the next point Vega draws starts a new run after a
+ * gap (`gapBefore`). Points left out before the first or after the last only shorten the line.
  */
 function pointsOf(first: VegaItem): { item: VegaItem; point: Point; gapBefore: boolean }[] {
   const items = lineItems(first);
-  const interpolate = items[0]?.interpolate;
-  if (interpolate !== undefined && interpolate !== "linear") {
-    throw new TypeError(
-      `fromVegaView: a line is drawn with interpolate "${interpolate}", but only straight lines can be read. Use interpolate "linear" (the default), or describe the curve with expressive()'s geometry option.`
-    );
-  }
   const points: { item: VegaItem; point: Point; gapBefore: boolean }[] = [];
   let gap = false;
   for (const item of items) {
@@ -419,9 +418,19 @@ function pointsOf(first: VegaItem): { item: VegaItem; point: Point; gapBefore: b
   return points;
 }
 
-/** A line through the points Vega draws, with a break where it leaves some out. */
+/**
+ * A straight line through the points Vega draws, with a break where it leaves some out. A curve
+ * (monotone, basis, step and the rest) is the path Vega drew, read from its `d` as describe.shape
+ * reads any, in its group's coordinates as the items' numbers are: a gap at each move, and closed
+ * where Vega closes it on itself (the "-closed" curves).
+ */
 function lineOf(key: string, element: Element, first: VegaItem, m: Matrix): MarkGeometry {
   const width = first.strokeWidth ?? Number.parseFloat(element.getAttribute("stroke-width") ?? "1");
+  if (!straight(first)) {
+    // describe.shape needs a width more than 0, so a curve drawn with none is 1 px, as expressive() reads a shape by its tag.
+    const scaled = width * scaleOf(m);
+    return describeShape({ key, series: key, d: element.getAttribute("d") ?? "", matrix: m, width: scaled > 0 && Number.isFinite(scaled) ? scaled : 1 });
+  }
   const points = pointsOf(first);
   const breaks = points.flatMap((p, i) => (p.gapBefore ? [i] : []));
   return describeLine({

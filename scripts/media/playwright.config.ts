@@ -16,8 +16,8 @@ export default defineConfig({
   use: {
     browserName: "chromium",
     baseURL: `http://localhost:${PORT}`,
-    // Tall enough that no page scrolls, as in the visual suite.
-    viewport: { width: 440, height: 5000 },
+    // Tall enough that no page scrolls, as in the visual suite: the line page is about 5,300 px at this width.
+    viewport: { width: 440, height: 6000 },
     deviceScaleFactor: 2,
     colorScheme: "light",
     reducedMotion: "no-preference",

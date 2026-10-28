@@ -1,6 +1,7 @@
 // The season so far, after matchweek 24: goals per matchweek on barChart, goals vs xG on lineChart and
 // shots per matchweek on columns drawn with D3, in one link(), so hovering a matchweek in any of them
-// shows it in the others; the players' goals on barChart, each change since the last matchweek rising
+// shows it in the others, and each matchweek's goals rising past the goals line's end with delta();
+// the players' goals on barChart, each change since the last matchweek rising
 // past its bar with delta(); and a D3 slope chart of each player's goals at matchweek 1 and now, its
 // change written past each name with label(). "Play next matchweek" moves the whole page on a week,
 // and nothing plays by itself.
@@ -14,6 +15,7 @@ import {
   lineChart,
   link,
   motionSwitch,
+  only,
   parallel,
   trace,
   travel,
@@ -154,7 +156,16 @@ const goalsChart = barChart<Week>("#goals", {
   on: { hover: travel(soccerBall) }
 });
 
-// The season to date, as on line.html: each week's points pulse when it's hovered, or linked.
+/**
+ * The goals line's change since the last matchweek, past its end label and xG's. Only the goals line's:
+ * the two lines end close together and head the same way, so xG's change would land on it. On a line
+ * chart the update slot runs on the points too, so it keeps to the line. It stays until the chart's
+ * next update, and a matchweek with no goals shows none.
+ */
+const goalsChange = only((mark) => mark.series === "totalGoals" && mark.length > 0, delta());
+
+// The season to date, as on line.html: each week's points pulse when it's hovered, or linked, and each
+// matchweek's goals show past the goals line's end.
 const line = lineChart<Week>("#line", {
   label: "Goals vs expected goals, season to date",
   description: "Goals scored and expected goals so far, week by week.",
@@ -170,7 +181,7 @@ const line = lineChart<Week>("#line", {
   markDescription: (d) => `${tenths(d.totalGoals - d.totalXg)} vs expected`,
   table: { category: "Matchweek" },
   height: 270,
-  on: { hover: "pulse" }
+  on: { hover: "pulse", update: goalsChange }
 });
 
 // The D3 columns draw themselves; expressive() reads each rect as a column, keyed by its week as the
@@ -300,11 +311,20 @@ segmented("linked-marks", (value) => {
 const nextButton = document.querySelector<HTMLButtonElement>("#next-matchweek");
 const status = document.getElementById("matchweek-status");
 
-/** "Matchweek 25: Okafor +1, 15 goals; Lindqvist +1, 7 goals." */
+/**
+ * "Season to date: 43 goals +2, 39.7 xG +1.8.": each line's end label with its change, as the goals
+ * line's delta() shows it, and xG's, which the page doesn't draw. No goals, no change on goals.
+ */
+function seasonToDate(): string {
+  const week = weeks[now - 1]!;
+  return `Season to date: ${goals(week.totalGoals)}${week.goals > 0 ? ` ${signed(week.goals)}` : ""}, ${week.totalXg.toFixed(1)} xG ${tenths(week.xg)}.`;
+}
+
+/** "Matchweek 25: Okafor +1, 15 goals; Lindqvist +1, 7 goals. Season to date: 43 goals +2, 39.7 xG +1.8." */
 function said(rows: readonly Player[]): string {
   const scored = rows.filter((row) => row.change > 0).sort((a, b) => b.goals - a.goals);
-  if (scored.length === 0) return `Matchweek ${now}: no goals.`;
-  return `Matchweek ${now}: ${scored.map((row) => `${row.name} ${signed(row.change)}, ${goals(row.goals)}`).join("; ")}.`;
+  if (scored.length === 0) return `Matchweek ${now}: no goals. ${seasonToDate()}`;
+  return `Matchweek ${now}: ${scored.map((row) => `${row.name} ${signed(row.change)}, ${goals(row.goals)}`).join("; ")}. ${seasonToDate()}`;
 }
 
 function playMatchweek(): void {

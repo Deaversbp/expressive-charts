@@ -18,7 +18,7 @@ import { report } from "../core/report";
 import { createRunner, type RunInput } from "../core/runner";
 import { chartAnnouncer, changeText, type Announcer } from "./announce";
 import { toColorAssignment } from "./colors";
-import { CENTER_SIZE, donutEncoding, layoutDonut, placeCenter, placeLabels, placeSlice, type CenterLine, type DonutFrame, type DonutLayout, type DonutSlice, type SliceLabel, type SliceState } from "./donut-layout";
+import { CENTER_SIZE, donutEncoding, layoutDonut, placeCenter, placeLabels, placeSlices, type CenterLine, type DonutFrame, type DonutLayout, type DonutSlice, type SliceLabel, type SliceState } from "./donut-layout";
 import { chartLegend } from "./legend";
 import { linkable } from "./link";
 import { chartMotion } from "./motion";
@@ -409,7 +409,13 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
       now.map(({ state }) => state),
       measure
     );
-    return now.map(({ record, state }, i) => ({ record, slice: placeSlice(f, state, labels[i], measure), label: labels[i] }));
+    const slices = placeSlices(
+      f,
+      now.map(({ state }) => state),
+      labels,
+      measure
+    );
+    return now.map(({ record }, i) => ({ record, slice: slices[i]!, label: labels[i] }));
   }
 
   /** Draws every slice as it is now, its label, and the total counting in the hole. */

@@ -72,6 +72,12 @@ export interface MarkGeometry {
    * Unset when nothing says where they are (segments, points, and marks the library didn't draw).
    */
   readonly labelBounds?: readonly Rect[];
+  /**
+   * The boxes of other marks' text near this one, which an effect's text should keep clear of too:
+   * a line's are the other lines' end labels, a slice's its neighbours' labels either side. Unset
+   * when none is known (bars, segments, points, and marks the library didn't draw).
+   */
+  readonly nearbyLabels?: readonly Rect[];
 
   /** Ordered parts, from the baseline (goals, then assists). Every bar has at least one. */
   readonly segments?: readonly MarkGeometry[];

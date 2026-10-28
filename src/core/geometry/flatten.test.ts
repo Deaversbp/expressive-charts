@@ -1,8 +1,8 @@
 import type { Point } from "../contracts/geometry";
-import { FLAT, flattenPath } from "./flatten";
+import { cubicPieces, FLAT, flattenPath } from "./flatten";
 import { matrix } from "./matrix";
 import { parsePath, transformPath } from "./path";
-import { pointOn, type PathSegment } from "./segment";
+import { line, pointOn, type PathSegment } from "./segment";
 
 const flatten = (d: string) => flattenPath(parsePath(d));
 const segmentsOf = (d: string): PathSegment[] => flatten(d).flatMap((subpath) => subpath.segments);
@@ -198,5 +198,34 @@ describe("flattenPath", () => {
 
   it("leaves out pieces with no length", () => {
     expect(segmentsOf("M0,0L0,0L10,0L10,0Z")).toHaveLength(2);
+  });
+});
+
+describe("cubicPieces", () => {
+  it("is the number of pieces flattenPath makes of a cubic, at least 1", () => {
+    for (const [p0, p1, p2, p3] of [
+      [{ x: 0, y: 100 }, { x: 30, y: -40 }, { x: 90, y: 160 }, { x: 140, y: 20 }],
+      [{ x: 0, y: 0 }, { x: 10, y: 2 }, { x: 20, y: 2 }, { x: 30, y: 0 }],
+      [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }, { x: 30, y: 0 }],
+      [{ x: 5, y: 5 }, { x: 5, y: 5 }, { x: 5, y: 5 }, { x: 5, y: 5 }]
+    ] as Point[][]) {
+      const pieces = segmentsOf(`M${p0!.x},${p0!.y}C${p1!.x},${p1!.y} ${p2!.x},${p2!.y} ${p3!.x},${p3!.y}`).length;
+      expect(cubicPieces(p0!, p1!, p2!, p3!)).toBe(Math.max(1, pieces));
+    }
+  });
+
+  it("keeps the straight pieces between equal steps of the parameter within 0.1 px of the curve", () => {
+    const [p0, p1, p2, p3] = [
+      { x: 0, y: 250 },
+      { x: 8, y: 180 },
+      { x: 16, y: 20 },
+      { x: 24, y: 0 }
+    ];
+    const n = cubicPieces(p0, p1, p2, p3);
+    const curve = cubic(p0, p1, p2, p3);
+    const segments = Array.from({ length: n }, (_, k) => line(curve(k / n), curve((k + 1) / n)));
+    for (const p of along(curve)) expect(distanceTo(p, segments)).toBeLessThanOrEqual(FLAT);
+    // A curve this tight takes more than one.
+    expect(n).toBeGreaterThan(1);
   });
 });

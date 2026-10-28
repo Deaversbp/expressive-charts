@@ -15,6 +15,8 @@ export interface PointSpec {
   readonly r: number;
   /** The boxes of the text drawn for the mark, in the same px: passed through as `labelBounds`. */
   readonly labelBounds?: readonly Rect[];
+  /** The boxes of other marks' text near it, in the same px: passed through as `nearbyLabels`. */
+  readonly nearbyLabels?: readonly Rect[];
 }
 
 /**
@@ -40,6 +42,7 @@ export function describePoint(spec: PointSpec): MarkGeometry {
     bounds: { x: center.x - r, y: center.y - r, width: 2 * r, height: 2 * r },
     center,
     pivot: center,
-    labelBounds: labelBoxes("point", spec.labelBounds)
+    labelBounds: labelBoxes("point", spec.labelBounds),
+    nearbyLabels: labelBoxes("point", spec.nearbyLabels, "nearbyLabels")
   });
 }

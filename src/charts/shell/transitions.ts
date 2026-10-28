@@ -2,7 +2,7 @@
 // exactly on the layout. An update's change, played through the runner in the order it expects. And
 // the small tests a chart's retarget makes: whether a value still has to move, whether a mark moved.
 
-import type { Animated, Clock, MarkGeometry } from "../../core";
+import type { Animated, Clock, MarkGeometry, Rect } from "../../core";
 import type { RunInput, Runner } from "../../core/runner";
 import type { ChartEvents } from "./events";
 import type { ChartHover } from "./hover";
@@ -179,10 +179,12 @@ export function geometryChanged(from: MarkGeometry, to: MarkGeometry): boolean {
   return a.length !== b.length || a.some((segment, i) => segment.key !== b[i]!.key || segment.outline.d !== b[i]!.outline.d);
 }
 
-/** Whether a mark's `labelBounds` differ: text placed past them has to follow. */
+/** Whether a mark's `labelBounds` or `nearbyLabels` differ: text placed past them has to follow. */
 export function labelsMoved(from: MarkGeometry, to: MarkGeometry): boolean {
-  const a = from.labelBounds;
-  const b = to.labelBounds;
+  return boxesMoved(from.labelBounds, to.labelBounds) || boxesMoved(from.nearbyLabels, to.nearbyLabels);
+}
+
+function boxesMoved(a: readonly Rect[] | undefined, b: readonly Rect[] | undefined): boolean {
   if (a === b) return false;
   if (!a || !b || a.length !== b.length) return true;
   return a.some((box, i) => box.x !== b[i]!.x || box.y !== b[i]!.y || box.width !== b[i]!.width || box.height !== b[i]!.height);

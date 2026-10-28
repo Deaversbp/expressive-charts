@@ -531,6 +531,7 @@ One mark, described the same way whoever drew it. In chart pixels, with y pointi
   - `center`: `Point`. Its visual centre, for tooltips, rings and labels.
   - `pivot`: `Point`. Where it's attached to the chart: a bar's baseline, a donut's centre, a line's first point.
   - `labelBounds`: `readonly Rect[] | undefined`. The boxes of the text the chart draws for the mark, so an effect's own text can keep clear of them: a bar's category and value labels, the two lines of a slice's label outside the ring, a line's end label. An empty list when the mark has none drawn now. Unset on segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#the-marks-own-labels)).
+  - `nearbyLabels`: `readonly Rect[] | undefined`. The boxes of other marks' text near this one, which an effect's text should keep clear of too: on a line, every other line's end label; on a slice, its neighbours' labels, the nearest each way round. `labelBounds` stays the mark's own. An empty list when none is near; unset when none is known: on bars, segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#other-marks-labels-nearby)).
   - `segments`: `readonly MarkGeometry[] | undefined`. A bar's parts, from the baseline; every bar has at least one.
 
 Build one with [`describe`](#describe).
@@ -960,6 +961,9 @@ interface BarSpec
 - `segments`: `readonly BarSegmentSpec[]`. Its parts, from the baseline. Default: one segment named after `series`, the whole bar. Sizes past the tip are cut off, and a series named twice throws an `Error`.
 - `gap`: `number`. Default 0. Px left empty between segments, out of the start of the later one, so each still ends at its value; it shrinks when the part before it is shorter.
 - `labelBounds`: `readonly Rect[]`. The boxes of the bar's own labels, in chart px, passed through as the geometry's `labelBounds`. Its segments have none.
+- `nearbyLabels`: `readonly Rect[]`. The boxes of other marks' labels near the bar, in chart px, passed through as the geometry's `nearbyLabels`. Its segments have none.
+
+A box in `labelBounds` or `nearbyLabels` with a coordinate that isn't finite, or a negative size, throws a `RangeError` naming the builder and the field: `describe.bar: nearbyLabels[0].x must be a finite number, got NaN.` So do the other builders'.
 
 #### `BarSegmentSpec`
 
@@ -997,6 +1001,7 @@ interface ArcSpec
 - `inner`, `outer`: `number`, required. Radii in px; an inner of 0 makes a pie slice. Given the wrong way round, they're swapped, as `d3.arc()` does.
 - `start`, `end`: `number`, required. Radians from 12 o'clock, clockwise: the `d3.pie()` convention, so its output plugs straight in. An `end` before `start` walks anticlockwise; more than a full turn draws one ring.
 - `labelBounds`: `readonly Rect[]`. The boxes of the slice's own labels, passed through as the geometry's `labelBounds`.
+- `nearbyLabels`: `readonly Rect[]`. The boxes of other slices' labels near it, passed through as the geometry's `nearbyLabels`.
 
 #### `LineSpec`
 
@@ -1010,10 +1015,11 @@ interface LineSpec {
   readonly breaks?: readonly number[];
   readonly width?: number;
   readonly labelBounds?: readonly Rect[];
+  readonly nearbyLabels?: readonly Rect[];
 }
 ```
 
-A polyline through `points` (at least one), in chart px, with straight legs. `breaks` are the indices of the points that start a new run, so there's a gap in the geometry's [`gaps`](#markgeometry) from `points[i - 1]` to `points[i]`, and the stroke leaves it out: each a whole number from 1 to the last index, in order, with no repeats, or it throws a `RangeError` naming it. A line drawn with d3's `.defined()` is described by its defined points and the indices where they break. Default none. `width` is its stroke width, default 1. `labelBounds`, the boxes of its own labels (an end label), is passed through as the geometry's.
+A polyline through `points` (at least one), in chart px, with straight legs. `breaks` are the indices of the points that start a new run, so there's a gap in the geometry's [`gaps`](#markgeometry) from `points[i - 1]` to `points[i]`, and the stroke leaves it out: each a whole number from 1 to the last index, in order, with no repeats, or it throws a `RangeError` naming it. A line drawn with d3's `.defined()` is described by its defined points and the indices where they break. Default none. `width` is its stroke width, default 1. `labelBounds`, the boxes of its own labels (an end label), and `nearbyLabels`, other marks' near it (other lines' end labels), are passed through as the geometry's.
 
 #### `PointSpec`
 
@@ -1027,10 +1033,11 @@ interface PointSpec {
   readonly y: number;
   readonly r: number;
   readonly labelBounds?: readonly Rect[];
+  readonly nearbyLabels?: readonly Rect[];
 }
 ```
 
-A dot of radius `r`. Its walk has length 0, so `travel` and `trace` do nothing on it, while `wiggle`, `pulse` and `flash` still work. `labelBounds`, the boxes of its own labels, is passed through as the geometry's.
+A dot of radius `r`. Its walk has length 0, so `travel` and `trace` do nothing on it, while `wiggle`, `pulse` and `flash` still work. `labelBounds`, the boxes of its own labels, and `nearbyLabels`, other marks' near it, are passed through as the geometry's.
 
 #### `ShapeSpec`
 
@@ -1044,6 +1051,7 @@ interface ShapeSpec {
   readonly matrix?: Matrix;
   readonly width?: number;
   readonly labelBounds?: readonly Rect[];
+  readonly nearbyLabels?: readonly Rect[];
 }
 ```
 
@@ -1053,6 +1061,7 @@ Any SVG shape, from its path data. The library follows the path itself, so it wo
 - `matrix`: [`Matrix`](#matrix-type). Moves the shape into the marks' px, as an element's transform does, arcs too. Default none.
 - `width`: `number`. An open shape's stroke width in px, more than 0. Default 1.
 - `labelBounds`: `readonly Rect[]`. The boxes of its own labels, in the marks' px, passed through as the geometry's.
+- `nearbyLabels`: `readonly Rect[]`. The boxes of other marks' labels near it, in the marks' px, passed through as the geometry's.
 
 A shape is closed when every subpath ends with `Z`, or where it started, and otherwise open.
 
@@ -1314,7 +1323,7 @@ interface TraceOptions
 delta<D = unknown>(options?: DeltaOptions<D>): DataEffect<D>
 ```
 
-A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label, outside a slice's label. It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until its chart's next update clears it, whether or not that update changes its mark, following the mark as it moves. `data.previous` is the values the last update gave, so an update that replaces one still moving says "+1", not the change from part way. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
+A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label and any other line's beside it, outside a slice's label. It keeps clear of the mark's own labels (`labelBounds`) and other marks' near it (`nearbyLabels`). It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until its chart's next update clears it, whether or not that update changes its mark, following the mark as it moves. `data.previous` is the values the last update gave, so an update that replaces one still moving says "+1", not the change from part way. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
 
 The text goes in the overlay, which screen readers don't read: a page that relies on it says the same in its table or its announcement. On a line chart, `update` runs on the points whose values changed too, so a change meant for the line goes in [`only()`](#only) with a filter on the mark's length:
 
@@ -1777,7 +1786,7 @@ The [shared options](#chartoptionsd), and:
 - `sort`: `"none" | "value" | "key" | ((a: D, b: D) => number)`. Default `"none"`, data order. `"value"` puts the largest total first, `"key"` the keys A to Z (numbers in numeric order). Sorting never changes a key or a colour.
 - `orientation`: `"horizontal" | "vertical"`. Forces bars or columns; needed when both axes hold numbers.
 - `colorBy`: `"series" | "category"`. Default `"series"`. `"category"` gives each bar its own palette slot by its key, as a donut's slices have, so one `colorAssignment()` shared with a donut keeps each category's colour in both. It needs one series: on a stack it throws.
-- `room`: `number`. Default 0. Px kept clear past the labels at each end of the value axis that bars reach, for text an effect draws there: a [`delta`](#delta) past a bar's value label, above a column's, or past a negative bar's name. At 320 px, `room: 28` keeps a `delta` inside the chart. Anything but a number of px, 0 or more, throws a `RangeError`.
+- `room`: `number`. Default 0. Px kept clear past the labels at each end of the value axis that bars reach, for text an effect draws there: a [`delta`](#delta) past a bar's value label, above a column's, or past a negative bar's or a negative column's name. At 320 px, `room: 28` keeps a `delta` inside the chart. Anything but a number of px, 0 or more, throws a `RangeError`.
 
 Bars are 20 px thick in rows of 34 px, so a horizontal chart's height follows its rows unless `height` is given; columns are 300 px high.
 
@@ -1838,7 +1847,7 @@ The donut is 300 px high, and as large as the room its labels leave.
 lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D>
 ```
 
-A line chart in `target`: a line per series through one row per x, each ending in a dot and a label that counts as the line moves ([architecture.md](architecture.md#line-chart)). The pointer anywhere over it hovers every series at the nearest x, with a crosshair and a tooltip, and nothing dimmed. It's one tab stop whose arrow keys go x by x, each x read as one image ("12: 15 goals, 14.2 xg"); on a time axis Page Down and Page Up go a calendar month on or back, in its `timeZone`, to the first x that far. Each line is a line mark keyed by its series, and each row's value a point mark keyed `"<series>@<row key>"` (`goals@12`), so `only("goals", …)` matches both; an effect meant for a line does nothing on a point. `reveal(x)` shows the data up to x, which is how [`playback()`](#playback) plays it. An `x` that gives `Date`s makes a time axis. A missing value, `null` or `undefined`, is a gap in its line with no point, while its x stays a stop whose name, tooltip and table say it's missing ([architecture.md](architecture.md#missing-values)). Options: [`LineChartOptions<D>`](#linechartoptionsd). Returns [`LineChart<D>`](#linechartd). `NaN` and the infinities throw, and so do repeated x values and numbers mixed with dates.
+A line chart in `target`: a line per series through one row per x, each ending in a dot and a label that counts as the line moves ([architecture.md](architecture.md#line-chart)). The pointer anywhere over it hovers every series at the nearest x, with a crosshair and a tooltip, and nothing dimmed. It's one tab stop whose arrow keys go x by x, each x read as one image ("12: 15 goals, 14.2 xg"); on a time axis Page Down and Page Up go a calendar month on or back, in its `timeZone`, to the first x that far. With `hover: "point"` it hovers the one point nearest the pointer instead, with the other lines dimmed, and the arrow keys go along a line and between lines. Each line is a line mark keyed by its series, and each row's value a point mark keyed `"<series>@<row key>"` (`goals@12`), so `only("goals", …)` matches both; an effect meant for a line does nothing on a point. `reveal(x)` shows the data up to x, which is how [`playback()`](#playback) plays it. An `x` that gives `Date`s makes a time axis. A missing value, `null` or `undefined`, is a gap in its line with no point, while its x stays a stop whose name, tooltip and table say it's missing ([architecture.md](architecture.md#missing-values)). With `curve: "monotone"` each line curves through its values as d3's `curveMonotoneX` does, never above or below the values either side ([architecture.md](architecture.md#curves)). Options: [`LineChartOptions<D>`](#linechartoptionsd). Returns [`LineChart<D>`](#linechartd). `NaN` and the infinities throw, and so do repeated x values and numbers mixed with dates.
 
 ```ts
 import { lineChart, only, parallel, threshold, travel } from "expressive-charts";
@@ -1884,10 +1893,22 @@ The [shared options](#chartoptionsd), and:
 - `x`: `Accessor<D, number | Date>`, required. Each row's x. Rows are drawn in ascending x, and x values must be unique. `key` defaults to it, a `Date` by its `toISOString()`.
 - `series`: `readonly KeyOfType<D, number | null | undefined>[]`, required. The numeric fields drawn as lines, in order. A value that's `null` or `undefined` is missing: a gap in its line, from the value before to the value after, with no point, and "missing" in the x's name ("3: goals missing, 3.6 xg"), the tooltip and the table. A value alone between gaps shows its point at rest. A line revealed into a gap ends at its last value, and a line with no values is empty. Its samples leave the missing values out, with `gapBefore` on the first after each gap.
 - `labels`: `false | ((value, series, format) => string)`. The label at each line's end. Default: its value in `format` with its series' label ("52 goals"). `false` turns them off; an empty string shows none.
+- `curve`: `"linear" | "monotone"`. Default `"linear"`: straight from value to value. `"monotone"` is d3's `curveMonotoneX`: a smooth curve through every value, flat between two equal ones, that never goes above or below the values either side, so it shows no value the data doesn't have. Each run between gaps is curved on its own, so a run of two values is straight. A curved line's samples are its rows' and one at each bend between them, each with its `at` and `value` on the curve and `t` in order: a data effect that counts samples sees more than the rows, `delta` and `label` read the ends, which are rows or the reveal, and `threshold` changes colour where the drawn lines cross. A reveal between two rows ends the line on the curve. `update({ curve })` eases each line from straight to curved, or back, as a change; Off jumps. Anything else throws a `TypeError` naming it, and `update()` rejects it.
 - `timeZone`: `"UTC" | "local"`. Default `"UTC"`. A time axis's zone: ticks fall on its boundaries, and names, the tooltip and the table say times in it. A date-only value such as `new Date("2026-01-05")` is UTC midnight, so in UTC it's 5 January on every machine. `"local"` follows the viewer's clock.
 - `xFormat`: `(x: Date | number) => string`. Words an x for people: in its name, the tooltip's title, the table's row headers and announcements. Default: a medium date in the page's locale ("Jan 5, 2026"), with the time when any x has one; a number as it is. The ticks keep their own wording.
+- `hover`: `"x" | "point"`. Default `"x"`: the pointer anywhere over the chart, touch and the keys hover every series' point at the nearest x, with a crosshair and nothing dimmed, and the x's are the focus stops. `"point"` hovers one point:
+  - **The pointer** anywhere over the plot, and touch, hover the revealed point nearest it, by distance; of two as near, the series first in `series`. Leaving the plot leaves. A missing value, or a point past the reveal, has nothing to hover. `hover` fires for that point alone, and its hover effect plays on it.
+  - **Dimming.** The point shows in its strong colour, and its line and their decorations stay at full strength. Every other line and point dims to `--ec-dim-opacity`, with its decorations; text keeps its contrast. `dim: false` keeps them.
+  - **The tooltip** sits above the point, or below it without room, with no crosshair: the x in bold, then that series' value with its label ("3.6 xg"), or a tooltip function's text.
+  - **Keys.** One tab stop, on a point. Left and Right go along its line to the next x where it has a value, Up and Down to the point above or below at its x, by where they're drawn, Home and End to the line's first and last value, and Page Down and Page Up a page along it: a calendar month on a time axis, otherwise a tenth of its points. Escape ends the hover, and focus stays.
+  - **Names.** Each point is an image named by its x and its value, "12: 15 goals", or by `markLabel`, given that series alone in `values`. The x's aren't stops.
+  - **Links** still go by x: a point hovered hovers the others at its x, and a link's hover shows at every series' point there, with nothing dimmed, as with `"x"`.
+  - **`focus(key)`** takes a point's key, or an x's, for its first series' point there.
 
-A time axis has ticks on second, minute, hour, day, week, month and year boundaries, each worded for its level in the page's locale ("2026", "Apr", "Feb 8", "3:00 PM"). The chart is 300 px high. `dim` does nothing here.
+  `update({ hover })` changes it at once: a hover held ends, and focus moves to the nearest stop of the new kind, with its ring, without hovering it. Anything else throws a `TypeError`, and `update()` rejects it.
+- `tooltip`: `boolean | ((d: D, point?: { series: string }) => string)`. As on every chart. With `hover: "point"` a function is given the point's series too, `(d, { series })`, for the point's text and description; with `"x"` it's given the row alone.
+
+A time axis has ticks on second, minute, hour, day, week, month and year boundaries, each worded for its level in the page's locale ("2026", "Apr", "Feb 8", "3:00 PM"). The chart is 300 px high. `dim` does nothing with `hover: "x"`, since nothing dims.
 
 #### `Chart<D, O>`
 
@@ -1901,7 +1922,7 @@ What every chart's handle has. `O` is its options.
   - **A new `on`** swaps the effects of the slots it changes, in place: `decorate` starts again on every mark, a held hover replays with the new hover effect once the change settles, and `enter`, `update` and `exit` draw the new effect's end state, so nothing enters again. Focus stays, nothing fires, and a slot given the same effect or preset name keeps playing. The new `on` replaces the old one, so a slot it leaves out is emptied: give every slot you want to keep. An `update()` without `on` keeps the effects; `on: {}` empties every slot.
 - `on(type, listener)`: listens for [`MarkEvents`](#markeventsd), and returns a function that stops it.
 - `marks()`: `readonly MarkGeometry[]`. The marks on screen, in visual order, part way there while a change plays. Leaving marks are left out.
-- `focus(key)`: moves keyboard focus to the mark `key` as a key press would, whatever the last input was: the focus ring shows and its hover plays. On a line chart it's the x's focus stop, for the x's key or one of its points'. A key that isn't on screen does nothing.
+- `focus(key)`: moves keyboard focus to the mark `key` as a key press would, whatever the last input was: the focus ring shows and its hover plays. On a line chart it's the x's focus stop, for the x's key or one of its points'; with `hover: "point"`, the point's, for its key or an x's (its first series' point there). A key that isn't on screen does nothing.
 - `leave()`: ends the hover, pointer or keyboard, as the viewer moving away would: the emphasis, the dimming, the tooltip and the hover effects end, and `leave` fires for each mark that was hovered. Focus stays where it is, with its ring, as after Escape.
 - `labels()`: `readonly ChartLabel[]`. Each mark's labels as drawn now, in the marks' visual order ([`ChartLabel`](#chartlabel)). A bar's label that thinning leaves out isn't there.
 - `element`: `SVGSVGElement`. The chart's `<svg>`.

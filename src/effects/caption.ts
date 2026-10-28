@@ -1,13 +1,13 @@
-// A caption: text past the end of a mark's walk, or past its own labels (`labelBounds`), rising into
-// place. delta and label draw through it, so they place and rise the same way. Internal:
-// it reads only the geometry, and draws only through the context's layer.
+// A caption: text past the end of a mark's walk, or past its own labels (`labelBounds`) and other
+// marks' near it (`nearbyLabels`), rising into place. delta and label draw through it, so they place
+// and rise the same way. Internal: it reads only the geometry, and draws only through the context's layer.
 
 import { offset } from "../core";
 import type { Color, EffectContext, MarkData, MarkGeometry, Point, Rect, TextHandle } from "../core";
 
 /** Past the end of the walk, with no label in the way. */
 const PAST_END = 10;
-/** Past the farthest of the mark's labels in the way; a label is in the way when the line it's placed along passes within this of it, since the text has height. */
+/** Past the farthest label in the way; a label is in the way when the line it's placed along passes within this of it, since the text has height. */
 const PAST_LABEL = 6;
 /** How far it rises into place, across the way it's placed. */
 const RISE = 8;
@@ -30,13 +30,18 @@ export interface CaptionPlace {
 /**
  * Where a caption goes on `mark`.
  *
- * - **Along the heading,** from the end of the walk: 10 px past the end, or 6 px past the farthest of
- *   its `labelBounds` the heading meets, whichever is further. The heading meets a box when it passes
- *   within 6 px of it: the text has height, and a heading that just misses a label would put the
- *   text on it.
- * - **Up from its centre,** when the heading meets none of its labels but its up side does: 6 px past
- *   the farthest of them. A slice's heading runs along the ring, and its up side goes out through its
- *   label outside it.
+ * - **Along the heading,** from the end of the walk: 10 px past the end, or 6 px past the farthest
+ *   label the heading meets, whichever is further. The heading meets a box when it passes within 6 px
+ *   of it: the text has height, and a heading that just misses a label would put the text on it.
+ *   Text centred on its point reaches out to either side, so it goes 6 px past a label's top or bottom,
+ *   though the heading leaves it through a side.
+ * - **Up from its centre,** when the heading meets none of its own labels but its up side does: 6 px
+ *   past the farthest label that way meets. A slice's heading runs along the ring, and its up side
+ *   goes out through its label outside it.
+ *
+ * The way is picked by the mark's own labels (`labelBounds`) alone. The labels it goes past are those
+ * and other marks' near it (`nearbyLabels`), so another mark's label never turns it, and only takes it
+ * further: a line's text goes past a neighbour's end label beside its own.
  *
  * It's anchored by the way it was placed: at its start reading rightwards, its end leftwards, and its
  * middle within 45° of vertical, so a column's sits centred above its value. Its baseline is a little
@@ -44,15 +49,16 @@ export interface CaptionPlace {
  * charts' labels are; read upwards, it stands on it; read downwards, it hangs from it.
  */
 export function captionPlace(mark: MarkGeometry): CaptionPlace {
-  const boxes = mark.labelBounds ?? [];
+  const own = mark.labelBounds ?? [];
+  const nearby = mark.nearbyLabels ?? [];
   const heading = mark.angle(1);
-  const along = farthest(mark.end, heading, boxes);
-  if (along === undefined && boxes.length > 0) {
+  const along = farthest(mark.end, heading, own);
+  if (along === undefined && own.length > 0) {
     const up = mark.angle(0.5) - Math.PI / 2;
-    const out = farthest(mark.center, up, boxes);
-    if (out !== undefined) return placed(mark.center, up, out);
+    const out = farthest(mark.center, up, own);
+    if (out !== undefined) return placed(mark.center, up, Math.max(out, farthest(mark.center, up, nearby) ?? -Infinity));
   }
-  return placed(mark.end, heading, Math.max(PAST_END, along ?? -Infinity));
+  return placed(mark.end, heading, Math.max(PAST_END, along ?? -Infinity, farthest(mark.end, heading, nearby) ?? -Infinity));
 }
 
 /** The caption `distance` px from `from` towards `toward`, anchored and dropped to its baseline by that direction. */
@@ -61,21 +67,30 @@ function placed(from: Point, toward: number, distance: number): CaptionPlace {
   const sin = Math.sin(toward);
   const point = offset(from, toward, distance);
   const drop = TEXT * (sin < 0 ? CENTRE * (1 + sin) : CENTRE + (HANG - CENTRE) * sin);
-  const anchor: CaptionAnchor = Math.abs(cos) <= Math.SQRT1_2 + 1e-9 ? "middle" : cos > 0 ? "start" : "end";
+  const anchor: CaptionAnchor = centred(cos) ? "middle" : cos > 0 ? "start" : "end";
   return { at: { x: point.x, y: point.y + drop }, anchor, toward };
+}
+
+/** Whether text placed this way (its cosine) is centred on its point: within 45° of vertical. */
+function centred(cos: number): boolean {
+  return Math.abs(cos) <= Math.SQRT1_2 + 1e-9;
 }
 
 /**
  * How far from `from` towards `toward` the ray leaves the farthest of `boxes` it meets, each grown by
- * 6 px on every side, so it's 6 px past the box itself; or undefined when it meets none.
+ * 6 px on every side, so it's 6 px past the box itself; or undefined when it meets none. Within 45° of
+ * vertical, where the text is centred, it leaves a box past its top or bottom.
  */
 function farthest(from: Point, toward: number, boxes: readonly Rect[]): number | undefined {
   const cos = Math.cos(toward);
   const sin = Math.sin(toward);
+  const across = centred(cos);
   let exit: number | undefined;
   for (const { x, y, width, height } of boxes) {
     const grown = { x: x - PAST_LABEL, y: y - PAST_LABEL, width: width + 2 * PAST_LABEL, height: height + 2 * PAST_LABEL };
-    const leaving = leaves(from, cos, sin, grown);
+    let leaving = leaves(from, cos, sin, grown);
+    // Centred text reaches out to either side, so it's past a box once it's past its top or bottom.
+    if (leaving !== undefined && across) leaving = Math.max(leaving, ((sin > 0 ? grown.y + grown.height : grown.y) - from.y) / sin);
     if (leaving !== undefined) exit = Math.max(exit ?? leaving, leaving);
   }
   return exit;

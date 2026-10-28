@@ -2,7 +2,7 @@
 // Effects rely on these without knowing which builder made a mark.
 
 import { area, curveMonotoneX, line } from "d3-shape";
-import type { MarkGeometry, Point } from "../../contracts/geometry";
+import type { MarkGeometry, Point, Rect } from "../../contracts/geometry";
 import { measurePath } from "../../testing";
 import { matrix } from "../matrix";
 import { describe as build } from "./index";
@@ -212,5 +212,46 @@ describe.each(gappedMarks)("%s", (_name, mark) => {
     expect(points[0]).toEqual(mark.start);
     expect(points[49]).toEqual(mark.end);
     for (const p of points) expect(inside(p, mark.bounds)).toBe(true);
+  });
+});
+
+describe("labels' boxes", () => {
+  const own: Rect[] = [{ x: 4, y: 10, width: 40, height: 14 }];
+  const nearby: Rect[] = [
+    { x: 230, y: 30, width: 18, height: 14 },
+    { x: 230, y: 50, width: 26, height: 14 }
+  ];
+  type Boxes = { labelBounds?: Rect[]; nearbyLabels?: Rect[] };
+  /** A mark from each builder, with the boxes given. */
+  const builders: Record<string, (boxes: Boxes) => MarkGeometry> = {
+    "stacked bar": (boxes) =>
+      build.bar({ key: "e", x: 0, y: 0, width: 120, height: 20, baseline: "left", radius: 4, gap: 2, segments: [{ series: "goals", size: 70 }, { series: "assists", size: 50 }], ...boxes }),
+    slice: (boxes) => build.arc({ key: "g", cx: 100, cy: 100, inner: 70, outer: 116, start: 0.4, end: 2.1, ...boxes }),
+    "line with a gap": (boxes) => build.line({ key: "l", points: [{ x: 0, y: 50 }, { x: 40, y: 20 }, { x: 80, y: 35 }, { x: 120, y: 5 }], breaks: [2], width: 2, ...boxes }),
+    dot: (boxes) => build.point({ key: "m", x: 10, y: 10, r: 4.5, ...boxes }),
+    curve: (boxes) => build.shape({ key: "q", d: curved(values)!, width: 2, ...boxes }),
+    area: (boxes) => build.shape({ key: "s", d: filled([3, 5, 9, 8, 12])!, ...boxes })
+  };
+  const ts = [0, 0.1, 0.35, 0.5, 0.8, 1];
+  /** What a mark draws and where, its boxes left out. */
+  const drawn = (mark: MarkGeometry): object => ({
+    ...mark,
+    path: ts.map((t) => mark.path(t)),
+    angle: ts.map((t) => mark.angle(t)),
+    slice: mark.slice(0.2, 0.8),
+    outline: { d: mark.outline.d, closed: mark.outline.closed, sample: mark.outline.sample(12) },
+    segments: mark.segments?.map(drawn),
+    labelBounds: undefined,
+    nearbyLabels: undefined
+  });
+
+  it.each(Object.entries(builders))("change nothing else about a %s", (_name, make) => {
+    const plain = make({});
+    for (const boxes of [{ labelBounds: own }, { nearbyLabels: nearby }, { labelBounds: own, nearbyLabels: nearby }, { labelBounds: [], nearbyLabels: [] }]) {
+      const boxed = make(boxes);
+      expect(Object.keys(boxed).filter((field) => field !== "labelBounds" && field !== "nearbyLabels")).toEqual(Object.keys(plain));
+      expect(drawn(boxed)).toEqual(drawn(plain));
+      expect({ labelBounds: boxed.labelBounds, nearbyLabels: boxed.nearbyLabels }).toEqual(boxes);
+    }
   });
 });

@@ -24,6 +24,8 @@ export interface ShapeSpec {
   readonly width?: number;
   /** The boxes of the text drawn for the mark, in the marks' px: passed through as `labelBounds`. */
   readonly labelBounds?: readonly Rect[];
+  /** The boxes of other marks' text near it, in the marks' px: passed through as `nearbyLabels`. */
+  readonly nearbyLabels?: readonly Rect[];
 }
 
 /**
@@ -64,6 +66,7 @@ export function describeShape(spec: ShapeSpec): MarkGeometry {
     throw new RangeError(`describe.shape: d must stay finite${m ? " once moved by matrix" : ""}, got ${show(d)}.`);
   }
   const labelBounds = labelBoxes("shape", spec.labelBounds);
+  const nearbyLabels = labelBoxes("shape", spec.nearbyLabels, "nearbyLabels");
 
   if (subpaths.every(closes) && length > 0) {
     const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -77,7 +80,8 @@ export function describeShape(spec: ShapeSpec): MarkGeometry {
       bounds: box,
       center,
       pivot: center,
-      labelBounds
+      labelBounds,
+      nearbyLabels
     });
   }
 
@@ -93,7 +97,8 @@ export function describeShape(spec: ShapeSpec): MarkGeometry {
     bounds: { x: box.x - pad, y: box.y - pad, width: box.width + width, height: box.height + width },
     center: walk.point(0.5),
     pivot: walk.start,
-    labelBounds
+    labelBounds,
+    nearbyLabels
   });
 }
 

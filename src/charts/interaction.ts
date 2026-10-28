@@ -1,6 +1,8 @@
 // Pointer hover for a chart's marks, delegated from the root <svg>. A mouse or pen hovers; a touch tap
-// acts as hover until a tap somewhere else. While a tooltip shows, the pointer on it is on the target
-// it's for, so it can be read, selected and magnified without the hover ending (WCAG 1.4.13).
+// acts as hover until a tap somewhere else. A target that isn't an element (a line chart's nearest
+// point) is found from where the pointer is, on every move. While a tooltip shows, the pointer on it
+// is on the target it's for, so it can be read, selected and magnified without the hover ending
+// (WCAG 1.4.13).
 
 export interface HoverTarget {
   readonly key: string;
@@ -15,8 +17,13 @@ export interface HoverTooltip {
 }
 
 export interface PointerHoverOptions {
-  /** The mark an event target belongs to, if any (leaving marks don't count). */
-  find(target: EventTarget | null): HoverTarget | undefined;
+  /** The mark an event target belongs to, if any (leaving marks don't count), with where the pointer is in client px. */
+  find(target: EventTarget | null, pointer?: { readonly x: number; readonly y: number }): HoverTarget | undefined;
+  /**
+   * Whether the target can change as the pointer moves over one element, as a line chart's nearest
+   * point does: then every move finds it again, and hovers once it's another.
+   */
+  moves?(): boolean;
   hover(target: HoverTarget, source: "pointer" | "touch"): void;
   leave(): void;
   /**
@@ -51,8 +58,11 @@ export function pointerHover(svg: SVGSVGElement, options: PointerHoverOptions): 
    * moves, that doesn't hover it, or a dismissed tooltip would come back at once.
    */
   let still: { readonly x: number; readonly y: number } | undefined;
+  /** The target the pointer was last found on. With `moves`, it hovers again only once that changes, as moving onto another element does. */
+  let under: string | undefined;
 
   const enter = (target: HoverTarget | undefined, source: "pointer" | "touch"): void => {
+    under = target?.key;
     if (target?.key === current) return;
     leave();
     if (!target) return;
@@ -86,8 +96,11 @@ export function pointerHover(svg: SVGSVGElement, options: PointerHoverOptions): 
   const arrive = (element: Element | null, x: number, y: number): void => {
     const tip = tooltipHolding(element);
     if (tip) hold(tip, x, y);
-    else enter(element && svg.contains(element) ? options.find(element) : undefined, "pointer");
+    else enter(element && svg.contains(element) ? options.find(element, { x, y }) : undefined, "pointer");
   };
+
+  /** The target under the pointer, from the event's target and where it is. */
+  const at = (event: MouseEvent): HoverTarget | undefined => options.find(event.target, { x: event.clientX, y: event.clientY });
 
   /** The pointer is on the tooltip, on its target: keyboard focus may have put it there. */
   const hold = (tip: HoverTooltip, x: number, y: number): void => {
@@ -160,7 +173,8 @@ export function pointerHover(svg: SVGSVGElement, options: PointerHoverOptions): 
   const over = (event: PointerEvent): void => {
     if (event.pointerType === "touch" || resting(event)) return;
     letGo();
-    enter(options.find(event.target), "pointer");
+    const target = at(event);
+    if (!options.moves?.() || target?.key !== under) enter(target, "pointer");
   };
   // Off the <svg>, onto the tooltip the pointer stays on the hovered target; anywhere else it leaves.
   const out = (event: PointerEvent): void => {
@@ -169,14 +183,18 @@ export function pointerHover(svg: SVGSVGElement, options: PointerHoverOptions): 
     arrive(landing(event), event.clientX, event.clientY);
   };
   const move = (event: PointerEvent): void => {
-    if (event.pointerType !== "touch") resting(event);
+    if (event.pointerType === "touch" || resting(event) || !options.moves?.()) return;
+    const target = at(event);
+    if (target?.key === under) return;
+    letGo();
+    enter(target, "pointer");
   };
   const down = (event: PointerEvent): void => {
     lastPointer = event.pointerType;
   };
   // A click follows a tap but not a scroll, so scrolling past the chart doesn't hover anything.
   const click = (event: MouseEvent): void => {
-    if (lastPointer === "touch") enter(options.find(event.target), "touch");
+    if (lastPointer === "touch") enter(at(event), "touch");
   };
   // A tap on the tooltip isn't a tap elsewhere: the hover stays. The document hears a chart in a
   // shadow root's events from its host, so the target is the first in the event's path.

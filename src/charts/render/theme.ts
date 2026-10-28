@@ -171,18 +171,19 @@ ${TOKEN_RULES}
 :where(.ec-chart .ec-hot .ec-segment) { fill: var(--ec-mark-strong); }
 :where(.ec-chart .ec-stroke) { fill: none; stroke: var(--ec-mark); stroke-linejoin: round; transition: stroke var(--ec-hover-duration, 100ms) ease-out, opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-stroke) { stroke: var(--ec-mark-strong); }
-:where(.ec-chart .ec-end) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; }
+:where(.ec-chart .ec-end) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-dot) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; opacity: 0; transition: opacity var(--ec-hover-duration, 100ms) ease-out, fill var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-dot) { fill: var(--ec-mark-strong); opacity: 1; }
 :where(.ec-chart .ec-alone .ec-dot) { opacity: 1; }
 :where(.ec-chart .ec-crosshair) { stroke: var(--ec-axis, ${TOKENS.axis}); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
-:where(.ec-chart .ec-column:focus) { outline: none; }
+:where(.ec-chart .ec-column:focus, .ec-chart .ec-stop:focus) { outline: none; }
 :where(.ec-chart .ec-lines, .ec-chart .ec-points) { pointer-events: none; }
 :where(.ec-chart .ec-slice) { fill: var(--ec-mark); stroke: var(--ec-surface, ${TOKENS.surface}); stroke-width: 2; stroke-linejoin: round; transition: fill var(--ec-hover-duration, 100ms) ease-out, opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart .ec-hot .ec-slice) { fill: var(--ec-mark-strong); }
 :where(.ec-chart .ec-center-value) { fill: var(--ec-text, ${TOKENS.text}); font-size: 26px; font-weight: 600; }
 :where(.ec-chart .ec-center-label) { fill: var(--ec-text-muted, ${TOKENS["text-muted"]}); font-size: 12.5px; }
 :where(.ec-chart.ec-hovering .ec-mark:not(.ec-hot) > .ec-body > *) { opacity: var(--ec-dim-opacity, 0.3); }
+:where(.ec-chart.ec-hovering .ec-line:not(.ec-hot-line) > .ec-body > *, .ec-chart.ec-hovering .ec-alone:not(.ec-hot) > .ec-body > *) { opacity: var(--ec-dim-opacity, 0.3); }
 :where(.ec-hovering .ec-run:not(.ec-hot) > .ec-follow) { opacity: var(--ec-dim-opacity, 0.3); }
 :where(.ec-follow) { transition: opacity var(--ec-hover-duration, 100ms) ease-out; }
 :where(.ec-chart.ec-morphing .ec-marks) { visibility: hidden; }

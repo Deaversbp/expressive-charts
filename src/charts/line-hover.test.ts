@@ -304,6 +304,33 @@ describe('lineChart({ hover: "point" }): the tooltip', () => {
   });
 });
 
+describe('lineChart({ hover: "point" }): a tooltip function written for points', () => {
+  /** A function that needs the point's series, as `(d, { series })` would. */
+  const forPoints = (d: Week, point?: { readonly series: string }) => {
+    if (!point) throw new Error("no series");
+    return `Week ${d.week}: ${point.series}`;
+  };
+
+  it("is never given the row alone, for the hidden x's, when made or updated", async () => {
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+    const { chart, stop, column, settle } = setup({ tooltip: forPoints });
+    await settle(chart.update({ data: [...weeks, { week: 5, goals: 6, xg: 5.1 }] }));
+    expect(reportError).not.toHaveBeenCalled();
+    expect(column("2").hasAttribute("aria-describedby")).toBe(false);
+    expect(document.getElementById(stop("xg@5").getAttribute("aria-describedby")!)?.textContent).toBe("Week 5: xg");
+    vi.unstubAllGlobals();
+  });
+
+  it('describes the x\'s again once update() makes the hover "x"', async () => {
+    const both = (d: Week, point?: { readonly series: string }) => `Week ${d.week}${point ? `: ${point.series}` : ""}`;
+    const { chart, column, settle } = setup({ tooltip: both });
+    expect(column("2").hasAttribute("aria-describedby")).toBe(false);
+    await settle(chart.update({ hover: "x" }));
+    expect(document.getElementById(column("2").getAttribute("aria-describedby")!)?.textContent).toBe("Week 2");
+  });
+});
+
 describe('lineChart({ hover: "point" }): the keys', () => {
   interface Row {
     x: number;

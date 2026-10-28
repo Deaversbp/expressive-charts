@@ -1071,10 +1071,14 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     });
   }
 
-  /** The x's accessible name, from where it's heading, and its description (`markDescription`, or a tooltip function's text). */
+  /**
+   * The x's accessible name, from where it's heading, and its description (`markDescription`, or a
+   * tooltip function's text). With `hover: "point"` its column is hidden, and isn't described: a tooltip
+   * function written for points, `(d, { series })`, would be given the row alone.
+   */
   function labelColumn(record: RowRecord<D>): void {
     record.column.setAttribute("aria-label", names.get(record.key)!);
-    tooltip.describe(record.column, record.row);
+    if (hoverKind === "x") tooltip.describe(record.column, record.row);
   }
 
   /** Says what an update changed, in the live region: the chart's summary, or the page's text from it. */

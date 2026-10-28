@@ -53,8 +53,8 @@ export const donutDemo: Demo = {
 /** demo/line.html: the library's line chart, the D3 line, both again with missing weeks, and the Vega-Lite line. */
 export const lineDemo: Demo = {
   path: "/line.html",
-  // About 2,460 px at 1,000 px wide.
-  height: 2600,
+  // About 2,890 px at 1,000 px wide.
+  height: 3100,
   async ready(page) {
     await expect(page.locator("#line .ec-line")).toHaveCount(2);
     await expect(page.locator("#line .ec-column")).toHaveCount(38);
@@ -95,6 +95,8 @@ export const shapesDemo: Demo = {
 /** demo/season.html: the three linked charts, the players' bars and the D3 slope chart, after matchweek 24. */
 export const seasonDemo: Demo = {
   path: "/season.html",
+  // About 1,980 px at 1,000 px wide: close enough to the config's 2,000 that another browser's text could pass it.
+  height: 2200,
   async ready(page) {
     await expect(page.locator("#goals .ec-mark")).toHaveCount(24);
     await expect(page.locator("#line .ec-column")).toHaveCount(24);

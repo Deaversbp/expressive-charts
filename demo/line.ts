@@ -3,7 +3,8 @@
 // fromVegaView(); and the same season as a weekly data feed recorded it, with weeks missing, on
 // lineChart and on a D3 line drawn with .defined(). All five carry the same decoration: the goals line
 // red wherever it's below xG, and a ball riding its leading edge. One playback() drives the four that
-// play, with its playButton(), the page's scrubber and the motion switch.
+// play, with its playButton(), the page's scrubber and the motion switch. Two toggles curve the line
+// charts' lines, and the Vega-Lite line's, and hover their nearest point instead of the week.
 import {
   describe,
   expressive,
@@ -17,12 +18,13 @@ import {
   registerIcons,
   samplesAlong,
   threshold,
-  travel
+  travel,
+  type MarkSummary
 } from "../src/index";
 import { sport } from "../src/icons/sport/index";
 import { drawGaps, type FeedWeek, type Trace as FeedTrace } from "./d3-gaps";
 import { drawLine, type Week } from "./d3-line";
-import { drawVegaLine, type Row, type VegaLine } from "./vega-line";
+import { drawVegaLine, type Curve, type Row, type VegaLine } from "./vega-line";
 
 // The ball goes by its name, "soccer-ball", so the decoration reads the same on both charts.
 registerIcons(sport);
@@ -71,6 +73,8 @@ function signed(value: number): string {
 }
 /** The prototype's "+0.4 vs expected": goals less xG. */
 const versus = (d: Week): string => `${signed(d.goals - d.xg)} vs expected`;
+/** One series' value at a week, as its end label words it: "18 goals", "19.0 xG". */
+const valueOf = (d: Week, series: string): string => (series === "xg" ? `${d.xg.toFixed(1)} xG` : goals(d.goals));
 
 /** The ball's width in px: smaller than its own 17 px, so it doesn't hide the lines' last weeks. */
 const BALL = 11;
@@ -90,10 +94,13 @@ const chart = lineChart<Week>("#line", {
   // The prototype's end labels: "28 goals", "27.6 xG".
   labels: (value, series) => (series === "xg" ? `${value.toFixed(1)} xG` : goals(Math.round(value))),
   legend: { entries: [{ label: "Goals below xG", color: "negative" }] },
-  // The prototype's tooltip: the week, both values, and the gap. The page's CSS makes the first line bold.
-  tooltip: (d) => `Matchweek ${d.week}\n${goals(d.goals)} · ${d.xg.toFixed(1)} xG\n${versus(d)}`,
-  // Each week's name has its values; its description adds only the gap, so nothing is read twice.
-  markLabel: (d) => `Matchweek ${d.week}: ${goals(d.goals)}, ${d.xg.toFixed(1)} xG`,
+  // The prototype's tooltip: the week, both values, and the gap; with Nearest point, the point's one
+  // value and the gap. The page's CSS makes the first line bold.
+  tooltip: (d, point) =>
+    point ? `Matchweek ${d.week}\n${valueOf(d, point.series)}\n${versus(d)}` : `Matchweek ${d.week}\n${goals(d.goals)} · ${d.xg.toFixed(1)} xG\n${versus(d)}`,
+  // Each week's name has its values, and each point's, with Nearest point, its one value; the
+  // description adds only the gap, so nothing is read twice.
+  markLabel: (d, mark) => `Matchweek ${d.week}: ${mark.values.map((value) => valueOf(d, value.series)).join(", ")}`,
   markDescription: versus,
   table: {
     category: "Matchweek",
@@ -149,6 +156,10 @@ const feedGoals = (d: FeedWeek): string => (d.goals === null ? "goals missing" :
 const feedXg = (d: FeedWeek): string => (d.xg === null ? "xG missing" : `${d.xg.toFixed(1)} xG`);
 /** The gap, or nothing where the feed has no goals or no xG to compare. */
 const feedVersus = (d: FeedWeek): string => (d.goals === null || d.xg === null ? "" : versus({ week: d.week, goals: d.goals, xg: d.xg }));
+/** One series' value at a week, or that it's missing: "18 goals", "xG missing". */
+const feedValue = (d: FeedWeek, series: string): string => (series === "xg" ? feedXg(d) : feedGoals(d));
+/** With Nearest point, the series of the point a stop is, by its key ("goals@12"); a week's stop ("12") has none. */
+const pointSeries = (mark: MarkSummary): string | undefined => (mark.key.includes("@") ? mark.values[0]?.series : undefined);
 
 const gapsChart = lineChart<FeedWeek>("#gaps", {
   label: "Goals vs expected goals, with missing weeks",
@@ -160,9 +171,13 @@ const gapsChart = lineChart<FeedWeek>("#gaps", {
   seriesLabels: { goals: "Goals scored", xg: "Expected goals (xG)" },
   labels: (value, series) => (series === "xg" ? `${value.toFixed(1)} xG` : goals(Math.round(value))),
   legend: { entries: [{ label: "Goals below xG", color: "negative" }] },
-  // As the first chart's, with what's missing said where a value would be, and no gap without both.
-  tooltip: (d) => [`Matchweek ${d.week}`, `${feedGoals(d)} · ${feedXg(d)}`, feedVersus(d)].filter(Boolean).join("\n"),
-  markLabel: (d) => `Matchweek ${d.week}: ${feedGoals(d)}, ${feedXg(d)}`,
+  // As the first chart's, with what's missing said where a value would be, and no gap without both. A
+  // point is never missing: a missing value has no point.
+  tooltip: (d, point) => [`Matchweek ${d.week}`, point ? feedValue(d, point.series) : `${feedGoals(d)} · ${feedXg(d)}`, feedVersus(d)].filter(Boolean).join("\n"),
+  markLabel: (d, mark) => {
+    const series = pointSeries(mark);
+    return `Matchweek ${d.week}: ${series ? feedValue(d, series) : `${feedGoals(d)}, ${feedXg(d)}`}`;
+  },
   markDescription: feedVersus,
   table: {
     category: "Matchweek",
@@ -296,6 +311,47 @@ slider?.addEventListener("input", () => {
   const week = Number(slider.value);
   slider.setAttribute("aria-valuetext", `Through matchweek ${week}`);
   seasonPlayback.seek(week);
+});
+
+// ── The toggles ──────────────────────────────────────────────────────────────
+
+/** Wires a row of toggle buttons; returns a function that shows a value as selected. */
+function segmented(id: string, onPick: (value: string) => void): (value: string) => void {
+  const group = document.getElementById(id);
+  const buttons = Array.from(group?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+  const show = (value: string): void => {
+    for (const button of buttons) button.setAttribute("aria-pressed", String(button.dataset.value === value));
+  };
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      const value = button.dataset.value ?? "";
+      show(value);
+      onPick(value);
+    });
+  }
+  return show;
+}
+
+// The toggles drive both line charts, the one with missing weeks too, where each run between gaps curves
+// on its own and the keys pass over a missing week. Focus stays on the toggle.
+
+// Straight or Curved: each line chart eases its lines between the two as a change, and Vega draws its
+// line again from the spec's signal, which fromVegaView() follows as a move, as it follows a resize.
+let curve: Curve = "linear";
+segmented("curve", (value) => {
+  if (value === curve) return;
+  curve = value as Curve;
+  void chart.update({ curve });
+  void gapsChart.update({ curve });
+  void vegaReady.then((vegaLine) => vegaLine.curve(curve));
+});
+
+// Each week or Nearest point: a hover that's held ends, and each chart's tab stop moves to the nearest
+// stop of the new kind, a week's or a point's.
+segmented("hover", (value) => {
+  const hover = value as "x" | "point";
+  void chart.update({ hover });
+  void gapsChart.update({ hover });
 });
 
 // The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.

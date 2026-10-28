@@ -2,11 +2,11 @@
 
 This is a written WCAG 2.2 AA pass of the demo pages, made before the first release. It covers `bars.html`, `donut.html`, `line.html` and `morph.html`, since M7 `season.html`, and since M9 `shapes.html`: the library's charts, its controls, and the D3, Observable Plot, Vega-Lite and hand-written charts that `expressive()` and `fromVegaView()` drive there. `stress.html` has no table yet. axe and the DOM checks below run on it as on the others, but its criteria haven't been written up. `index.html` (a list of links) and `lab.html` (the single-file prototype the library grew out of, which doesn't use it) aren't part of it.
 
-It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. And in M7 (24 October 2026), hover stopped dimming the other marks' labels, with a check that they keep 4.5:1 (**contrast on hover**, below); the rows for 1.4.3 and the judgement call on dimming describe it as it is now. `season.html` came in M7 step 5, and its table was written then (26 October 2026), from the same checks. In M8 the tooltip became hoverable, which fixed finding 6, with a check that a pointer can move onto it (**onto the tooltip**, below); the rows for 1.4.13 describe it as it is now. Later in M8 (27 October 2026) the line page gained two charts with missing weeks, whose rows are under [line.html](#with-missing-weeks-m8), and the season page dropped its workarounds for what the library now does, which changed its row for 1.4.10. Then keyboard focus at a week with no values got a line in the focus colour, which made the third judgement call a pass. In M9 (27 October 2026) the shapes page came, with [its table](#shapeshtml), written from the same checks; the donut page's D3 pie began to swap its effects in place, and the morph page's switch was linked with a bar chart beside it, which add to those pages' rows. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
+It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. And in M7 (24 October 2026), hover stopped dimming the other marks' labels, with a check that they keep 4.5:1 (**contrast on hover**, below); the rows for 1.4.3 and the judgement call on dimming describe it as it is now. `season.html` came in M7 step 5, and its table was written then (26 October 2026), from the same checks. In M8 the tooltip became hoverable, which fixed finding 6, with a check that a pointer can move onto it (**onto the tooltip**, below); the rows for 1.4.13 describe it as it is now. Later in M8 (27 October 2026) the line page gained two charts with missing weeks, whose rows are under [line.html](#with-missing-weeks-m8), and the season page dropped its workarounds for what the library now does, which changed its row for 1.4.10. Then keyboard focus at a week with no values got a line in the focus colour, which made the third judgement call a pass. In M9 (27 October 2026) the shapes page came, with [its table](#shapeshtml), written from the same checks; the donut page's D3 pie began to swap its effects in place, and the morph page's switch was linked with a bar chart beside it, which add to those pages' rows. In M10 (28 October 2026) the line page gained two toggles, Straight or Curved and Each week or Nearest point, whose rows are under [line.html](#the-toggles-and-a-hover-on-one-point-m10), with a problem not fixed yet (finding 7), and the season page's goals line gained `delta()`, which adds to its rows. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
 
 ## How it was checked
 
-- **axe.** `axe-core` 4.14.0, a dev dependency pinned exactly, runs its WCAG rules for levels A and AA in 2.0, 2.1 and 2.2 (the tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` and `wcag22aa`: 70 of its 105 rules). It runs on every page at rest in light and in dark, under forced colours in each, at 320 px wide, and on `morph.html` part way through a switch. That's `tests/visual/a11y.spec.ts`, in Chromium, Firefox and WebKit.
+- **axe.** `axe-core` 4.14.0, a dev dependency pinned exactly, runs its WCAG rules for levels A and AA in 2.0, 2.1 and 2.2 (the tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` and `wcag22aa`: 70 of its 105 rules). It runs on every page at rest in light and in dark, under forced colours in each, at 320 px wide, on `morph.html` part way through a switch, and since M10 on `line.html` with Curved and Nearest point picked and a point focused, in light and dark. That's `tests/visual/a11y.spec.ts`, in Chromium, Firefox and WebKit.
 - **DOM checks** in the same file, for what axe can't see. Below, each has a short name:
   - **tab order**: every tab stop in order, each showing its focus (the chart's ring, or the control's outline), then Shift+Tab back through every one;
   - **ring**: the tooltip never covers the focus ring, at any mark of each library chart;
@@ -19,12 +19,12 @@ It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since 
   - **forced**: under forced colours, each legend's swatches keep their own colours, and a pressed toggle shows in the viewer's selection colours.
 - **The rest of the visual suite**: reduced motion and Off on each page, Play and Pause, the scrubber, the switch's timing, and what a screen reader can reach mid-switch (Chrome's accessibility tree, read over CDP).
 - **Contrast of SVG text and marks**, which axe reports as "incomplete" rather than judging: worked out from the theme's tokens ([Contrast](#contrast)), and validated for the marks by `src/charts/render/theme.test.ts`.
-- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. Section H, the season page's linked hover and change labels, passed on 26 October 2026. Section I, M8's missing weeks, Page Up and Page Down, and the season page again, passed on 27 October 2026. Section J, M9's shapes page, the D3 pie's picker and the morph page's link, passed on 27 October 2026. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
+- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. Section H, the season page's linked hover and change labels, passed on 26 October 2026. Section I, M8's missing weeks, Page Up and Page Down, and the season page again, passed on 27 October 2026. Section J, M9's shapes page, the D3 pie's picker and the morph page's link, passed on 27 October 2026. Section K, M10's toggles and hover on one point on the line page, and the season page's goals line, hasn't been run yet. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
 - **By hand**, in headless Chromium: the pages at 320 px, with the text spacing, and under forced colours, looked at as pictures; the tooltip's place against every focused mark; the target sizes of every control and mark; and Chrome's accessibility tree for each chart.
 
 ## What it found
 
-Six problems: five fixed as part of the audit, and the sixth in M8. Three judgement calls are listed after them. The third came from M8's charts with missing weeks, and a change later in M8 made it a pass.
+Seven problems: five fixed as part of the audit, the sixth in M8, and the seventh, found in M10, not fixed yet. Three judgement calls are listed after them. The third came from M8's charts with missing weeks, and a change later in M8 made it a pass.
 
 **Fixed:**
 
@@ -37,6 +37,14 @@ Six problems: five fixed as part of the audit, and the sixth in M8. Three judgem
 **Fixed in M8** ([the development log](plan.md#m8-a-tooltip-that-can-be-hovered-change-labels-that-hold-up-and-gaps-in-lines-030)):
 
 6. **The tooltip couldn't be hovered (1.4.13, "hoverable").** It was `pointer-events: none`, so moving the pointer onto it hovered whatever was under it: another mark, whose tooltip replaced it, or nothing, which hid it. Now it takes the pointer while it shows, and the pointer on it stays on the mark it describes: leaving it for a mark hovers that mark, and leaving it for anything else ends the hover. Beside a mark, a clear bridge spans the 12 px gap between them, so the pointer can go straight from one to the other: without it, the pointer crossed 4 or 5 px of the next row on the bars page, and 10 to 13 px of nothing round the donut. A tooltip that comes up under the pointer, as a crosshair's can, lets it through until the pointer has been off it, so it never catches a pointer running along a chart. The marks it covers are reached round it, since a bar's target is its whole row or column, or by keyboard. Escape still hides it without the pointer moving.
+
+**Found in M10, not fixed yet** (library code, for a follow-up):
+
+7. **A point's tooltip can't always be hovered (1.4.13, "hoverable").** With Nearest point, the pointer anywhere over the plot hovers the point nearest it, so on the way from a point up to its tooltip it has to stay nearer that point than any other until it's on the bridge or the tooltip. Measured on the line page's first chart in Docker's Chromium, moving the pointer a pixel at a time from each point straight up into its tooltip (54 of the 76 points have it above at 1,000 px; the rest have it below, near the top of the chart):
+   - **The bridge starts too far up.** It starts about 3 px above the point's centre. Where the other line's point at that week is less than about 6 px above, the pointer is nearer that one first, and it takes the hover: 14 points at either width (at 1,000 px, the lower of the two at weeks 1, 3, 4, 8, 9, 12, 14, 16 to 21 and 23).
+   - **A gap between the tooltip and its bridge.** The tooltip's box ends a fraction of a pixel above its bridge (0.36 px here). Where a whole pixel falls in that gap, as the pointer lands on one, the pointer is on neither, so it's over the plot, and the nearest point there takes the hover: at 320 px, 37 more of the points lose it there, 16 or 17 px up; at 1,000 px none, by where the pixels fall. On bars, and on a line chart's weeks, the same mark is under the gap, so nothing changes there.
+   
+   Either way, the point that takes the hover brings up its own tooltip, and the first one's goes. Every point's tooltip shows on focus, and its value is in its name and the table. Starting the bridge at the point's centre, and drawing it flush with the tooltip's box, would fix both. A library step before 0.5.0 is to fix it.
 
 **Judgement calls**, which could reasonably go the other way:
 
@@ -62,7 +70,7 @@ The marks' figures are validated by `theme.test.ts`, which fails if any slot fal
 
 ## Browsers
 
-Every DOM check in the visual suite, this audit's included, runs in Chromium, Firefox and WebKit, in the Playwright image CI uses (Playwright 1.64.1, Linux): 233 tests in each at M9 step 7 (27 October 2026), 29 of which Firefox and WebKit skip. Screenshots are Chromium's only. Two kinds of check run in Chromium alone, and are the 29: the switch's accessibility tree, which is read over CDP, and forced colours, since Firefox's and WebKit's emulation only matches the media query and forces no colours.
+Every DOM check in the visual suite, this audit's included, runs in Chromium, Firefox and WebKit, in the Playwright image CI uses (Playwright 1.64.1, Linux): 248 tests in each at M10 step 6 (28 October 2026), 29 of which Firefox and WebKit skip. Screenshots are Chromium's only. Two kinds of check run in Chromium alone, and are the 29: the switch's accessibility tree, which is read over CDP, and forced colours, since Firefox's and WebKit's emulation only matches the media query and forces no colours.
 
 The first runs in Firefox and WebKit failed in four ways, and each was the test, not the library:
 
@@ -219,7 +227,7 @@ The library's `lineChart` with `threshold` and a riding ball, a D3 line through 
 | 2.2.2 Pause, stop, hide | Pass | Play season, about 6.5 s, starts only when pressed, and Pause stops it (`line.spec.ts`). 5 s: the ball's first trip at load ends within 1.4 s. |
 | 2.3.1 Three flashes | Pass | Nothing flashes. |
 | 2.4.1, 2.4.2 | Pass | axe. |
-| 2.4.3 Focus order | Pass | tab order: the motion switch, Play season, the scrubber, the chart, its table, the D3 line, the chart with missing weeks, its table, its D3 line, the Vega-Lite line. |
+| 2.4.3 Focus order | Pass | tab order: the motion switch, Play season, the scrubber, since M10 the four toggles ([below](#the-toggles-and-a-hover-on-one-point-m10)), the chart, its table, the D3 line, the chart with missing weeks, its table, its D3 line, the Vega-Lite line. |
 | 2.4.6 Headings and labels | Pass | Card headings; the scrubber is named Matchweek, and says its value as "Through matchweek 38". |
 | 2.4.7 Focus visible | Pass | tab order; `line.spec.ts` pictures the ring on each chart. |
 | 2.4.11 Focus not obscured | Pass | ring: the tooltip sits above the highest point, clear of the rings, at every week. |
@@ -255,6 +263,35 @@ The second pair of cards: the same season as a weekly data feed recorded it, wit
 | 2.4.11 Focus not obscured | Pass | At a week with values the tooltip sits above the highest point, as on the first chart. At a week with none it sits at the crosshair's top, over the top of the focus line, which runs on below it. Escape hides it. |
 | Reduced motion | Pass | `line.spec.ts`: with reduced motion and with Off, a gap stays a gap. Revealed into the gap, each line ends at matchweek 8 with its ball there; after Play, each ball is at the tip, past the gap, and no red is drawn in any gap. |
 | Forced colours | Pass | forced: the D3 line's legend keeps its colours, as the first one's does. |
+
+#### The toggles, and a hover on one point (M10)
+
+Above the first chart, two groups of toggle buttons: Line, Straight or Curved (`update({ curve })`), and Hover, Each week or Nearest point (`update({ hover })`). They drive both `lineChart`s, the one with missing weeks too, and the Vega-Lite line follows Straight or Curved. With Nearest point, the pointer hovers the point nearest it, the points are the focus stops, and the other line dims. The tables above hold for the page at rest; these are the rows the toggles add to. Script K hasn't been run yet.
+
+| Criterion | Result | Evidence |
+| --- | --- | --- |
+| 1.1.1 Non-text content | Pass | axe, with Curved and Nearest point picked and a point focused, light and dark. Each point is an image named by its week and its one value ("Matchweek 12: 18 goals"; "Matchweek 4: 4 goals" where xG is missing), and described by the week's gap. The weeks' columns are hidden (`display="none"`), so they aren't read. Curved changes no name (`line.spec.ts`; NVDA K). |
+| 1.3.1 Info and relationships | Pass | The toggles are two groups, named Line and Hover by their visible labels (`aria-labelledby`), each button `aria-pressed` (`line.spec.ts`). |
+| 1.3.2 Meaningful sequence | Pass | The points are in the DOM line by line, in week order, as Left and Right go. |
+| 1.3.3 Sensory characteristics | Pass | "Curved" and "the other line dims" describe what's seen; the names, the tooltip and the table say every value. |
+| 1.4.1 Use of colour | Pass | A hovered point is told by its emphasis, by its ring when focused, and by the other line dimming; its value is in the tooltip and its name. |
+| 1.4.3 Contrast (minimum) | Pass | axe, with the toggles picked. The toggles' labels are the pages' muted text on a card (5.04:1 light, 5.24:1 dark). Nearest point dims no text: `line.spec.ts` checks that every text in the chart, the end labels and the axes too, is drawn at full strength while a point is hovered or focused. |
+| 1.4.10 Reflow | Pass | reflow and axe at 320 px: the toggles wrap, each label kept on a line with its buttons. |
+| 1.4.11 Non-text contrast | Pass | The hovered point in its series' strong colour; the ring on a point, as on a week ([Contrast](#contrast)). The other line, its points and its decorations at 30%: judgement call, as for dimmed bars. A pressed toggle shows its wash and bold, and under forced colours the viewer's selection colours (forced). |
+| 1.4.13 Content on hover or focus | Fail, not fixed yet | Persistent and dismissible: a point's tooltip stays while the pointer does, and Escape hides it until the pointer finds another point (`line.spec.ts`). Hoverable only from some points: from week 20's goals the pointer goes straight up onto its tooltip over the bridge, keeping the hover (`line.spec.ts`), but from 14 points at 1,000 px, and 51 at 320 px, another point takes the hover on the way ([finding 7](#what-it-found)). |
+| 2.1.1 Keyboard | Pass | The toggles by Tab and Space. With Nearest point, Left and Right along a line, passing over a missing week; Up and Down between the lines, by where they're drawn, doing nothing where the other line is missing; Home, End, Page Up, Page Down and Escape (`line.spec.ts`; NVDA K 1–21). |
+| 2.2.2 Pause, stop, hide | Pass | A change of curve eases in half a second in Presentation, and only when it's picked. |
+| 2.4.3 Focus order | Pass | tab order: the four toggles after the scrubber, before the chart. A pick keeps focus on its button, and each chart's tab stop where it was: on the same week, or on a point at it, or on the week of the point (`line.spec.ts`; NVDA K 4–9, 19–20). |
+| 2.4.6 Headings and labels | Pass | The groups' visible labels, Line and Hover, are their names. |
+| 2.4.7 Focus visible | Pass | tab order; `line.spec.ts` pictures the ring on a point, light and dark. |
+| 2.4.11 Focus not obscured | Pass | `line.spec.ts`: at every point of both lines, the tooltip is clear of the ring. |
+| 2.5.3 Label in name | Pass | Each toggle's name is its text. |
+| 2.5.8 Target size (minimum) | Pass | axe: each toggle is 30 px tall. With Nearest point, a point's target is all of the plot nearer it than any other point. |
+| 3.2.1, 3.2.2 | Pass | A pick changes only the charts, which the card's note says; focus and the tab stops stay. |
+| 4.1.2 Name, role, value | Pass | axe; the toggles are `aria-pressed`, and each point's name and description say its value. |
+| 4.1.3 Status messages | Pass | A pick announces nothing: the pressed state is read on the button (NVDA K 4, 7). |
+| Reduced motion | Pass | `line.spec.ts`: with reduced motion and with Off, Curved draws the curve at once, with the red and the ball where they end, and a point's hover shows at once, with no fade. |
+| Forced colours | Pass | forced: a pressed toggle shows in the viewer's selection colours. |
 
 ### morph.html
 
@@ -299,20 +336,20 @@ The donut and the columns in one `chartSwitch`, with `morph()`, the V key and th
 
 ### season.html
 
-The library's `barChart`, twice (goals per matchweek, and goals by player), and `lineChart`, with columns and a slope chart drawn with D3 through `expressive()`. Three of them are in one `link()`; the players' bars have `delta()`, the slope chart `label()` and `trace()`, and Play next matchweek moves every chart on a week.
+The library's `barChart`, twice (goals per matchweek, and goals by player), and `lineChart`, with columns and a slope chart drawn with D3 through `expressive()`. Three of them are in one `link()`; the players' bars have `delta()`, the slope chart `label()` and `trace()`, and Play next matchweek moves every chart on a week. Since M10 the goals line has `delta()` too, past its end label and clear of xG's: only the goals line, since the two lines end close together and xG's change would land on it. Script K's steps 22–24 cover it, and haven't been run yet.
 
 | Criterion | Result | Evidence |
 | --- | --- | --- |
-| 1.1.1 Non-text content | Pass | axe. Each chart is a named group and each mark one named image ("Matchweek 13: 4 goals", "Matchweek 1: 7 shots", "Okafor: 1 goal at matchweek 1, 14 goals after matchweek 24, +13"). The ball, the pulses, the trace and the text `delta()` and `label()` draw are in `aria-hidden` overlays; what the text says is in the announcement, the players' table and the slope lines' names (M7 decision 16). NVDA H. |
+| 1.1.1 Non-text content | Pass | axe. Each chart is a named group and each mark one named image ("Matchweek 13: 4 goals", "Matchweek 1: 7 shots", "Okafor: 1 goal at matchweek 1, 14 goals after matchweek 24, +13"). The ball, the pulses, the trace and the text `delta()` and `label()` draw are in `aria-hidden` overlays; what the text says is in the announcement, the players' table and the slope lines' names (M7 decision 16). The goals line's change, since M10, is in the announcement too ("Season to date: 43 goals +2, 39.7 xG +1.8."). NVDA H, K 22–24. |
 | 1.3.1 Info and relationships | Pass | axe. The goals and line tables have the matchweek as row header, and the players' table its Change and Since matchweek 1 columns (NVDA H, steps 9–11). The toggles are a group named Linked marks, and each chart has a heading. |
 | 1.3.2 Meaningful sequence | Pass | The two column charts come before the line in the DOM, as they're stacked on the left; the bars follow their sort, and the slope lines are in the players' order. |
 | 1.3.3 Sensory characteristics | Pass | The instructions name controls and keys. "Lights up" describes what's seen; the names and tables don't depend on it. |
 | 1.3.4 Orientation | Pass | reflow. |
 | 1.4.1 Use of colour | Pass | A linked week is told by its emphasis and by every other mark dimming, and it's visual only: each value is in the names and the tables. xG is dashed as well as grey. The slope lines share one colour, each named at its end. |
-| 1.4.3 Contrast (minimum) | Pass | axe, light and dark; [Contrast](#contrast); contrast on hover, on the goals chart, the line and the players' bars. `season.spec.ts`: a linked chart's labels stay at full strength while its columns dim. The D3 charts' names are the page's `--ink-2` (7.73:1 light, 9.72:1 dark), their ticks `--ec-text-muted`, and the text `label()` draws `--ec-text`. |
+| 1.4.3 Contrast (minimum) | Pass | axe, light and dark; [Contrast](#contrast); contrast on hover, on the goals chart, the line and the players' bars. `season.spec.ts`: a linked chart's labels stay at full strength while its columns dim. The D3 charts' names are the page's `--ink-2` (7.73:1 light, 9.72:1 dark), their ticks `--ec-text-muted`, and the text `label()` draws `--ec-text`, as is the goals line's change. |
 | 1.4.4 Resize text | Pass | reflow. |
 | 1.4.5 Images of text | Pass | All text is text. |
-| 1.4.10 Reflow | Pass | reflow and axe at 320 px. `season.spec.ts`: after a matchweek at 320 px, with Okafor's bar at the end of its scale, every change stays inside its card's padding, with no sideways scroll: the players' chart keeps 28 px for them inside itself, with `room: 28` (M8). Where the goals chart's week names would overlap, the chart draws every 2nd (at 320 px, and at 1,000 px in the suite's fonts), and where its values would, it leaves them out (at 320 px): each is in the names, the tooltip and the table. |
+| 1.4.10 Reflow | Pass | reflow and axe at 320 px. `season.spec.ts`: after a matchweek at 320 px, with Okafor's bar at the end of its scale, every change stays inside its card's padding, with no sideways scroll: the players' chart keeps 28 px for them inside itself, with `room: 28` (M8). The goals line's change stays inside its card too, clear of both end labels, though the plot is narrow and the lines end close together (M10). Where the goals chart's week names would overlap, the chart draws every 2nd (at 320 px, and at 1,000 px in the suite's fonts), and where its values would, it leaves them out (at 320 px): each is in the names, the tooltip and the table. |
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast): the marks, the ring. Marks dimmed by a hover, linked or not: judgement call. |
 | 1.4.12 Text spacing | Pass | spacing. The slope chart draws itself again when its names grow, so each change stays clear of its name. |
 | 1.4.13 Content on hover or focus | Pass (fixed) | hover and onto the tooltip, on the three library charts. Finding 6. A linked chart shows no tooltip. |
@@ -334,8 +371,8 @@ The library's `barChart`, twice (goals per matchweek, and goals by player), and 
 | 3.2.3, 3.2.4 Consistency | Pass | The motion switch as on every page. |
 | 3.3.2 Labels or instructions | Pass | Every control's text is its label. |
 | 4.1.2 Name, role, value | Pass | axe; the toggles are `aria-pressed`. NVDA H. |
-| 4.1.3 Status messages | Pass | Each matchweek is announced once, by the players' chart, with each player who scored, their change and their total (`season.spec.ts`; NVDA H, steps 6 and 7). A linked hover announces nothing. |
-| Reduced motion | Pass | `season.spec.ts`: with reduced motion and with Off, the changes and the slope chart's labels show at once, and a trace is whole. |
+| 4.1.3 Status messages | Pass | Each matchweek is announced once, by the players' chart, with each player who scored, their change and their total (`season.spec.ts`; NVDA H, steps 6 and 7). Since M10 it ends with the season to date and its change, which the goals line's `delta()` shows: "Season to date: 43 goals +2, 39.7 xG +1.8." (NVDA K 22–24). A linked hover announces nothing. |
+| Reduced motion | Pass | `season.spec.ts`: with reduced motion and with Off, the changes, the goals line's too, and the slope chart's labels show at once, and a trace is whole. |
 | Forced colours | Pass | forced; axe under forced colours. The line's legend keeps its colours. |
 
 ### shapes.html

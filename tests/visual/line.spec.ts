@@ -1,11 +1,15 @@
 // Screenshots of demo/line.html on a stopped clock: the theme at rest, both charts mid-play at week 20,
 // the crosshair with its tooltip, keyboard focus, the D3 line hovered, the Vega-Lite line at rest,
-// hovered and focused, and the charts with missing weeks mid-play in a gap, and at a missing week
-// hovered and focused.
+// hovered and focused, the first chart's lines curved and the Vega-Lite line with them, a point hovered
+// and focused with Nearest point, and the charts with missing weeks mid-play in a gap, and at a missing
+// week hovered and focused.
 // Beside them, DOM checks: how long Play takes in each mode, reduced motion, the scrubber, the names,
-// legend and table, the Vega-Lite line following a resize, and the gaps: no red in them, the ball
-// waiting and jumping, and a gap staying a gap without motion. Names start with "line-", since
-// screenshot names are shared across files.
+// legend and table, the Vega-Lite line following a resize, the toggles (each pick pressed, focus kept
+// on it, the chart's tab stop kept), the curve (through every week's value, never past the values
+// either side, eased, the red and the ball following, and at once without motion), Nearest point (the
+// other line and its decorations dimmed, no text, the tooltip's point and words, the keys, Escape, and
+// at once without motion), and the gaps: no red in them, the ball waiting and jumping, and a gap
+// staying a gap without motion. Names start with "line-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, iconTransforms, lineDemo, openDemo, pickMode, REST, tabInto } from "./demo";
@@ -140,6 +144,69 @@ async function hoverD3Goals(page: Page, share = 0.3, path: Locator = d3Path(page
     throw new Error("No whole pixel on the line's stroke.");
   }, share);
   await page.mouse.move(point.x, point.y);
+}
+
+/** A toggle above the first chart, by its text. */
+const toggle = (page: Page, name: "Straight" | "Curved" | "Each week" | "Nearest point"): Locator => page.getByRole("button", { name, exact: true });
+/** A line's stroke on the first chart. */
+const stroke = (page: Page, series: "goals" | "xg"): Locator => line(page).locator(`.ec-line[data-key="${series}"] .ec-stroke`);
+/** A point's focus stop with Nearest point, by its key: "goals@12". */
+const pointStop = (page: Page, key: string): Locator => line(page).locator(`.ec-stop[data-key="${key}"]`);
+
+/**
+ * How a line on the first chart runs: its vertices, the weeks whose point the stroke misses (no vertex
+ * within 0.05 px of the point's dot), and the weeks after which it goes above or below both weeks'
+ * values on the way to the next (more than 0.05 px past either).
+ */
+async function runOf(page: Page, series: "goals" | "xg"): Promise<{ readonly vertices: number; readonly missed: string[]; readonly overshoots: string[] }> {
+  return line(page).evaluate((root, series) => {
+    const d = root.querySelector(`.ec-line[data-key="${series}"] .ec-stroke`)?.getAttribute("d") ?? "";
+    const numbers = (d.match(/-?\d*\.?\d+(?:e-?\d+)?/g) ?? []).map(Number);
+    const vertices = numbers.flatMap((x, i) => (i % 2 === 0 ? [{ x, y: numbers[i + 1]! }] : []));
+    const points = [...root.querySelectorAll<SVGGraphicsElement>(`.ec-point[data-series="${series}"] .ec-dot`)].map((dot) => {
+      const box = dot.getBBox();
+      return { week: dot.closest("[data-key]")!.getAttribute("data-key")!, x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    });
+    const missed = points.filter((p) => !vertices.some((v) => Math.hypot(v.x - p.x, v.y - p.y) < 0.05)).map((p) => p.week);
+    const overshoots = points.slice(1).flatMap((to, i) => {
+      const from = points[i]!;
+      const [lo, hi] = [Math.min(from.y, to.y), Math.max(from.y, to.y)];
+      return vertices.some((v) => v.x > from.x && v.x < to.x && (v.y < lo - 0.05 || v.y > hi + 0.05)) ? [from.week] : [];
+    });
+    return { vertices: vertices.length, missed, overshoots };
+  }, series);
+}
+
+/** Moves the pointer onto a point's dot on the first chart, by its key: with Nearest point, it hovers that point. */
+async function hoverPoint(page: Page, key: string): Promise<{ x: number; y: number }> {
+  const box = (await line(page).locator(`.ec-point[data-key="${key}"] .ec-dot`).boundingBox())!;
+  const at = { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
+  await page.mouse.move(at.x, at.y);
+  return at;
+}
+
+/**
+ * The first chart as a point hover leaves it: the opacity each line's stroke and end dot, and each line's
+ * decoration (threshold's red and the ball), are drawn at, and the texts drawn at less than full strength.
+ * The hover's CSS transitions run on the browser's own time, so they're finished first.
+ */
+async function strengths(page: Page): Promise<{ readonly lines: Record<string, number[]>; readonly decoration: number; readonly faded: string[] }> {
+  return line(page).evaluate((root) => {
+    for (const animation of document.getAnimations()) animation.finish();
+    const opacity = (element: Element): number => {
+      let product = 1;
+      for (let at: Element | null = element; at; at = at.parentElement) product *= Number(getComputedStyle(at).opacity);
+      return Math.round(product * 100) / 100;
+    };
+    const lines = Object.fromEntries(
+      ["goals", "xg"].map((series) => [series, [".ec-stroke", ".ec-end"].map((part) => opacity(root.querySelector(`.ec-line[data-key="${series}"] ${part}`)!))])
+    );
+    const decoration = opacity(root.querySelector('.ec-overlay .ec-run[data-key="goals"] .ec-follow')!);
+    const faded = [...root.querySelectorAll("svg text")]
+      .filter((text) => text.textContent?.trim() && !text.closest(".ec-icon") && getComputedStyle(text).visibility === "visible" && opacity(text) < 1)
+      .map((text) => text.textContent!.trim());
+    return { lines, decoration, faded };
+  });
 }
 
 /** The base duration of a whole season's play, and the share of it from week 1 to week 20. */
@@ -353,6 +420,260 @@ test.describe("the Vega-Lite line", () => {
   });
 });
 
+test.describe("the toggles", () => {
+  test("each in a named group, a pick pressed with focus kept on it, and the chart's tab stop kept", async ({ page }) => {
+    await openAtRest(page);
+    await expect(page.getByRole("group", { name: "Line" }).getByRole("button")).toHaveText(["Straight", "Curved"]);
+    await expect(page.getByRole("group", { name: "Hover" }).getByRole("button")).toHaveText(["Each week", "Nearest point"]);
+    await expect(toggle(page, "Straight")).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle(page, "Each week")).toHaveAttribute("aria-pressed", "true");
+
+    // Focus on a week, then back to the toggles with Shift+Tab: Curved, by the keyboard.
+    await tabInto(page, line(page));
+    for (let i = 1; i < 12; i++) await page.keyboard.press("ArrowRight");
+    await expect(week(page, 12)).toBeFocused();
+    for (let i = 0; i < 3; i++) await page.keyboard.press("Shift+Tab");
+    await expect(toggle(page, "Curved")).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(toggle(page, "Curved")).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle(page, "Straight")).toHaveAttribute("aria-pressed", "false");
+    await page.clock.runFor(REST);
+    await expect(toggle(page, "Curved")).toBeFocused();
+    // The chart is still one tab stop, at the week focus left.
+    await expect(line(page).locator('[tabindex="0"]')).toHaveCount(1);
+    for (let i = 0; i < 3; i++) await page.keyboard.press("Tab");
+    await expect(week(page, 12)).toBeFocused();
+
+    // Nearest point: focus stays on it, and the tab stop moves to a point at that week.
+    await page.keyboard.press("Shift+Tab");
+    await expect(toggle(page, "Nearest point")).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(toggle(page, "Nearest point")).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle(page, "Each week")).toHaveAttribute("aria-pressed", "false");
+    await page.clock.runFor(REST);
+    await expect(toggle(page, "Nearest point")).toBeFocused();
+    await expect(line(page).locator('[tabindex="0"]')).toHaveCount(1);
+    await expect(line(page).locator(".ec-column")).toHaveCount(38);
+    await expect(line(page).locator(".ec-columns")).toHaveAttribute("display", "none");
+    await page.keyboard.press("Tab");
+    await expect(pointStop(page, "goals@12")).toBeFocused();
+
+    // And back to Each week: focus stays on the toggle, and the tab stop is week 12's again.
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(toggle(page, "Each week")).toBeFocused();
+    await page.keyboard.press("Space");
+    await page.clock.runFor(REST);
+    await expect(toggle(page, "Each week")).toBeFocused();
+    await expect(line(page).locator(".ec-stop")).toHaveCount(0);
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await expect(week(page, 12)).toBeFocused();
+  });
+});
+
+test.describe("Straight or Curved", () => {
+  test("Curved: the lines ease into curves through every week's value, never past the values either side, with the red and the ball", async ({ page }) => {
+    await openAtRest(page);
+    const straight = await stroke(page, "goals").getAttribute("d");
+    expect(await runOf(page, "goals")).toEqual({ vertices: 38, missed: [], overshoots: [] });
+    await toggle(page, "Curved").click();
+    // Part way, it's neither straight nor curved yet: it eases, as a change does.
+    await page.clock.runFor(300);
+    const between = await stroke(page, "goals").getAttribute("d");
+    expect(between).not.toBe(straight);
+    await page.clock.runFor(REST);
+    const curved = await stroke(page, "goals").getAttribute("d");
+    expect(curved).not.toBe(between);
+    for (const series of ["goals", "xg"] as const) {
+      const run = await runOf(page, series);
+      // A vertex at each week and at each bend between.
+      expect(run.vertices, series).toBeGreaterThan(38 * 2);
+      expect(run.missed, series).toEqual([]);
+      expect(run.overshoots, series).toEqual([]);
+    }
+    // threshold's red runs, where the drawn lines cross: five, not three. Goals equal xG at weeks 7 and
+    // 13, where the straight lines touch, and the curves part there: goals' runs above xG's from week 7
+    // to 7.8, and from 12.7 to 13. And the ball at the tip.
+    expect(await redRuns(line(page))).toBe(5);
+    expect(await iconTransforms(line(page))).toHaveLength(1);
+    await expect(line(page)).toHaveScreenshot("line-curved.png");
+
+    // Back to Straight: the lines it drew before, exactly.
+    await toggle(page, "Straight").click();
+    await page.clock.runFor(REST);
+    await expect(stroke(page, "goals")).toHaveAttribute("d", straight ?? "");
+    expect(await redRuns(line(page))).toBe(3);
+  });
+
+  test("the Vega-Lite line follows: drawn as a monotone curve, with its red and the ball, and its names and tab stop kept", async ({ page }) => {
+    await openAtRest(page);
+    const straight = await vegaPath(page, "goals").getAttribute("d");
+    expect(straight).not.toMatch(/C/);
+    // Focus on the Vega-Lite line's xG, then Curved from the keyboard.
+    await tabInto(page, vegaLine(page));
+    await page.keyboard.press("ArrowRight");
+    await expect(vegaPath(page, "xg")).toBeFocused();
+    await toggle(page, "Curved").focus();
+    await page.keyboard.press("Space");
+    // Vega draws it again with Béziers, in the same element, and fromVegaView() follows on the next frame.
+    await expect(vegaPath(page, "goals")).toHaveAttribute("d", /C/);
+    await page.clock.runFor(REST);
+    expect(await redRuns(vegaLine(page))).toBe(3);
+    expect(await iconTransforms(vegaLine(page))).toHaveLength(1);
+    await expect(vegaPath(page, "goals")).toHaveAttribute("aria-label", "Goals scored: 56 goals by matchweek 38");
+    await expect(vegaLine(page).locator('.mark-line path[tabindex="0"]')).toHaveCount(1);
+    await expect(vegaPath(page, "xg")).toHaveAttribute("tabindex", "0");
+    // The ball rests just behind the tip of the curve.
+    const ends = await page.evaluate(() => {
+      const goals = document.querySelector<SVGGeometryElement>('#vega-line .mark-line path[stroke="#2a78d6"]')!;
+      const tip = goals.getPointAtLength(goals.getTotalLength()).matrixTransform(goals.getScreenCTM()!);
+      const box = document.querySelector('#vega-line .ec-overlay .ec-run[data-key="goals"] .ec-icon')!.getBoundingClientRect();
+      return { line: tip.x, ball: box.x + box.width / 2 };
+    });
+    expect(ends.line - ends.ball).toBeGreaterThan(0);
+    expect(ends.line - ends.ball).toBeLessThan(20);
+    await expect(vegaBox(page)).toHaveScreenshot("line-vega-curved.png");
+
+    // And straight again: the path Vega drew before.
+    await toggle(page, "Straight").focus();
+    await page.keyboard.press("Space");
+    await expect(vegaPath(page, "goals")).toHaveAttribute("d", straight ?? "");
+    await page.clock.runFor(REST);
+    expect(await redRuns(vegaLine(page))).toBe(3);
+  });
+});
+
+test.describe("Nearest point", () => {
+  test("hovered: its line, red and ball at full strength, the other line dimmed, no text, and a tooltip with its one value", async ({ page }) => {
+    await openAtRest(page);
+    await toggle(page, "Nearest point").click();
+    await hoverPoint(page, "goals@12");
+    await page.clock.runFor(REST);
+    const tooltip = line(page).locator(".ec-tooltip");
+    await expect(tooltip).toHaveClass(/ec-tooltip-shown/);
+    await expect(tooltip).toHaveText(/^Matchweek 12\s*18 goals\s*-1\.0 vs expected$/);
+    await expect(line(page).locator(".ec-point.ec-hot")).toHaveAttribute("data-key", "goals@12");
+    await expect(line(page).locator(".ec-crosshair")).toHaveAttribute("visibility", "hidden");
+    // Above the point.
+    const [tip, dot] = await Promise.all([tooltip.boundingBox(), line(page).locator('.ec-point[data-key="goals@12"] .ec-dot').boundingBox()]);
+    expect(tip!.y + tip!.height).toBeLessThan(dot!.y);
+    expect(await strengths(page)).toEqual({ lines: { goals: [1, 1], xg: [0.3, 0.3] }, decoration: 1, faded: [] });
+    await expect(line(page)).toHaveScreenshot("line-point-hover.png");
+
+    // An xG point: the goals line dims, its red and its ball with it, and still no text.
+    await hoverPoint(page, "xg@30");
+    await page.clock.runFor(REST);
+    await expect(tooltip).toHaveText(/^Matchweek 30\s*\d+\.\d xG\s*[+-]\d+\.\d vs expected$/);
+    expect(await strengths(page)).toEqual({ lines: { goals: [0.3, 0.3], xg: [1, 1] }, decoration: 0.3, faded: [] });
+
+    // Off the plot, nothing is hovered or dimmed.
+    await page.mouse.move(2, 2);
+    await page.clock.runFor(REST);
+    await expect(tooltip).not.toHaveClass(/ec-tooltip-shown/);
+    expect(await strengths(page)).toEqual({ lines: { goals: [1, 1], xg: [1, 1] }, decoration: 1, faded: [] });
+  });
+
+  test("the pointer goes from a point onto its tooltip, keeping the hover; Escape hides it until the pointer finds another point", async ({ page }) => {
+    await openAtRest(page);
+    await toggle(page, "Nearest point").click();
+    // Week 20's goals, 28, the higher of its two points (xG is 27.6).
+    const at = await hoverPoint(page, "goals@20");
+    await page.clock.runFor(REST);
+    const tooltip = line(page).locator(".ec-tooltip");
+    const text = await tooltip.textContent();
+    const box = (await tooltip.boundingBox())!;
+    // Straight up from the point into the tooltip's middle, 2 px a move, over the bridge between them.
+    const middle = Math.round(box.y + box.height / 2);
+    for (let y = at.y - 2; y >= middle; y -= 2) {
+      await page.mouse.move(at.x, y);
+      await expect(tooltip, `at ${at.x}, ${y}`).toHaveText(text ?? "");
+      await expect(line(page).locator(".ec-point.ec-hot"), `at ${at.x}, ${y}`).toHaveAttribute("data-key", "goals@20");
+    }
+    await page.keyboard.press("Escape");
+    await page.clock.runFor(REST);
+    await expect(tooltip).not.toHaveClass(/ec-tooltip-shown/);
+    await expect(line(page).locator(".ec-point.ec-hot")).toHaveCount(0);
+    await hoverPoint(page, "goals@30");
+    await page.clock.runFor(REST);
+    await expect(tooltip).toHaveClass(/ec-tooltip-shown/);
+    await expect(tooltip).toHaveText(/^Matchweek 30\s*\d+ goals/);
+  });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`by the keyboard, ${colorScheme}: one tab stop, each point by name, along a line and between lines, the ends, and Escape`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openAtRest(page);
+      await toggle(page, "Nearest point").click();
+      await tabInto(page, line(page));
+      await expect(pointStop(page, "goals@1")).toBeFocused();
+      await expect(line(page).locator('[tabindex="0"]')).toHaveCount(1);
+      await expect(pointStop(page, "goals@1")).toHaveAttribute("aria-label", "Matchweek 1: 0 goals");
+      for (let i = 1; i < 12; i++) await page.keyboard.press("ArrowRight");
+      await expect(pointStop(page, "goals@12")).toBeFocused();
+      await expect(pointStop(page, "goals@12")).toHaveAttribute("aria-label", "Matchweek 12: 18 goals");
+      // xG, 19.0, is drawn above goals, 18, at week 12: Up goes to it, and Down comes back.
+      await page.keyboard.press("ArrowUp");
+      await expect(pointStop(page, "xg@12")).toBeFocused();
+      await expect(pointStop(page, "xg@12")).toHaveAttribute("aria-label", "Matchweek 12: 19.0 xG");
+      await page.keyboard.press("ArrowUp");
+      await expect(pointStop(page, "xg@12")).toBeFocused();
+      await page.keyboard.press("ArrowDown");
+      await expect(pointStop(page, "goals@12")).toBeFocused();
+      await page.clock.runFor(REST);
+      await expect(line(page).locator(".ec-tooltip")).toHaveText(/^Matchweek 12\s*18 goals\s*-1\.0 vs expected$/);
+      await expect(line(page).locator(".ec-focus")).not.toHaveAttribute("visibility", "hidden");
+      expect(await strengths(page)).toEqual({ lines: { goals: [1, 1], xg: [0.3, 0.3] }, decoration: 1, faded: [] });
+      await expect(line(page)).toHaveScreenshot(`line-point-focus-${colorScheme}.png`);
+
+      // End and Home go to the line's ends, and Page Down a tenth of its points on, rounded up.
+      await page.keyboard.press("End");
+      await expect(pointStop(page, "goals@38")).toBeFocused();
+      await page.keyboard.press("ArrowRight");
+      await expect(pointStop(page, "goals@38")).toBeFocused();
+      await page.keyboard.press("Home");
+      await expect(pointStop(page, "goals@1")).toBeFocused();
+      await page.keyboard.press("PageDown");
+      await expect(pointStop(page, "goals@5")).toBeFocused();
+      // Escape ends the hover and the dimming, and focus stays.
+      await page.keyboard.press("Escape");
+      await page.clock.runFor(REST);
+      await expect(line(page).locator(".ec-tooltip")).not.toHaveClass(/ec-tooltip-shown/);
+      await expect(pointStop(page, "goals@5")).toBeFocused();
+      expect((await strengths(page)).lines).toEqual({ goals: [1, 1], xg: [1, 1] });
+    });
+  }
+
+  test("the tooltip never covers the focus ring, at any point of either line", async ({ page }) => {
+    await openAtRest(page);
+    await toggle(page, "Nearest point").click();
+    await tabInto(page, line(page));
+    for (const series of ["goals", "xg"] as const) {
+      // At week 1, xG (0.6) is drawn above goals (0): Up reaches it.
+      if (series === "xg") {
+        await page.keyboard.press("Home");
+        await page.keyboard.press("ArrowUp");
+      }
+      for (let n = 1; n <= 38; n++) {
+        await expect(pointStop(page, `${series}@${n}`)).toBeFocused();
+        await page.clock.runFor(FRAME * 2);
+        const overlap = await line(page).evaluate((root) => {
+          const tip = root.querySelector(".ec-tooltip.ec-tooltip-shown")!.getBoundingClientRect();
+          const ring = [...root.querySelectorAll<SVGGraphicsElement>(".ec-focus-ring")].find((r) => getComputedStyle(r).visibility === "visible")!;
+          const box = ring.getBBox();
+          const half = parseFloat(getComputedStyle(ring).strokeWidth) / 2 || 0;
+          const screen = ring.getScreenCTM()!;
+          const a = new DOMPoint(box.x - half, box.y - half).matrixTransform(screen);
+          const b = new DOMPoint(box.x + box.width + half, box.y + box.height + half).matrixTransform(screen);
+          return Math.max(0, Math.min(b.x, tip.right) - Math.max(a.x, tip.left)) * Math.max(0, Math.min(b.y, tip.bottom) - Math.max(a.y, tip.top));
+        });
+        expect(overlap, `${series}@${n}`).toBe(0);
+        await page.keyboard.press("ArrowRight");
+      }
+    }
+  });
+});
+
 test.describe("names, legend and table", () => {
   test("each week's name and gap, the D3 lines' names, the legend's three entries and the Difference column", async ({ page }) => {
     await openDemo(page, lineDemo);
@@ -411,6 +732,42 @@ test.describe("reduced motion", () => {
     expect(await redRuns(vegaLine(page))).toBe(3);
     expect(await iconTransforms(vegaLine(page))).toHaveLength(1);
   });
+
+  for (const how of ["reduced motion", "Off"] as const) {
+    test(`${how}: Curved draws the curve at once, and a point's hover shows its end at once`, async ({ page }) => {
+      if (how === "reduced motion") await page.emulateMedia({ reducedMotion: "reduce" });
+      await openDemo(page, lineDemo);
+      if (how === "Off") await pickMode(page, "Off");
+      await page.clock.runFor(FRAME);
+      const straight = await stroke(page, "goals").getAttribute("d");
+      await toggle(page, "Curved").focus();
+      await page.keyboard.press("Space");
+      // No time passes: the curve is drawn whole, with the red and the ball where they end.
+      const curved = await stroke(page, "goals").getAttribute("d");
+      expect(curved).not.toBe(straight);
+      const run = await runOf(page, "goals");
+      expect(run.vertices).toBeGreaterThan(38 * 2);
+      expect(run).toMatchObject({ missed: [], overshoots: [] });
+      expect(await redRuns(line(page))).toBe(5);
+      const icons = await iconTransforms(line(page));
+      expect(icons).toHaveLength(1);
+      await page.clock.runFor(REST);
+      await expect(stroke(page, "goals")).toHaveAttribute("d", curved ?? "");
+      expect(await iconTransforms(line(page))).toEqual(icons);
+
+      // Nearest point: the hover's end at once, with the other line dimmed and no fade.
+      await toggle(page, "Nearest point").focus();
+      await page.keyboard.press("Space");
+      await hoverPoint(page, "goals@12");
+      await expect(line(page).locator(".ec-tooltip")).toHaveClass(/ec-tooltip-shown/);
+      const drawn = await line(page).evaluate((root) => ({
+        duration: root.querySelector("svg")!.style.getPropertyValue("--ec-hover-duration"),
+        xg: getComputedStyle(root.querySelector('.ec-line[data-key="xg"] .ec-stroke')!).opacity,
+        goals: getComputedStyle(root.querySelector('.ec-line[data-key="goals"] .ec-stroke')!).opacity
+      }));
+      expect(drawn).toEqual({ duration: "0ms", xg: "0.3", goals: "1" });
+    });
+  }
 });
 
 test.describe("with missing weeks", () => {
@@ -546,6 +903,70 @@ test.describe("with missing weeks", () => {
     await expect(table.locator("tbody tr").nth(3).locator("th, td")).toHaveText(["4", "4", "missing", "missing"]);
     await expect(table.locator("tbody tr").nth(8).locator("th, td")).toHaveText(["9", "missing", "missing", "missing"]);
     await expect(table.locator("tbody tr").nth(10).locator("th, td")).toHaveText(["11", "14", "16.6", "-2.6"]);
+  });
+
+  test("Curved: each run between gaps curves on its own, a gap stays a gap where it was, and no red in it", async ({ page }) => {
+    await openAtRest(page);
+    const goalsStroke = gaps(page).locator('.ec-line[data-key="goals"] .ec-stroke');
+    const [straightD, straight] = [await goalsStroke.getAttribute("d"), await drawnGaps(page, "#gaps")];
+    await toggle(page, "Curved").click();
+    await page.clock.runFor(REST);
+    await expect(goalsStroke).not.toHaveAttribute("d", straightD ?? "");
+    const curved = await drawnGaps(page, "#gaps");
+    expect(curved.goals).toHaveLength(1);
+    expect(curved.xg).toHaveLength(2);
+    expect(redInGaps(curved)).toEqual([]);
+    // Each run ends at its last week and starts again at its next, as when straight: the points are at the rows.
+    for (const series of ["goals", "xg"] as const) {
+      curved[series].forEach(([from, to], i) => {
+        expect(from, series).toBeCloseTo(straight[series][i]![0], 1);
+        expect(to, series).toBeCloseTo(straight[series][i]![1], 1);
+      });
+    }
+  });
+
+  test("Nearest point: Left and Right pass over the missing weeks, Up and Down do nothing where the other line is missing", async ({ page }) => {
+    await openAtRest(page);
+    await toggle(page, "Nearest point").click();
+    const stop = (key: string): Locator => gaps(page).locator(`.ec-stop[data-key="${key}"]`);
+    // A missing value has no point, so no stop.
+    for (const key of ["goals@9", "goals@10", "xg@4", "xg@5", "xg@9", "xg@10"]) await expect(stop(key), key).toHaveCount(0);
+    await tabInto(page, gaps(page));
+    await expect(stop("goals@1")).toBeFocused();
+    for (let i = 1; i < 8; i++) await page.keyboard.press("ArrowRight");
+    await expect(stop("goals@8")).toBeFocused();
+    await expect(stop("goals@8")).toHaveAttribute("aria-label", "Matchweek 8: 12 goals");
+    // Over matchweeks 9 and 10, which the goals line hasn't.
+    await page.keyboard.press("ArrowRight");
+    await expect(stop("goals@11")).toBeFocused();
+    await expect(stop("goals@11")).toHaveAttribute("aria-label", "Matchweek 11: 14 goals");
+    await page.keyboard.press("ArrowLeft");
+    await expect(stop("goals@8")).toBeFocused();
+
+    // xG, drawn above goals at week 3, from week 3 to 6, over 4 and 5.
+    await page.keyboard.press("Home");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowUp");
+    await expect(stop("xg@3")).toBeFocused();
+    await expect(stop("xg@3")).toHaveAttribute("aria-label", "Matchweek 3: 3.5 xG");
+    await page.keyboard.press("ArrowRight");
+    await expect(stop("xg@6")).toBeFocused();
+    await expect(stop("xg@6")).toHaveAttribute("aria-label", "Matchweek 6: 8.3 xG");
+
+    // At week 4 only goals has a value: Up and Down stay on it, and its tooltip has no gap to give.
+    await page.keyboard.press("ArrowDown");
+    await expect(stop("goals@6")).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await expect(stop("goals@4")).toBeFocused();
+    await expect(stop("goals@4")).toHaveAttribute("aria-label", "Matchweek 4: 4 goals");
+    await page.keyboard.press("ArrowUp");
+    await expect(stop("goals@4")).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(stop("goals@4")).toBeFocused();
+    await page.clock.runFor(REST);
+    await expect(gaps(page).locator(".ec-tooltip")).toHaveText(/^Matchweek 4\s*4 goals$/);
   });
 
   for (const how of ["reduced motion", "Off"] as const) {

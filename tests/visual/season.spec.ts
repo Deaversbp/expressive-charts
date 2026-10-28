@@ -1,9 +1,9 @@
 // Screenshots of demo/season.html on a stopped clock: the page at rest in light and dark, a linked
-// hover, the players' bars after a matchweek, and the slope chart mid-trace. Beside them, DOM checks:
-// what a linked chart shows and doesn't (no tooltip, crosshair, focus or announcement), Emphasis only,
-// the keyboard, each matchweek's changes in the overlay, the table and the announcement, reduced motion
-// and Off, and the room for the changes at 320 px. Names start with "season-", since screenshot names
-// are shared across files.
+// hover, the players' bars and the goals line's change after a matchweek, and the slope chart
+// mid-trace. Beside them, DOM checks: what a linked chart shows and doesn't (no tooltip, crosshair,
+// focus or announcement), Emphasis only, the keyboard, each matchweek's changes in the overlay, clear
+// of every text, the table and the announcement, reduced motion and Off, and the room for the changes
+// at 320 px. Names start with "season-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, hoverShape, iconTransforms, openDemo, pickMode, REST, seasonDemo, tabInto } from "./demo";
@@ -51,6 +51,27 @@ async function captionOpacities(chart: Locator): Promise<number[]> {
       return Math.round(product * 100) / 100;
     })
   );
+}
+
+/**
+ * Each text in the chart's overlay that meets another text in the chart, by more than a pixel each way:
+ * "+1" on "15". A text's box is its line box, which Firefox draws a little taller than the glyphs, so a
+ * change just above a label touches it there: its middle 60% is where glyphs collide, as in a11y.spec.ts.
+ */
+async function textsMet(chart: Locator): Promise<string[]> {
+  return chart.evaluate((root) => {
+    const boxes = [...root.querySelectorAll("svg text")]
+      .filter((text) => text.textContent?.trim() && getComputedStyle(text).visibility === "visible")
+      .map((text) => {
+        const box = text.getBoundingClientRect();
+        return { text: text.textContent!.trim(), left: box.left, right: box.right, top: box.top + box.height * 0.2, bottom: box.bottom - box.height * 0.2, caption: text.closest(".ec-overlay") !== null };
+      });
+    return boxes.flatMap((a) =>
+      a.caption
+        ? boxes.filter((b) => b !== a && Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1).map((b) => `"${a.text}" on "${b.text}"`)
+        : []
+    );
+  });
 }
 
 /** The keys of the line chart's points emphasised now. */
@@ -223,7 +244,7 @@ test.describe("Play next matchweek", () => {
     await openAtRest(page);
     await nextButton(page).click();
     await expect(status(page)).toHaveText("After matchweek 25");
-    await expect(announcement(page)).toHaveText("Matchweek 25: Okafor +1, 15 goals; Lindqvist +1, 7 goals.");
+    await expect(announcement(page)).toHaveText("Matchweek 25: Okafor +1, 15 goals; Lindqvist +1, 7 goals. Season to date: 43 goals +2, 39.7 xG +1.8.");
     await page.clock.runFor(REST);
     await expect(goals(page).locator(".ec-mark")).toHaveCount(25);
     await expect(line(page).locator(".ec-column")).toHaveCount(25);
@@ -239,31 +260,55 @@ test.describe("Play next matchweek", () => {
     await expect(table.locator("tbody tr").first().locator("th, td")).toHaveText(["Okafor", "Forward", "15", "+1", "+14"]);
     await expect(table.locator("tbody tr").nth(1).locator("th, td")).toHaveText(["Moreau", "Winger", "8", "0", "+7"]);
     // The changes keep clear of every other text in the chart.
-    const overlaps = await players(page).evaluate((root) => {
-      const boxes = [...root.querySelectorAll("svg text")]
-        .filter((text) => text.textContent?.trim() && getComputedStyle(text).visibility === "visible")
-        .map((text) => ({ text: text.textContent!.trim(), box: text.getBoundingClientRect(), caption: text.closest(".ec-overlay") !== null }));
-      return boxes.flatMap((a) =>
-        a.caption
-          ? boxes.filter((b) => b !== a && Math.min(a.box.right, b.box.right) - Math.max(a.box.left, b.box.left) > 1 && Math.min(a.box.bottom, b.box.bottom) - Math.max(a.box.top, b.box.top) > 1).map((b) => `"${a.text}" on "${b.text}"`)
-          : []
-      );
-    });
-    expect(overlaps).toEqual([]);
+    expect(await textsMet(players(page))).toEqual([]);
     await expect(playersCard(page)).toHaveScreenshot("season-bars-matchweek.png");
 
     // The next matchweek shows only its own changes: Okafor didn't score, so his +1 goes.
     await nextButton(page).click();
-    await expect(announcement(page)).toHaveText(/^Matchweek 26: Lindqvist \+1, 8 goals\.\s*$/);
+    await expect(announcement(page)).toHaveText(/^Matchweek 26: Lindqvist \+1, 8 goals\. Season to date: 44 goals \+1, 41\.6 xG \+1\.9\.\s*$/);
     await page.clock.runFor(REST);
     expect(await captions(players(page))).toEqual(["Lindqvist +1"]);
     await expect(players(page).locator("table tbody tr").first().locator("td").nth(2)).toHaveText("0");
 
     // And a matchweek with no goals shows none.
     await nextButton(page).click();
-    await expect(announcement(page)).toHaveText("Matchweek 27: no goals.");
+    await expect(announcement(page)).toHaveText("Matchweek 27: no goals. Season to date: 44 goals, 42.7 xG +1.1.");
     await page.clock.runFor(REST);
     expect(await captions(players(page))).toEqual([]);
+  });
+
+  test("the goals line's change rises past its end label, clear of every text, and shows only its own matchweek's", async ({ page }) => {
+    await openAtRest(page);
+    expect(await captions(line(page))).toEqual([]);
+    await nextButton(page).click();
+    // Part way, it's still to come or rising in.
+    await page.clock.runFor(150);
+    expect((await captionOpacities(line(page)))[0] ?? 0).toBeLessThan(1);
+    await page.clock.runFor(REST);
+    // The goals line's alone, not xG's or a point's, at full strength.
+    expect(await captions(line(page))).toEqual(["totalGoals +2"]);
+    expect(await captionOpacities(line(page))).toEqual([1]);
+    expect(await textsMet(line(page))).toEqual([]);
+    // Past both end labels, along the line's way: to their right or above them, by their glyphs' middle 60%.
+    const { change, labels } = await line(page).evaluate((root) => {
+      const core = (text: Element): { left: number; right: number; top: number; bottom: number } => {
+        const box = text.getBoundingClientRect();
+        return { left: box.left, right: box.right, top: box.top + box.height * 0.2, bottom: box.bottom - box.height * 0.2 };
+      };
+      return { change: core(root.querySelector(".ec-overlay text")!), labels: [...root.querySelectorAll(".ec-end-label")].map(core) };
+    });
+    expect(labels).toHaveLength(2);
+    for (const label of labels) expect(change.left >= label.right || change.bottom <= label.top).toBe(true);
+    await expect(linkedCard(page)).toHaveScreenshot("season-line-matchweek.png");
+
+    await nextButton(page).click();
+    await page.clock.runFor(REST);
+    expect(await captions(line(page))).toEqual(["totalGoals +1"]);
+    expect(await textsMet(line(page))).toEqual([]);
+    // A matchweek with no goals shows none: xG's change isn't drawn.
+    await nextButton(page).click();
+    await page.clock.runFor(REST);
+    expect(await captions(line(page))).toEqual([]);
   });
 
   test("a matchweek played while the last is still moving says the change in whole goals", async ({ page }) => {
@@ -314,9 +359,12 @@ test.describe("without motion", () => {
       expect(new Set(await captionOpacities(slope(page)))).toEqual(new Set([1]));
 
       await nextButton(page).click();
-      // No time passes: the changes are already in place.
+      // No time passes: the changes are already in place, the goals line's too.
       expect(await captions(players(page))).toEqual(["Okafor +1", "Lindqvist +1"]);
       expect(await captionOpacities(players(page))).toEqual([1, 1]);
+      expect(await captions(line(page))).toEqual(["totalGoals +2"]);
+      expect(await captionOpacities(line(page))).toEqual([1]);
+      expect(await textsMet(line(page))).toEqual([]);
 
       await hoverStroke(page, slopeLine(page, "Okafor"), 0.3);
       expect(await traced(page, "Okafor")).toBe(1);
@@ -331,6 +379,9 @@ test("at 320 px, the changes fit beside their bars, with no sideways scroll", as
   await nextButton(page).click();
   await page.clock.runFor(REST);
   expect(await captions(players(page))).toEqual(["Okafor +1", "Lindqvist +1"]);
+  // The goals line's change, clear of the end labels, though the plot is narrow and the lines end close together.
+  expect(await captions(line(page))).toEqual(["totalGoals +2"]);
+  expect(await textsMet(line(page))).toEqual([]);
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth

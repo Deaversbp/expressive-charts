@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M9 are complete (§9). M9 built attachments on a par with charts, circles and shapes, Vega lines with gaps, the icon sets' faded parts, and TypeScript 7 building the declarations. **0.4.0 is on npm**, published from CI through npm's trusted publishing with provenance on 27 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.4.0)), after 0.3.0 earlier the same day, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M9 are complete (§9). M9 built attachments on a par with charts, circles and shapes, Vega lines with gaps, the icon sets' faded parts, and TypeScript 7 building the declarations. **0.4.0 is on npm**, published from CI through npm's trusted publishing with provenance on 27 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.4.0)), after 0.3.0 earlier the same day, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. M10, for 0.5.0, is planned in §9: curved lines and a hover on one point on the line chart, change labels that keep clear of other marks' labels, curved Vega lines, smaller pages for the motion core and `describe`, and a build on stable releases. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -2939,6 +2939,185 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **0.4.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M9 is done.
 
 **Status: complete (27 October 2026).** Every item on the list holds. Steps 1 to 7 built and checked the first nine, and 0.4.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 8).
+
+### M10: Curved lines, a hover on one point, and labels that keep clear (0.5.0)
+
+Line charts that curve and hover the nearest point, change labels that keep off other marks' labels, curved Vega lines, smaller pages for the motion core and `describe`, a build on stable releases, and last, 0.5.0 on npm.
+
+**Demo:** the line page gets two toggles, Straight or Curved and Each week or Nearest point, and its Vega-Lite line follows the first. On the season page, the goals and xG lines show each matchweek's change past their end labels, clear of each other's.
+
+**Where M10 starts** (checked against main at `77803a7` while planning, 28 October 2026):
+
+- **Already built.**
+  - **0.4.0** is npm's `latest`, published through trusted publishing with provenance. npm lists `0.0.0-stage` and `0.1.0` to `0.4.0`. GitHub has no open issues or pull requests. Main is 0.4.0's code, with this plan's last edits.
+  - **The line chart** draws straight lines only. `placeLines` (`src/charts/line-layout.ts`) gives `describe.line` a vertex at each row's value, with a sample there, and a reveal between two rows ends each line part way, its value straight between them.
+    - Its hover is an x: a hit column for each x, a dashed crosshair, and every series' point there in its strong colour. Nothing dims, and the chart gives `chartHover` no `hot`, which #105 added to dim decorations. The one tab stop goes from x to x.
+    - A tooltip function is given the row alone.
+  - **Curves elsewhere.** `describe.shape` flattens Béziers into straight pieces within 0.1 px (`src/core/geometry/flatten.ts`), and `expressive()` reads a D3 curve by its tag. Its samples are at the points the page drew it from, and between them `threshold` takes values as linear in `t`, so on a curve its crossings are approximate. Measured while planning, with d3's `curveMonotoneX` on a 900 × 250 px plot: on the line page's season, the colour changes up to 2.4 px from where the drawn lines cross (1.5 px typically); on the shapes page's five-match averages, up to 4.8 px; on values per match, up to 6.8 px.
+  - **`fromVegaView()`** throws on a line drawn with any `interpolate` but `"linear"`, in `pointsOf` (`src/charts/adapter/vega.ts`): "only straight lines can be read".
+  - **Change labels.** `captionPlace` (`src/effects/caption.ts`) puts `delta`'s and `label`'s text past the mark's `labelBounds`, "the boxes of the text the chart draws for this mark", and picks its way from them too: along the walk's heading, or out from a slice's centre through its label. A line's are its own end label alone, so when two lines end close together, with their labels pushed apart, one line's text can land on the other's label.
+  - **A negative column.** `verticalFrame` (`src/charts/bar-layout.ts`) keeps 18.5 px below the plot for the lowest value label, but draws the names 18 px below the plot, inside that room, and a negative column's value label hangs 16 px below its tip. So a column whose tip is at the plot's bottom has its value label on its name. No demo draws a negative column.
+  - **The build.** tsdown 0.23.2 asks for rolldown-plugin-dts 0.29.0-beta.2. tsdown 0.23.3, out on 28 October, asks for `^0.28.8`, the latest stable, which has the same `oxc` generator. TypeScript 7.0.2 is `latest` and 7.1 is in beta (7.1.0-beta, 20 October), so `api-docs.test.ts` still needs TypeScript 6's API.
+  - **The small sets.** A page that imports `motion` and `animated` is 2.4 KB (1.7 before tsdown), and one that imports `describe` and `matrix` 7.2. Rolldown puts code that only `index` uses in `index.js` itself, so those pages keep its top-level tables: the theme's tokens and the stylesheet's text (`theme.ts`), the time axis's steps (`time.ts`), the gaits' still pose (`gaits.ts`) and a walk's empty gaps (`walk.ts`) (M9 step 5).
+  - **Testing.** 2,452 unit tests in 105 files pass, and `typecheck` takes 2.7 s. Vitest's timeout is its default, 5 s: during M9, `bar-layout.test.ts`'s 1,000 bars, `api-docs.test.ts`'s link check, `d3-line.test.ts` and `long-axes.test.ts` each timed out under load and passed run again. The visual suite ran 641 tests, with 58 skipped, at M9 step 7 (233 in each browser).
+  - **Sizes** (gzip, against their budgets, on `77803a7`, 0.4.0's code): everything 76.0 KB of 76.5 (77,775 bytes: 561 left), `barChart` 30.5 of 34, the line page's set 37.1 of 41, the switch's set 40.8 of 45, `expressive` and `travel` 31.1 of 34, `describe` and `matrix` 7.2 of 8, `motion` and `animated` 2.4 of 3, the script-tag bundle 75.8 of 79.5, `dist/index.js` 109.9 of 111, and the stylesheet 2.4 of 2.5.
+- **Gaps.**
+  - A line chart draws only straight lines, and its hover is always every series at once.
+  - A change label can land on another mark's label, and a negative column's value label on its name.
+  - A Vega line drawn as a curve throws.
+  - A page that imports only the motion core or `describe` carries `index.js`'s tables.
+  - The build rests on a beta, and four test files time out under load.
+- **Out of date** (each fixed by the step named):
+  - §10's open question 9 says a host's curve is described "with points taken from the path"; since M9 it's read from its path data with `describe.shape` (step 1).
+  - The backlog's line chart extras say a `curve` option "needs sampled arc-length tables"; `describe.shape`'s flattening is that now (step 1).
+
+**What M10 takes from the backlog, and what stays:**
+
+| Item | Goes to |
+| --- | --- |
+| Line chart extras: a `curve` option, and hovering only the nearest point instead of the crosshair (M4) | Decisions 1, 4, 5, 9 and 10, steps 1 and 2 |
+| Change labels on a neighbour's label (M7 step 1) | Decisions 1, 6 and 11, step 3 |
+| A negative column's value label on its name (M7 step 1) | Decisions 1 and 11, step 3 |
+| A curved Vega line read through `describe.shape` (M9's "stays" row) | Decisions 2 and 12, step 4 |
+| The top-level tables marked pure, rolldown-plugin-dts still a beta, and the tests that time out under load (M9 step 5's and step 8's notes) | Decisions 2 and 13, step 5 |
+| `api-docs.test.ts` on TypeScript 7's API, ending `typescript-6` | Stays: TypeScript 7.1 is still in beta |
+| Lines as switch views and `morph` across gaps, recolouring at once on `update({ colors })`, decorations below a line chart's points, a rotated `<rect>` read as a closed shape, a clockwise order for a pie's slices read by tag, `vector-effect: non-scaling-stroke` widths, VoiceOver + Safari, a written audit table for `stress.html`, square caps and bevel joins, the other follow-ups in M8's and M9's notes, and the rest | Stay: in the backlog, or in the notes |
+
+When a step lands, it marks its backlog item as built in M10.
+
+**Decided while planning M10 (28 October 2026):** decisions 1–7 are yours, and 8–14 follow from them and the code.
+
+1. **M10 builds two things:** line chart extras (a `curve` option, and a hover on the nearest point beside the crosshair), and labels that keep clear (a change label off another mark's label, and a negative column's value label off its name).
+2. **Three smaller items join them:** curved Vega lines; smaller small sets, with the top-level tables marked pure; and a stable tsdown, with tests that hold up under load.
+3. **One release, 0.5.0, when M10 is done.**
+4. **Two curves: `"linear"`, the default, and `"monotone"`.** A monotone curve passes through every value and never overshoots, so a line never shows a value the data doesn't have. Not step, nor a curve factory: step's corners jolt a riding icon, and basis, cardinal and natural curves overshoot or miss the values.
+5. **`hover: "point"` hovers the nearest point, and the other lines dim.** The tooltip shows its one value. The arrow keys go along its line, and Up and Down to the line above or below at the same x. Links still go by x. The default stays `"x"`, the crosshair.
+6. **A new optional field for other marks' labels nearby.** `labelBounds` stays the mark's own, and `delta` and `label` still pick their way from it, then go past any label in the way.
+7. **The demos are controls on today's pages:** the line page's toggles, its Vega-Lite line following the curve, and the season page's lines with `delta`.
+8. **What's an addition and what isn't** (the 0.x promise). 0.5.0 is a minor release. In the effect-author API, `nearbyLabels` is an addition; nothing in it changes or goes.
+
+   | Change | Under the promise? | Kind |
+   | --- | --- | --- |
+   | `nearbyLabels` on `MarkGeometry` and on each builder's spec | Yes | Optional fields: additions. An effect that doesn't read them works as before |
+   | `delta` and `label` going past other marks' labels | No: the built-in effects | A fix: text that landed on a neighbour's label now goes past it. Listed under Fixed |
+   | A curved line's samples between its rows | No: the charts (`MarkData`'s type doesn't change) | An addition: only with `curve: "monotone"`, which is new. A line without it has the samples it had |
+   | `curve` and `hover` on `lineChart`, and a tooltip function's second argument | No: the charts | Additions. Their defaults draw and hover as before, and a function that takes the row alone still fits |
+   | A chart with a negative column drawing its names below its value labels' room | No: the charts | A fix: only a chart with a negative column changes |
+   | `fromVegaView()` reading curved lines | No: the adapters | An addition: a line that threw is read |
+   | The tables marked pure | No: the internals | Smaller import sets; nothing else changes |
+   | tsdown 0.23.3, with rolldown-plugin-dts 0.28.8 | The published types | Nothing changes while every exported name has the same type, which the comparison checks. A difference stops the step |
+   | Vitest's timeout | No: the repository | Tests only |
+
+9. **The curve** (decision 4).
+   - **The option:** `curve?: "linear" | "monotone"` on `LineChartOptions`. `"linear"`, the default, draws as now, the same marks byte for byte. `"monotone"` is d3's `curveMonotoneX`: through every value, flat where two neighbours are equal, and never above or below the values either side between two rows. Anything else throws a `TypeError` naming it, and `update()` rejects it, changing nothing.
+   - **How it's drawn.**
+     - Each run of values between gaps is curved on its own, as d3's `.defined()` draws it. A run of two values is straight, and a value alone is its point.
+     - The curve is worked out in the data's own units (x and value) and drawn through the scales, a time axis too. Each piece is flattened into straight pieces within 0.1 px, by the bound `describe.shape` uses (`flatten.ts`), not by its path reader, and the line is `describe.line` through them.
+     - So its walk, outline, gaps, `slice()` and reveal work as a straight line's, with more vertices, and its points sit at its rows, on the curve. No effect changes.
+   - **Samples.** Each row has its sample, as now, and each bend between rows has one too, with its `at` and `value` read off the curve, so `threshold`'s crossings are exact on the drawn line, as on a straight one. A data effect that counts samples sees more than the rows on a curved line; api.md says so. `delta` and `label` read the ends, which are rows or the reveal.
+   - **The reveal.** A reveal between two rows ends the line where the curve is at that x, with its value read off the curve, so playback draws the curve in.
+   - **A change.** The rows' values ease as now, and the curve follows them on every frame. `update({ curve })` plays as a change: each piece eases from straight to curved or back, its tangents moving between the straight piece's slope and the curve's, so it never overshoots on the way. Off jumps.
+   - **The crosshair** and its columns are as now: an x is still an x.
+10. **A hover on the nearest point** (decision 5).
+    - **The option:** `hover?: "x" | "point"` on `LineChartOptions`. `"x"`, the default, hovers as now. Anything else throws a `TypeError`, and `update()` rejects it. `update({ hover })` changes it at once: a hover held ends, and focus moves to the stop of the new kind nearest it.
+    - **What's hovered.** With `"point"`, the pointer hovers the revealed point nearest it, by distance in px, anywhere over the plot; leaving the plot leaves. Touch does the same. Of two points as near, the series first in `series` wins. It fires `hover` for that point alone, and its hover effects run on it. The lines themselves still take no hover.
+    - **Dimming.** The hovered point shows in its strong colour, and its line and their decorations stay at full strength. Every other line and point dims to `--ec-dim-opacity`, their decorations with them, as on bars since #105, and text keeps its contrast. `dim: false` keeps them. With `"x"` nothing dims, as now.
+    - **No crosshair.** The tooltip sits above the point, or below it without room: the x in bold, then that series' value with its label. A tooltip function is given the row and, as a second argument, `{ series }`; with `"x"` it's given the row alone.
+    - **Keys.** One tab stop, on a point. Left and Right go along its line to the next or previous x where it has a value. Up and Down go to the point above or below at the same x, by where they're drawn, passing over series missing there. Home and End go to the line's first and last value, and Page Up and Page Down as now (a calendar month on a time axis, otherwise a tenth of the x's), along the line. Escape ends the hover and focus stays.
+    - **Names.** The focus stops are the points, each named by its x and its one value, through `markLabel` with that series alone in `values`. The x stops go while `hover` is `"point"`.
+    - **Links** go by x, as now. A point hovered hovers the link's other sources at its x. A link's hover shows as an x hover does: every series' point there, with the crosshair, and nothing dims.
+    - **`focus(key)`** takes a point's key, or an x's, which focuses the first series' point there.
+    - Points past the reveal, and missing values, have no point to hover or focus.
+11. **Labels that keep clear** (decisions 1 and 6).
+    - **`MarkGeometry.nearbyLabels?: readonly Rect[]`:** the boxes of other marks' text near this one, which an effect's text should keep clear of. `labelBounds` stays the boxes of the mark's own. Unset means none is known.
+    - **The builders** take it on each mark's spec (`BarSpec`, `ArcSpec`, `LineSpec`, `PointSpec` and `ShapeSpec`), check it as they check `labelBounds`, with a `RangeError` naming the field, and pass it on.
+    - **Who gives it.** The line chart gives each line every other line's end label, and the donut each slice its neighbours' labels, either side. Bars give none: a bar's text goes past its own end, where no other bar's label is. Adapters give none, as they give no `labelBounds`.
+    - **`delta` and `label`,** through `captionPlace`, pick their way from `labelBounds` as now, then go 6 px past the farthest box of either list that way meets. So a slice's text still goes out through its own label, and a line's goes past its neighbour's.
+    - **A negative column.** With a negative column, the names go below the room the layout keeps for its value labels, so the two never meet, and the plot keeps its height. A chart with no negative column draws as before.
+    - **The promise.** `nearbyLabels` is an addition. No fixture gets it, so `FixtureName` doesn't change; `src/captions.test.ts` and the sweep check it on real marks.
+12. **Curved Vega lines** (decision 2).
+    - `fromVegaView()` reads a line drawn with any `interpolate` but `"linear"` through `describe.shape`, from the path Vega draws (its element's `d`), moved by the element's matrix, at the item's stroke width. Its gaps come with it, one at each move, as on a D3 curve read by tag. A path Vega closes on itself (the `-closed` interpolations) is a closed shape, as `describe.shape` reads any.
+    - Its samples are at the items drawn, projected onto the curve with `samplesAlong`, as now. So `threshold`'s crossings between items are approximate on a curve, as on a D3 curve; architecture.md says so.
+    - A straight line is read as now, through `describe.line` from the items, the same mark byte for byte. The throw goes, and its comment.
+13. **Smaller sets, a stable tsdown, and sturdy tests** (decision 2).
+    - **The tables.** The top-level values built at import in `theme.ts`, `time.ts`, `gaits.ts` and `walk.ts` are marked pure (`/* @__PURE__ */`), or built when first used, whichever Rolldown drops, so a page that imports only `motion` and `animated`, or `describe` and `matrix`, keeps none of them. They cost those pages 0.74 and 0.71 KB when tsdown came in (M9 step 5). Those two budgets come down to the new size plus 10%, and no other size may grow.
+    - **tsdown** goes to 0.23.3, or the latest 0.23 patch, pinned exactly, which takes rolldown-plugin-dts 0.28.8, a stable release, in place of 0.29.0-beta.2. M9 step 5's comparison runs again: the files, each entry's names as an ES module and as CommonJS, each exported name's type read with TypeScript 6's API, and the sizes. A published type or name that differs, or a size that grows by more than 1 KB, stops the step to ask you.
+    - **The tests.** Vitest's timeout goes from 5 s to 15 s a test, in `vitest.config.ts`: four files timed out under load during M9, each taking about a second alone. Tests that time themselves (10,000 points in under 2 s) keep their own limits.
+    - **`api-docs.test.ts` stays on TypeScript 6's API** until TypeScript 7.1 is out; then it and `typescript-6` can go.
+14. **The rest.**
+    - **Accessibility.** A new script, K, for NVDA + Chrome: the line page's toggles, keeping focus; the nearest point reached by the keys, Up and Down between lines, each point read by name; and the season page's lines after a matchweek, with the announcement saying the change. You run it.
+    - **Docs.** Each step adds its exports to api.md (`src/api-docs.test.ts` fails otherwise), its sections to architecture.md, and its entries to CHANGELOG, under a new `## Unreleased` above 0.4.0 with Added, Changed and Fixed lists. The effects guide says how an effect's text keeps clear of `nearbyLabels`.
+    - **Sizes.** `everything` has 561 bytes of room, `dist/index.js` 1.1 KB and the line page's set 3.9 KB. Steps 1, 2 and 3 add to them, and step 4 to everything. A step that takes a set past its budget raises the budget in the same PR and says why (CONTRIBUTING's Bundle size). Step 5 lowers two.
+    - **The release** goes as CONTRIBUTING's Releasing says, through trusted publishing. Nothing is published, tagged or released without your go-ahead in that session.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `package.json`, `src/index.ts`, `src/core/index.ts`, `src/charts/index.ts`, `src/charts/types.ts`, `src/charts/line.ts`, `src/charts/line-layout.ts`, `src/charts/render/theme.ts`, `src/conformance.test.ts`, `src/promise.test.ts`, `scripts/size-budget.json`, `src/core/README.md`, `src/charts/README.md`, `docs/architecture.md`, `docs/api.md`, `docs/effects-guide.md`, `docs/sketches/api.ts`, `README.md`, `CHANGELOG.md` and this plan. Steps 1 and 2 both work in `line.ts`: step 1 owns its layout, animated state and `retarget`, and step 2 its Hover section, its columns and its focus stops. Step 1 owns `line-layout.ts`'s lines, and step 3 the boxes it gives them. `typecheck` requires an explicit type on every new export. The first step to land adds CHANGELOG's Unreleased.
+
+Each step's session reads the hand-over notes in its notes folder first, `plan-0-5.md` from planning among them, and writes its own there: commits, files, decisions beyond the brief, where the plan and the code differ, and follow-ups.
+
+**Wave 1** (parallel):
+
+1. **A line's `curve`** (decision 9). Owns `src/charts/curve.ts` (new: the monotone curve, eased from straight, and its flattening), the curve in `src/charts/line-layout.ts` (its vertices and samples) and in `line.ts` (its layout, animated state and `retarget`), `curve` on `LineChartOptions`, the cubic flattening `flatten.ts` exports for it (internal), §10's open question 9, and their tests.
+   - Tests:
+     - The curve: through every value; never above or below the values either side between two rows; flat between two equal values; within 0.1 px of d3's `curveMonotoneX` on the same points, at several scales and on a time axis; and eased, the polyline exactly at the start and the curve at the end, never overshooting between.
+     - `curve: "monotone"` on a line chart: the points on the curve; gaps (each run curved alone, a run of two straight, a value alone a point); a reveal part way along it; the samples, each row's and one at each bend, with `at` and `value` on the curve and `t` ascending; `threshold` against xG changing colour where the drawn lines cross, on the line page's season; `travel` riding it; `delta` and `label`; a change while curved; `update({ curve })` both ways, in Presentation and Off, with nothing entering and focus kept; an unknown curve throwing and rejecting; and ten years of days in four series, curved, laid out in good time.
+     - `curve: "linear"`, and no `curve`, giving main's marks byte for byte.
+     - The sweep on the curved chart's lines and points.
+   - **Done when** every existing test passes unchanged, and a chart without `curve` draws as before.
+   - Docs: architecture.md (Line chart, and `threshold`'s crossings), api.md (`curve`, and what a curved line's samples hold), README's Charts line, the backlog's line chart extras, §10's open question 9, CHANGELOG (Added).
+2. **A hover on the nearest point** (decision 10). Owns `hover` in `src/charts/line.ts` (its Hover section, its columns and focus stops), `src/charts/keyboard.ts` as it needs, the line chart's `hot` in `src/charts/shell/hover.ts`, the stylesheet's rules for a line chart's dimming if it needs any, `hover` and the tooltip function's second argument on `LineChartOptions`, `src/charts/tooltip.ts` as it needs, and their tests.
+   - Tests:
+     - `hover: "point"`: the pointer hovering the nearest point, across lines and where they cross, and touch; nothing past the reveal or at a missing value; the hover effect on the point alone; its line and their decorations at full strength and the others dimmed, decorations too, with every text at full strength; `dim: false`; no crosshair; the tooltip above the point, and below it at the top; a tooltip function given the row and `{ series }`.
+     - The keys: Left and Right along the line, passing over missing values; Up and Down between lines at an x, by where they're drawn, passing over series missing there; Home, End, Page Up, Page Down and Escape; one tab stop; each point's name, and `markLabel` given its one series; `focus(key)` with a point's key and an x's.
+     - A link: a point hovered hovering the others by x, and a link's hover shown at every point there with nothing dimmed.
+     - `update({ hover })` both ways with a hover held, by the pointer and the keyboard; with `curve: "monotone"`; Off; and an unknown value throwing and rejecting.
+     - The default, `"x"`, unchanged: every existing line chart test.
+   - **Done when** every existing test passes unchanged, and a chart without `hover` hovers as before.
+   - Docs: architecture.md (Line chart: hover, focus and its ARIA structure), api.md (`hover`, the tooltip function's second argument), README's Charts line, the backlog's line chart extras, CHANGELOG (Added).
+3. **Labels that keep clear** (decision 11). Owns `nearbyLabels` in `src/core/contracts/geometry.ts` and in the builders (`src/core/geometry/describe/`), `src/effects/caption.ts`, the boxes the charts give (each line's other end labels in `line-layout.ts`, and `src/charts/donut-layout.ts`), the names of a chart with a negative column in `src/charts/bar-layout.ts`, and their tests.
+   - Tests:
+     - `captionPlace`: past a nearby box along a heading and out from a centre; the way picked from `labelBounds` alone, so a nearby box never turns it.
+     - The builders taking `nearbyLabels`, each `RangeError`, and the geometry invariants.
+     - On real marks (`src/captions.test.ts`): two lines ending close together, each `delta` past the other's end label, at 320 px and wide; a slice's text clear of its neighbours' labels; a negative column's value label clear of its name, with `room` too; and a chart with no negative column as before.
+     - The sweep: every source's text outside each mark's labels and its nearby ones.
+   - **Done when** every existing test passes unchanged, but any that pinned the names' place on a chart with a negative column, each named in the PR.
+   - Docs: architecture.md (Mark geometry, Change labels, the bar chart's layout), api.md (`nearbyLabels`, the specs), the effects guide (keeping text clear of other marks' labels), the sketch, the backlog's two items, CHANGELOG (the field under Added, the text's place and the names under Fixed).
+4. **Curved Vega lines** (decision 12). Owns reading lines in `src/charts/adapter/vega.ts`, and `src/vega.test.ts`.
+   - Tests: Vega-Lite lines drawn with `"monotone"`, `"basis"`, `"step"` and `"natural"`, each the same mark as `describe.shape` gives its path's `d`; one closed on itself; one with missing values, its gaps at each move; the samples at the items; `threshold` against xG and a riding ball, with nothing inside a gap on any frame; a render that changes the curve, followed; `update({ on })`; the sweep on the View's curved lines; and a straight line the same mark as on main.
+   - **Done when** every existing test passes unchanged, but any that pinned the throw on a curve, each named in the PR.
+   - Docs: architecture.md (Vega and Vega-Lite), api.md (`fromVegaView()`), README's Adapters line, CHANGELOG (Added).
+5. **Smaller sets, a stable tsdown, and sturdy tests** (decision 13). Owns tsdown's version in `package.json` and the lockfile, `tsdown.config.ts` as it needs, the pure marks (small edits in `theme.ts`, `src/charts/time.ts`, `src/effects/gaits.ts` and `src/core/geometry/walk.ts`), `vitest.config.ts`, the two budgets it lowers, architecture.md's Build outputs and Bundle size, and CONTRIBUTING's toolchain lines.
+   - Checks: the small sets measured before and after; the comparison of tsdown 0.23.3's build with main's; `npm ls rolldown-plugin-dts` naming no beta; `typecheck`; the suite, run while another suite runs, with no timeout; `pack-check` on 5.4, 6 and 7; `build:site`; and CI on Node 22 and 24.
+   - **Done when** `npm run typecheck && npm test && npm run build`, `npm run size` and `npm run pack-check` pass, the two small sets are smaller with no other size grown, the build needs no beta, and the published types are the same.
+   - Docs: architecture.md (Build outputs, Bundle size), CONTRIBUTING (tsdown's version, the tests' timeout), CHANGELOG (Changed: smaller pages that import only the motion core or `describe`).
+
+**Wave 2** (after steps 1 to 4 land):
+
+6. **The demos, their screenshots, the audit and script K.** Owns `demo/line.*`, `demo/vega-line.ts`, `demo/season.*`, their visual specs and baselines, README's GIFs if they differ, `docs/a11y-audit.md`, and section K of `docs/a11y-check.md`.
+   - **The line page:** two toggles above its first chart, Straight or Curved (`update({ curve })`) and Each week or Nearest point (`update({ hover })`), each keeping focus. The Vega-Lite line follows the first, drawn with `"monotone"` or `"linear"`. Design notes say why a curve never overshoots, and what the nearest point dims.
+   - **The season page:** the goals and xG lines show each matchweek's change with `delta`, past their end labels and clear of each other's.
+   - **README's GIFs** are compared with their pages, and made again if they differ.
+   - **Screenshots,** made in Docker: the curved line, a point hovered and focused, the curved Vega-Lite line, the season page's lines after a matchweek, and every page whose picture changed. Reduced motion and Off are checked in the DOM.
+   - **Script K,** for NVDA + Chrome (decision 14). You run it.
+   - **The walk:** you look at the pages in the browser, at 320 px too.
+   - Docs: a11y-audit.md (the line page's toggles and its hover on a point, the season page's lines, the Browsers count), a11y-check.md (section K and its results), CONTRIBUTING's visual tests.
+
+**Wave 3:**
+
+7. **Publish 0.5.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.5.0 entry, README's status, its script tag (`@0.5`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.5.0's code, and this plan's status line and M10's ✅.
+   - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you, compared with 0.4.0's) and `npm publish --dry-run`. The PR has their results.
+   - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com.
+   - **Then, on your go-ahead in that session:** the `v0.5.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
+   - **After:** check npm (the version, README, provenance), install 0.5.0 in a fresh project and load each entry as an ES module and as CommonJS, and check jsDelivr's `@0.5`.
+
+**Done when:**
+- **Curves.** `lineChart` draws `curve: "monotone"` through every value without overshooting, with its gaps, its reveal and `update({ curve })`, and `threshold` changes colour where the drawn lines cross. A chart without `curve` draws as before.
+- **A hover on one point.** `lineChart({ hover: "point" })` hovers the nearest point with the other lines dimmed, by the pointer, touch and the keys, Up and Down between lines, and links by x. A chart without `hover` hovers as before.
+- **Labels.** `delta` and `label` keep off other marks' labels through `MarkGeometry.nearbyLabels`, two lines ending close together among them, and a negative column's value label keeps off its name.
+- **Vega.** `fromVegaView()` reads a Vega-Lite line drawn as a curve.
+- **The build.** A page that imports only `motion` and `animated`, or `describe` and `matrix`, is smaller; tsdown builds on rolldown-plugin-dts's stable release, with the same published types; and the tests hold up under load.
+- **The demos** show all of it, with their screenshots and the audit, and script K passed with NVDA + Chrome.
+- **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise changes only by `nearbyLabels`, an addition.
+- **0.5.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M10 is done.
 
 ### Backlog (after 0.1)
 

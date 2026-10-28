@@ -95,17 +95,11 @@ function build(): void {
     on
   });
 
-  attachPie();
+  attachPie(on);
 }
 
-/**
- * Attaches the picked effects to the D3 pie. An attachment's effects can't change, so a new pick
- * attaches them again: the pie's tab stop goes back to its first slice.
- */
-function attachPie(): void {
-  pieEffects?.destroy();
-  pieEffects = undefined;
-  const on = effectsFor(effect);
+/** Draws the D3 pie and attaches the effects to it, once: a new pick swaps them in place, as on the other two. */
+function attachPie(on: ReturnType<typeof effectsFor>): void {
   drawD3Pie();
   if (pie) {
     pieEffects = expressive(pie.slices, {
@@ -151,16 +145,16 @@ function segmented(id: string, onPick: (value: string) => void): (value: string)
   return show;
 }
 
-// update({ on }) swaps the hover effect in place: the donut and the columns keep their marks, their
-// tab stops and a hover that's held, and nothing enters again. The flash is the same effect, so it's
-// kept. Focus stays on the picker.
+// update({ on }) swaps the hover effect in place: the donut, the columns and the D3 pie keep their
+// marks, their tab stops and a hover that's held, and nothing enters again. The flash is the same
+// effect, so it's kept. Focus stays on the picker.
 segmented("effect", (value) => {
   if (value === effect) return;
   effect = value as HoverEffect;
   const on = effectsFor(effect);
   void donut?.update({ on });
   void columns?.update({ on });
-  attachPie();
+  void pieEffects?.update({ on });
 });
 
 // The order drives all three. In Presentation the donut resizes its slices first, then turns them to

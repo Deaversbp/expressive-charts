@@ -26,7 +26,7 @@ const hoverPieSlice = (page: Page, outcome: Outcome): Promise<unknown> => hoverS
 const effectButton = (page: Page, effect: HoverEffect): Locator =>
   page.getByRole("group", { name: "Hover effect" }).getByRole("button", { name: effect, exact: true });
 
-/** Picks the hover effect for all three charts: the page swaps it in place, and attaches the pie's again. */
+/** Picks the hover effect for all three charts: the page swaps it in place on each. */
 async function pickEffect(page: Page, effect: HoverEffect): Promise<void> {
   await effectButton(page, effect).click();
   await expect(effectButton(page, effect)).toHaveAttribute("aria-pressed", "true");
@@ -197,6 +197,33 @@ test.describe("the effect picker", () => {
     await page.clock.runFor(75);
     await expect(slice(page, "Saved").locator(".ec-body")).toHaveAttribute("transform", /^matrix\(/);
     expect(await iconTransforms(donut(page))).toEqual([]);
+  });
+
+  test("swaps the D3 pie's effect in place too, so Tab comes back to the slice it left", async ({ page }) => {
+    await openDemo(page, donutDemo);
+    // Marks the pie's overlay: attaching the pie again would make a new one.
+    await pie(page).locator(".ec-overlay").evaluate((overlay) => overlay.setAttribute("data-probe", ""));
+    // The pie's tab stop moves on to Off target.
+    await tabInto(page, pie(page));
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(pieSlice(page, "Off target")).toBeFocused();
+    await page.clock.runFor(REST);
+
+    await effectButton(page, "Wiggle").focus();
+    await page.keyboard.press("Space");
+    await expect(effectButton(page, "Wiggle")).toBeFocused();
+    await expect(pie(page).locator(".ec-overlay[data-probe]")).toHaveCount(1);
+    const stops = (): Promise<(string | null)[]> => pie(page).locator("path.slice").evaluateAll((slices) => slices.map((path) => path.getAttribute("tabindex")));
+    // Data order: Goal, Saved, Off target, Blocked.
+    expect(await stops()).toEqual(["-1", "-1", "0", "-1"]);
+
+    // Tab from the picker comes back to Off target, which plays the wiggle as it's focused.
+    await tabInto(page, pie(page));
+    await expect(pieSlice(page, "Off target")).toBeFocused();
+    await page.clock.runFor(75);
+    await expect(pieSlice(page, "Off target")).toHaveCSS("transform", /^matrix\(/);
+    expect(await iconTransforms(pie(page))).toEqual([]);
   });
 });
 

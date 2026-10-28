@@ -8,7 +8,7 @@
 
 import axe from "axe-core";
 import { expect, test, type Page } from "@playwright/test";
-import { barsDemo, donutDemo, FRAME, hoverShape, lineDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, stressDemo, tabInto, type Demo } from "./demo";
+import { barsDemo, donutDemo, FRAME, hoverShape, lineDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, shapesDemo, stressDemo, tabInto, type Demo } from "./demo";
 
 /** axe's rules for WCAG 2.0, 2.1 and 2.2 at levels A and AA. */
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -59,13 +59,15 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
   {
     name: "morph",
     demo: morphDemo,
-    stops: [...MOTION, "Show as columns", "Drop", "Unroll", "Goal: 58 shots, 14%", "Data table"],
+    stops: [...MOTION, "Show as columns", "Drop", "Unroll", "Goal: 58 shots, 14%", "Data table", "Off target: 149 shots", "Data table"],
+    // A linked hover hovers the other chart too: "contrast on hover" measures the chart hovered.
     charts: [
       {
         chart: "#shots",
         shape: '.ec-switch-view[data-view="donut"] .ec-mark[data-key="Off target"] .ec-slice',
         other: '.ec-switch-view[data-view="donut"] .ec-mark[data-key="Goal"] .ec-slice'
-      }
+      },
+      { chart: "#ranked", shape: '.ec-mark[data-key="Saved"] .ec-segment', other: '.ec-mark[data-key="Goal"] .ec-segment' }
     ]
   },
   {
@@ -83,6 +85,18 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
       { chart: "#line", shape: '.ec-column[data-key="13"] .ec-hit', other: '.ec-column[data-key="3"] .ec-hit' },
       { chart: "#players", shape: '.ec-mark[data-key="Okafor"] .ec-segment', other: '.ec-mark[data-key="Castillo"] .ec-segment' }
     ]
+  },
+  {
+    name: "shapes",
+    demo: shapesDemo,
+    stops: [
+      ...MOTION,
+      ...["Pulse", "Flash", "Wiggle", "Okafor: 16 goals from 64 shots", "Okafor: 16 goals, 4 assists"],
+      ...["Goals per match, five-match average: 1.0 at matchweek 38, below xG in matchweeks 1 to 6, 9 to 12, 20 to 23, 31 and 33 to 38", "Shots on target: 177 in 38 matches"]
+    ],
+    // None: its four charts are attachments, which draw no tooltip, so the tooltip checks below have
+    // nothing to check there. shapes.spec.ts checks their hover and focus.
+    charts: []
   },
   {
     name: "stress",
@@ -317,8 +331,11 @@ test.describe("keyboard", () => {
   }
 });
 
+/** The pages with a library chart, which draws a tooltip and dims as these checks expect. */
+const withTooltips = demos.filter(({ charts }) => charts.length > 0);
+
 test.describe("content on hover", () => {
-  for (const { name, demo, charts } of demos) {
+  for (const { name, demo, charts } of withTooltips) {
     test(`${name}.html: the tooltip stays while the pointer does, and Escape hides it without the pointer moving`, async ({ page }) => {
       await openAtRest(page, demo);
       for (const { chart, shape } of charts) {
@@ -544,7 +561,7 @@ test.describe("contrast on hover", () => {
   // WCAG 1.4.3 while a mark is hovered, which axe never sees: the other marks dim, and every text in
   // the chart keeps 4.5:1 against the card behind it. A text's colour is its fill at the opacity it's
   // drawn with (its own and every ancestor's), over that card.
-  for (const { name, demo, charts } of demos) {
+  for (const { name, demo, charts } of withTooltips) {
     for (const colorScheme of ["light", "dark"] as const) {
       test(`${name}.html, ${colorScheme}: every label keeps 4.5:1 while another mark is hovered`, async ({ page }) => {
         await page.emulateMedia({ colorScheme });
@@ -642,8 +659,9 @@ test.describe("text spacing", () => {
 });
 
 test.describe("pause, stop, hide", () => {
-  // WCAG 2.2.2: what moves by itself for more than 5 s needs a pause. Only the line page plays at
-  // load (the ball's first trip, about 1.4 s), and Play season has Pause (line.spec.ts).
+  // WCAG 2.2.2: what moves by itself for more than 5 s needs a pause. Only the line page and the
+  // shapes page play at load (each ball's first trip, about 1.4 s and 3 s), and Play season has Pause
+  // (line.spec.ts).
   for (const { name, demo } of demos) {
     test(`${name}.html: nothing moves by itself 5 s after load`, async ({ page }) => {
       await openDemo(page, demo);

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dots, curves and areas · expressive-charts</title>
+<style>
+  /* Page chrome only, as on bars.html. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d67;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6; --link: #226dc7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5; --link: #3987e5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+  /* Two charts side by side where there's room. Each card's title, note and chart share rows with the
+     other's, so the charts start at the same height. */
+  .pair { display: grid; gap: 20px; min-width: 0; }
+  @media (min-width: 860px) {
+    .pair { grid-template-columns: 1fr 1fr; }
+    .pair.charts > .card { grid-row: span 3; grid-template-rows: subgrid; }
+  }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 20px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
+  .note { font-size: 14px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .label { font-size: 13px; color: var(--muted); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
+  .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+  /* Forced colours drop the wash, which leaves only the weight: the pressed button takes the viewer's selection colours, as the motion switch does. */
+  @media (forced-colors: active) { .seg button[aria-pressed="true"] { background: Highlight; color: HighlightText; } }
+  .seg button:hover { background: var(--wash); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+  .box { min-width: 0; }
+  .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  a { color: var(--link); }
+  /* The motion switch sits on the page, darker than the charts' surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
+  #motion { --ec-text-muted: var(--muted); }
+  /* The charts' own styles: they're someone else's charts, so the page styles them, not the library.
+     Their marks take the library's palette slots, and their axes its grid and text tokens. */
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  /* Under forced colours (Windows contrast themes), keep the swatches' colours, as the library's legend does: the marks keep theirs. */
+  .legend i { flex: none; width: 16px; height: 0; border-top: 3px solid; forced-color-adjust: none; }
+  .legend .swatch-goals { border-top-color: var(--ec-series-1, #2a78d6); }
+  .legend .swatch-xg { border-top: 3px dashed var(--ec-series-2); }
+  .legend .swatch-below { border-top-color: var(--ec-negative, #d03b3b); }
+  .legend .swatch-on { width: 12px; height: 12px; border: 0; border-radius: 3px; background: var(--ec-series-1, #2a78d6); }
+  .legend .swatch-off { width: 12px; height: 12px; border: 0; border-radius: 3px; background: var(--ec-series-2, #eb6834); }
+  .chart { display: block; max-width: 100%; height: auto; overflow: visible; }
+  .chart .tick, .chart .axis-title { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
+  .chart .grid { stroke: var(--ec-grid, #e1e0d9); }
+  .chart .baseline { stroke: var(--ec-axis, #c3c2b7); }
+  #d3-scatter circle { fill: var(--ec-series-1, #2a78d6); }
+  #d3-scatter .name { font-size: 12.5px; fill: var(--ink-2); }
+  /* xG is what goals are read against: a dashed grey, as on the line page, so it can't be mistaken for the red below it. */
+  #curve-box { --ec-series-2: var(--ec-text-muted, #75736d); }
+  #d3-curve .line { fill: none; stroke-linejoin: round; stroke-linecap: butt; }
+  #d3-curve .line-goals { stroke: var(--ec-series-1, #2a78d6); }
+  #d3-curve .line-xg { stroke: var(--ec-series-2); stroke-dasharray: 6 4; }
+  /* A line in the card's colour between the areas, as between the donut's slices, so they're told apart without their colours. */
+  #d3-area .area { stroke: var(--surface); stroke-width: 1.5px; stroke-linejoin: round; }
+  #d3-area .area-onTarget { fill: var(--ec-series-1, #2a78d6); }
+  #d3-area .area-offTarget { fill: var(--ec-series-2, #eb6834); }
+  /* Plot writes its own colours and type as attributes; the page maps them to the theme, as it does for the D3 charts. */
+  #plot-dots svg { display: block; max-width: 100%; height: auto; overflow: visible; font-family: inherit; }
+  #plot-dots text { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
+  #plot-dots .plot-names text { font-size: 12.5px; fill: var(--ink-2); }
+  #plot-dots .plot-dots circle { fill: var(--ec-series-1, #2a78d6); }
+  #plot-dots [aria-label$="grid"] line { stroke: var(--ec-grid, #e1e0d9); stroke-opacity: 1; }
+  #plot-dots [aria-label$="tick"] path { stroke: var(--ec-axis, #c3c2b7); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Circles and shapes · expressive()</p>
+    <h1>Dots, curves and areas</h1>
+    <p class="lede">Four charts drawn by other code: a scatter, a curved line and an area drawn with D3, and a dot chart drawn with Observable Plot. <code>expressive()</code> reads each <code>&lt;circle&gt;</code> as a point and each <code>&lt;path&gt;</code> as a shape, so each chart is attached with a key and only what it needs, and the same effects play on all four. Pick a hover effect, then hover or Tab into a chart.</p>
+  </header>
+
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
+
+  <div class="bar">
+    <span class="label" id="effect-label">Hover effect</span>
+    <div class="seg" id="effect" role="group" aria-labelledby="effect-label">
+      <button type="button" data-value="pulse" aria-pressed="true">Pulse</button>
+      <button type="button" data-value="flash" aria-pressed="false">Flash</button>
+      <button type="button" data-value="wiggle" aria-pressed="false">Wiggle</button>
+    </div>
+  </div>
+
+  <div class="pair charts">
+    <section class="card" aria-labelledby="scatter-title">
+      <h2 id="scatter-title">Goals from shots, on a D3 scatter</h2>
+      <p class="note">Drawn the way D3 code often draws a scatter: a group for each player, moved into place, with a <code>&lt;circle&gt;</code> and the player's name. <code>expressive()</code> reads each circle as a point, through its group's move, given a key, the goals as its <code>value</code> and a name for each dot (<code>markLabel</code>). Tab reaches the dots, and the arrow keys go through them in the order D3 drew them.</p>
+      <div class="box">
+        <!-- A group, not an image: screen readers skip what's inside an image, and its dots take focus. -->
+        <svg id="d3-scatter" class="chart" role="group" aria-label="Goals and shots by player on a D3 scatter"></svg>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="plot-title">
+      <h2 id="plot-title">Goals and assists, on an Observable Plot dot chart</h2>
+      <p class="note">Plot draws its own <code>&lt;svg&gt;</code>, with a <code>&lt;circle&gt;</code> for each dot, bound to its row's index. The page gives <code>expressive()</code> each dot's row (<code>datum</code>), and the rest as for the D3 scatter. A resize draws a new <code>&lt;svg&gt;</code>, and <code>refresh()</code> follows it.</p>
+      <!-- Plot's chart goes here: a group named by Plot's ariaLabel, as the D3 charts are. -->
+      <div class="box" id="plot-dots"></div>
+    </section>
+  </div>
+
+  <div class="pair charts">
+    <section class="card" aria-labelledby="curve-title">
+      <h2 id="curve-title">Form, on a D3 curved line</h2>
+      <p class="note">Goals and expected goals per match, each averaged over the last five, drawn with <code>d3.line()</code> and <code>curveMonotoneX</code>, which writes Béziers. <code>expressive()</code> reads each path's own data as an open shape, a line it can walk, so the goals line turns red below xG and a ball rides its tip, as on the line page. The page gives each curve its series (<code>segment</code>) and its values along it (<code>samples</code>), which <code>threshold</code> compares week by week.</p>
+      <div class="box" id="curve-box">
+        <div class="legend"><span><i class="swatch-goals"></i>Goals</span><span><i class="swatch-xg"></i>Expected goals (xG)</span><span><i class="swatch-below"></i>Goals below xG</span></div>
+        <!-- A group, not an image, as the scatter is. -->
+        <svg id="d3-curve" class="chart" role="group" aria-label="Goals and expected goals per match on a D3 curved line"></svg>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="area-title">
+      <h2 id="area-title">Shots, on a D3 area</h2>
+      <p class="note">Shots on target and off target per match, each averaged over the last five, drawn with <code>d3.area()</code>, one stacked on the other. Each path ends where it began, so <code>expressive()</code> reads it as a closed shape: an area, with no direction. A pulse or a flash rings its outline, and hovering one area dims the other.</p>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-on"></i>On target</span><span><i class="swatch-off"></i>Off target</span></div>
+        <!-- A group, not an image, as the scatter is. -->
+        <svg id="d3-area" class="chart" role="group" aria-label="Shots on and off target per match on a D3 area"></svg>
+      </div>
+    </section>
+  </div>
+
+  <div class="pair">
+    <section class="card" aria-labelledby="notes-title">
+      <h2 id="notes-title">Design notes</h2>
+      <ul class="checklist">
+        <li>No chart here describes its marks: <code>expressive()</code> reads a <code>&lt;rect&gt;</code> as a bar, a <code>&lt;circle&gt;</code> as a point, and a <code>&lt;path&gt;</code>, <code>&lt;line&gt;</code>, <code>&lt;polyline&gt;</code>, <code>&lt;polygon&gt;</code> or <code>&lt;ellipse&gt;</code> as a shape, open or closed.</li>
+        <li>A closed shape, such as an area, has no direction, so <code>travel</code> and <code>trace</code> do nothing on it, as on a dot. Its outline has no start or end of its own: any the library chose would be made up, and a ball rolling round an area, or a trace drawing it, would seem to say something about the data that it doesn't. Pulse, flash and wiggle need only the outline, so they play.</li>
+        <li>A wiggle turns a mark a few pixels about its pivot. A dot's pivot is its centre, and a circle turned about its centre looks the same, so on the dots Wiggle shows only the emphasis and the dimming. An area rocks about its middle, and a curve about its first point.</li>
+        <li>The picker swaps each chart's hover effect with <code>update({ on })</code>. Nothing is attached again, so focus and each chart's tab stop stay where they were, and a hover that's held plays the new effect. The curve's red and its ball are the same effect each time, so they keep running.</li>
+        <li>The names beside the dots are the page's own text, hidden from screen readers: each dot's name says who it is and its values.</li>
+      </ul>
+    </section>
+
+    <section class="card" aria-labelledby="try-title">
+      <h2 id="try-title">Things to try</h2>
+      <ul class="checklist">
+        <li>Pick Pulse, Flash or Wiggle, then hover a dot, a curve and an area: the same effect plays on all four charts.</li>
+        <li>Tab into the scatter and use the arrow keys: focus goes through the dots in the order D3 drew them, top scorer first. Then Shift+Tab to the picker, pick another effect, and Tab back: focus is on the dot you left.</li>
+        <li>Pick Wiggle and hover a dot, then an area: the dot doesn't move, and the area rocks.</li>
+        <li>Turn on reduced motion and reload: the ball is at the tip at once, with the red drawn, and a pulse or a flash shows nothing, since its end state is nothing.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+<script type="module" src="./shapes.ts"></script>
+</body>
+</html>

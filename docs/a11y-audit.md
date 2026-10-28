@@ -1,8 +1,8 @@
 # Accessibility audit: WCAG 2.2 AA
 
-This is a written WCAG 2.2 AA pass of the demo pages, made before the first release. It covers `bars.html`, `donut.html`, `line.html` and `morph.html`, and since M7 `season.html`: the library's charts, its controls, and the D3, Vega-Lite and hand-written charts that `expressive()` and `fromVegaView()` drive there. `stress.html` has no table yet. axe and the DOM checks below run on it as on the others, but its criteria haven't been written up. `index.html` (a list of links) and `lab.html` (the single-file prototype the library grew out of, which doesn't use it) aren't part of it.
+This is a written WCAG 2.2 AA pass of the demo pages, made before the first release. It covers `bars.html`, `donut.html`, `line.html` and `morph.html`, since M7 `season.html`, and since M9 `shapes.html`: the library's charts, its controls, and the D3, Observable Plot, Vega-Lite and hand-written charts that `expressive()` and `fromVegaView()` drive there. `stress.html` has no table yet. axe and the DOM checks below run on it as on the others, but its criteria haven't been written up. `index.html` (a list of links) and `lab.html` (the single-file prototype the library grew out of, which doesn't use it) aren't part of it.
 
-It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. And in M7 (24 October 2026), hover stopped dimming the other marks' labels, with a check that they keep 4.5:1 (**contrast on hover**, below); the rows for 1.4.3 and the judgement call on dimming describe it as it is now. `season.html` came in M7 step 5, and its table was written then (26 October 2026), from the same checks. In M8 the tooltip became hoverable, which fixed finding 6, with a check that a pointer can move onto it (**onto the tooltip**, below); the rows for 1.4.13 describe it as it is now. Later in M8 (27 October 2026) the line page gained two charts with missing weeks, whose rows are under [line.html](#with-missing-weeks-m8), and the season page dropped its workarounds for what the library now does, which changed its row for 1.4.10. Then keyboard focus at a week with no values got a line in the focus colour, which made the third judgement call a pass. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
+It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since then the last card of each page has been rewritten, which took away the bars page's one link; that page's rows for 2.4.3 and 2.4.4 describe it as it is now. And in M7 (24 October 2026), hover stopped dimming the other marks' labels, with a check that they keep 4.5:1 (**contrast on hover**, below); the rows for 1.4.3 and the judgement call on dimming describe it as it is now. `season.html` came in M7 step 5, and its table was written then (26 October 2026), from the same checks. In M8 the tooltip became hoverable, which fixed finding 6, with a check that a pointer can move onto it (**onto the tooltip**, below); the rows for 1.4.13 describe it as it is now. Later in M8 (27 October 2026) the line page gained two charts with missing weeks, whose rows are under [line.html](#with-missing-weeks-m8), and the season page dropped its workarounds for what the library now does, which changed its row for 1.4.10. Then keyboard focus at a week with no values got a line in the focus colour, which made the third judgement call a pass. In M9 (27 October 2026) the shapes page came, with [its table](#shapeshtml), written from the same checks; the donut page's D3 pie began to swap its effects in place, and the morph page's switch was linked with a bar chart beside it, which add to those pages' rows. Each criterion has a result: **pass**, **fail**, or **not applicable**, with its evidence. The screen-reader runs are in [a11y-check.md](a11y-check.md#results).
 
 ## How it was checked
 
@@ -19,7 +19,7 @@ It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since 
   - **forced**: under forced colours, each legend's swatches keep their own colours, and a pressed toggle shows in the viewer's selection colours.
 - **The rest of the visual suite**: reduced motion and Off on each page, Play and Pause, the scrubber, the switch's timing, and what a screen reader can reach mid-switch (Chrome's accessibility tree, read over CDP).
 - **Contrast of SVG text and marks**, which axe reports as "incomplete" rather than judging: worked out from the theme's tokens ([Contrast](#contrast)), and validated for the marks by `src/charts/render/theme.test.ts`.
-- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. Section H, the season page's linked hover and change labels, passed on 26 October 2026. Section I, M8's missing weeks, Page Up and Page Down, and the season page again, passed on 27 October 2026. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
+- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. Section H, the season page's linked hover and change labels, passed on 26 October 2026. Section I, M8's missing weeks, Page Up and Page Down, and the season page again, passed on 27 October 2026. Section J, M9's shapes page, the D3 pie's picker and the morph page's link, hasn't been run yet. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
 - **By hand**, in headless Chromium: the pages at 320 px, with the text spacing, and under forced colours, looked at as pictures; the tooltip's place against every focused mark; the target sizes of every control and mark; and Chrome's accessibility tree for each chart.
 
 ## What it found
@@ -62,7 +62,7 @@ The marks' figures are validated by `theme.test.ts`, which fails if any slot fal
 
 ## Browsers
 
-Every DOM check in the visual suite, this audit's included, runs in Chromium, Firefox and WebKit, in the Playwright image CI uses (Playwright 1.64.1, Linux): 201 tests in each at M8 step 7 (27 October 2026), 25 of which Firefox and WebKit skip. Screenshots are Chromium's only. Two kinds of check run in Chromium alone, and are the 25: the switch's accessibility tree, which is read over CDP, and forced colours, since Firefox's and WebKit's emulation only matches the media query and forces no colours.
+Every DOM check in the visual suite, this audit's included, runs in Chromium, Firefox and WebKit, in the Playwright image CI uses (Playwright 1.64.1, Linux): 233 tests in each at M9 step 7 (27 October 2026), 29 of which Firefox and WebKit skip. Screenshots are Chromium's only. Two kinds of check run in Chromium alone, and are the 29: the switch's accessibility tree, which is read over CDP, and forced colours, since Firefox's and WebKit's emulation only matches the media query and forces no colours.
 
 The first runs in Firefox and WebKit failed in four ways, and each was the test, not the library:
 
@@ -172,7 +172,7 @@ The library's `donutChart` and columns on `barChart`, and a D3 pie through `expr
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast). Slices are separated by a 2 px line in the surface colour. |
 | 1.4.12 Text spacing | Pass | spacing. |
 | 1.4.13 Content on hover or focus | Pass (fixed) | hover and onto the tooltip, on the donut and the columns. Finding 6. |
-| 2.1.1 Keyboard | Pass | tab order; arrows round the ring (`donut.spec.ts`); the picker keeps focus (`donut.spec.ts`). NVDA D. |
+| 2.1.1 Keyboard | Pass | tab order; arrows round the ring (`donut.spec.ts`); the picker keeps focus, and each chart's tab stop, the D3 pie's too since M9 (`donut.spec.ts`). NVDA D, J 11–14. |
 | 2.1.2 No keyboard trap | Pass | tab order, both ways. |
 | 2.1.4 Character key shortcuts | Pass | None. |
 | 2.2.2 Pause, stop, hide | Pass | 5 s. A pulse ends within 5 s; flashes after a match end within 2 s. |
@@ -186,7 +186,7 @@ The library's `donutChart` and columns on `barChart`, and a D3 pie through `expr
 | 2.5.3 Label in name | Pass | Button text is its name; a slice's name starts with the outcome on its label. |
 | 2.5.8 Target size (minimum) | Pass | axe. The smallest slice is about 84 × 68 px. |
 | 3.1.1 Language of page | Pass | axe. |
-| 3.2.1, 3.2.2 | Pass | Focus plays the effect; the picker swaps effects in place with `update({ on })`, keeping focus. |
+| 3.2.1, 3.2.2 | Pass | Focus plays the effect; the picker swaps effects in place with `update({ on })` on all three charts, keeping focus and each tab stop. Before M9 it attached the D3 pie's effects again, which sent its tab stop back to its first slice. |
 | 3.2.3, 3.2.4 Consistency | Pass | The motion switch as on every page. |
 | 3.3.2 Labels or instructions | Pass | Every control's text is its label. |
 | 4.1.2 Name, role, value | Pass | axe. NVDA D. |
@@ -258,42 +258,42 @@ The second pair of cards: the same season as a weekly data feed recorded it, wit
 
 ### morph.html
 
-The donut and the columns in one `chartSwitch`, with `morph()`, the V key and the Morph toggles.
+The donut and the columns in one `chartSwitch`, with `morph()`, the V key and the Morph toggles, and since M9 a bar chart of the same shots beside it, largest first, in one `link()` with the switch.
 
 | Criterion | Result | Evidence |
 | --- | --- | --- |
-| 1.1.1 Non-text content | Pass | axe, at rest and mid-switch. NVDA F. |
-| 1.3.1 Info and relationships | Pass | axe. Only the view shown can be read: the other is `inert` and `aria-hidden` (`morph.spec.ts`, from Chrome's tree; NVDA F, steps 8, 11, 12). |
+| 1.1.1 Non-text content | Pass | axe, at rest and mid-switch. The bars beside the switch are a named group of named bars ("Off target: 149 shots"). NVDA F, J 15–19. |
+| 1.3.1 Info and relationships | Pass | axe. Only the view shown can be read: the other is `inert` and `aria-hidden` (`morph.spec.ts`, from Chrome's tree; NVDA F, steps 8, 11, 12). The bars beside it, with their table, can always be read. |
 | 1.3.2 Meaningful sequence | Pass | As on the donut page. |
 | 1.3.3 Sensory characteristics | Pass | Instructions name controls and the V key. |
 | 1.3.4 Orientation | Pass | reflow. |
-| 1.4.1 Use of colour | Pass | Labels round the ring and under the columns name every outcome. |
-| 1.4.3 Contrast (minimum) | Pass (fixed) | axe after fix 1, which included the Morph label; contrast on hover. |
+| 1.4.1 Use of colour | Pass | Labels round the ring, under the columns and beside the bars name every outcome. A linked hover is told by emphasis and by the other marks dimming, and it's visual only. |
+| 1.4.3 Contrast (minimum) | Pass (fixed) | axe after fix 1, which included the Morph label; contrast on hover, on the switch and the bars. |
 | 1.4.4 Resize text | Pass | reflow. |
 | 1.4.5 Images of text | Pass | All text is text. |
 | 1.4.10 Reflow | Pass | reflow and axe at 320 px. |
 | 1.4.11 Non-text contrast | Pass | [Contrast](#contrast). |
 | 1.4.12 Text spacing | Pass | spacing. |
-| 1.4.13 Content on hover or focus | Pass (fixed) | hover and onto the tooltip. Finding 6. |
-| 2.1.1 Keyboard | Pass | tab order; V on a slice or column switches, and focus follows its outcome (`morph.spec.ts`). NVDA F. |
+| 1.4.13 Content on hover or focus | Pass (fixed) | hover and onto the tooltip, on the switch and the bars. Finding 6. A linked chart shows no tooltip (`morph.spec.ts`). |
+| 2.1.1 Keyboard | Pass | tab order; V on a slice or column switches, and focus follows its outcome (`morph.spec.ts`). The bars by arrow key, the view shown following them (`morph.spec.ts`). NVDA F, J 15–19. |
 | 2.1.2 No keyboard trap | Pass | tab order, both ways. |
 | 2.1.4 Character key shortcuts | Pass | V works only with focus on a mark (`morph.spec.ts`), which the criterion allows. |
 | 2.2.2 Pause, stop, hide | Pass | A switch takes about 1 s and starts only when asked. 5 s. |
 | 2.3.1 Three flashes | Pass | Nothing flashes. |
 | 2.4.1, 2.4.2 | Pass | axe. |
-| 2.4.3 Focus order | Pass | tab order: the motion switch, Show as columns, Drop, Unroll, the view shown, its table. A switch keeps focus on the button, or moves it to the same outcome in the new view. |
-| 2.4.6 Headings and labels | Pass | The button says the view it goes to; the toggles are a group named Morph. |
+| 2.4.3 Focus order | Pass | tab order: the motion switch, Show as columns, Drop, Unroll, the view shown, its table, the bars, their table. A switch keeps focus on the button, or moves it to the same outcome in the new view. A linked hover never moves focus (`morph.spec.ts`; NVDA J 15–19). |
+| 2.4.6 Headings and labels | Pass | The button says the view it goes to; the toggles are a group named Morph. The bars' card is headed "Linked, largest first". |
 | 2.4.7 Focus visible | Pass | tab order; `morph.spec.ts` pictures the ring after a switch. |
-| 2.4.11 Focus not obscured | Pass | ring. |
+| 2.4.11 Focus not obscured | Pass | ring, on the switch and the bars. |
 | 2.5.1, 2.5.2, 2.5.7 | Pass | Pointing and clicking only. |
 | 2.5.3 Label in name | Pass | Each button's name is its text. |
 | 2.5.8 Target size (minimum) | Pass | axe. |
 | 3.1.1 Language of page | Pass | axe. |
-| 3.2.1, 3.2.2 | Pass | Focus plays the effect. The switch changes the view beside the button, which the button's name says, and announces it. |
+| 3.2.1, 3.2.2 | Pass | Focus plays the effect, in the chart focused and, linked, in the other. The switch changes the view beside the button, which the button's name says, and announces it. The link holds across a switch, and across a new Morph pick, which links the rebuilt switch (`morph.spec.ts`). |
 | 3.2.3, 3.2.4 Consistency | Pass | The motion switch as on every page. |
 | 3.3.2 Labels or instructions | Pass | Every control's text is its label. |
 | 4.1.2 Name, role, value | Pass | axe, mid-switch too. NVDA F. |
-| 4.1.3 Status messages | Pass | The new view's name is announced when a switch lands (NVDA F, steps 3, 5, 6, 9). |
+| 4.1.3 Status messages | Pass | The new view's name is announced when a switch lands (NVDA F, steps 3, 5, 6, 9). A linked hover announces nothing (NVDA J 15–19). |
 | Reduced motion | Pass | `morph.spec.ts`: a switch lands at once until the viewer picks a mode. |
 | Forced colours | Pass | forced. Fix 5. |
 
@@ -337,3 +337,44 @@ The library's `barChart`, twice (goals per matchweek, and goals by player), and 
 | 4.1.3 Status messages | Pass | Each matchweek is announced once, by the players' chart, with each player who scored, their change and their total (`season.spec.ts`; NVDA H, steps 6 and 7). A linked hover announces nothing. |
 | Reduced motion | Pass | `season.spec.ts`: with reduced motion and with Off, the changes and the slope chart's labels show at once, and a trace is whole. |
 | Forced colours | Pass | forced; axe under forced colours. The line's legend keeps its colours. |
+
+### shapes.html
+
+A D3 scatter and an Observable Plot dot chart, whose dots are `<circle>`s, and a D3 curved line and a D3 area, whose marks are `<path>`s, each through `expressive()`, which reads them by their tags (M9). The curved line has `threshold` and a riding ball, and a picker swaps the four charts' hover effect in place. The charts are attachments, so they draw no tooltip and no data table.
+
+| Criterion | Result | Evidence |
+| --- | --- | --- |
+| 1.1.1 Non-text content | Pass | axe. Each chart is a named group, and each dot, curve and area one named image: "Okafor: 16 goals from 64 shots", "Okafor: 16 goals, 4 assists", "Shots on target: 177 in 38 matches". The goals curve's name says where it's red: "… below xG in matchweeks 1 to 6, 9 to 12, 20 to 23, 31 and 33 to 38". The names beside the dots, the axes and Plot's other groups are hidden, and the ball and the rings are in `aria-hidden` overlays (`shapes.spec.ts`). NVDA J 1–10. |
+| 1.3.1 Info and relationships | Pass | axe. Each chart has a heading, and the picker is a group named Hover effect, by its visible label. There's no table: each dot's name gives its values, and the curves and areas are named by what they show, as the line page's D3 line is. Plot's own name for its dots' group ("dot") is taken off, so it isn't read as a group of its own (`shapes.spec.ts`). |
+| 1.3.2 Meaningful sequence | Pass | The marks are in the DOM in the order the page drew them, which is the arrow keys' order: the dots top scorer first, the curves goals first, the areas on target first (`shapes.spec.ts`; NVDA J 2, 3 and 10). |
+| 1.3.3 Sensory characteristics | Pass | The instructions name controls and keys. "Turns red" describes the curve; its name says the same weeks in words. |
+| 1.3.4 Orientation | Pass | reflow. |
+| 1.4.1 Use of colour | Pass | The curve's red has a legend entry, "Goals below xG", and the goals curve's name lists those weeks. xG is dashed as well as grey. The two areas are told apart by a legend, their names and a line in the card's colour between them; every dot is one colour, named beside it. |
+| 1.4.3 Contrast (minimum) | Pass | axe, light and dark; [Contrast](#contrast). The names beside the dots are the page's `--ink-2` (7.73:1 light, 9.72:1 dark), the axes `--ec-text-muted`. Hover dims only the marks: `shapes.spec.ts` checks every text in each chart keeps its full strength while a mark is hovered. |
+| 1.4.4 Resize text | Pass | reflow. |
+| 1.4.5 Images of text | Pass | All text is text. |
+| 1.4.10 Reflow | Pass | reflow and axe at 320 px: the cards stack, and the D3 charts and Plot's are drawn at least 280 px wide and scale down to fit. |
+| 1.4.11 Non-text contrast | Pass | [Contrast](#contrast): the dots, the curves, the red, the areas, the ring. The areas meet with a 1.5 px line in the card's colour between them, as the donut's slices do, since their two colours are close in lightness. Dimmed marks while another is hovered: judgement call. |
+| 1.4.12 Text spacing | Pass | spacing: no text in the four charts overlaps, or leaves its card. |
+| 1.4.13 Content on hover or focus | Not applicable | Nothing appears on hover or focus but the effects, the emphasis and the dimming, which add no content: the attachments draw no tooltip. |
+| 2.1.1 Keyboard | Pass | tab order; each chart's marks by the arrow keys, Home and End, in document order (`shapes.spec.ts`); every control is a button. NVDA J 1–9. |
+| 2.1.2 No keyboard trap | Pass | tab order, both ways. |
+| 2.1.4 Character key shortcuts | Pass | None. |
+| 2.2.2 Pause, stop, hide | Pass | 5 s. The ball's first trip along the goals curve at load takes about 3 s, under the 5 s, and starts only at load; a pulse ends within 1.2 s, a flash within 0.9 s. |
+| 2.3.1 Three flashes | Pass | A flash blinks once. A pulse rings twice in 1.2 s, round one mark. |
+| 2.4.1, 2.4.2 | Pass | axe. |
+| 2.4.3 Focus order | Pass | tab order: the motion switch, the hover effect, the scatter, Plot's chart, the curved line, the area. A pick keeps focus on the picker and each chart's tab stop where it was (`shapes.spec.ts`; NVDA J 4–6). |
+| 2.4.6 Headings and labels | Pass | Each card's heading names its chart and the library that drew it; the picker's group is named by its label, Hover effect. |
+| 2.4.7 Focus visible | Pass | tab order checks every stop; `shapes.spec.ts` pictures the ring on each chart. |
+| 2.4.11 Focus not obscured | Pass | Nothing covers the ring: there's no tooltip. |
+| 2.5.1, 2.5.2, 2.5.7 | Pass | Pointing and clicking only; buttons act on release. |
+| 2.5.3 Label in name | Pass | Each button's name is its text; each dot's name starts with the player named beside it. |
+| 2.5.8 Target size (minimum) | Pass | axe. The dots are 12 px across and placed by their values, and the curves take the pointer on their 2.25 px strokes: judgement call, as for the line page's weeks and lines. The areas are large. All are reached by keyboard, and their names give their values. |
+| 3.1.1 Language of page | Pass | axe. |
+| 3.2.1, 3.2.2 | Pass | Focus plays the hover effect, and nothing else changes. The picker changes only the hover effect, which its group's name says, swapping it in place with `update({ on })`. |
+| 3.2.3, 3.2.4 Consistency | Pass | The motion switch as on every page. |
+| 3.3.2 Labels or instructions | Pass | Every control's text is its label, and the picker's group has a visible one. |
+| 4.1.2 Name, role, value | Pass | axe; the picker's buttons are `aria-pressed`. NVDA J. |
+| 4.1.3 Status messages | Not applicable | Nothing changes but the effects, which aren't status: there's nothing to announce. |
+| Reduced motion | Pass | `shapes.spec.ts`: with reduced motion, the ball is at the tip at load with the red drawn, and a hover shows its end state at once; in Off, a wiggle and a pulse show nothing. |
+| Forced colours | Pass | forced: the curve's and the area's legends keep their colours, and the picker's pressed button shows in the selection colours. axe under forced colours. |

@@ -40,7 +40,7 @@
   .btn:hover { background: var(--wash); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
-  #shots { min-width: 0; }
+  #shots, #ranked { min-width: 0; }
   .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
   kbd { font: inherit; font-size: 12px; font-weight: 600; padding: 0 5px; border: 1px solid var(--ring); border-radius: 4px; background: var(--page); }
   a { color: var(--link); }
@@ -51,29 +51,37 @@
 <body>
 <main class="wrap">
   <header>
-    <p class="eyebrow">Chart switch · morph</p>
+    <p class="eyebrow">Chart switch · morph · link</p>
     <h1>Shot outcomes, as a donut and as columns</h1>
-    <p class="lede">A season's shots as a <code>donutChart</code> and as columns on <code>barChart</code>, in one <code>chartSwitch</code>. Each slice turns into its own column and back with <code>morph()</code>, and its labels move with it.</p>
+    <p class="lede">A season's shots as a <code>donutChart</code> and as columns on <code>barChart</code>, in one <code>chartSwitch</code>. Each slice turns into its own column and back with <code>morph()</code>, and its labels move with it. Beside it, the same shots as bars are linked with the switch.</p>
   </header>
 
   <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
   <div id="motion"></div>
 
-  <section class="card" aria-labelledby="shots-title">
-    <h2 id="shots-title">Shot outcomes</h2>
-    <p class="note">Switch between share of total and side-by-side counts. The same four shapes morph into each other, so you never lose which slice became which column. Click again mid-way and they go back from where they are. With a slice or column focused, <kbd>V</kbd> switches too, and focus follows its outcome.</p>
-    <div class="bar">
-      <!-- Its name is the view a click goes to; the switch announces the new view when it lands (announce). -->
-      <button type="button" class="btn" id="toggle">Show as columns</button>
-      <span class="label" id="align-label">Morph</span>
-      <div class="seg" id="align" role="group" aria-labelledby="align-label">
-        <button type="button" data-value="drop" aria-pressed="false">Drop</button>
-        <button type="button" data-value="unroll" aria-pressed="false">Unroll</button>
+  <div class="pair">
+    <section class="card" aria-labelledby="shots-title">
+      <h2 id="shots-title">Shot outcomes</h2>
+      <p class="note">Switch between share of total and side-by-side counts. The same four shapes morph into each other, so you never lose which slice became which column. Click again mid-way and they go back from where they are. With a slice or column focused, <kbd>V</kbd> switches too, and focus follows its outcome.</p>
+      <div class="bar">
+        <!-- Its name is the view a click goes to; the switch announces the new view when it lands (announce). -->
+        <button type="button" class="btn" id="toggle">Show as columns</button>
+        <span class="label" id="align-label">Morph</span>
+        <div class="seg" id="align" role="group" aria-labelledby="align-label">
+          <button type="button" data-value="drop" aria-pressed="false">Drop</button>
+          <button type="button" data-value="unroll" aria-pressed="false">Unroll</button>
+        </div>
       </div>
-    </div>
-    <!-- chartSwitch() builds both views here, one shown at a time. -->
-    <div id="shots"></div>
-  </section>
+      <!-- chartSwitch() builds both views here, one shown at a time. -->
+      <div id="shots"></div>
+    </section>
+
+    <section class="card" aria-labelledby="ranked-title">
+      <h2 id="ranked-title">Linked, largest first</h2>
+      <p class="note">The same shots on <code>barChart</code>, largest first, in one <code>link()</code> with the switch. Hover a bar, or Tab in and use the arrow keys, and its slice or column lights up in whichever view shows; hover a slice or a column, and its bar does. The link takes the switch's view on show, so it holds across a switch.</p>
+      <div id="ranked"></div>
+    </section>
+  </div>
 
   <div class="pair">
     <section class="card" aria-labelledby="align-title">
@@ -89,7 +97,8 @@
       <h2 id="notes-title">Design notes</h2>
       <ul class="checklist">
         <li>Each view is a whole chart, with its own legend, tooltip, keyboard order and data table, and only the one showing can be reached or read.</li>
-        <li>Each outcome keeps its colour in both views: the columns colour by category, from the donut's colours.</li>
+        <li>Each outcome keeps its colour in both views and in the bars beside them: the three charts share one <code>colorAssignment</code>, and the columns and bars colour by category.</li>
+        <li>The bars are in a different order from the slices and the columns, so the link goes by outcome, each mark's key, never by place. A linked mark shows no tooltip or focus ring, and nothing is announced: the chart under the pointer or the keyboard says it.</li>
         <li>The old view's legend and table fade out by 40% of the way and the new view's fade in from half way, so for a moment neither shows.</li>
         <li><kbd>V</kbd> on a focused slice or column is how a keyboard user switches and keeps their place.</li>
       </ul>
@@ -102,6 +111,7 @@
       <li>Switch in each mode: about 950 ms in Presentation, 200 ms in Analysis, and none in Off or under reduced motion.</li>
       <li>Watch the labels: they move with their shapes and swap their text half way, while the centre total fades out and the axes fade in.</li>
       <li>Switch with Drop, then with Unroll, and click again mid-way with each: the shapes go back the way they came.</li>
+      <li>Hover a bar beside the switch, then a slice: each lights up its partner. Switch to the columns and try again: the link follows the view on show.</li>
     </ul>
   </section>
 </main>

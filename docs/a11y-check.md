@@ -1,8 +1,8 @@
 # Screen-reader checks
 
-These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`, [section H](#h-the-season-page-linked-hover-and-change-labels) checks linked hover and the change labels on `demo/season.html`, and [section I](#i-missing-values-page-up-and-page-down-and-the-season-page-again) checks what M8 adds: a line with missing values on `demo/line.html`, Page Up and Page Down on `demo/stress.html`, and the season page without its workarounds. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
+These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`, [section H](#h-the-season-page-linked-hover-and-change-labels) checks linked hover and the change labels on `demo/season.html`, and [section I](#i-missing-values-page-up-and-page-down-and-the-season-page-again) checks what M8 adds: a line with missing values on `demo/line.html`, Page Up and Page Down on `demo/stress.html`, and the season page without its workarounds. [Section J](#j-circles-and-shapes-an-attachments-picker-and-a-link-across-a-switch) checks what M9 adds: the dots, curves and areas that `expressive()` reads by their tags on `demo/shapes.html`, the D3 pie's effect picker on `demo/donut.html`, and the link across the switch on `demo/morph.html`. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
 
-**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026, and section H, the season page, on 26 October 2026. Section I, for 0.3.0, passed with NVDA + Chrome on 27 October 2026. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026, and section H, the season page, on 26 October 2026. Section I, for 0.3.0, passed with NVDA + Chrome on 27 October 2026. Section J, for 0.4.0, hasn't been run yet. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
 
 A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to paste into an issue.
 
@@ -404,6 +404,64 @@ M8 (0.3.0) adds three things to hear: a line with missing values, on the line pa
 | 23 | Section H's steps 8 to 11: Tab 9 times to the players' "Data table", Space, T, and along and down the rows. | As section H says: "Goals by player, table with 9 rows and 5 columns", Okafor's row "Forward", "15", "Change, column 4, 0", "Since matchweek 1, column 5, +14", then Lindqvist's "+8" and "Change, column 4, +1". | |
 
 If a missing week is read with a number, or a step lands somewhere other than it says, say so: the names, or a page's size, may need to change.
+
+## J. Circles and shapes, an attachment's picker, and a link across a switch
+
+M9 (0.4.0) adds three things to hear: the shapes page, `demo/shapes.html`, whose dots, curves and areas are drawn by D3 and Observable Plot and read by `expressive()` by their tags; the D3 pie's picker on the donut page, which now swaps its effects in place; and the morph page's switch, in a link with a bar chart beside it. Otherwise the charts read as in sections [C](#c-the-second-chart-expressive-on-the-pages-own-svg), [D](#d-the-donut-page-donutchart-and-a-d3-pie) and [F](#f-the-morph-page-a-chart-switch).
+
+- **The shapes page.** Four charts drawn by other code, each an `<svg>` with `role="group"` and a name: "Goals and shots by player on a D3 scatter", "Goals and assists by player on an Observable Plot dot chart", "Goals and expected goals per match on a D3 curved line" and "Shots on and off target per match on a D3 area". Their axes, and the names beside the dots, are hidden. Each dot, curve and area is `role="img"`, named by `markLabel`: "Okafor: 16 goals from 64 shots" on the scatter, "Okafor: 16 goals, 4 assists" on Plot's chart, "Expected goals (xG) per match, five-match average: 1.7 at matchweek 38" on the curved line, whose goals curve also says where it's red ("below xG in matchweeks 1 to 6, …"), and "Shots on target: 177 in 38 matches" on the area.
+- **Keyboard order.** Each chart is one tab stop. The arrow keys go through its marks in the order the page drew them, whatever their place on the chart: Right and Down to the next, Left and Up to the previous, Home and End to the ends, with no wrap-around. On both dot charts that's the top scorer first: Okafor, Lindqvist, Moreau, Tanaka, Reyes, Adeyemi, Novak, Castillo.
+- **The picker.** "Pulse", "Flash" and "Wiggle" are toggle buttons in a group named "Hover effect". A press swaps every chart's hover effect in place, with `update({ on })`: focus stays on the button, and each chart's tab stop stays on the mark it was on. The effects are seen, not heard: nothing is announced.
+- **The donut page's D3 pie** swaps its effect in the same way, so its tab stop stays too. Before M9 the page attached its effects again, and the tab stop went back to the first slice.
+- **The morph page's link.** Beside the switch, a bar chart, "Shot outcomes, largest first", is in one `link()` with it. Hovering or focusing a bar hovers its slice or column in the view shown, and the other way round, before and after a switch. A linked hover is seen, not heard: focus stays where it is, and nothing is read or announced from the other chart.
+
+**Setup.** Run `npm run dev`. Use NVDA + Chrome, with the setup from [A](#a-nvda--chrome-windows), and keep the pointer off the charts. Each part starts on a freshly loaded page.
+
+**Listen for:**
+
+1. Each dot, curve and area is read **once, as one item**, by its name. Never a name beside a dot, an axis value, or "dot" on its own.
+2. Moving into each chart says its name once.
+3. The arrow keys go through each chart's marks in the order above, and stop at the ends.
+4. After a picker button is pressed, focus is still on it, and Tab back into a chart lands on the mark that was focused there last. On the donut page, the same holds for the D3 pie.
+5. On the morph page, a hover or focus in one chart never moves focus, or reads anything, in the other, before or after a switch.
+
+**Known, no need to report:** "xG" may be read "x g". The goals curve's name is long, since it says where the curve is red; do say if it's too long to follow.
+
+**The shapes page.** Open `shapes.html` at the address Vite prints, for example `http://localhost:5173/shapes.html`, and reload. The page's tab order: the three motion buttons, the three Hover effect buttons (Pulse, Flash, Wiggle), the scatter (one stop), Plot's chart (one stop), the curved line (one stop), then the area (one stop).
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 7 times from the top of the page, until focus reaches the scatter's first dot. | On the way: "Hover effect, grouping, Pulse, toggle button, pressed", "Flash, toggle button, not pressed", "Wiggle, toggle button, not pressed". Then "Goals and shots by player on a D3 scatter, grouping", then "Okafor: 16 goals from 64 shots, graphic". A ring shows round Okafor's dot, and the other dots dim. | |
+| 2 | NVDA+Space (focus mode), then Right arrow 3 times. | "Lindqvist: 10 goals from 41 shots", "Moreau: 8 goals from 46 shots", "Tanaka: 6 goals from 35 shots", each a graphic. The ring goes in the order the page drew the dots, not from left to right. | |
+| 3 | End, Right arrow, then Home. | "Castillo: 1 goal from 18 shots, graphic", nothing new (Castillo is the last), then "Okafor: 16 goals from 64 shots, graphic". | |
+| 4 | Right arrow twice, to Moreau. Escape, then NVDA+Space (browse mode). Shift+Tab twice, to "Flash", and press Space. | "Moreau: 8 goals from 46 shots, graphic". Then "Flash, toggle button, not pressed", then "pressed". Nothing else. | |
+| 5 | Press NVDA+Tab. | "Flash, toggle button, pressed": focus stayed on the button. | |
+| 6 | Tab twice. | "Wiggle, toggle button, not pressed", then "Goals and shots by player on a D3 scatter, grouping", "Moreau: 8 goals from 46 shots, graphic": the dot focused last, not Okafor. Moreau's dot flashes once. | |
+| 7 | Tab once, to Plot's chart. NVDA+Space (focus mode), then Right arrow twice. | "Goals and assists by player on an Observable Plot dot chart, grouping", "Okafor: 16 goals, 4 assists, graphic". Then "Lindqvist: 10 goals, 7 assists" and "Moreau: 8 goals, 3 assists", each a graphic. Never "dot". | |
+| 8 | Escape, browse mode, then Tab once, to the curved line. Focus mode, then Right arrow. | "Goals and expected goals per match on a D3 curved line, grouping", "Goals per match, five-match average: 1.0 at matchweek 38, below xG in matchweeks 1 to 6, 9 to 12, 20 to 23, 31 and 33 to 38, graphic". Then "Expected goals (xG) per match, five-match average: 1.7 at matchweek 38, graphic". The ring goes round each curve, and the other dims. | |
+| 9 | Escape, browse mode, then Tab once, to the area. Focus mode, then Right arrow. | "Shots on and off target per match on a D3 area, grouping", "Shots on target: 177 in 38 matches, graphic", then "Shots off target: 333 in 38 matches, graphic". | |
+| 10 | Escape, browse mode. Press 2 until "Goals from shots, on a D3 scatter, heading, level 2". Then press Down arrow until "Form, on a D3 curved line, heading, level 2". | The scatter's note, "Goals and shots by player on a D3 scatter, grouping" and its eight dots by name. Then the heading "Goals and assists, on an Observable Plot dot chart", its note, its group and its eight dots by name. **Never** a player's name on its own, "dot", "Goals", "Shots", "Assists" or an axis value such as "20". | |
+
+**The donut page.** Open `donut.html` and reload. Its tab order is section D's.
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 11 | Press Tab 12 times from the top of the page, until focus reaches the D3 pie. | As section D's steps 1 and 10, ending "Shot outcomes on a D3 pie, grouping", then "Goal: 58 shots, 14%, graphic". | |
+| 12 | NVDA+Space (focus mode), then Right arrow twice. | "Saved: 112 shots, 28%, graphic", then "Off target: 149 shots, 37%, graphic". | |
+| 13 | Escape, then NVDA+Space (browse mode). Shift+Tab 7 times, to "Wiggle", and press Space. | On the way, "Data table", the donut, "Next match", the order buttons and "Pulse". Then "Wiggle, toggle button, not pressed", then "pressed". | |
+| 14 | Tab 7 times, back to the D3 pie. | "Shot outcomes on a D3 pie, grouping", then "Off target: 149 shots, 37%, graphic": the slice focused last, not Goal. The slice rocks. | |
+
+**The morph page.** Open `morph.html` and reload. The page's tab order: the three motion buttons, "Show as columns", the two Morph buttons (Drop, Unroll), the view shown (one stop), its "Data table", the bars beside it (one stop), then their "Data table".
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 15 | Press Tab 9 times from the top of the page, until focus reaches the bars. | On the way, "Goal: 58 shots, 14%, graphic" in the donut and "Data table". Then "Shot outcomes, largest first, grouping", "Off target: 149 shots, graphic". In the donut, Off target lights up and the other slices dim, and nothing is read about it. | |
+| 16 | NVDA+Space (focus mode), then Right arrow. | "Saved: 112 shots, graphic". Saved lights up in the donut. Nothing else is read. | |
+| 17 | Escape, then NVDA+Space (browse mode). Shift+Tab twice, back into the donut. | "Data table", then "Shot outcomes, share of total, grouping", "Goal: 58 shots, 14%, graphic". In the bars, Goal lights up; nothing is read about it. | |
+| 18 | NVDA+Space (focus mode), then V. | After about a second, "Shot outcomes, counts, grouping", "Goal: 58 shots, graphic", and the announcement "Shot outcomes, counts". In the bars, Goal is still lit: the link follows the switch. | |
+| 19 | Escape, browse mode, then Tab twice, to the bars. Focus mode, then Right arrow. | "Data table", then "Shot outcomes, largest first, grouping", "Saved: 112 shots, graphic": the bar focused last. Then "Blocked: 87 shots, graphic". In the columns, Saved, then Blocked, lights up. Focus stays in the bars, and nothing is announced. | |
+
+If a mark is read in pieces, a hidden name or axis is read, or Tab lands on a different mark after a pick, say so: the names, or what the page hides, may need to change.
 
 ## Re-check: each bar's description
 

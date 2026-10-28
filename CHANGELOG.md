@@ -44,10 +44,14 @@ Everything else can still change in a minor release while the library is 0.x: th
 
   The default, `"x"`, hovers every series at an x with the crosshair, as before, so no page needs to change.
 - **A line chart's tooltip function is given the point's series** with `hover: "point"`, as a second argument, `(d, { series })`, for the tooltip's text and each point's description. With `"x"` it's given the row alone, so a function that takes the row alone still fits.
+- **`nearbyLabels` on `MarkGeometry`**, under the 0.x promise, and on each builder's spec (`BarSpec`, `ArcSpec`, `LineSpec`, `PointSpec` and `ShapeSpec`): the boxes of other marks' text near a mark, which an effect's text should keep clear of as well as its own. `labelBounds` stays the boxes of the mark's own. Our line chart gives each line every other line's end label, and the donut each slice its neighbours' labels, the nearest each way round; bars and adapters give none. It's an optional field, an addition: code that builds a `MarkGeometry` needs no change, and an effect that ignores it works as before. The builders check it as they check `labelBounds`, with a `RangeError` naming the field, such as `nearbyLabels[0].x`.
 
 ### Changed
 
 ### Fixed
+
+- **`delta` and `label` keep off other marks' labels.** When two lines ended close together, with their end labels pushed apart, one line's text could land on the other's end label; now it goes past both. They still pick their way from the mark's own labels, so another mark's label only takes the text further that way, never turns it. And text centred on a point, within 45° of vertical, goes 6 px past a label's top or bottom, not past the side its way leaves through, where it could sit on the label it was placed past.
+- **A negative column's value label no longer sits on its name.** The layout kept room under the plot for negative columns' value labels but drew the names in it, so the deepest column's value label was on its name. Now the names go below that room, and the plot keeps its height. A chart with no negative column draws as before. A `delta` on a negative column, past its name, reaches past the chart's bottom at 320 px (14.1 px in Chrome), as a column's does past the top; `room: 28` keeps it inside.
 
 ## 0.4.0 (27 October 2026)
 

@@ -1022,7 +1022,7 @@ describe.each(Object.entries(sources))("effects on marks from %s", (_source, mar
     }
   });
 
-  it("delta and label put their text outside every mark's own labels", () => {
+  it("delta and label put their text outside every mark's own labels, and other marks' near it", () => {
     for (const mark of marksOf()) {
       for (const effect of [delta(), label(() => "+0.25")]) {
         const ctx = testContext();
@@ -1030,7 +1030,8 @@ describe.each(Object.entries(sources))("effects on marks from %s", (_source, mar
         const texts = ctx.layer.drawn.filter((drawn) => drawn.kind === "text");
         expect(texts.map((text) => text.content), mark.key).toEqual(["+0.25"]);
         const { at } = texts[0]!.style;
-        const inside = (mark.labelBounds ?? []).some((box) => at.x >= box.x && at.x <= box.x + box.width && at.y >= box.y && at.y <= box.y + box.height);
+        const boxes = [...(mark.labelBounds ?? []), ...(mark.nearbyLabels ?? [])];
+        const inside = boxes.some((box) => at.x >= box.x && at.x <= box.x + box.width && at.y >= box.y && at.y <= box.y + box.height);
         expect(inside, mark.key).toBe(false);
       }
     }

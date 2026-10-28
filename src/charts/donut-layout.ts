@@ -157,7 +157,7 @@ export function layoutDonut<D>(input: DonutLayoutInput<D>): DonutLayout<D> {
   return {
     frame,
     total,
-    slices: states.map((state, i) => placeSlice(frame, state, labels[i], input.measure)),
+    slices: placeSlices(frame, states, labels, input.measure),
     labels,
     centerText,
     center: placeCenter(frame, centerText, input.measure)
@@ -179,10 +179,40 @@ export function joinedStarts(values: readonly number[]): number[] {
 }
 
 /**
+ * Draws the slices in a frame, in the ring's order, each with its label (placeSlice) and its
+ * neighbours' labels as `nearbyLabels`: the nearest label each way round, passing over slices that
+ * have none, and one label once when it's the nearest both ways.
+ */
+export function placeSlices<D>(frame: DonutFrame, states: readonly SliceState<D>[], labels: readonly (SliceLabel | undefined)[], measure: Measure): DonutSlice<D>[] {
+  const boxes = labels.map((label) => (label ? labelBoxes(label, measure) : undefined));
+  const labelled = boxes.flatMap((box, i) => (box ? [i] : []));
+  const first = labelled[0];
+  const last = labelled[labelled.length - 1];
+  // The nearest slice with a label before each slice, and after it, going round past the ends.
+  const before: (number | undefined)[] = [];
+  const after: (number | undefined)[] = [];
+  let seen: number | undefined;
+  for (let i = 0; i < states.length; i++) {
+    before[i] = seen ?? (last === i ? undefined : last);
+    if (boxes[i]) seen = i;
+  }
+  seen = undefined;
+  for (let i = states.length - 1; i >= 0; i--) {
+    after[i] = seen ?? (first === i ? undefined : first);
+    if (boxes[i]) seen = i;
+  }
+  return states.map((state, i) => {
+    const sides = before[i] === after[i] ? [before[i]] : [before[i], after[i]];
+    return placeSlice(frame, state, labels[i], measure, sides.flatMap((j) => (j === undefined ? [] : boxes[j]!)));
+  });
+}
+
+/**
  * Draws a slice in a frame: its arc, described with describe.arc, and its data. With its label
  * (and `measure`), the boxes of the label's two lines are its `labelBounds`; with no label, none.
+ * `nearby` are other slices' labels' boxes, its `nearbyLabels`; unset without.
  */
-export function placeSlice<D>(frame: DonutFrame, state: SliceState<D>, label?: SliceLabel, measure?: Measure): DonutSlice<D> {
+export function placeSlice<D>(frame: DonutFrame, state: SliceState<D>, label?: SliceLabel, measure?: Measure, nearby?: readonly Rect[]): DonutSlice<D> {
   const geometry = describeArc({
     key: state.key,
     series: state.series,
@@ -192,7 +222,8 @@ export function placeSlice<D>(frame: DonutFrame, state: SliceState<D>, label?: S
     outer: frame.outer,
     start: state.start,
     end: state.end,
-    labelBounds: label && measure ? labelBoxes(label, measure) : []
+    labelBounds: label && measure ? labelBoxes(label, measure) : [],
+    ...(nearby ? { nearbyLabels: nearby } : {})
   });
   return { ...state, geometry, data: sliceData(state.datum, state.share, state.series) };
 }

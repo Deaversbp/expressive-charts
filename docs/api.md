@@ -531,6 +531,7 @@ One mark, described the same way whoever drew it. In chart pixels, with y pointi
   - `center`: `Point`. Its visual centre, for tooltips, rings and labels.
   - `pivot`: `Point`. Where it's attached to the chart: a bar's baseline, a donut's centre, a line's first point.
   - `labelBounds`: `readonly Rect[] | undefined`. The boxes of the text the chart draws for the mark, so an effect's own text can keep clear of them: a bar's category and value labels, the two lines of a slice's label outside the ring, a line's end label. An empty list when the mark has none drawn now. Unset on segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#the-marks-own-labels)).
+  - `nearbyLabels`: `readonly Rect[] | undefined`. The boxes of other marks' text near this one, which an effect's text should keep clear of too: on a line, every other line's end label; on a slice, its neighbours' labels, the nearest each way round. `labelBounds` stays the mark's own. An empty list when none is near; unset when none is known: on bars, segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#other-marks-labels-nearby)).
   - `segments`: `readonly MarkGeometry[] | undefined`. A bar's parts, from the baseline; every bar has at least one.
 
 Build one with [`describe`](#describe).
@@ -960,6 +961,9 @@ interface BarSpec
 - `segments`: `readonly BarSegmentSpec[]`. Its parts, from the baseline. Default: one segment named after `series`, the whole bar. Sizes past the tip are cut off, and a series named twice throws an `Error`.
 - `gap`: `number`. Default 0. Px left empty between segments, out of the start of the later one, so each still ends at its value; it shrinks when the part before it is shorter.
 - `labelBounds`: `readonly Rect[]`. The boxes of the bar's own labels, in chart px, passed through as the geometry's `labelBounds`. Its segments have none.
+- `nearbyLabels`: `readonly Rect[]`. The boxes of other marks' labels near the bar, in chart px, passed through as the geometry's `nearbyLabels`. Its segments have none.
+
+A box in `labelBounds` or `nearbyLabels` with a coordinate that isn't finite, or a negative size, throws a `RangeError` naming the builder and the field: `describe.bar: nearbyLabels[0].x must be a finite number, got NaN.` So do the other builders'.
 
 #### `BarSegmentSpec`
 
@@ -997,6 +1001,7 @@ interface ArcSpec
 - `inner`, `outer`: `number`, required. Radii in px; an inner of 0 makes a pie slice. Given the wrong way round, they're swapped, as `d3.arc()` does.
 - `start`, `end`: `number`, required. Radians from 12 o'clock, clockwise: the `d3.pie()` convention, so its output plugs straight in. An `end` before `start` walks anticlockwise; more than a full turn draws one ring.
 - `labelBounds`: `readonly Rect[]`. The boxes of the slice's own labels, passed through as the geometry's `labelBounds`.
+- `nearbyLabels`: `readonly Rect[]`. The boxes of other slices' labels near it, passed through as the geometry's `nearbyLabels`.
 
 #### `LineSpec`
 
@@ -1010,10 +1015,11 @@ interface LineSpec {
   readonly breaks?: readonly number[];
   readonly width?: number;
   readonly labelBounds?: readonly Rect[];
+  readonly nearbyLabels?: readonly Rect[];
 }
 ```
 
-A polyline through `points` (at least one), in chart px, with straight legs. `breaks` are the indices of the points that start a new run, so there's a gap in the geometry's [`gaps`](#markgeometry) from `points[i - 1]` to `points[i]`, and the stroke leaves it out: each a whole number from 1 to the last index, in order, with no repeats, or it throws a `RangeError` naming it. A line drawn with d3's `.defined()` is described by its defined points and the indices where they break. Default none. `width` is its stroke width, default 1. `labelBounds`, the boxes of its own labels (an end label), is passed through as the geometry's.
+A polyline through `points` (at least one), in chart px, with straight legs. `breaks` are the indices of the points that start a new run, so there's a gap in the geometry's [`gaps`](#markgeometry) from `points[i - 1]` to `points[i]`, and the stroke leaves it out: each a whole number from 1 to the last index, in order, with no repeats, or it throws a `RangeError` naming it. A line drawn with d3's `.defined()` is described by its defined points and the indices where they break. Default none. `width` is its stroke width, default 1. `labelBounds`, the boxes of its own labels (an end label), and `nearbyLabels`, other marks' near it (other lines' end labels), are passed through as the geometry's.
 
 #### `PointSpec`
 
@@ -1027,10 +1033,11 @@ interface PointSpec {
   readonly y: number;
   readonly r: number;
   readonly labelBounds?: readonly Rect[];
+  readonly nearbyLabels?: readonly Rect[];
 }
 ```
 
-A dot of radius `r`. Its walk has length 0, so `travel` and `trace` do nothing on it, while `wiggle`, `pulse` and `flash` still work. `labelBounds`, the boxes of its own labels, is passed through as the geometry's.
+A dot of radius `r`. Its walk has length 0, so `travel` and `trace` do nothing on it, while `wiggle`, `pulse` and `flash` still work. `labelBounds`, the boxes of its own labels, and `nearbyLabels`, other marks' near it, are passed through as the geometry's.
 
 #### `ShapeSpec`
 
@@ -1044,6 +1051,7 @@ interface ShapeSpec {
   readonly matrix?: Matrix;
   readonly width?: number;
   readonly labelBounds?: readonly Rect[];
+  readonly nearbyLabels?: readonly Rect[];
 }
 ```
 
@@ -1053,6 +1061,7 @@ Any SVG shape, from its path data. The library follows the path itself, so it wo
 - `matrix`: [`Matrix`](#matrix-type). Moves the shape into the marks' px, as an element's transform does, arcs too. Default none.
 - `width`: `number`. An open shape's stroke width in px, more than 0. Default 1.
 - `labelBounds`: `readonly Rect[]`. The boxes of its own labels, in the marks' px, passed through as the geometry's.
+- `nearbyLabels`: `readonly Rect[]`. The boxes of other marks' labels near it, in the marks' px, passed through as the geometry's.
 
 A shape is closed when every subpath ends with `Z`, or where it started, and otherwise open.
 
@@ -1314,7 +1323,7 @@ interface TraceOptions
 delta<D = unknown>(options?: DeltaOptions<D>): DataEffect<D>
 ```
 
-A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label, outside a slice's label. It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until its chart's next update clears it, whether or not that update changes its mark, following the mark as it moves. `data.previous` is the values the last update gave, so an update that replaces one still moving says "+1", not the change from part way. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
+A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label and any other line's beside it, outside a slice's label. It keeps clear of the mark's own labels (`labelBounds`) and other marks' near it (`nearbyLabels`). It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until its chart's next update clears it, whether or not that update changes its mark, following the mark as it moves. `data.previous` is the values the last update gave, so an update that replaces one still moving says "+1", not the change from part way. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
 
 The text goes in the overlay, which screen readers don't read: a page that relies on it says the same in its table or its announcement. On a line chart, `update` runs on the points whose values changed too, so a change meant for the line goes in [`only()`](#only) with a filter on the mark's length:
 
@@ -1777,7 +1786,7 @@ The [shared options](#chartoptionsd), and:
 - `sort`: `"none" | "value" | "key" | ((a: D, b: D) => number)`. Default `"none"`, data order. `"value"` puts the largest total first, `"key"` the keys A to Z (numbers in numeric order). Sorting never changes a key or a colour.
 - `orientation`: `"horizontal" | "vertical"`. Forces bars or columns; needed when both axes hold numbers.
 - `colorBy`: `"series" | "category"`. Default `"series"`. `"category"` gives each bar its own palette slot by its key, as a donut's slices have, so one `colorAssignment()` shared with a donut keeps each category's colour in both. It needs one series: on a stack it throws.
-- `room`: `number`. Default 0. Px kept clear past the labels at each end of the value axis that bars reach, for text an effect draws there: a [`delta`](#delta) past a bar's value label, above a column's, or past a negative bar's name. At 320 px, `room: 28` keeps a `delta` inside the chart. Anything but a number of px, 0 or more, throws a `RangeError`.
+- `room`: `number`. Default 0. Px kept clear past the labels at each end of the value axis that bars reach, for text an effect draws there: a [`delta`](#delta) past a bar's value label, above a column's, or past a negative bar's or a negative column's name. At 320 px, `room: 28` keeps a `delta` inside the chart. Anything but a number of px, 0 or more, throws a `RangeError`.
 
 Bars are 20 px thick in rows of 34 px, so a horizontal chart's height follows its rows unless `height` is given; columns are 300 px high.
 

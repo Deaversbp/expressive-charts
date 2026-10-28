@@ -1103,7 +1103,7 @@ Each published JS file and the stylesheet:
 | `dist/expressive-charts.global.js` | 230.0 KB | 75.8 KB | 64.9 KB | 79.5 KB |
 | `dist/icons/sport.cjs` | 7.3 KB | 2.6 KB | 2.4 KB | 3.5 KB |
 | `dist/icons/sport.js` + 2 chunks | 10.8 KB | 4.0 KB | 3.6 KB | 4.5 KB |
-| `dist/index.cjs` | 417.4 KB | 108.0 KB | 85.2 KB | 110.5 KB |
+| `dist/index.cjs` | 417.4 KB | 108.0 KB | 85.2 KB | 122 KB |
 | `dist/index.js` + 3 chunks | 418.1 KB | 109.9 KB | 88.4 KB | 123.5 KB |
 | `dist/testing.cjs` | 60.2 KB | 16.9 KB | 14.8 KB | 19 KB |
 | `dist/testing.js` + 2 chunks | 80.2 KB | 22.6 KB | 20.0 KB | 24.5 KB |

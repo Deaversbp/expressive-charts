@@ -482,14 +482,16 @@ function verticalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[]
   const { positive, negative } = reach(input, rows);
   // Room above positive columns (and below negative ones) for their value labels, and `room` past them.
   const top = (domain.hi > 0 ? VALUE_SIZE + PAD + 2 : TOP) + positive;
-  const bottom = AXIS + (domain.lo < 0 ? VALUE_SIZE + PAD : 0) + negative;
+  const values = domain.lo < 0 ? VALUE_SIZE + PAD : 0;
+  const bottom = AXIS + values + negative;
   const left = tickWidth + 8 + 2;
   const plot = { x: left, y: top, width: Math.max(0, width - left - 8), height: Math.max(0, height - top - bottom) };
   const band = n > 0 ? plot.width / n : 0;
   const base = plot.y + plot.height;
   return {
     orientation: "vertical",
-    scale: { lo: domain.lo, hi: domain.hi, from: base, extent: -plot.height, label: base + 18 },
+    // The names go below the negative columns' value labels' room, so a column reaching the bottom never has its value on its name.
+    scale: { lo: domain.lo, hi: domain.hi, from: base, extent: -plot.height, label: base + values + 18 },
     bands: { start: plot.x, band, thickness: Math.min((band * BAR) / ROW, MAX_COLUMN), span: plot.width, width, height }
   };
 }

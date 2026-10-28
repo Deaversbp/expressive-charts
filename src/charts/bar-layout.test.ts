@@ -234,6 +234,46 @@ describe("layoutBars, room", () => {
   });
 });
 
+describe("layoutBars, a negative column's labels", () => {
+  type Row = { k: string; v: number };
+  const rows = (...values: number[]): Row[] => values.map((v, i) => ({ k: `r${i}`, v }));
+  const meet = (a: Rect, b: Rect): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  /** A row's name and value boxes, as its labelBounds give them. */
+  const boxes = (row: BarRow<Row>) => ({ name: textBox(row.label, measure, "ec-label", 12.5), value: textBox(row.value, measure, "ec-value", 12.5) });
+
+  it("puts the names below the room kept for the value labels, so a column reaching the bottom has its value off its name", () => {
+    for (const room of [0, 28]) {
+      for (const data of [rows(6, -3), rows(-6, -3), rows(-10, -9.5, 4), rows(-0.5, 20)]) {
+        const result = layout({ data, x: "k", y: "v" }, { room });
+        const base = result.frame.scale.from;
+        // 12.5 + 6 px of room for the value labels, then the names 18 px below it, as they'd be below the plot.
+        expect(result.frame.scale.label, `${room} ${data.map((row) => row.v)}`).toBeCloseTo(base + 12.5 + 6 + 18, 9);
+        for (const row of result.rows) {
+          const { name, value } = boxes(row);
+          expect(meet(name, value), `${room} ${row.key}`).toBe(false);
+          expect(name.y + name.height).toBeLessThanOrEqual(result.height - room);
+          expect(row.geometry.labelBounds).toEqual([name, value]);
+        }
+      }
+    }
+    // The most negative column reaches the plot's bottom, and its value label hangs into the room, above its name.
+    const [lowest] = layout({ data: rows(-6, -3), x: "k", y: "v" }).rows;
+    const { name, value } = boxes(lowest!);
+    expect(lowest!.geometry.end.y).toBeCloseTo(lowest!.geometry.start.y + (300 - 4 - 44.5), 9);
+    expect(value.y + value.height).toBeLessThan(name.y);
+  });
+
+  it("keeps the plot's height, and draws a chart with no negative column as before", () => {
+    // Positive and negative: 12.5 + 6 + 2 px above the plot, and the axis's 26 px and the value labels' room below it.
+    const mixed = layout({ data: rows(6, -3), x: "k", y: "v" });
+    expect(-mixed.frame.scale.extent).toBeCloseTo(300 - 20.5 - 44.5, 9);
+    // No negative column: the names 18 px below the plot, which reaches the axis's 26 px.
+    const positive = layout({ data: rows(16, 6, 10), x: "k", y: "v" });
+    expect(positive.frame.scale).toMatchObject({ from: 300 - 26, extent: -(300 - 20.5 - 26), label: 300 - 26 + 18 });
+    expect(positive.rows.map((row) => row.label.y)).toEqual([292, 292, 292]);
+  });
+});
+
 describe("layoutBars, thinning", () => {
   type Row = { name: string; value: number };
   /** "Bar 1" to "Bar n", their values from `lo` up to 100 and round again. */

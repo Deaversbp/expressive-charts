@@ -22,6 +22,8 @@ export interface LineSpec {
   readonly width?: number;
   /** The boxes of the text drawn for the mark, in the same px: passed through as `labelBounds`. */
   readonly labelBounds?: readonly Rect[];
+  /** The boxes of other marks' text near it, in the same px: passed through as `nearbyLabels`. */
+  readonly nearbyLabels?: readonly Rect[];
 }
 
 /**
@@ -59,7 +61,8 @@ export function describeLine(spec: LineSpec): MarkGeometry {
     bounds: { x: box.x - pad, y: box.y - pad, width: box.width + width, height: box.height + width },
     center: walk.point(0.5),
     pivot: first,
-    labelBounds: labelBoxes("line", spec.labelBounds)
+    labelBounds: labelBoxes("line", spec.labelBounds),
+    nearbyLabels: labelBoxes("line", spec.nearbyLabels, "nearbyLabels")
   });
 }
 

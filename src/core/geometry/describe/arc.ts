@@ -20,6 +20,8 @@ export interface ArcSpec {
   readonly end: number;
   /** The boxes of the text drawn for the mark, in the same px: passed through as `labelBounds`. */
   readonly labelBounds?: readonly Rect[];
+  /** The boxes of other marks' text near it, in the same px: passed through as `nearbyLabels`. */
+  readonly nearbyLabels?: readonly Rect[];
 }
 
 /**
@@ -58,6 +60,7 @@ export function describeArc(spec: ArcSpec): MarkGeometry {
     bounds: boundsOf(sides.flat().flatMap(extremes)),
     center: walk.point(0.5),
     pivot: center,
-    labelBounds: labelBoxes("arc", spec.labelBounds)
+    labelBounds: labelBoxes("arc", spec.labelBounds),
+    nearbyLabels: labelBoxes("arc", spec.nearbyLabels, "nearbyLabels")
   });
 }

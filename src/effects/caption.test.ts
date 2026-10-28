@@ -58,6 +58,24 @@ describe("captionPlace", () => {
     expect(anchor).toBe("middle");
   });
 
+  it("puts centred text past a label's top or bottom, though the heading leaves it through a side", () => {
+    // Up and to the right at 60°: centred. The heading leaves the box, grown by 6 px, through its right
+    // side 26 px along, where the text, reaching out to either side, would be on it; past its top is 68.6 px.
+    const end = { x: 50, y: 100 - 50 * Math.sqrt(3) };
+    const box = { x: 45, y: -40, width: 12, height: 50 };
+    const steep = build.line({ key: "goals", points: [{ x: 0, y: 100 }, end], labelBounds: [box] });
+    const { at, anchor } = captionPlace(steep);
+    expect(anchor).toBe("middle");
+    const along = (end.y + 46) / (Math.sqrt(3) / 2);
+    expect(at.x).toBeCloseTo(end.x + along / 2, 9);
+    expect(at.y).toBeCloseTo(-46 + SIDEWAYS * (1 - Math.sqrt(3) / 2), 9);
+    // Another mark's label the same way goes past its top too.
+    expect(captionPlace(build.line({ key: "goals", points: [{ x: 0, y: 100 }, end], nearbyLabels: [box] }))).toEqual({ at, anchor, toward: steep.angle(1) });
+    // At 30°, read sideways, it leaves through the side as before: 6 px past the box's right.
+    const shallow = build.line({ key: "goals", points: [{ x: 0, y: 100 }, { x: 50, y: 100 - 50 / Math.sqrt(3) }], labelBounds: [{ x: 45, y: 60, width: 12, height: 40 }] });
+    expect(captionPlace(shallow).at.x).toBeCloseTo(63, 9);
+  });
+
   it("anchors by the heading: start rightwards, end leftwards, middle within 45° of vertical", () => {
     const heading = (degrees: number) => {
       const radians = (degrees * Math.PI) / 180;
@@ -122,5 +140,57 @@ describe("captionPlace", () => {
     expect(captionPlace(bar([value, overhead]))).toMatchObject({ toward: 0, at: { x: 296 } });
     // A bar whose value label is empty: its name is behind it, and nothing is above it.
     expect(captionPlace(bar([{ x: 0, y: 12, width: 54, height: 14 }]))).toEqual(captionPlace(bar()));
+  });
+});
+
+describe("captionPlace with other marks' labels near it", () => {
+  const value = { x: 266, y: 12, width: 24, height: 14 };
+  const near = (labelBounds: Rect[] | undefined, nearbyLabels: Rect[] | undefined): MarkGeometry =>
+    build.bar({ key: "Okafor", x: 60, y: 10, width: 200, height: 20, baseline: "left", ...(labelBounds ? { labelBounds } : {}), ...(nearbyLabels ? { nearbyLabels } : {}) });
+
+  it("goes 6 px past another mark's label the heading meets, beside or past its own", () => {
+    // Another line's end label just below this one's, reaching further.
+    const neighbour = { x: 266, y: 24, width: 60, height: 14 };
+    expect(captionPlace(near([value], [neighbour]))).toEqual({ at: { x: 332, y: 20 + SIDEWAYS }, anchor: "start", toward: 0 });
+    // With no labels of its own, past the other's.
+    expect(captionPlace(near([], [neighbour])).at.x).toBe(332);
+    // One nearer than its own label leaves it past its own.
+    expect(captionPlace(near([value], [{ x: 262, y: 14, width: 10, height: 10 }])).at.x).toBe(296);
+    // One the heading misses by more than 6 px, or one behind the end, changes nothing.
+    const below = { x: 266, y: 37, width: 60, height: 14 };
+    const behind = { x: 0, y: 12, width: 54, height: 14 };
+    expect(captionPlace(near([value], [below, behind]))).toEqual(captionPlace(near([value], undefined)));
+    // Unset and empty are the same: none known.
+    expect(captionPlace(near([value], []))).toEqual(captionPlace(near([value], undefined)));
+  });
+
+  it("goes out from a slice's centre past a neighbour's label that way, as well as its own", () => {
+    const middle = { x: 150 + 93 * Math.SQRT1_2, y: 150 - 93 * Math.SQRT1_2 };
+    const own: Rect = { x: middle.x + 20, y: middle.y - 50, width: 40, height: 34 };
+    // Further out on the way up: the ray leaves it, grown by 6 px, 96 px up and right.
+    const neighbour: Rect = { x: middle.x + 60, y: middle.y - 90, width: 40, height: 20 };
+    const slice = build.arc({ key: "Saved", cx: 150, cy: 150, inner: 70, outer: 116, start: 0, end: Math.PI / 2, labelBounds: [own], nearbyLabels: [neighbour] });
+    const { at, toward } = captionPlace(slice);
+    expect(toward).toBeCloseTo(-Math.PI / 4, 9);
+    expect(at.x).toBeCloseTo(middle.x + 96, 9);
+    expect(at.y).toBeCloseTo(middle.y - 96 + SIDEWAYS * (1 - Math.SQRT1_2), 9);
+  });
+
+  it("picks the way from the mark's own labels alone, so another mark's label never turns it", () => {
+    const arc = (labelBounds?: Rect[], nearbyLabels?: Rect[]): MarkGeometry =>
+      build.arc({ key: "Saved", cx: 150, cy: 150, inner: 70, outer: 116, start: 0, end: Math.PI / 2, ...(labelBounds ? { labelBounds } : {}), ...(nearbyLabels ? { nearbyLabels } : {}) });
+    const middle = { x: 150 + 93 * Math.SQRT1_2, y: 150 - 93 * Math.SQRT1_2 };
+    const outside: Rect = { x: middle.x + 20, y: middle.y - 50, width: 40, height: 34 };
+    // A label on the slice's heading, below 3 o'clock: its own label still sends it out from the centre.
+    const onHeading: Rect = { x: 233, y: 170, width: 20, height: 20 };
+    expect(captionPlace(arc([outside], [onHeading]))).toEqual(captionPlace(arc([outside])));
+    // A slice with no label of its own keeps to its heading along the ring, though a neighbour's label is on its up side, and goes past one on its heading.
+    expect(captionPlace(arc([], [outside]))).toEqual(captionPlace(arc()));
+    const past = captionPlace(arc([], [onHeading]));
+    expect(past.toward).toBeCloseTo(Math.PI / 2, 9);
+    expect(past.at.y).toBeCloseTo(196 + DOWNWARDS, 9);
+    // A bar whose heading meets none of its own labels keeps to it, though another mark's label is on its up side.
+    const overhead = { x: 140, y: -40, width: 40, height: 14 };
+    expect(captionPlace(near([{ x: 0, y: 12, width: 54, height: 14 }], [overhead]))).toMatchObject({ toward: 0, at: { x: 270 } });
   });
 });

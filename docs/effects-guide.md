@@ -59,6 +59,7 @@ Every mark, whoever drew it, is described with the same shape. It has two parts.
 | `pivot` | where the mark is attached to the chart: a bar's baseline, a donut's centre, a line's first point |
 | `segments` | a stack's parts in order from the baseline, each a `MarkGeometry` with its `series`; every bar has at least one |
 | `labelBounds` | optional: the boxes of the text the chart draws for the mark, so your own text can keep clear of them |
+| `nearbyLabels` | optional: the boxes of other marks' text near this one, which your text should keep clear of too |
 | `key`, `series` | the mark's stable identity, and its series if it has one |
 
 What each kind of mark gives:
@@ -69,8 +70,11 @@ What each kind of mark gives:
 | `pivot` | middle of the baseline edge | the donut's centre | the first point | the point |
 | `segments` | at least one | none | none | none |
 | `labelBounds` | its category and value labels | its label outside the ring, or none when it's dropped | its end label | none (unset) |
+| `nearbyLabels` | none (unset) | its neighbours' labels, the nearest each way round | every other line's end label | none (unset) |
 
-A mark the library didn't draw has no `labelBounds` unless the page's `geometry` gives it, so an effect that reads it needs a fallback: past the end of the walk, say.
+A mark the library didn't draw has no `labelBounds` or `nearbyLabels` unless the page's `geometry` gives them, so an effect that reads them needs a fallback: past the end of the walk, say.
+
+**Keeping your text clear of labels.** An effect that writes text near a mark should keep it off the mark's own labels and off other marks' near it. Pick where it goes from `labelBounds` alone, as the built-in `delta` and `label` do: along the walk past the end, or out from the mark through its own label. Then go past every box that way meets in both lists, `labelBounds` and `nearbyLabels`, so a neighbour's label pushes your text further along but never turns it. Two lines that end close together then each put their text past both end labels, not on the other's. Text centred on a point reaches out to either side, so measure "past" a box by its top or bottom, not by the side the way leaves it through. Your effect sees only its own mark, so two effects' texts can still meet each other.
 
 **Conventions** ([architecture.md](architecture.md#conventions) has them all):
 
@@ -489,7 +493,7 @@ function stroke(mark: MarkGeometry, ctx: EffectContext, color: Color): (p: numbe
 
 A data effect: "+2" just beyond the end of a mark whose value changed, in the `update` slot. It compares the last sample with the one before the update.
 
-It's a smaller version of the built-in [`delta`](api.md#delta), which puts its text past the mark's own labels (`labelBounds`, or outside a slice's label), words the change in the page's locale so 0.1 + 0.2 reads "+0.3", takes a `value` and a `color`, and counts float noise as no change. The built-in [`label`](api.md#label) places and rises the same way, with text worked out from the mark's data.
+It's a smaller version of the built-in [`delta`](api.md#delta), which puts its text past the mark's own labels and other marks' near it (`labelBounds` and `nearbyLabels`, or outside a slice's label), words the change in the page's locale so 0.1 + 0.2 reads "+0.3", takes a `value` and a `color`, and counts float noise as no change. The built-in [`label`](api.md#label) places and rises the same way, with text worked out from the mark's data.
 
 ```ts
 import { defineDataEffect, offset, type EffectContext, type MarkData, type MarkGeometry, type TextStyle } from "expressive-charts";

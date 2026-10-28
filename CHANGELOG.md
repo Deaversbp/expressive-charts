@@ -25,6 +25,19 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`nearbyLabels` on `MarkGeometry`**, under the 0.x promise, and on each builder's spec (`BarSpec`, `ArcSpec`, `LineSpec`, `PointSpec` and `ShapeSpec`): the boxes of other marks' text near a mark, which an effect's text should keep clear of as well as its own. `labelBounds` stays the boxes of the mark's own. Our line chart gives each line every other line's end label, and the donut each slice its neighbours' labels, the nearest each way round; bars and adapters give none. It's an optional field, an addition: code that builds a `MarkGeometry` needs no change, and an effect that ignores it works as before. The builders check it as they check `labelBounds`, with a `RangeError` naming the field, such as `nearbyLabels[0].x`.
+
+### Changed
+
+### Fixed
+
+- **`delta` and `label` keep off other marks' labels.** When two lines ended close together, with their end labels pushed apart, one line's text could land on the other's end label; now it goes past both. They still pick their way from the mark's own labels, so another mark's label only takes the text further that way, never turns it. And text centred on a point, within 45° of vertical, goes 6 px past a label's top or bottom, not past the side its way leaves through, where it could sit on the label it was placed past.
+- **A negative column's value label no longer sits on its name.** The layout kept room under the plot for negative columns' value labels but drew the names in it, so the deepest column's value label was on its name. Now the names go below that room, and the plot keeps its height. A chart with no negative column draws as before. A `delta` on a negative column, past its name, reaches past the chart's bottom at 320 px (14.1 px in Chrome), as a column's does past the top; `room: 28` keeps it inside.
+
 ## 0.4.0 (27 October 2026)
 
 Attachments that swap their effects and end their hover as charts do, `expressive()` reading circles and other SVG shapes through the new `describe.shape`, a chart switch in a link, Vega lines with gaps, the icon sets' faded parts, and a build with tsdown. In the effect-author API, `describe.shape`, `ShapeSpec`, and `fillOpacity` and `strokeOpacity` on `IconShape` are additions, and `checkEffect`'s default data on a gap is a fix, under Fixed: an effect that joins across a gap can now fail, as it should. The other changes are outside the promise, and each says what to write instead, if anything.

@@ -268,7 +268,8 @@ export function positions(frame: LineFrame): { x(value: number): number; y(value
  * at or before it, a line is its first point. Each line's data has the row at its revealed end, a
  * sample per vertex (`t` by distance along the walk, `at` its x: a Date on a `time` axis), and the
  * other lines as `related`. With `labels`, the end labels are placed together (placeEndLabels), and
- * each line's geometry has its own label's box as `labelBounds`: none when its text is "".
+ * each line's geometry has its own label's box as `labelBounds`, none when its text is "", and the
+ * other lines' as `nearbyLabels`.
  *
  * A row missing a series is no vertex of its line: the line breaks there (`breaks`, so its geometry
  * has a gap from the value before to the value after, and the sample after it has `gapBefore`), and
@@ -316,12 +317,17 @@ export function placeLines<D>(frame: LineFrame, rows: readonly RowState<D>[], se
         named.map(({ name, vertices, points }) => ({ ...points[points.length - 1]!, text: labels.text(name, vertices[vertices.length - 1]!.value) }))
       )
     : [];
+  const boxes = labels ? placed.map((label) => (label.text !== "" ? textBox(label, labels.measure, "ec-value", VALUE_SIZE) : undefined)) : [];
   const lines = traced.map(({ name, vertices, points }): PlacedLine<D> => {
     const tip = points[points.length - 1]!;
-    const label = labels ? (placed[named.findIndex((line) => line.name === name)] ?? { x: tip.x + LABEL_GAP, y: tip.y + VALUE_SIZE * CENTRE, anchor: "start", text: "" }) : undefined;
-    const labelBounds = labels ? (label && label.text !== "" ? [textBox(label, labels.measure, "ec-value", VALUE_SIZE)] : []) : undefined;
+    const index = named.findIndex((line) => line.name === name);
+    const label = labels ? (placed[index] ?? { x: tip.x + LABEL_GAP, y: tip.y + VALUE_SIZE * CENTRE, anchor: "start", text: "" }) : undefined;
+    // Its own label's box, and every other line's.
+    const own = boxes[index];
+    const labelBounds = labels ? (own ? [own] : []) : undefined;
+    const nearbyLabels = labels ? boxes.filter((box, i): box is Rect => box !== undefined && i !== index) : undefined;
     const breaks = vertices.flatMap((v, j) => (v.gapBefore ? [j] : []));
-    const geometry = describeLine({ key: name, series: name, points, width: LINE_WIDTH, ...(breaks.length > 0 ? { breaks } : {}), ...(labelBounds ? { labelBounds } : {}) });
+    const geometry = describeLine({ key: name, series: name, points, width: LINE_WIDTH, ...(breaks.length > 0 ? { breaks } : {}), ...(labelBounds ? { labelBounds } : {}), ...(nearbyLabels ? { nearbyLabels } : {}) });
     // By distance, as the walk measures it, gaps and all; the last is exactly 1.
     let distance = 0;
     const samples: Sample[] = vertices.map((v, j) => {

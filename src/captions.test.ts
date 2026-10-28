@@ -160,6 +160,97 @@ describe("delta and label on our charts", () => {
   });
 });
 
+describe("delta and label clear of other marks' labels", () => {
+  interface Match {
+    week: number;
+    goals: number;
+    xg: number;
+  }
+  // Goals and xG end 3 px apart, so their end labels are pushed apart, xG's above, and each line's last leg crosses the other's.
+  const matches: Match[] = [
+    { week: 1, goals: 1, xg: 1.4 },
+    { week: 2, goals: 2, xg: 2.3 },
+    { week: 3, goals: 4, xg: 4.1 },
+    { week: 4, goals: 5, xg: 5.2 }
+  ];
+  /** Past `box` from a line heading up and right: wholly to its right, or wholly above it. */
+  const past = (text: Rect, box: Rect): boolean => text.x >= box.x + box.width || text.y + text.height <= box.y;
+
+  it.each([320, 600])("puts each of two lines' changes past the other's end label as well as its own, at %i px", async (width) => {
+    const chart = lineChart<Match>(container(), {
+      label: "Goals vs xG",
+      data: matches,
+      x: "week",
+      series: ["goals", "xg"],
+      width,
+      motion: "off",
+      on: { update: only((mark) => mark.length > 0, delta()) }
+    });
+    await chart.update({ data: matches.map((m) => (m.week === 4 ? { ...m, goals: 6, xg: 6.1 } : m)) });
+    const goals = byKey(chart.marks(), "goals");
+    const xg = byKey(chart.marks(), "xg");
+    expect(goals.nearbyLabels).toEqual(xg.labelBounds);
+    expect(xg.nearbyLabels).toEqual(goals.labelBounds);
+    const [goalsText] = drawn(chart.element, "goals");
+    const [xgText] = drawn(chart.element, "xg");
+    expect([goalsText!.text, xgText!.text]).toEqual(["+1", `+${(0.9).toLocaleString()}`]);
+    // Goals' heading climbs through xG's end label, above its own: its change goes past both.
+    for (const box of [...goals.labelBounds!, ...xg.labelBounds!]) expect(past(goalsText!.box, box)).toBe(true);
+    for (const box of [...xg.labelBounds!, ...goals.labelBounds!]) expect(past(xgText!.box, box)).toBe(true);
+    clearOfLabels(chart.element, chart.marks());
+  });
+
+  it("keeps a slice's change clear of its neighbours' labels, and one whose label is dropped past the label its way along the ring meets", async () => {
+    // Woodwork is too narrow for a label: its way runs along the ring at 12 o'clock, rightwards, into Goal's share.
+    const shots = [
+      { outcome: "Goal", shots: 35 },
+      { outcome: "Saved", shots: 20 },
+      { outcome: "Off target", shots: 25 },
+      { outcome: "Blocked", shots: 55 },
+      { outcome: "Woodwork", shots: 5 }
+    ];
+    for (const width of [320, 640]) {
+      const chart = donutChart(container(), { label: "Shots", data: shots, category: "outcome", value: "shots", width, motion: "off", on: { decorate: label(() => "+12.5%") } });
+      const marks = chart.marks();
+      expect(marks.map((mark) => mark.labelBounds!.length)).toEqual([2, 2, 2, 2, 0]);
+      expect(byKey(marks, "Woodwork").nearbyLabels).toEqual([...byKey(marks, "Blocked").labelBounds!, ...byKey(marks, "Goal").labelBounds!]);
+      clearOfLabels(chart.element, marks);
+    }
+    const narrow = donutChart(container(), { label: "Shots", data: shots, category: "outcome", value: "shots", width: 320, motion: "off", on: { decorate: label(() => "+12.5%") } });
+    const [woodwork] = drawn(narrow.element, "Woodwork");
+    const [, share] = byKey(narrow.marks(), "Goal").labelBounds!;
+    expect(woodwork!.anchor).toBe("start");
+    expect(woodwork!.x).toBeCloseTo(share!.x + share!.width + 6, 2);
+  });
+
+  it("puts a negative column's change past its value label and its name, which no longer meet, with room too", async () => {
+    const negative = players.map((p) => ({ ...p, goals: -p.goals }));
+    for (const room of [0, 28]) {
+      const chart = barChart<Player>(container(), { label: "Goals", data: negative, x: "name", y: "goals", width: 600, motion: "off", room, on: { update: delta() } });
+      await chart.update({ data: negative.map((p) => (p.name === "Okafor" ? { ...p, goals: p.goals - 4 } : p)) });
+      // Okafor's column, at -20, reaches the plot's bottom: its value label hangs into the room kept for it, above its name.
+      const okafor = byKey(chart.marks(), "Okafor");
+      expect(okafor.end.y).toBeCloseTo(Number(chart.element.getAttribute("height")) - 26 - 12.5 - 6 - room, 6);
+      const [name, value] = okafor.labelBounds!;
+      expect(overlaps(name!, value!)).toBe(false);
+      expect(value!.y + value!.height).toBeLessThan(name!.y);
+      const [text] = drawn(chart.element, "Okafor");
+      expect(text!.y).toBeCloseTo(name!.y + name!.height + 6 + 12.5 * 0.8, 2);
+      clearOfLabels(chart.element, chart.marks());
+      for (const mark of chart.marks()) expect(mark.nearbyLabels).toBeUndefined();
+    }
+  });
+
+  it("leaves a chart with no negative column as it was: its names 18 px below the plot", async () => {
+    const chart = barChart<Player>(container(), { label: "Goals", data: players, x: "name", y: "goals", width: 600, motion: "off", on: { update: delta() } });
+    // The axis's 26 px below the plot, and the names 18 px down it.
+    expect(chart.labels().filter((l) => l.role === "category").map((l) => l.y)).toEqual([300 - 26 + 18, 300 - 26 + 18, 300 - 26 + 18]);
+    await chart.update({ data: players.map((p) => (p.name === "Tanaka" ? { ...p, goals: p.goals + 2 } : p)) });
+    const [, value] = byKey(chart.marks(), "Tanaka").labelBounds!;
+    expect(drawn(chart.element, "Tanaka")[0]!.y).toBeCloseTo(value!.y - 6, 2);
+  });
+});
+
 describe("label from a field the chart doesn't plot", () => {
   interface Form {
     name: string;
@@ -222,10 +313,10 @@ describe("how far past the chart's edge the text reaches at 320 px", () => {
     expect((await bars({ y: "name", x: "goals" }, negative, -2)).left).toBeCloseTo(23, 1);
   });
 
-  it("columns: above the top edge; negative columns stay inside", async () => {
+  it("columns: above the top edge; negative columns, past their names, below the bottom edge", async () => {
     expect((await bars({ x: "name", y: "goals" }, goals, 2)).top).toBeCloseTo(14, 1);
-    const hanging = await bars({ x: "name", y: "goals" }, negative, -2);
-    expect(Math.max(hanging.left, hanging.right, hanging.top, hanging.bottom)).toBeLessThan(0);
+    // The names are below the room kept for the value labels, so the change hanging past them reaches past the bottom.
+    expect((await bars({ x: "name", y: "goals" }, negative, -2)).bottom).toBeCloseTo(13.6, 1);
   });
 
   it("with room: 28, bars, negative bars, columns and negative columns all stay inside", async () => {

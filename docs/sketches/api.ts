@@ -67,6 +67,11 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // width }) with ShapeSpec (M9 decision 4, built in M9 step 3): the library follows the path itself, so
 // it works in Node and jsdom, and the same in every browser.
 
+// NEW: every builder's spec takes labelBounds (M7 decision 4) and nearbyLabels (M10 decision 11), the
+// boxes of the mark's own labels and of other marks' labels near it, passed through to MarkGeometry.
+// delta and label pick their way from the first and go past both, so their text keeps clear of the
+// mark's own labels and its neighbours'.
+
 // NEW: samplesAlong(mark, points) projects data points (in mark coordinates) onto a mark's walk,
 // giving data effects their samples. Built in M4 step 4 (src/core/geometry), with the SamplePoint type
 // for its points. Points at the same t keep their order.

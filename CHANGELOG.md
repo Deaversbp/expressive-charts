@@ -25,6 +25,16 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **Curved Vega lines.** `fromVegaView()` reads a line Vega draws with any `interpolate` but `"linear"`, such as `"monotone"`, `"basis"`, `"step"` or `"natural"`: the path Vega drew, read with `describe.shape` from its `d`, moved into the marks' coordinates as the items are, at the item's stroke width. Its gaps come with it, one at each move, and a curve Vega closes on itself (the `-closed` ones) is a closed shape. Its samples are at the items drawn, on the curve, so `threshold`'s crossings between them are approximate, as on a D3 curve. It used to throw. A straight line is read from its items as before, the same mark, so no page needs to change.
+
+### Changed
+
+### Fixed
+
 ## 0.4.0 (27 October 2026)
 
 Attachments that swap their effects and end their hover as charts do, `expressive()` reading circles and other SVG shapes through the new `describe.shape`, a chart switch in a link, Vega lines with gaps, the icon sets' faded parts, and a build with tsdown. In the effect-author API, `describe.shape`, `ShapeSpec`, and `fillOpacity` and `strokeOpacity` on `IconShape` are additions, and `checkEffect`'s default data on a gap is a fix, under Fixed: an effect that joins across a gap can now fail, as it should. The other changes are outside the promise, and each says what to write instead, if anything.

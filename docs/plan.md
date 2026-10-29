@@ -3179,7 +3179,7 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
      - **The script-tag bundle leaves out the pure marks** (`annotation: false` in its build's comments). They'd have made it 18 bytes bigger gzipped, and nothing tree-shakes a script-tag bundle. Without them, Rolldown's own 131 too, it's main's bundle less its marks, byte for byte.
      - **`samples.ts`'s golden section is marked too,** outside the four files the plan names: `(Math.sqrt(5) - 1) / 2` stayed in both small sets. Written out as a number, it made `everything` 11 bytes bigger gzipped, so it's built in a call marked pure.
      - **`index.js` and `index.cjs` are about 50 bytes bigger gzipped,** and `testing.cjs` 1 byte: the marks are comments that the unminified files keep for a page's bundler. No page and no minified file grows, but the plan's "no other size may grow" doesn't hold for those three files to the byte; the size check shows `index.cjs` at 108.1 KB, not 108.0.
-     - **architecture.md's tables** show today's sizes beside 0.4.0's, as M9 step 5's did, until step 7 measures 0.5.0's.
+     - **architecture.md's tables** show today's sizes beside 0.4.0's, as M9 step 5's did, until step 8 measures 0.5.0's.
      - **CONTRIBUTING's Bundle size** says to build a value at a module's top level in a call marked pure, so the small sets don't grow again.
 
 **Wave 2** (after steps 1 to 4 land):
@@ -3216,9 +3216,24 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
      - **Found, for you to decide on** ([finding 7](a11y-audit.md#what-it-found)): with Nearest point, a point's tooltip can't always be hovered (1.4.13). The bridge starts about 3 px above the point's centre, so where the other line's point at that week is less than about 6 px above, it takes the hover first (14 of the 76 points); and the tooltip's box ends 0.36 px above its bridge, so at 320 px a whole pixel falls between them and the point nearest it there takes the hover (37 more). Both are in `src/charts/tooltip.ts` or the line chart's hover, not the demos. The audit's 1.4.13 row for Nearest point says "Fail, not fixed yet". You chose a library fix before 0.5.0, in a step of its own, which makes that row a pass.
      - **The brief's "the page empties the bars' `update` slot before each matchweek"** is from M7: since M8 the runner ends the update runs of the marks an update leaves alone, and the page passes the same effect each time, so the players' changes and the goals line's both go at their chart's next update.
 
+7. ✅ **A point's tooltip that can be hovered** (finding 7, found in step 6). Owns the bridge in `src/charts/tooltip.ts`, the held point in the line chart's hover (`src/charts/line.ts`), their tests, and finding 7 and its 1.4.13 row in `docs/a11y-audit.md`.
+   - **Why.** With Nearest point, a point's tooltip couldn't always be hovered (WCAG 1.4.13). The bridge started about 3 px above the point's centre, so where the other line's point at that week was less than about 6 px above, it took the hover first: 14 of the 76 points at 1,000 px. At 320 px a whole pixel fell between the tooltip's box and its bridge, and the point nearest it there took the hover: 37 more. You chose a library fix before 0.5.0, in a step of its own.
+   - **Built** (28 October 2026, merged on the 29th as [#115](https://github.com/Deaversbp/expressive-charts/pull/115)), in a session step 6 started:
+     - **The bridge reaches a px into the box** (`span()` in `src/charts/tooltip.ts`), above and below. `offsetHeight` is a whole number of px, and the box's real edge can fall up to a px short of it: 0.36 px on the line page at 320 px. The bridge is clear, so nothing looks different. Bars and slices get it too, and nothing changes for them.
+     - **The hovered point keeps the pointer on its dot** (`heldPoint()` and `pointAt()` in `src/charts/line.ts`). While its tooltip shows and the pointer is within the dot's radius (4.5 px) of its centre, through its effect's transform, the hover stays on it, though another point is nearer. The bridge starts a px inside the dot, so the pointer going straight up or down meets the bridge before it leaves the dot. A click on the held dot focuses the point hovered.
+     - **Tests:** `line-hover.test.ts` 4 new ("onto the tooltip"), and `tooltip.test.ts` 1 new and 2 changed, in their numbers only (the bridge a px taller, 14 not 13). Each of six mutations fails one. `line.spec.ts` has 2 new in each browser: at 1,000 and 320 px, the pointer goes from every point straight onto its tooltip, above or below, and keeps the hover.
+     - **Measured** in Docker Chromium on the line page: before, 14 points lost the hover on the way at 1,000 px and 51 at 320 px; after, none.
+     - **Checks:** `typecheck`, 2,672 unit tests in 109 files, the build, the size check (the line page's set 40.3 KB of 41, everything 80.0 of 86, no budget raised), `build:site`, and the visual suite in Docker in Chromium, Firefox and WebKit: 692 passed, 58 skipped, none failed, 250 tests in each browser. No baseline changed.
+     - **Docs:** CHANGELOG (Fixed), architecture.md (the tooltip's bridge, and the point hover's tooltip), api.md (`hover`), a11y-audit.md (finding 7 fixed, its 1.4.13 row a pass, the Browsers count), CONTRIBUTING (`line.spec.ts`).
+   - **Decisions beyond the plan:**
+     - **The hover is held on the dot,** rather than given a bridge from its centre. A tooltip that comes up under the pointer lets it through until it's off it, so a bridge to the centre would let the pointer through to the plot, where the nearer point would take the hover anyway.
+     - **Only while the tooltip shows:** not with `tooltip: false`, after Escape or `leave()`, or for a link's hover. Without a tooltip the nearest point wins, as before.
+     - **The whole dot holds,** as if the hovered dot were on top. So a point drawn within 4.5 px of the hovered one can't be hovered by moving onto it through the hovered dot, only from another side. Touch keeps the same rule.
+     - **Points that coincide** (goals equal to xG, or within a px of it) still can't be hovered by the pointer from their centre: of two as near, the series first in `series` wins. The keyboard reaches them.
+
 **Wave 3:**
 
-7. **Publish 0.5.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.5.0 entry, README's status, its script tag (`@0.5`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.5.0's code, and this plan's status line and M10's ✅.
+8. **Publish 0.5.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.5.0 entry, README's status, its script tag (`@0.5`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.5.0's code, and this plan's status line and M10's ✅.
    - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you, compared with 0.4.0's) and `npm publish --dry-run`. The PR has their results.
    - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com.
    - **Then, on your go-ahead in that session:** the `v0.5.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
@@ -3226,7 +3241,7 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 
 **Done when:**
 - **Curves.** `lineChart` draws `curve: "monotone"` through every value without overshooting, with its gaps, its reveal and `update({ curve })`, and `threshold` changes colour where the drawn lines cross. A chart without `curve` draws as before.
-- **A hover on one point.** `lineChart({ hover: "point" })` hovers the nearest point with the other lines dimmed, by the pointer, touch and the keys, Up and Down between lines, and links by x. A chart without `hover` hovers as before.
+- **A hover on one point.** `lineChart({ hover: "point" })` hovers the nearest point with the other lines dimmed, by the pointer, touch and the keys, Up and Down between lines, and links by x. Its tooltip can be hovered from every point (step 7). A chart without `hover` hovers as before.
 - **Labels.** `delta` and `label` keep off other marks' labels through `MarkGeometry.nearbyLabels`, two lines ending close together among them, and a negative column's value label keeps off its name.
 - **Vega.** `fromVegaView()` reads a Vega-Lite line drawn as a curve.
 - **The build.** A page that imports only `motion` and `animated`, or `describe` and `matrix`, is smaller; tsdown builds on rolldown-plugin-dts's stable release, with the same published types; and the tests hold up under load.

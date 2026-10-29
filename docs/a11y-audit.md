@@ -19,7 +19,7 @@ It was done on 23 October 2026, on commit `26e8fa5` with the fixes below. Since 
   - **forced**: under forced colours, each legend's swatches keep their own colours, and a pressed toggle shows in the viewer's selection colours.
 - **The rest of the visual suite**: reduced motion and Off on each page, Play and Pause, the scrubber, the switch's timing, and what a screen reader can reach mid-switch (Chrome's accessibility tree, read over CDP).
 - **Contrast of SVG text and marks**, which axe reports as "incomplete" rather than judging: worked out from the theme's tokens ([Contrast](#contrast)), and validated for the marks by `src/charts/render/theme.test.ts`.
-- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. Section H, the season page's linked hover and change labels, passed on 26 October 2026. Section I, M8's missing weeks, Page Up and Page Down, and the season page again, passed on 27 October 2026. Section J, M9's shapes page, the D3 pie's picker and the morph page's link, passed on 27 October 2026. Section K, M10's toggles and hover on one point on the line page, and the season page's goals line, hasn't been run yet. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
+- **NVDA + Chrome**, by the project's maintainer, from [a11y-check.md](a11y-check.md): sections A, D, E (steps 1–12) and F, before the fixes. Section C, section E's steps 13 and 14 (after fix 2), and section G, the stress page's date line, passed on 24 October 2026. Section H, the season page's linked hover and change labels, passed on 26 October 2026. Section I, M8's missing weeks, Page Up and Page Down, and the season page again, passed on 27 October 2026. Section J, M9's shapes page, the D3 pie's picker and the morph page's link, passed on 27 October 2026. Section K, M10's toggles and hover on one point on the line page, and the season page's goals line, passed on 28 October 2026. VoiceOver + Safari is recorded as not run for 0.1, and is in the backlog.
 - **By hand**, in headless Chromium: the pages at 320 px, with the text spacing, and under forced colours, looked at as pictures; the tooltip's place against every focused mark; the target sizes of every control and mark; and Chrome's accessibility tree for each chart.
 
 ## What it found
@@ -268,7 +268,7 @@ The second pair of cards: the same season as a weekly data feed recorded it, wit
 
 #### The toggles, and a hover on one point (M10)
 
-Above the first chart, two groups of toggle buttons: Line, Straight or Curved (`update({ curve })`), and Hover, Each week or Nearest point (`update({ hover })`). They drive both `lineChart`s, the one with missing weeks too, and the Vega-Lite line follows Straight or Curved. With Nearest point, the pointer hovers the point nearest it, the points are the focus stops, and the other line dims. The tables above hold for the page at rest; these are the rows the toggles add to. Script K hasn't been run yet.
+Above the first chart, two groups of toggle buttons: Line, Straight or Curved (`update({ curve })`), and Hover, Each week or Nearest point (`update({ hover })`). They drive both `lineChart`s, the one with missing weeks too, and the Vega-Lite line follows Straight or Curved. With Nearest point, the pointer hovers the point nearest it, the points are the focus stops, and the other line dims. The tables above hold for the page at rest; these are the rows the toggles add to. Script K's steps passed with NVDA + Chrome on 28 October 2026, and the walk, the page in the browser at full width and at 320 px, found nothing to change.
 
 | Criterion | Result | Evidence |
 | --- | --- | --- |
@@ -338,7 +338,7 @@ The donut and the columns in one `chartSwitch`, with `morph()`, the V key and th
 
 ### season.html
 
-The library's `barChart`, twice (goals per matchweek, and goals by player), and `lineChart`, with columns and a slope chart drawn with D3 through `expressive()`. Three of them are in one `link()`; the players' bars have `delta()`, the slope chart `label()` and `trace()`, and Play next matchweek moves every chart on a week. Since M10 the goals line has `delta()` too, past its end label and clear of xG's: only the goals line, since the two lines end close together and xG's change would land on it. Script K's steps 22–24 cover it, and haven't been run yet.
+The library's `barChart`, twice (goals per matchweek, and goals by player), and `lineChart`, with columns and a slope chart drawn with D3 through `expressive()`. Three of them are in one `link()`; the players' bars have `delta()`, the slope chart `label()` and `trace()`, and Play next matchweek moves every chart on a week. Since M10 the goals line has `delta()` too, past its end label and clear of xG's: only the goals line, since the two lines end close together and xG's change would land on it. Script K's steps 22–24 cover it, and passed with NVDA + Chrome on 28 October 2026, and the walk, the page in the browser at full width and at 320 px, found nothing to change.
 
 | Criterion | Result | Evidence |
 | --- | --- | --- |

@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M9 are complete (§9). M9 built attachments on a par with charts, circles and shapes, Vega lines with gaps, the icon sets' faded parts, and TypeScript 7 building the declarations. **0.4.0 is on npm**, published from CI through npm's trusted publishing with provenance on 27 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.4.0)), after 0.3.0 earlier the same day, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. M10, for 0.5.0, is planned in §9: curved lines and a hover on one point on the line chart, change labels that keep clear of other marks' labels, curved Vega lines, smaller pages for the motion core and `describe`, and a build on stable releases. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M10 are complete (§9). M10 built curved lines and a hover on one point on the line chart, change labels that keep clear of other marks' labels, curved Vega lines, smaller pages for the motion core and `describe`, and a build on stable releases. **0.5.0 is on npm**, published from CI through npm's trusted publishing with provenance on 29 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.5.0)), after 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -2940,7 +2940,7 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 
 **Status: complete (27 October 2026).** Every item on the list holds. Steps 1 to 7 built and checked the first nine, and 0.4.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 8).
 
-### M10: Curved lines, a hover on one point, and labels that keep clear (0.5.0)
+### M10: Curved lines, a hover on one point, and labels that keep clear (0.5.0) ✅
 
 Line charts that curve and hover the nearest point, change labels that keep off other marks' labels, curved Vega lines, smaller pages for the motion core and `describe`, a build on stable releases, and last, 0.5.0 on npm.
 
@@ -3235,11 +3235,19 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 
 **Wave 3:**
 
-8. **Publish 0.5.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.5.0 entry, README's status, its script tag (`@0.5`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.5.0's code, and this plan's status line and M10's ✅.
+8. ✅ **Publish 0.5.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.5.0 entry, README's status, its script tag (`@0.5`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.5.0's code, and this plan's status line and M10's ✅.
    - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you, compared with 0.4.0's) and `npm publish --dry-run`. The PR has their results.
    - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com.
    - **Then, on your go-ahead in that session:** the `v0.5.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
    - **After:** check npm (the version, README, provenance), install 0.5.0 in a fresh project and load each entry as an ES module and as CommonJS, and check jsDelivr's `@0.5`.
+   - **Built** (29 October 2026): [0.5.0 is on npm](https://www.npmjs.com/package/expressive-charts/v/0.5.0) through trusted publishing with provenance, and [its release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.5.0) is on GitHub.
+     - **The release PR** ([#118](https://github.com/Deaversbp/expressive-charts/pull/118)): 0.5.0 in `package.json`, the lockfile and `VERSION`; CHANGELOG's 0.5.0 entry, the Unreleased lists under a short summary; README's status, its script tag at `expressive-charts@0.5` (api.md's too), since `@0.4` keeps serving 0.4.x, and its sizes as measured, a bar chart about 31 KB gzipped and everything 80 KB; and architecture.md's size tables, measured again on 0.5.0's code, without the 0.4.0 column step 5 put beside them, with a sentence for step 3's raise of the script-tag bundle's budget to 88 KB, which its history didn't say. `release.yml` and CONTRIBUTING didn't change. The PR was made late on 28 October and pushed on the 29th, so its date went to the 29th, the day of the release, before the push.
+     - **CHANGELOG's lists,** which seven steps wrote, needed two edits: `nearbyLabels`, the item under the promise, moved first in Added, and step 7's fix, a point's tooltip that can be hovered, became a line of the point hover's entry in Added, since that hover is new in 0.5.0 and had nothing released to fix.
+     - **The dry run** passed on `056ca12` with the PR: `typecheck`, 2,672 tests, the build, every size within its budget, so none changed (`barChart` 30.8 KB, the line page's set 40.3 of 41, `expressive` and `travel` 31.4, everything 80.0 of 86 and the script-tag bundle 79.7 of 88), `pack-check` on TypeScript 5.4, 6 and 7, `npm pack` and `npm publish --dry-run`.
+     - **The tarball** has 37 files, as 0.4.0's: the same files but three hashed chunks, `drawing-…`, `effect-…` and `transition-…`, whose hashes changed with the code. Built on Windows it's 1.5 MB packed and 5.7 MB unpacked, since the checkout's CRLF goes into the source maps. Built from an LF copy, as CI builds it, it's 1.5 and 5.5 MB, and npm's is 5,530,850 bytes unpacked, the same.
+     - **You** approved the release notes, merged the PR and gave the go-ahead. The trusted publisher was still on npmjs.com, as the publish showed.
+     - **The release.** Main's CI was green on `5c7eaf2`. On your go-ahead, `v0.5.0` was created there at 19:32 UTC on 29 October (12:32, Pacific time), and its run published with provenance at 19:33 ([Sigstore's log](https://search.sigstore.dev/?logIndex=3574807073)), first time, with no `ENEEDAUTH`.
+     - **After.** npm shows 0.5.0 as `latest`, with README, its four GIFs, and "Built and signed on GitHub Actions" from `5c7eaf2` and `release.yml`. Its provenance is SLSA v1, from `refs/tags/v0.5.0`. A fresh project installs it with no dependencies, `npm audit signatures` verifies its registry signature and its attestation, and all three entries load as ES modules and as CommonJS, with the same names both ways, `VERSION` 0.5.0 and the stylesheet. jsDelivr serves the script tag at `expressive-charts@0.5`, the same bytes as the build, once npm had processed the package (it gave a 404 for about a minute before), and the demo pages load. No placeholder version came.
 
 **Done when:**
 - **Curves.** `lineChart` draws `curve: "monotone"` through every value without overshooting, with its gaps, its reveal and `update({ curve })`, and `threshold` changes colour where the drawn lines cross. A chart without `curve` draws as before.
@@ -3250,6 +3258,8 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **The demos** show all of it, with their screenshots and the audit, and script K passed with NVDA + Chrome.
 - **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise changes only by `nearbyLabels`, an addition.
 - **0.5.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M10 is done.
+
+**Status: complete (29 October 2026).** Every item on the list holds. Steps 1 to 7 built and checked the first seven, and 0.5.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 8).
 
 ### Backlog (after 0.1)
 

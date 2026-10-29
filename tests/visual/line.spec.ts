@@ -7,9 +7,10 @@
 // legend and table, the Vega-Lite line following a resize, the toggles (each pick pressed, focus kept
 // on it, the chart's tab stop kept), the curve (through every week's value, never past the values
 // either side, eased, the red and the ball following, and at once without motion), Nearest point (the
-// other line and its decorations dimmed, no text, the tooltip's point and words, the keys, Escape, and
-// at once without motion), and the gaps: no red in them, the ball waiting and jumping, and a gap
-// staying a gap without motion. Names start with "line-", since screenshot names are shared across files.
+// other line and its decorations dimmed, no text, the tooltip's point and words, the pointer onto the
+// tooltip from every point, the keys, Escape, and at once without motion), and the gaps: no red in
+// them, the ball waiting and jumping, and a gap staying a gap without motion. Names start with "line-",
+// since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, iconTransforms, lineDemo, openDemo, pickMode, REST, tabInto } from "./demo";
@@ -599,6 +600,62 @@ test.describe("Nearest point", () => {
     await expect(tooltip).toHaveClass(/ec-tooltip-shown/);
     await expect(tooltip).toHaveText(/^Matchweek 30\s*\d+ goals/);
   });
+
+  for (const width of [1000, 320]) {
+    test(`at ${width} px, the pointer goes from every point straight onto its tooltip, above or below, keeping the hover`, async ({ page }) => {
+      // 76 points, a px at a time: about 40 to 55 s in each browser.
+      test.setTimeout(180_000);
+      // At 320 px the page is about 6,200 px tall.
+      if (width === 320) await page.setViewportSize({ width, height: 7000 });
+      await openAtRest(page);
+      await toggle(page, "Nearest point").click();
+      // Every point that takes the hover, and the tooltip hiding, as the pointer moves.
+      await line(page).evaluate((root) => {
+        const log: string[] = [];
+        (window as unknown as { hovers: string[] }).hovers = log;
+        new MutationObserver((records) => {
+          for (const { target } of records) {
+            const element = target as Element;
+            if (element.matches(".ec-point.ec-hot")) log.push(element.getAttribute("data-key")!);
+            if (element.matches(".ec-tooltip:not(.ec-tooltip-shown)")) log.push("hidden");
+          }
+        }).observe(root, { attributes: true, attributeFilter: ["class"], subtree: true });
+      });
+      const dot = async (key: string) => {
+        const box = (await line(page).locator(`.ec-point[data-key="${key}"] .ec-dot`).boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      const tooltip = line(page).locator(".ec-tooltip");
+      const lost: string[] = [];
+      for (const series of ["goals", "xg"]) {
+        for (let n = 1; n <= 38; n++) {
+          const key = `${series}@${n}`;
+          await page.mouse.move(2, 2);
+          const at = await hoverPoint(page, key);
+          await page.clock.runFor(FRAME * 2);
+          if ((await line(page).locator(".ec-point.ec-hot").getAttribute("data-key")) !== key) {
+            // Only where the other line's point is drawn within a px or so, as at weeks 7 and 13 (goals = xG):
+            // of two as near, the series first in `series` has it.
+            const [mine, other] = await Promise.all([dot(key), dot(`${series === "goals" ? "xg" : "goals"}@${n}`)]);
+            if (Math.hypot(mine.x - other.x, mine.y - other.y) >= 1.5) lost.push(`${key}: not hovered at its centre`);
+            continue;
+          }
+          const tip = (await tooltip.boundingBox())!;
+          const above = (await tooltip.getAttribute("data-side")) === "above";
+          // A px at a time, to 4 px inside the box.
+          const to = Math.round(above ? tip.y + tip.height - 4 : tip.y + 4);
+          await page.evaluate(() => void ((window as unknown as { hovers: string[] }).hovers.length = 0));
+          for (let y = at.y; above ? y > to : y < to; ) {
+            y += above ? -1 : 1;
+            await page.mouse.move(at.x, y);
+          }
+          const seen = await page.evaluate((own) => (window as unknown as { hovers: string[] }).hovers.filter((entry) => entry !== own), key);
+          if (seen.length > 0) lost.push(`${key}, ${above ? "up" : "down"}: ${seen.join(", ")}`);
+        }
+      }
+      expect(lost).toEqual([]);
+    });
+  }
 
   for (const colorScheme of ["light", "dark"] as const) {
     test(`by the keyboard, ${colorScheme}: one tab stop, each point by name, along a line and between lines, the ends, and Escape`, async ({ page }) => {

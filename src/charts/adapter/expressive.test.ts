@@ -3004,6 +3004,32 @@ describe("expressive: circles and shapes", () => {
         ["plain", 2, 50]
       ]);
     });
+
+    it("reads a non-scaling stroke again when the common ancestor's screen scale changes, and nothing when it only moves", async () => {
+      const { plot, elements } = host((plot) => [
+        ["fixed", el("line", { x1: 0, y1: 0, x2: 50, y2: 0, "stroke-width": 4, "vector-effect": "non-scaling-stroke" }, plot)],
+        ["scaling", el("line", { x1: 0, y1: 10, x2: 50, y2: 10, "stroke-width": 4 }, plot)]
+      ]);
+      // The margin group, the marks' common ancestor, as a browser lays it out.
+      let [k, e] = [1, 40];
+      Object.assign(plot, { getScreenCTM: () => ({ a: k, b: 0, c: 0, d: k, e, f: 20 }) });
+      const story = recorder();
+      const { fx, clock } = setup<string>(elements, { ...named, watch: true, on: { decorate: story.effect } });
+      expect(fx.marks().map((mark) => mark.thickness)).toEqual([4, 4]);
+      story.log.length = 0;
+      // The page zooms the plot: 4 screen px are 2 of its units now.
+      k = 2;
+      plot.setAttribute("transform", "translate(40,20) scale(2)");
+      await delivered();
+      clock.advance(16);
+      expect(fx.marks().map((mark) => mark.thickness)).toEqual([2, 4]);
+      expect(story.log).toEqual(["change fixed"]);
+      e = 60;
+      plot.setAttribute("transform", "translate(60,20) scale(2)");
+      await delivered();
+      clock.advance(16);
+      expect(story.log).toEqual(["change fixed"]);
+    });
   });
 });
 

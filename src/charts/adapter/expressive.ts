@@ -845,11 +845,21 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       if (element.contains(ancestor)) overlayMoved = true;
       else for (const record of order) if (record.mark.parts.some((part) => element.contains(part.element))) changed.add(record);
     }
-    if (overlayMoved) placeOverlay();
-    if (changed.size === 0) return;
+    // A non-scaling stroke's width in the marks' units goes by the common ancestor's screen scale, so
+    // its marks are read again when that ancestor moves, and follow only if the width changed.
+    const rescaled = new Set<MarkRecord<D>>();
+    if (overlayMoved) {
+      placeOverlay();
+      for (const record of order) if (!changed.has(record) && record.mark.parts.some((part) => part.stroke?.screen)) rescaled.add(record);
+    }
+    if (changed.size === 0 && rescaled.size === 0) return;
 
     // Throws (reported by the clock) on marks it can't read, before anything changes.
-    const { records, marks } = reread([...changed]);
+    const read = reread([...changed, ...rescaled]);
+    const kept = read.records.flatMap((record, i) => (rescaled.has(record) && !geometryChanged(record.mark.geometry, read.marks[i]!.geometry) ? [] : [i]));
+    if (kept.length === 0) return;
+    const records = kept.map((i) => read.records[i]!);
+    const marks = kept.map((i) => read.marks[i]!);
     records.forEach((record, i) => {
       const mark = marks[i]!;
       record.mark = mark;

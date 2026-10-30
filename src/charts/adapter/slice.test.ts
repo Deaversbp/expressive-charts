@@ -49,6 +49,18 @@ describe("sliceOf", () => {
     expect(read(arc<{ startAngle: number; endAngle: number }>().innerRadius(0).outerRadius(116)(sliver!)!)).toMatchObject({ cx: 0, cy: 0, inner: 0, outer: 116 });
   });
 
+  it("reads a whole ring whose circles are each written in two unequal arcs, or in three", () => {
+    const whole = { cx: 0, cy: 0, inner: 50, outer: 80, start: 0, end: TURN };
+    // A quarter turn, then three quarters.
+    expect(read("M0,-80A80,80 0 0 1 80,0A80,80 0 1 1 0,-80Z M0,-50A50,50 0 0 0 -50,0A50,50 0 1 0 0,-50Z")).toEqual(whole);
+    // Three thirds round, each way.
+    const third = (r: number, deg: number) => `${(r * Math.sin((deg * Math.PI) / 180)).toFixed(3)},${(-r * Math.cos((deg * Math.PI) / 180)).toFixed(3)}`;
+    const thirds = `M${third(80, 0)}A80,80 0 0 1 ${third(80, 120)}A80,80 0 0 1 ${third(80, 240)}A80,80 0 0 1 ${third(80, 0)}M${third(50, 0)}A50,50 0 0 0 ${third(50, 240)}A50,50 0 0 0 ${third(50, 120)}A50,50 0 0 0 ${third(50, 0)}Z`;
+    const spec = read(thirds)!;
+    expect(Math.hypot(spec.cx, spec.cy)).toBeLessThan(0.01);
+    expect([spec.inner, spec.outer, spec.start, spec.end]).toEqual([50, 80, 0, TURN]);
+  });
+
   it("reads whole rings and half-turn slices whatever their start, though a half turn's own centre is unsure by d3's rounding", () => {
     const shape = arc<{ startAngle: number; endAngle: number }>().outerRadius(116);
     for (let degrees = 0; degrees < 360; degrees += 1.7) {

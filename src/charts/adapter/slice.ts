@@ -81,14 +81,18 @@ function ring(a: readonly Run[], b: readonly Run[], near: number): Own | undefin
   const [first, second] = [a[0], b[0]];
   if (a.length !== 1 || b.length !== 1 || first?.kind !== "arc" || second?.kind !== "arc") return undefined;
   const [outer, inner] = first.radius >= second.radius ? [first, second] : [second, first];
-  const center = centerOf(outer);
-  if (!center) return undefined;
-  const [r1, r0] = [distance(outer.from, center), distance(inner.from, center)];
-  const [t1, t0] = [turnOf(outer, center), turnOf(inner, center)];
   const whole = (turn: number, radius: number): boolean => Math.abs(Math.abs(turn) - TAU) * radius <= near;
-  const fits =
-    r1 > near && r1 - r0 > near && Math.sign(t1) !== Math.sign(t0) && whole(t1, r1) && whole(t0, r0) && onCircle(outer, center, r1, near) && onCircle(inner, center, r0, near);
-  return fits ? { center, inner: r0, outer: r1, start: angleOf(outer.from, center), sweep: Math.sign(t1) * TAU } : undefined;
+  // From the points it's written through; or, for a circle written in two arcs that aren't half turns,
+  // whose ends are no way across, from its first arc's own centre, which is sure for an arc that isn't one.
+  for (const center of [centerOf(outer), outer.arcs[0]!.center]) {
+    if (!center) continue;
+    const [r1, r0] = [distance(outer.from, center), distance(inner.from, center)];
+    const [t1, t0] = [turnOf(outer, center), turnOf(inner, center)];
+    const fits =
+      r1 > near && r1 - r0 > near && Math.sign(t1) !== Math.sign(t0) && whole(t1, r1) && whole(t0, r0) && onCircle(outer, center, r1, near) && onCircle(inner, center, r0, near);
+    if (fits) return { center, inner: r0, outer: r1, start: angleOf(outer.from, center), sweep: Math.sign(t1) * TAU };
+  }
+  return undefined;
 }
 
 /**

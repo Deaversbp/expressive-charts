@@ -29,10 +29,17 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Added
 
+- **A line chart as a chart switch's view.** Its points grow into columns keyed as they are, and back: key the columns with the bar chart's `key` (``key: (d) => `goals@${d.week}` ``).
+  - Each point pairs with its column and grows out of a dot of no size at its centre, or out of its own dot when it's alone between gaps, while the lines fade out over the first half. Back, each column shrinks into its point.
+  - Between two line charts, the lines morph by series and their end labels move. The points stay hidden, but for a value alone between gaps, which morphs as its dot.
+  - Focus follows the x: from an x to its first series' point's column, and back to the x, or to the point with `hover: "point"`.
+- **`paintOf(key)` and `standsFor(key)` on `ChartSwitchView`,** both optional, with the `ChartSwitchPaint` type. `paintOf` gives the name a mark's colour comes from in the switch's assignment, and whether its chart draws it at rest; `standsFor` gives the keys a focus stop stands for, in the order the next view tries them. The bar, donut and line charts' handles have `paintOf`, and the line chart's has `standsFor`. A view without them is drawn by key, as before, so no page needs to change.
+
 ### Changed
 
 ### Fixed
 
+- **A chart switch draws each mark in its view's colour.** It drew each pair, and each mark that fades, in its key's colour, so columns coloured by series (the default) each took a colour of their own while they morphed, and the switch asked the shared assignment for a slot for every key. A switch whose views colour by key, such as a donut and its `colorBy: "category"` columns, draws as before.
 - **`morph` keeps a line's gaps and a shape's holes.** Between two lines with gaps, it joined them part way; now the stroke inside a gap of the old line fades in as it goes, and inside a gap of the new line fades out, so nothing is drawn inside a gap both have and nothing jumps. Between two shapes with holes, such as two D3 rings, the holes showed only at the ends; now each hole morphs to its partner, largest with largest, and one with no partner shrinks to a point as the shape moves, or grows from one. A hole stays a hole under either fill rule. Lines without gaps and outlines without holes morph as before, byte for byte, so nothing to write instead.
 
 ## 0.5.0 (29 October 2026)

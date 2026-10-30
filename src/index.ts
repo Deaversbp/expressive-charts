@@ -49,6 +49,7 @@ export type {
   ChartOptions,
   ChartSwitch,
   ChartSwitchOptions,
+  ChartSwitchPaint,
   ChartSwitchView,
   ChartSwitchViewFactory,
   ChartSwitchViewName,

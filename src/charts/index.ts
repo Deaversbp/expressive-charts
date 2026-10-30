@@ -25,6 +25,7 @@ export {
   chartSwitch,
   type ChartSwitch,
   type ChartSwitchOptions,
+  type ChartSwitchPaint,
   type ChartSwitchView,
   type ChartSwitchViewFactory,
   type ChartSwitchViewName,

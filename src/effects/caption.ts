@@ -52,10 +52,11 @@ export interface CaptionText {
  * goes past a neighbour's end label beside its own, and past the change already placed there.
  *
  * With `text`, the text's own box counts too. From there, the text moves along its way until its box
- * meets none of the boxes: 6 px clear of a box the way misses, which the text would still meet,
- * reaching out to one side, and clear of one the way meets. So text that kept clear before stays
- * where it was, and text centred along a slice's ring keeps off a label beside it, without going past
- * a label it would only meet far along.
+ * meets none of the boxes: 6 px clear of a label the way misses, which the text would still meet,
+ * reaching out to one side, clear of other effects' text the way misses, and clear of a box the way
+ * meets. So text that kept clear before stays where it was, text centred along a slice's ring keeps
+ * off a label beside it, without going past a label it would only meet far along, and changes on
+ * rows a line apart, as past a slope chart's names, stay beside their own.
  *
  * It's anchored by the way it was placed: at its start reading rightwards, its end leftwards, and its
  * middle within 45° of vertical, so a column's sits centred above its value. Its baseline is a little
@@ -81,16 +82,18 @@ function past(from: Point, toward: number, least: number, own: readonly Rect[], 
   if (!text) return placed(from, toward, Math.max(least, farthest(from, toward, boxes) ?? -Infinity));
   // The text's own box placed at `from`, from `from`: as the text moves along, so does its box.
   const { x, y, width, height } = text.box(placed(from, toward, 0));
-  return placed(from, toward, clearOf(from, toward, Math.max(least, farthest(from, toward, own) ?? -Infinity), boxes, { x: x - from.x, y: y - from.y, width, height }));
+  return placed(from, toward, clearOf(from, toward, Math.max(least, farthest(from, toward, own) ?? -Infinity), boxes, { x: x - from.x, y: y - from.y, width, height }, new Set(text.held)));
 }
 
 /**
  * The least distance from `distance` on at which the text, its box `reach` from its point, meets none
  * of `boxes`. It meets a box from where its box comes within 6 px of it. It leaves a box the ray
  * passes within 6 px of 6 px past it along the ray, as without its box, or where its box is clear of
- * it, if that's further; and a box the ray misses where its box is 6 px clear of it.
+ * it, if that's further; and a box the ray misses where its box is 6 px clear of it. Other effects'
+ * text, `held`, the ray misses meets the text only where their boxes overlap: a box already holds
+ * the text's ascent and descent, so text a row above or below is a line apart, not in its way.
  */
-function clearOf(from: Point, toward: number, distance: number, boxes: readonly Rect[], reach: Rect): number {
+function clearOf(from: Point, toward: number, distance: number, boxes: readonly Rect[], reach: Rect, held: ReadonlySet<Rect>): number {
   const cos = Math.cos(toward);
   const sin = Math.sin(toward);
   const across = centred(cos);
@@ -99,8 +102,9 @@ function clearOf(from: Point, toward: number, distance: number, boxes: readonly 
     span(from, cos, sin, { x: box.x - reach.x - reach.width, y: box.y - reach.y - reach.height, width: box.width + reach.width, height: box.height + reach.height });
   const spans = boxes.map((box) => {
     const near = grow(box, PAST_LABEL);
-    const within = meets(near);
     const band = span(from, cos, sin, near);
+    if (!band && held.has(box)) return meets(box);
+    const within = meets(near);
     if (!band || !within) return within;
     // Centred text is past a box once it's past its top or bottom, as farthest() has it.
     const leaving = across ? Math.max(band[1], ((sin > 0 ? near.y + near.height : near.y) - from.y) / sin) : band[1];

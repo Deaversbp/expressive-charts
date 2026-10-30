@@ -235,6 +235,18 @@ describe("captionPlace with other effects' text, and its own box (texts)", () =>
     expect(captionPlace(bar([{ x: 266, y: 27, width: 24, height: 14 }]), text([], "+12.5%")).at.x).toBeCloseTo(298, 9);
   });
 
+  it("stays beside other effects' text in the rows above and below, which it meets only where their boxes overlap", () => {
+    // Changes past the names on a slope chart's stacked rows, 17 px apart: their boxes come within 0.75 px of this one's, a line apart.
+    const place = captionPlace(bar([value]), text());
+    const row = (by: number): Rect => ({ ...boxOf(place), y: boxOf(place).y + by });
+    expect(captionPlace(bar([value]), text([row(-17), row(17)]))).toEqual(place);
+    // Text that overlaps it still takes it on, past it.
+    expect(captionPlace(bar([value]), text([row(-10)])).at.x).toBeGreaterThan(place.at.x);
+    // A label a line above still keeps it 6 px clear, as text centred along a ring keeps off a label beside it.
+    const labelled = build.bar({ key: "Okafor", series: "goals", x: 60, y: 10, width: 200, height: 20, baseline: "left", labelBounds: [value], nearbyLabels: [row(-17)] });
+    expect(captionPlace(labelled, text()).at.x).toBeGreaterThan(place.at.x);
+  });
+
   it("keeps clear of a box its way meets but leaves through its top, while its text still hangs on it", () => {
     // Heading up and right, through the box's corner: the line leaves the box, grown by 6 px, through its top, with the text's foot still on the box.
     const line = (labelBounds: Rect[]): MarkGeometry => build.line({ key: "goals", points: [{ x: 0, y: 100 }, { x: 100, y: 100 - 100 * Math.tan(0.3) }], labelBounds });

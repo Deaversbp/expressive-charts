@@ -24,7 +24,9 @@ Three TypeScripts are dev dependencies, each pinned exactly:
 
 Each has a `tsc`, so `npx tsc` could run any of them: run TypeScript through the npm scripts, or by its path (`node node_modules/typescript/bin/tsc`).
 
-The build uses none of them. tsdown (`tsdown.config.ts`), 0.23.3 pinned exactly, bundles the package with Rolldown, whose oxc writes the declarations from each file alone, so **a new export needs an explicit type** wherever TypeScript would have to look at another file to infer it. `typecheck` says so (`isolatedDeclarations` in `tsconfig.json`): `export const describe = { bar: describeBar }` fails, and `export const describe: { bar: typeof describeBar } = { bar: describeBar }` passes. An exported function needs its return type.
+The build uses none of them. tsdown (`tsdown.config.ts`), 0.23.4 pinned exactly, bundles the package with Rolldown, whose oxc writes the declarations from each file alone, so **a new export needs an explicit type** wherever TypeScript would have to look at another file to infer it. `typecheck` says so (`isolatedDeclarations` in `tsconfig.json`): `export const describe = { bar: describeBar }` fails, and `export const describe: { bar: typeof describeBar } = { bar: describeBar }` passes. An exported function needs its return type.
+
+tsdown 0.23.4 takes rolldown-plugin-dts 0.28.8. The plugin's 0.29.0 waits for a tsdown that asks for it. Both pin `get-tsconfig` 5.0.0-beta.6, a beta, so the build waits for a stable release of it too.
 
 `pack-check` (`scripts/pack-check.mjs`) packs the package, installs the tarball in a new project in the system's temporary folder, imports every entry in Node as ES modules and as CommonJS with no DOM, and typechecks a small consumer against it with each of the three TypeScripts, under `bundler`, `node16` (ES module) and `node16` (CommonJS) resolution. Each must read its own declarations: `.d.ts` for `import`, `.d.cts` for `require`, the stylesheet's included. CI runs it after the build. `-- --keep` keeps the temporary project.
 

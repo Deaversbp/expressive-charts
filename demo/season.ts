@@ -1,6 +1,6 @@
 // The season so far, after matchweek 24: goals per matchweek on barChart, goals vs xG on lineChart and
 // shots per matchweek on columns drawn with D3, in one link(), so hovering a matchweek in any of them
-// shows it in the others, and each matchweek's goals rising past the goals line's end with delta();
+// shows it in the others, and each matchweek's change rising past each line's end with delta();
 // the players' goals on barChart, each change since the last matchweek rising
 // past its bar with delta(); and a D3 slope chart of each player's goals at matchweek 1 and now, its
 // change written past each name with label(). "Play next matchweek" moves the whole page on a week,
@@ -157,15 +157,26 @@ const goalsChart = barChart<Week>("#goals", {
 });
 
 /**
- * The goals line's change since the last matchweek, past its end label and xG's. Only the goals line's:
- * the two lines end close together and head the same way, so xG's change would land on it. On a line
- * chart the update slot runs on the points too, so it keeps to the line. It stays until the chart's
- * next update, and a matchweek with no goals shows none.
+ * Each line's change since the last matchweek, past both end labels. The goals line comes first in the
+ * chart's order, so its change keeps its place and xG's goes past it. On a line chart the update slot
+ * runs on the points too, so each keeps to its line. xG's is in tenths, as its end label is. Each stays
+ * until the chart's next update, and a matchweek with no goals shows none on the goals line.
  */
-const goalsChange = only((mark) => mark.series === "totalGoals" && mark.length > 0, delta());
+const lineChanges = parallel(
+  only((mark) => mark.series === "totalGoals" && mark.length > 0, delta()),
+  only((mark) => mark.series === "totalXg" && mark.length > 0, delta({ format: tenths }))
+);
+
+/**
+ * On a phone the line chart is narrow, and the two changes rise past the end labels as much as they go
+ * right: it keeps less room for them there, and the page's CSS keeps space above the plot as well.
+ */
+const phone = matchMedia("(max-width: 480px)");
+/** Px the line chart keeps past its end labels for the two changes side by side. */
+const roomFor = (): number => (phone.matches ? 40 : 60);
 
 // The season to date, as on line.html: each week's points pulse when it's hovered, or linked, and each
-// matchweek's goals show past the goals line's end.
+// matchweek's change shows past each line's end.
 const line = lineChart<Week>("#line", {
   label: "Goals vs expected goals, season to date",
   description: "Goals scored and expected goals so far, week by week.",
@@ -181,8 +192,12 @@ const line = lineChart<Week>("#line", {
   markDescription: (d) => `${tenths(d.totalGoals - d.totalXg)} vs expected`,
   table: { category: "Matchweek" },
   height: 270,
-  on: { hover: "pulse", update: goalsChange }
+  // The two changes sit side by side past the end labels: the chart keeps room for them inside itself.
+  room: roomFor(),
+  on: { hover: "pulse", update: lineChanges }
 });
+// A phone turned on its side, or a window narrowed past it, lays the chart out again with its room.
+phone.addEventListener("change", () => void line.update({ room: roomFor() }));
 
 // The D3 columns draw themselves; expressive() reads each rect as a column, keyed by its week as the
 // others are, so the link needs no `by`.

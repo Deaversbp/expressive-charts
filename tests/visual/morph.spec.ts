@@ -2,7 +2,10 @@
 // with each mapping, and the focus ring after a switch. Beside them, DOM checks: how long a switch
 // takes in each mode, reduced motion, a switch back mid-way, the labels swapping their text, the
 // announcement, the mapping control, only the view shown being readable, and the bars linked with the
-// switch, across a switch. Names start with "morph-", since screenshot names are shared across files.
+// switch, across a switch. Then the season's switch of two line charts and columns: its views, half way
+// from a line to its columns and between the two lines, and a column focused, with DOM checks for its
+// toggles, V and focus following the week, the weeks both lines miss through a switch, reduced motion
+// and Off, and what can be read. Names start with "morph-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, hoverShape, morphDemo, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
@@ -25,6 +28,35 @@ const mark = (page: Page, name: View, outcome: string): Locator => view(page, na
 /** The bars beside the switch, in one link() with it, and an outcome's bar there. */
 const ranked = (page: Page): Locator => page.locator("#ranked");
 const rankedBar = (page: Page, outcome: string): Locator => ranked(page).locator(`.ec-mark[data-key="${outcome}"]`);
+
+/** The season's card below: its view picker and its switch of two line charts and columns. */
+type SeasonView = "perMatch" | "toDate" | "columns";
+const SEASON_VIEWS: readonly SeasonView[] = ["perMatch", "toDate", "columns"];
+const seasonCard = (page: Page): Locator => page.locator('section[aria-labelledby="season-title"]');
+const season = (page: Page): Locator => page.locator("#season");
+const seasonView = (page: Page, name: SeasonView): Locator => season(page).locator(`.ec-switch-view[data-view="${name}"]`);
+const seasonRuns = (page: Page): Locator => season(page).locator(".ec-switch-overlay .ec-switch-runs > .ec-run");
+const seasonFades = (page: Page): Locator => season(page).locator(".ec-switch-overlay .ec-switch-fades > .ec-switch-fade");
+const seasonAnnouncer = (page: Page): Locator => season(page).getByRole("status");
+const seasonButton = (page: Page, name: "Per match" | "Season to date" | "Columns"): Locator => page.getByRole("group", { name: "View" }).getByRole("button", { name, exact: true });
+/** A week's focus stop on a line view, and a week's column, keyed as the lines' goals points are. */
+const weekStop = (page: Page, name: "perMatch" | "toDate", week: number): Locator => seasonView(page, name).locator(`.ec-column[data-key="${week}"]`);
+const goalsColumn = (page: Page, week: number): Locator => seasonView(page, "columns").locator(`.ec-mark[data-key="goals@${week}"]`);
+
+/** The season's view shown, the others inactive, and nothing in its overlay: its switch has landed there. */
+async function expectSeasonLanded(page: Page, name: SeasonView): Promise<void> {
+  for (const each of SEASON_VIEWS) {
+    if (each === name) {
+      await expect(seasonView(page, each)).not.toHaveClass(/ec-switch-inactive|ec-switching/);
+      await expect(seasonView(page, each)).not.toHaveAttribute("inert");
+    } else {
+      await expect(seasonView(page, each)).toHaveClass(/ec-switch-inactive/);
+      await expect(seasonView(page, each)).toHaveAttribute("inert", "");
+    }
+  }
+  await expect(seasonRuns(page)).toHaveCount(0);
+  await expect(seasonFades(page)).toHaveCount(0);
+}
 
 /** The keys a chart shows hovered, its own hover or a link's. */
 const hot = (chart: Locator): Promise<(string | null)[]> => chart.locator(".ec-hot").evaluateAll((marks) => marks.map((mark) => mark.getAttribute("data-key")));
@@ -215,20 +247,24 @@ test.describe("keyboard focus", () => {
 });
 
 /**
- * The switch's part of Chrome's own accessibility tree, as "role: name": what a screen reader can
- * reach in it. Playwright's getByRole doesn't model `inert`, which takes both views out mid-switch,
- * so this reads the tree Chrome builds.
+ * The groups, images, disclosures and tables Chrome's own accessibility tree has inside the elements
+ * `roots` select, as "role: name": what a screen reader can reach there. Playwright's getByRole doesn't
+ * model `inert`, which takes both views out mid-switch, so this reads the tree Chrome builds.
  */
-async function readable(page: Page): Promise<string[]> {
+async function readable(page: Page, roots: readonly string[]): Promise<string[]> {
   const cdp = await page.context().newCDPSession(page);
   try {
     await cdp.send("Accessibility.enable");
-    const { nodes } = await cdp.send("Accessibility.getFullAXTree");
-    const roles = new Set(["group", "image", "DisclosureTriangle", "table"]);
-    return nodes
-      .filter((node) => !node.ignored && roles.has(String(node.role?.value)) && node.name?.value)
-      .map((node) => `${String(node.role?.value)}: ${String(node.name?.value)}`)
-      .filter((line) => !/^group: (Motion|Morph)$/.test(line));
+    const { root } = await cdp.send("DOM.getDocument", { depth: 0 });
+    const lines: string[] = [];
+    for (const selector of roots) {
+      const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector });
+      for (const role of ["group", "image", "DisclosureTriangle", "table"]) {
+        const { nodes } = await cdp.send("Accessibility.queryAXTree", { nodeId, role });
+        lines.push(...nodes.filter((node) => !node.ignored && node.name?.value).map((node) => `${String(node.role?.value)}: ${String(node.name?.value)}`));
+      }
+    }
+    return lines;
   } finally {
     await cdp.detach();
   }
@@ -247,22 +283,52 @@ test.describe("the screen reader", () => {
 
   test("only the view shown can be read, and the switch announces the new one", async ({ page, browserName }) => {
     test.skip(browserName !== "chromium", "It reads Chrome's accessibility tree, over CDP.");
+    const charts = ["#shots", "#ranked"];
     await openDemo(page, morphDemo);
-    expect(sorted(await readable(page))).toEqual(sorted([...donutView, ...bars]));
+    expect(sorted(await readable(page, charts))).toEqual(sorted([...donutView, ...bars]));
 
     await toggle(page).click();
     // Mid-switch, neither view can be read: both are inert, and the new one is hidden until it lands.
     await page.clock.runFor(300);
-    expect(sorted(await readable(page))).toEqual(sorted(bars));
+    expect(sorted(await readable(page, charts))).toEqual(sorted(bars));
     await page.clock.runFor(REST);
     // The announcer adds a no-break space every other time, so the same text twice is still a change.
     await expect(announcer(page)).toHaveText(/^Shot outcomes, counts\s?$/);
-    expect(sorted(await readable(page))).toEqual(sorted([...columnsView, ...bars]));
+    expect(sorted(await readable(page, charts))).toEqual(sorted([...columnsView, ...bars]));
 
     await toggle(page).click();
     await page.clock.runFor(REST);
     await expect(announcer(page)).toHaveText(/^Shot outcomes, share of total\s?$/);
-    expect(sorted(await readable(page))).toEqual(sorted([...donutView, ...bars]));
+    expect(sorted(await readable(page, charts))).toEqual(sorted([...donutView, ...bars]));
+  });
+
+  test("the season's switch: only its view shown can be read, each week named, and each view announced", async ({ page, browserName }) => {
+    test.skip(browserName !== "chromium", "It reads Chrome's accessibility tree, over CDP.");
+    await openDemo(page, morphDemo);
+    const perMatch = await readable(page, ["#season"]);
+    // Its chart, each of the 38 weeks with both values or what's missing, and its table.
+    expect(perMatch.filter((line) => !line.startsWith("image: "))).toEqual(["group: Goals and xG per match", "DisclosureTriangle: Data table"]);
+    expect(perMatch.filter((line) => line.startsWith("image: "))).toHaveLength(38);
+    expect(perMatch).toEqual(
+      expect.arrayContaining(["image: Matchweek 1: 0 goals, 0.6 xG", "image: Matchweek 4: 1 goal, xG missing", "image: Matchweek 9: goals missing, xG missing", "image: Matchweek 12: 4 goals, 2.4 xG"])
+    );
+
+    await seasonButton(page, "Columns").click();
+    await page.clock.runFor(300);
+    expect(await readable(page, ["#season"])).toEqual([]);
+    await page.clock.runFor(REST);
+    await expect(seasonAnnouncer(page)).toHaveText(/^Goals per match, as columns\s?$/);
+    const columns = await readable(page, ["#season"]);
+    // A column for each week with goals: none for matchweeks 9 and 10.
+    expect(columns.filter((line) => !line.startsWith("image: "))).toEqual(["group: Goals per match, as columns", "DisclosureTriangle: Data table"]);
+    expect(columns.filter((line) => line.startsWith("image: "))).toHaveLength(36);
+    expect(columns).toEqual(expect.arrayContaining(["image: Matchweek 8: 2 goals", "image: Matchweek 11: 2 goals", "image: Matchweek 12: 4 goals"]));
+    expect(columns.filter((line) => /Matchweek (9|10):/.test(line))).toEqual([]);
+
+    await seasonButton(page, "Season to date").click();
+    await page.clock.runFor(REST);
+    await expect(seasonAnnouncer(page)).toHaveText(/^Goals and xG, season to date\s?$/);
+    expect(await readable(page, ["#season"])).toEqual(expect.arrayContaining(["group: Goals and xG, season to date", "image: Matchweek 12: 18 goals, 19.0 xG", "image: Matchweek 9: goals missing, xG missing"]));
   });
 });
 
@@ -351,5 +417,194 @@ test.describe("the mapping control", () => {
     await morphDemo.ready(page);
     await expectLanded(page, "donut");
     await expect(toggle(page)).toHaveText("Show as columns");
+  });
+});
+
+/**
+ * The most opaque any part of a line's stroke in the season's overlay is drawn now, within the weeks
+ * both line views miss: goals' 9 and 10, and xG's 4, 5, 9 and 10. Each span runs between the weeks
+ * either side, as far in as both views have them, less 3 px each end; a piece counts by its middle.
+ */
+async function inMissingWeeks(page: Page): Promise<number> {
+  return season(page).evaluate((root) => {
+    const x = (view: string, week: number): number => {
+      const box = root.querySelector(`.ec-switch-view[data-view="${view}"] .ec-column[data-key="${week}"] .ec-hit`)!.getBoundingClientRect();
+      return box.left + box.width / 2;
+    };
+    const span = (before: number, after: number): [number, number] => [Math.max(x("perMatch", before), x("toDate", before)) + 3, Math.min(x("perMatch", after), x("toDate", after)) - 3];
+    const spans: Record<string, [number, number][]> = { goals: [span(8, 11)], xg: [span(3, 6), span(8, 11)] };
+    let most = 0;
+    for (const [key, ranges] of Object.entries(spans)) {
+      for (const path of root.querySelectorAll<SVGPathElement>(`.ec-switch-overlay [data-key="${key}"] path`)) {
+        let opacity = 1;
+        for (let at: Element | null = path; at && at !== root; at = at.parentElement) opacity *= Number(at.getAttribute("opacity") ?? 1);
+        const m = path.getScreenCTM()!;
+        let last: DOMPoint | undefined;
+        for (const [, command, px, py] of path.getAttribute("d")!.matchAll(/([ML])\s*(-?[\d.]+)[ ,](-?[\d.]+)/g)) {
+          const point = new DOMPoint(Number(px), Number(py)).matrixTransform(m);
+          const middle = last ? (last.x + point.x) / 2 : point.x;
+          if (command === "L" && ranges.some(([from, to]) => middle > from && middle < to)) most = Math.max(most, opacity);
+          last = point;
+        }
+      }
+    }
+    return most;
+  });
+}
+
+test.describe("the season's switch", () => {
+  test("the views at rest, each picked with focus kept on its toggle, and announced", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    await expect(page.getByRole("group", { name: "View" }).getByRole("button")).toHaveText(["Per match", "Season to date", "Columns"]);
+    await expect(seasonButton(page, "Per match")).toHaveAttribute("aria-pressed", "true");
+    await expectSeasonLanded(page, "perMatch");
+
+    for (const [name, view, label, picture] of [
+      ["Season to date", "toDate", "Goals and xG, season to date", "morph-season-to-date.png"],
+      ["Columns", "columns", "Goals per match, as columns", "morph-season-columns.png"],
+      ["Per match", "perMatch", "Goals and xG per match", undefined]
+    ] as const) {
+      await seasonButton(page, name).focus();
+      await page.keyboard.press("Space");
+      await expect(seasonButton(page, name)).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("group", { name: "View" }).locator('button[aria-pressed="true"]')).toHaveCount(1);
+      await page.clock.runFor(REST);
+      await expectSeasonLanded(page, view);
+      await expect(seasonButton(page, name)).toBeFocused();
+      // The announcer adds a no-break space every other time, so the same text twice is still a change.
+      await expect(seasonAnnouncer(page)).toHaveText(new RegExp(`^${label}\\s?$`));
+      if (picture) await expect(season(page)).toHaveScreenshot(picture);
+    }
+    // Tab from the toggles goes into the view on show, and only that one.
+    await tabInto(page, season(page));
+    await expect(weekStop(page, "perMatch", 1)).toBeFocused();
+  });
+
+  test("half way from a line to its columns, and between the two lines", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    await seasonButton(page, "Columns").click();
+    await pointerAway(page);
+    // 472 ms in: each column half grown out of its point, and the lines faded out.
+    await page.clock.runFor(475);
+    await expect(seasonView(page, "perMatch")).toHaveClass(/ec-switching/);
+    await expect(seasonView(page, "columns")).toHaveClass(/ec-switching/);
+    // A pair for each column and its point, and the two lines fading, with no partner; xG's points
+    // aren't drawn, so nothing of them fades.
+    await expect(seasonRuns(page)).toHaveCount(36);
+    await expect(seasonFades(page)).toHaveCount(2);
+    await expect(seasonFades(page).nth(0)).toHaveAttribute("data-key", "goals");
+    await expect(seasonFades(page).nth(1)).toHaveAttribute("data-key", "xg");
+    await expect(season(page)).toHaveScreenshot("morph-season-half-columns.png");
+    await page.clock.runFor(REST);
+    await expectSeasonLanded(page, "columns");
+
+    await seasonButton(page, "Per match").click();
+    await page.clock.runFor(REST);
+    await seasonButton(page, "Season to date").click();
+    await pointerAway(page);
+    await page.clock.runFor(475);
+    // Only the lines morph: the two charts' points aren't drawn, so they aren't played.
+    await expect(seasonRuns(page)).toHaveCount(2);
+    await expect(seasonFades(page)).toHaveCount(0);
+    await expect(season(page)).toHaveScreenshot("morph-season-half-lines.png");
+    await page.clock.runFor(REST);
+    await expectSeasonLanded(page, "toDate");
+  });
+
+  test("a switch between the two lines draws nothing in the weeks both miss as it starts and lands, and part way only what fades", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    for (const [to, view] of [["Season to date", "toDate"], ["Per match", "perMatch"]] as const) {
+      await seasonButton(page, to).click();
+      await pointerAway(page);
+      const frames: number[] = [];
+      // 950 ms: the last frame drawn is 944 ms in, the 59th.
+      for (let frame = 1; frame <= 59; frame++) {
+        await page.clock.runFor(FRAME);
+        frames.push(await inMissingWeeks(page));
+      }
+      expect(frames[0]).toBeLessThan(0.05);
+      expect(frames[58]).toBeLessThan(0.05);
+      // Gaps are matched by how far along the line they fall, not by week, so part way the stroke
+      // that's in one line's gap and not the other's crosses the weeks both miss: fading in or out,
+      // never at full strength.
+      expect(Math.max(...frames)).toBeLessThan(0.99);
+      await page.clock.runFor(REST);
+      await expectSeasonLanded(page, view);
+    }
+  });
+
+  test("V on a week or a column goes to the next view, and focus follows the week", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    await tabInto(page, season(page));
+    await expect(weekStop(page, "perMatch", 1)).toBeFocused();
+    for (let i = 1; i < 12; i++) await page.keyboard.press("ArrowRight");
+    await expect(weekStop(page, "perMatch", 12)).toBeFocused();
+
+    // A week on one line to the same week on the other.
+    await page.keyboard.press("v");
+    await expect(seasonButton(page, "Season to date")).toHaveAttribute("aria-pressed", "true");
+    await page.clock.runFor(REST);
+    await expectSeasonLanded(page, "toDate");
+    await expect(weekStop(page, "toDate", 12)).toBeFocused();
+
+    // A week to its goals' column, with the focus ring.
+    await page.keyboard.press("V");
+    await page.clock.runFor(REST);
+    await expectSeasonLanded(page, "columns");
+    await expect(goalsColumn(page, 12)).toBeFocused();
+    await expect(seasonView(page, "columns").locator(".ec-focus")).not.toHaveAttribute("visibility", "hidden");
+    await expect(season(page)).toHaveScreenshot("morph-season-focus-column.png");
+
+    // And the column back to its week.
+    await page.keyboard.press("v");
+    await page.clock.runFor(REST);
+    await expectSeasonLanded(page, "perMatch");
+    await expect(weekStop(page, "perMatch", 12)).toBeFocused();
+
+    // A week the feed missed has no column: focus goes to the first.
+    for (let i = 12; i > 9; i--) await page.keyboard.press("ArrowLeft");
+    await expect(weekStop(page, "perMatch", 9)).toBeFocused();
+    await page.keyboard.press("v");
+    await page.clock.runFor(REST);
+    await expect(weekStop(page, "toDate", 9)).toBeFocused();
+    await page.keyboard.press("v");
+    await page.clock.runFor(REST);
+    await expect(goalsColumn(page, 1)).toBeFocused();
+
+    // V on a toggle does nothing.
+    await seasonButton(page, "Columns").focus();
+    await page.keyboard.press("v");
+    await expectSeasonLanded(page, "columns");
+  });
+
+  test("reduced motion: a switch lands at once, focus following the week, until the viewer picks a mode", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openDemo(page, morphDemo);
+    await seasonButton(page, "Columns").click();
+    // No time passes.
+    await expectSeasonLanded(page, "columns");
+    await seasonButton(page, "Season to date").click();
+    await expectSeasonLanded(page, "toDate");
+    await tabInto(page, season(page));
+    for (let i = 1; i < 12; i++) await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("v");
+    await expectSeasonLanded(page, "columns");
+    await expect(goalsColumn(page, 12)).toBeFocused();
+
+    // The viewer's own pick overrides the device's setting.
+    await pickMode(page, "Presentation");
+    await seasonButton(page, "Per match").click();
+    await expect(seasonRuns(page)).toHaveCount(36);
+    await page.clock.runFor(REST);
+    await expectSeasonLanded(page, "perMatch");
+  });
+
+  test("Off: a switch lands at once, each way", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    await pickMode(page, "Off");
+    for (const [name, view] of [["Columns", "columns"], ["Per match", "perMatch"], ["Season to date", "toDate"], ["Per match", "perMatch"]] as const) {
+      await seasonButton(page, name).click();
+      await expectSeasonLanded(page, view);
+    }
   });
 });

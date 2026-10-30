@@ -1,7 +1,7 @@
 // "Someone else's chart", round: a donut drawn the way D3 code would draw it, with d3.pie() and
 // d3.arc(), its slices joined by outcome in a centred <g>, each path's arc on __data__. Like
 // host-chart.ts it knows nothing about expressive-charts; demo/donut.ts attaches effects to it with
-// expressive(), passing the arc generator's radii to describe.arc.
+// expressive(), which reads each path as a slice by its tag.
 //
 // Its ARIA is a careful D3 author's: the labels are hidden, and the page gives the <svg> role="group"
 // and its name. expressive()'s markLabel names the slices, since its keyboard focus lands on them.
@@ -25,9 +25,6 @@ export interface PieOptions {
 export interface DrawnPie {
   /** The slices as a D3 selection, in data order: d3.pie() sorts the angles, not the arcs it returns. */
   readonly slices: Selection<SVGPathElement, Slice, SVGGElement, null>;
-  /** The arc generator's radii, which expressive() needs to describe each slice. */
-  readonly inner: number;
-  readonly outer: number;
 }
 
 const HEIGHT = 300;
@@ -99,5 +96,5 @@ export function drawPie(svgElement: SVGSVGElement, rows: readonly Outcome[], opt
     group.select(".host-value").attr("x", x).attr("y", top + 15).attr("text-anchor", anchor).text(d.data.shots);
   });
 
-  return { slices, inner, outer };
+  return { slices };
 }

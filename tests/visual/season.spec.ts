@@ -1,9 +1,10 @@
 // Screenshots of demo/season.html on a stopped clock: the page at rest in light and dark, a linked
-// hover, the players' bars and the goals line's change after a matchweek, and the slope chart
-// mid-trace. Beside them, DOM checks: what a linked chart shows and doesn't (no tooltip, crosshair,
-// focus or announcement), Emphasis only, the keyboard, each matchweek's changes in the overlay, clear
-// of every text, the table and the announcement, reduced motion and Off, and the room for the changes
-// at 320 px. Names start with "season-", since screenshot names are shared across files.
+// hover, the players' bars and both lines' changes after a matchweek, and the slope chart mid-trace.
+// Beside them, DOM checks: what a linked chart shows and doesn't (no tooltip, crosshair, focus or
+// announcement), Emphasis only, the keyboard, each matchweek's changes in the overlay, clear of each
+// other and of every text, at 1,000 and 320 px, the table and the announcement, reduced motion and Off,
+// and the room for the changes at 320 px. Names start with "season-", since screenshot names are shared
+// across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, hoverShape, iconTransforms, openDemo, pickMode, REST, seasonDemo, tabInto } from "./demo";
@@ -72,6 +73,38 @@ async function textsMet(chart: Locator): Promise<string[]> {
         : []
     );
   });
+}
+
+/**
+ * Each change on the line that meets the text of the line chart's legend, or of its heading above it,
+ * by the middle 60% of each: where the chart is narrow, the changes rise above the plot.
+ */
+async function headingsMet(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const core = (box: DOMRect) => ({ left: box.left, right: box.right, top: box.top + box.height * 0.2, bottom: box.bottom - box.height * 0.2 });
+    const above = [...document.querySelectorAll("#line-title, #line .ec-legend-item")].map((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return { text: element.textContent!.trim(), ...core(range.getBoundingClientRect()) };
+    });
+    return [...document.querySelectorAll("#line .ec-overlay text")].flatMap((text) => {
+      const a = core(text.getBoundingClientRect());
+      return above.filter((b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1).map((b) => `"${text.textContent}" on "${b.text}"`);
+    });
+  });
+}
+
+/** Each change or label in a chart's overlay that goes past its card's padding, toward its border. */
+async function outsideCards(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll(".ec-overlay text")].flatMap((text) => {
+      const card = text.closest(".card")!;
+      const box = text.getBoundingClientRect();
+      const inner = card.getBoundingClientRect();
+      const padding = parseFloat(getComputedStyle(card).paddingRight);
+      return box.left < inner.left + padding || box.right > inner.right - padding ? [`"${text.textContent}" at ${box.left}–${box.right}`] : [];
+    })
+  );
 }
 
 /** The keys of the line chart's points emphasised now. */
@@ -277,39 +310,54 @@ test.describe("Play next matchweek", () => {
     expect(await captions(players(page))).toEqual([]);
   });
 
-  test("the goals line's change rises past its end label, clear of every text, and shows only its own matchweek's", async ({ page }) => {
+  test("each line's change rises past both end labels, clear of the other and of every text, and shows only its own matchweek's", async ({ page }) => {
     await openAtRest(page);
     expect(await captions(line(page))).toEqual([]);
     await nextButton(page).click();
-    // Part way, it's still to come or rising in.
+    // Part way, they're still to come or rising in.
     await page.clock.runFor(150);
     expect((await captionOpacities(line(page)))[0] ?? 0).toBeLessThan(1);
     await page.clock.runFor(REST);
-    // The goals line's alone, not xG's or a point's, at full strength.
-    expect(await captions(line(page))).toEqual(["totalGoals +2"]);
-    expect(await captionOpacities(line(page))).toEqual([1]);
+    // The goals line's and xG's, not a point's, at full strength: xG's in tenths, as its end label is.
+    expect(await captions(line(page))).toEqual(["totalGoals +2", "totalXg +1.8"]);
+    expect(await captionOpacities(line(page))).toEqual([1, 1]);
     expect(await textsMet(line(page))).toEqual([]);
-    // Past both end labels, along the line's way: to their right or above them, by their glyphs' middle 60%.
-    const { change, labels } = await line(page).evaluate((root) => {
+    // Past both end labels, along the lines' way: to their right or above them, by their glyphs' middle 60%.
+    const { changes, labels } = await line(page).evaluate((root) => {
       const core = (text: Element): { left: number; right: number; top: number; bottom: number } => {
         const box = text.getBoundingClientRect();
         return { left: box.left, right: box.right, top: box.top + box.height * 0.2, bottom: box.bottom - box.height * 0.2 };
       };
-      return { change: core(root.querySelector(".ec-overlay text")!), labels: [...root.querySelectorAll(".ec-end-label")].map(core) };
+      return { changes: [...root.querySelectorAll(".ec-overlay text")].map(core), labels: [...root.querySelectorAll(".ec-end-label")].map(core) };
     });
+    expect(changes).toHaveLength(2);
     expect(labels).toHaveLength(2);
-    for (const label of labels) expect(change.left >= label.right || change.bottom <= label.top).toBe(true);
+    for (const change of changes) for (const label of labels) expect(change.left >= label.right || change.bottom <= label.top).toBe(true);
     await expect(linkedCard(page)).toHaveScreenshot("season-line-matchweek.png");
 
     await nextButton(page).click();
     await page.clock.runFor(REST);
-    expect(await captions(line(page))).toEqual(["totalGoals +1"]);
+    expect(await captions(line(page))).toEqual(["totalGoals +1", "totalXg +1.9"]);
     expect(await textsMet(line(page))).toEqual([]);
-    // A matchweek with no goals shows none: xG's change isn't drawn.
+    // A matchweek with no goals shows xG's change alone.
     await nextButton(page).click();
     await page.clock.runFor(REST);
-    expect(await captions(line(page))).toEqual([]);
+    expect(await captions(line(page))).toEqual(["totalXg +1.1"]);
   });
+
+  for (const width of [1000, 320]) {
+    test(`at ${width.toLocaleString("en-GB")} px, every matchweek's changes keep clear of each other, every label, the legend and the heading, inside the card`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 6000 });
+      await openAtRest(page);
+      const met: string[] = [];
+      for (let week = 25; week <= 38; week++) {
+        await nextButton(page).click();
+        await page.clock.runFor(REST);
+        for (const meeting of [...(await textsMet(line(page))), ...(await headingsMet(page)), ...(await outsideCards(page))]) met.push(`matchweek ${week}: ${meeting}`);
+      }
+      expect(met).toEqual([]);
+    });
+  }
 
   test("a matchweek played while the last is still moving says the change in whole goals", async ({ page }) => {
     await openAtRest(page);
@@ -362,8 +410,8 @@ test.describe("without motion", () => {
       // No time passes: the changes are already in place, the goals line's too.
       expect(await captions(players(page))).toEqual(["Okafor +1", "Lindqvist +1"]);
       expect(await captionOpacities(players(page))).toEqual([1, 1]);
-      expect(await captions(line(page))).toEqual(["totalGoals +2"]);
-      expect(await captionOpacities(line(page))).toEqual([1]);
+      expect(await captions(line(page))).toEqual(["totalGoals +2", "totalXg +1.8"]);
+      expect(await captionOpacities(line(page))).toEqual([1, 1]);
       expect(await textsMet(line(page))).toEqual([]);
 
       await hoverStroke(page, slopeLine(page, "Okafor"), 0.3);
@@ -379,23 +427,16 @@ test("at 320 px, the changes fit beside their bars, with no sideways scroll", as
   await nextButton(page).click();
   await page.clock.runFor(REST);
   expect(await captions(players(page))).toEqual(["Okafor +1", "Lindqvist +1"]);
-  // The goals line's change, clear of the end labels, though the plot is narrow and the lines end close together.
-  expect(await captions(line(page))).toEqual(["totalGoals +2"]);
+  // Both lines' changes, clear of each other, the end labels and the legend, though the plot is narrow
+  // and the lines end close together.
+  expect(await captions(line(page))).toEqual(["totalGoals +2", "totalXg +1.8"]);
   expect(await textsMet(line(page))).toEqual([]);
+  expect(await headingsMet(page)).toEqual([]);
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth
   }));
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
   // Every change and label stays inside its card's padding, clear of its border.
-  const outside = await page.evaluate(() =>
-    [...document.querySelectorAll(".ec-overlay text")].flatMap((text) => {
-      const card = text.closest(".card")!;
-      const box = text.getBoundingClientRect();
-      const inner = card.getBoundingClientRect();
-      const padding = parseFloat(getComputedStyle(card).paddingRight);
-      return box.left < inner.left + padding || box.right > inner.right - padding ? [`"${text.textContent}" at ${box.left}–${box.right}`] : [];
-    })
-  );
-  expect(outside).toEqual([]);
+  expect(await outsideCards(page)).toEqual([]);
 });

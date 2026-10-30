@@ -1,7 +1,7 @@
 // The accessibility audit's automatic checks (docs/a11y-audit.md has the rest, and the results).
 // axe-core, a pinned dev dependency, runs its WCAG 2.2 A and AA rules on every demo page: in light and
-// dark, at 320 px wide, under forced colours, on morph.html mid-switch, and on line.html with Curved and
-// Nearest point picked. Beside it, DOM checks for
+// dark, at 320 px wide, under forced colours, on morph.html mid-switch and with its season's other views
+// shown, and on line.html with Curved and Nearest point picked. Beside it, DOM checks for
 // what axe can't see: the tab order with a visible focus at every stop, no sideways scroll at 320 px,
 // the tooltip clear of the focus ring, dismissed by Escape and hoverable, every label at 4.5:1 while
 // another mark is hovered, nothing moving by itself after 5 s, and legends keeping their colours under
@@ -61,8 +61,14 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
   {
     name: "morph",
     demo: morphDemo,
-    stops: [...MOTION, "Show as columns", "Drop", "Unroll", "Goal: 58 shots, 14%", "Data table", "Off target: 149 shots", "Data table"],
-    // A linked hover hovers the other chart too: "contrast on hover" measures the chart hovered.
+    stops: [
+      ...MOTION,
+      ...["Show as columns", "Drop", "Unroll", "Goal: 58 shots, 14%", "Data table", "Off target: 149 shots", "Data table"],
+      ...["Per match", "Season to date", "Columns", "Matchweek 1: 0 goals, 0.6 xG", "Data table"]
+    ],
+    // A linked hover hovers the other chart too: "contrast on hover" measures the chart hovered. Not
+    // #season, whose line charts have weeks with no values, as line.html's chart with missing weeks has:
+    // see line.html's entry below. morph.spec.ts checks that switch.
     charts: [
       {
         chart: "#shots",
@@ -192,6 +198,28 @@ test.describe("axe", () => {
       await page.clock.runFor(REST);
       await expect(page.locator('#line .ec-stop[data-key="goals@1"]')).toBeFocused();
       expect(await axeViolations(page)).toEqual([]);
+    });
+  }
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`morph.html with the season's other views shown, a column focused, and mid-switch, ${colorScheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openAtRest(page, morphDemo);
+      const view = (name: string) => page.getByRole("group", { name: "View" }).getByRole("button", { name, exact: true });
+      await view("Season to date").click();
+      await page.clock.runFor(REST);
+      expect(await axeViolations(page)).toEqual([]);
+      await view("Columns").click();
+      await page.clock.runFor(REST);
+      await tabInto(page, page.locator("#season"));
+      await expect(page.locator('#season .ec-mark[data-key="goals@1"]')).toBeFocused();
+      expect(await axeViolations(page)).toEqual([]);
+      await view("Per match").click();
+      await page.clock.runFor(300);
+      const views = page.locator("#season .ec-switch-view.ec-switching");
+      await expect(views).toHaveCount(2);
+      expect(await axeViolations(page)).toEqual([]);
+      await expect(views).toHaveCount(2);
     });
   }
 

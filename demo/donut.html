@@ -94,7 +94,7 @@
 
     <section class="card" aria-labelledby="pie-title">
       <h2 id="pie-title">The same story on a D3 pie</h2>
-      <p class="note">Drawn the way D3 code would draw it, with <code>d3.pie()</code> and <code>d3.arc()</code>. <code>expressive()</code> describes each slice with <code>describe.arc</code> and adds the same effects, dimming and keyboard focus, which goes clockwise from 12 o'clock though <code>d3.pie()</code> returns its arcs in data order. <code>markLabel</code> names the slices as the donut does, and <code>refresh()</code> follows each redraw.</p>
+      <p class="note">Drawn the way D3 code would draw it, with <code>d3.pie()</code> and <code>d3.arc()</code>. <code>expressive()</code> reads each path as a slice by its tag, with no <code>geometry</code>: its centre, radii and angles come from the path, so the same effects, dimming and keyboard focus play as on the donut. Focus goes clockwise from 12 o'clock though <code>d3.pie()</code> returns its arcs in data order. <code>markLabel</code> names the slices as the donut does, and <code>refresh()</code> follows each redraw.</p>
       <!-- A group, not an image: screen readers skip what's inside an image, and its slices take focus. -->
       <svg id="d3-pie" role="group" aria-label="Shot outcomes on a D3 pie"></svg>
     </section>

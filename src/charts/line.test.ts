@@ -233,6 +233,27 @@ describe("lineChart: drawing", () => {
     expect(container.childElementCount).toBe(0);
   });
 
+  it("keeps `room` clear to the right of the end labels, lays out again on update({ room }), and checks it", async () => {
+    const { chart, settle } = setup({ motion: "off" });
+    const ends = () => chart.marks().filter((mark) => mark.key === mark.series).map((mark) => mark.end.x);
+    const labels = () => chart.labels().map((label) => label.x);
+    const before = { ends: ends(), labels: labels(), html: chart.element.outerHTML };
+    await settle(chart.update({ room: 40 }));
+    // The plot is 40 px narrower, and the end labels stay 10 px past the lines' ends, beside it.
+    ends().forEach((x, i) => expect(x).toBeCloseTo(before.ends[i]! - 40, 6));
+    labels().forEach((x, i) => expect(x).toBeCloseTo(ends()[i]! + 10, 6));
+    await settle(chart.update({ room: 0 }));
+    expect(ends()).toEqual(before.ends);
+    // 0 lays out as unset, the same chart.
+    expect(chart.element.outerHTML).toBe(before.html);
+    expect(setup({ room: 0 }).chart.element.outerHTML.replace(/ec-\w+-\d+/g, "")).toBe(setup().chart.element.outerHTML.replace(/ec-\w+-\d+/g, ""));
+    for (const room of [-1, Number.NaN, Infinity, "28" as never]) {
+      expect(() => setup({ room })).toThrow(new RangeError(`lineChart: room must be a number of px, 0 or more, got ${String(room)}.`));
+      await expect(chart.update({ room })).rejects.toThrow(/room must be a number of px/);
+    }
+    expect(ends()).toEqual(before.ends);
+  });
+
   it("throws on a row key that's also a line's or a point's, so focus(key) can't mean two things", async () => {
     const container = document.body.appendChild(document.createElement("div"));
     const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion: quietMotion(), clock: manualClock() };

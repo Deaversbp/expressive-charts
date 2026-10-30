@@ -1,7 +1,8 @@
 import type { MarkGeometry, Rect } from "../core";
 import { describe as build } from "../core";
 import { fixtures } from "../testing/fixtures";
-import { captionPlace } from "./caption";
+import { estimatedBox } from "../core/text-box";
+import { captionPlace, type CaptionPlace, type CaptionText } from "./caption";
 
 /** The overlay's text size, and how far its baseline drops below the placed point read sideways (0.36 em) and downwards (0.8 em). */
 const SIDEWAYS = 12.5 * 0.36;
@@ -192,5 +193,102 @@ describe("captionPlace with other marks' labels near it", () => {
     // A bar whose heading meets none of its own labels keeps to it, though another mark's label is on its up side.
     const overhead = { x: 140, y: -40, width: 40, height: 14 };
     expect(captionPlace(near([{ x: 0, y: 12, width: 54, height: 14 }], [overhead]))).toMatchObject({ toward: 0, at: { x: 270 } });
+  });
+});
+
+describe("captionPlace with other effects' text, and its own box (texts)", () => {
+  const value = { x: 266, y: 12, width: 24, height: 14 };
+  /** What the context's `texts` tells a caption: the boxes held before it, and its own text's box, estimated as in jsdom. */
+  const text = (held: Rect[] = [], content = "+2"): CaptionText => ({ held, box: (style) => estimatedBox(content, style) });
+  const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  const boxOf = (place: CaptionPlace, content = "+2"): Rect => estimatedBox(content, place);
+  const nearby = (nearbyLabels: Rect[]): MarkGeometry => build.bar({ key: "Okafor", x: 60, y: 10, width: 200, height: 20, baseline: "left", nearbyLabels });
+
+  it("goes 6 px past the farthest held box its way meets, as past a label, along a heading", () => {
+    expect(captionPlace(bar(), text([value]))).toEqual({ at: { x: 296, y: 20 + SIDEWAYS }, anchor: "start", toward: 0 });
+    // Past its own label, then past the change held beyond it.
+    expect(captionPlace(bar([value]), text([{ x: 300, y: 18, width: 40, height: 14 }])).at.x).toBe(346);
+    // Without texts, no other text is known.
+    expect(captionPlace(bar(), undefined).at.x).toBe(270);
+  });
+
+  it("goes out from a slice's centre past a held box that way, as past a neighbour's label", () => {
+    const middle = { x: 150 + 93 * Math.SQRT1_2, y: 150 - 93 * Math.SQRT1_2 };
+    const own: Rect = { x: middle.x + 20, y: middle.y - 50, width: 40, height: 34 };
+    const held: Rect = { x: middle.x + 60, y: middle.y - 90, width: 40, height: 20 };
+    const slice = build.arc({ key: "Saved", cx: 150, cy: 150, inner: 70, outer: 116, start: 0, end: Math.PI / 2, labelBounds: [own] });
+    const withNeighbour = build.arc({ key: "Saved", cx: 150, cy: 150, inner: 70, outer: 116, start: 0, end: Math.PI / 2, labelBounds: [own], nearbyLabels: [held] });
+    expect(captionPlace(slice, text([held]))).toEqual(captionPlace(withNeighbour));
+    expect(captionPlace(slice, text([held])).at.x).toBeCloseTo(middle.x + 96, 9);
+  });
+
+  it("moves on until its own box is 6 px clear of a box its way misses but its text would meet", () => {
+    // 7 px below the bar's line, and 7 px above it: the line misses both by more than 6 px, but the text, centred on the line, reaches them.
+    for (const beside of [{ x: 266, y: 27, width: 24, height: 14 }, { x: 266, y: -3, width: 24, height: 16 }]) {
+      expect(captionPlace(bar([beside])).at.x).toBe(270);
+      const place = captionPlace(bar([beside]), text());
+      // Its box starts 6 px past the label's: the box reaches 0.16 em before the text.
+      expect(place.at.x).toBeCloseTo(290 + 6 + 0.16 * 12.5, 9);
+      expect(boxOf(place).x).toBeCloseTo(beside.x + beside.width + 6, 9);
+    }
+    // A longer text reaches further from its point, and goes no further: its box starts at the same place.
+    expect(captionPlace(bar([{ x: 266, y: 27, width: 24, height: 14 }]), text([], "+12.5%")).at.x).toBeCloseTo(298, 9);
+  });
+
+  it("stays beside other effects' text in the rows above and below, which it meets only where their boxes overlap", () => {
+    // Changes past the names on a slope chart's stacked rows, 17 px apart: their boxes come within 0.75 px of this one's, a line apart.
+    const place = captionPlace(bar([value]), text());
+    const row = (by: number): Rect => ({ ...boxOf(place), y: boxOf(place).y + by });
+    expect(captionPlace(bar([value]), text([row(-17), row(17)]))).toEqual(place);
+    // Text that overlaps it still takes it on, past it.
+    expect(captionPlace(bar([value]), text([row(-10)])).at.x).toBeGreaterThan(place.at.x);
+    // A label a line above still keeps it 6 px clear, as text centred along a ring keeps off a label beside it.
+    const labelled = build.bar({ key: "Okafor", series: "goals", x: 60, y: 10, width: 200, height: 20, baseline: "left", labelBounds: [value], nearbyLabels: [row(-17)] });
+    expect(captionPlace(labelled, text()).at.x).toBeGreaterThan(place.at.x);
+  });
+
+  it("keeps clear of a box its way meets but leaves through its top, while its text still hangs on it", () => {
+    // Heading up and right, through the box's corner: the line leaves the box, grown by 6 px, through its top, with the text's foot still on the box.
+    const line = (labelBounds: Rect[]): MarkGeometry => build.line({ key: "goals", points: [{ x: 0, y: 100 }, { x: 100, y: 100 - 100 * Math.tan(0.3) }], labelBounds });
+    const box = { x: 106, y: 68, width: 60, height: 14 };
+    expect(overlaps(boxOf(captionPlace(line([box]))), box)).toBe(true);
+    const place = captionPlace(line([box]), text());
+    expect(place.toward).toBeCloseTo(-0.3, 9);
+    // On until its box's foot is on the box's top, clear of it, not 6 px: the way's own 6 px took it this far, as without its box.
+    expect(boxOf(place).y + boxOf(place).height).toBeCloseTo(box.y, 9);
+    expect(captionPlace(line([box]), text()).at.x).toBeGreaterThan(captionPlace(line([box])).at.x);
+  });
+
+  it("doesn't go past a box it would only meet further along its way", () => {
+    // On the bar's line, 140 px past its end: the text is clear of it where it is.
+    const ahead = { x: 400, y: 12, width: 24, height: 14 };
+    expect(captionPlace(bar(), text([ahead])).at.x).toBe(270);
+    expect(captionPlace(nearby([ahead]), text()).at.x).toBe(270);
+    // Without texts it goes past it, as before.
+    expect(captionPlace(nearby([ahead])).at.x).toBe(430);
+    // Its own labels are passed wherever the way meets them, as before: they pick its way.
+    expect(captionPlace(bar([ahead]), text()).at.x).toBe(430);
+  });
+
+  it("keeps text centred along a ring off a label beside it", () => {
+    // A slice from 12 o'clock to 3 with no label: its walk ends heading down at 3 o'clock, its text centred under the end.
+    const slice = (nearbyLabels: Rect[]): MarkGeometry => build.arc({ key: "Woodwork", cx: 150, cy: 150, inner: 70, outer: 116, start: 0, end: Math.PI / 2, labelBounds: [], nearbyLabels });
+    // A neighbour's label 12 px to the right of the way: the line misses it, but centred text 49 px wide reaches it.
+    const beside = { x: 255, y: 158, width: 40, height: 16 };
+    const before = captionPlace(slice([beside]));
+    expect(before.at.y).toBeCloseTo(160 + DOWNWARDS, 9);
+    expect(overlaps(boxOf(before, "+12.5%"), beside)).toBe(true);
+    const place = captionPlace(slice([beside]), text([], "+12.5%"));
+    expect(place.anchor).toBe("middle");
+    expect(place.at.x).toBeCloseTo(243, 9);
+    // Down until its box's top is 6 px below the label.
+    expect(boxOf(place, "+12.5%").y).toBeCloseTo(beside.y + beside.height + 6, 9);
+  });
+
+  it("places text as without texts where nothing is near: the fixtures, and bars past their own labels", () => {
+    for (const [name, mark] of Object.entries(fixtures)) expect(captionPlace(mark, text()), name).toEqual(captionPlace(mark));
+    for (const labels of [[value], [{ x: 0, y: 12, width: 54, height: 14 }, value], [value, { x: 300, y: 18, width: 40, height: 14 }]]) {
+      expect(captionPlace(bar(labels), text())).toEqual(captionPlace(bar(labels)));
+    }
   });
 });

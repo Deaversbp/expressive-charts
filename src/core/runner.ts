@@ -4,14 +4,15 @@
 
 import { defaultClock, type Clock } from "./clock";
 import type { MarkData } from "./contracts/data";
-import type { Layer, MarkHandle, MarkStyle } from "./contracts/drawing";
-import type { AnyMarkEffect, EffectContext, MarkEffect } from "./contracts/effect";
-import type { MarkGeometry } from "./contracts/geometry";
+import type { Layer, MarkHandle, MarkStyle, TextStyle } from "./contracts/drawing";
+import type { AnyMarkEffect, EffectContext, MarkEffect, TextSpace } from "./contracts/effect";
+import type { MarkGeometry, Rect } from "./contracts/geometry";
 import type { IconSource } from "./contracts/icon";
 import type { EffectSlot } from "./contracts/slots";
 import { mergeFields } from "./merge";
 import { motion as pageMotion, type Motion, type MotionView } from "./motion";
 import { report } from "./report";
+import { estimatedBox } from "./text-box";
 import { tween } from "./tween";
 
 type Batch = { readonly index: number; readonly count: number };
@@ -26,6 +27,8 @@ export interface RunScopeOptions {
   readonly mark: MarkHandle;
   readonly batch: Batch;
   readonly previous?: MarkGeometry | undefined;
+  /** The run's view of where effects' text sits. The caller lets go of its box when it's cleared. */
+  readonly texts?: TextSpace;
 }
 
 /** An EffectContext plus the controls the runner keeps for itself. testContext() is built on it too. */
@@ -51,6 +54,7 @@ export function runScope(options: RunScopeOptions): RunScope {
     icons: options.icons,
     batch: options.batch,
     ...(options.previous ? { previous: options.previous } : {}),
+    ...(options.texts ? { texts: options.texts } : {}),
     tween(tweenOptions) {
       const own = tweenOptions.signal;
       const running = tween({ ...tweenOptions, signal: own ?? controller.signal }, { clock, motion });
@@ -118,6 +122,11 @@ export interface RunnerSurface {
   group(key: string, slot: EffectSlot, order: number): SurfaceGroup;
   /** The mark's own style handle. The runner merges every live run's style into it. */
   mark(key: string): MarkHandle;
+  /**
+   * The box `content` takes drawn with `style` in a run's group, for `EffectContext.texts`: measured
+   * as the chart measures its own text. Default: estimated from its length.
+   */
+  box?(content: string, style: TextStyle): Rect;
 }
 
 export interface RunnerOptions<D = unknown> {
@@ -156,7 +165,12 @@ export interface Runner<D = unknown> {
   hover(marks: readonly RunInput<D>[]): void;
   /** Pointer or focus left these marks (default: every hovered mark): clears their hover runs. */
   leave(keys?: readonly string[]): void;
-  /** A mark's geometry (or data) changed on screen: every frame of a transition, a resize, a line reveal. */
+  /**
+   * A mark's geometry (or data) changed on screen: every frame of a transition, a resize, a line
+   * reveal. Its runs hear it in start order. Charts tell marks in the order they give them to enter()
+   * and update(), so text placed again goes past the text before it; text that another mark's text
+   * moved past after it was placed is placed again once the chart is done (a microtask).
+   */
   change(mark: MarkGeometry, data?: MarkData<D>): void;
   /** A data transition starts: clears hover runs, and holds new hovers until settle(). */
   interrupt(): void;
@@ -230,7 +244,19 @@ interface StartOptions {
   readonly mark?: MarkGeometry;
 }
 
+/** A run's text, as it holds it through `texts`. */
+interface Held {
+  box: Rect | undefined;
+  /** When the run last held a box, and when its box last moved, counted in holds. */
+  placed: number;
+  moved: number;
+}
+
 const SLOTS: readonly EffectSlot[] = ["decorate", "enter", "update", "exit", "hover"];
+
+const byOrder = <D>(a: Run<D>, b: Run<D>): number => a.order - b.order;
+const sameBox = (a: Rect | undefined, b: Rect | undefined): boolean =>
+  a === b || (a !== undefined && b !== undefined && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height);
 
 const NO_ICONS: IconSource = { get: () => undefined };
 /** Handed out for draws after a run is cleared, so an effect that ignores its signal draws nothing. */
@@ -248,6 +274,14 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
   let transitioning = false;
   let destroyed = false;
   let order = 0;
+  const box = (content: string, style: TextStyle): Rect => (surface.box ? surface.box(content, style) : estimatedBox(content, style));
+  /**
+   * Every run's text, as `texts` holds it. A run that let go stays until the next flush, so the runs
+   * after it that were placed against it are placed again.
+   */
+  const texts = new Map<Run<D>, Held>();
+  let holds = 0;
+  let flushing = false;
 
   // The effective mode can turn off mid-run (the device asks for reduced motion, or the viewer picks
   // Off). Runs still going are replaced by end() on a fresh context, so they never finish half-drawn.
@@ -297,7 +331,14 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
         batch,
         previous,
         layer: runLayer(entry.key, slot, () => run.order, () => run.state !== "cleared"),
-        mark: runMark(() => run)
+        mark: runMark(() => run),
+        texts: {
+          box,
+          held: () => [...texts].flatMap(([other, held]) => (held.box && other.order < run.order ? [held.box] : [])),
+          hold(next) {
+            if (run.state !== "cleared") hold(run, next);
+          }
+        }
       })
     };
     entry.runs.set(slot, run);
@@ -354,7 +395,50 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
       report(error);
     }
     run.scope.clear();
+    hold(run, undefined);
     release(run);
+  }
+
+  /** Tells the run its mark moved, with its latest data; a run that throws is reported and cleared. */
+  function tell(run: Run<D>, mark: MarkGeometry): void {
+    try {
+      // An update run keeps the previous values it was given, as when it's replaced by end().
+      run.scope.change(mark, latestData(run.entry, run));
+    } catch (error) {
+      report(error);
+      clearRun(run);
+    }
+  }
+
+  /** The run's text is at `next` now. When it moved, the runs after it placed before it moved are placed again, once the chart has told every mark it's moving. */
+  function hold(run: Run<D>, next: Rect | undefined): void {
+    let held = texts.get(run);
+    if (!held) {
+      if (!next) return;
+      texts.set(run, (held = { box: undefined, placed: 0, moved: 0 }));
+    }
+    held.placed = ++holds;
+    if (sameBox(held.box, next)) return;
+    held.box = next;
+    held.moved = holds;
+    if (flushing) return;
+    flushing = true;
+    queueMicrotask(flush);
+  }
+
+  /**
+   * Places text again where text held before it moved after it was placed: each such run hears
+   * onChange, in start order, so it goes past the text before it as that is now. The chart tells marks
+   * in its order, which runs on several slots, or on a mark that didn't move, needn't keep.
+   */
+  function flush(): void {
+    let moved = 0;
+    for (const [run, held] of [...texts].sort(([a], [b]) => byOrder(a, b))) {
+      if (held.box && held.placed < moved) tell(run, run.entry.mark);
+      if (!held.box) texts.delete(run);
+      moved = Math.max(moved, held.moved);
+    }
+    flushing = false;
   }
 
   /** A run's overlay group, created on its first draw. Draws after the run is cleared do nothing. */
@@ -550,16 +634,8 @@ export function createRunner<D = unknown>(options: RunnerOptions<D>): Runner<D> 
         // Outside a transition the values aren't on their way anywhere: a resize, a line's reveal.
         if (!transitioning) entry.resting = data;
       }
-      for (const run of [...entry.runs.values()]) {
-        if (run.state === "cleared") continue;
-        try {
-          // An update run keeps the previous values it was given, as when it's replaced by end().
-          run.scope.change(mark, latestData(entry, run));
-        } catch (error) {
-          report(error);
-          clearRun(run);
-        }
-      }
+      // In start order, as they started, so text placed again goes past the text before it, as that is now.
+      for (const run of [...entry.runs.values()].sort(byOrder)) if (run.state !== "cleared") tell(run, mark);
     },
 
     interrupt() {

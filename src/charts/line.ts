@@ -266,6 +266,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   const findMark = (key: string): MarkRecord<D> | undefined => points.get(key) ?? lines.get(key) ?? leaving.get(key);
   const surface = svgSurface({
     overlay,
+    measure,
     // Looked up on each call, so the handle follows the mark's record.
     mark: (key) => ({
       set: (style) => {
@@ -316,7 +317,9 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     const encoding = lineEncoding(opts);
     const series = encoding.series.map((s) => s.series);
     checkNeeds(using, series, "lineChart");
-    const next = layoutLines({ data: opts.data, encoding, width: opts.width ?? measuredWidth, height: opts.height, format: format(opts), measure, label: labeler(opts, true) });
+    const { room = 0 } = opts;
+    if (!(typeof room === "number" && Number.isFinite(room) && room >= 0)) throw new RangeError(`lineChart: room must be a number of px, 0 or more, got ${String(room)}.`);
+    const next = layoutLines({ data: opts.data, encoding, width: opts.width ?? measuredWidth, height: opts.height, format: format(opts), measure, label: labeler(opts, true), room });
     // A series named "a@b" and a key "c" make the same point key as "a" and "b@c".
     const keys = new Set(next.series);
     for (const row of next.rows) {

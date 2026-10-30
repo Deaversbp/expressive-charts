@@ -158,23 +158,36 @@ function paintOf(element: Element, root: Element, property: "fill" | "stroke"): 
   return computed !== undefined && !(initial && declared !== undefined) ? computed : kind(declared);
 }
 
+/** A stroke's width as drawn. */
+export interface StrokeWidth {
+  /** In the element's own user units, or in screen px when `screen`; undefined when there's none in px. */
+  readonly width: number | undefined;
+  /** `vector-effect: non-scaling-stroke`: the width is in screen px, whatever the element's transforms. */
+  readonly screen: boolean;
+}
+
 /**
- * An element's stroke width in its own user units, as drawn: the computed value, even a 1 px the
- * page's CSS sets. jsdom computes no presentation attributes, so there a computed 1, the initial
- * value, gives way to the nearest `stroke-width` attribute on the element or above it, passing over
- * one that can't be read, as SVG ignores it. An inline style, which jsdom computes, stops the search.
- * Undefined when there's none in px.
+ * An element's stroke width as drawn: the computed value, even a 1 px the page's CSS sets. jsdom
+ * computes no presentation attributes, so there a computed 1, the initial value, gives way to the
+ * nearest `stroke-width` attribute on the element or above it, passing over one that can't be read,
+ * as SVG ignores it. An inline style, which jsdom computes, stops the search. `vector-effect`, which
+ * isn't inherited, is read from the element alone in the same way: there a computed `none` gives way
+ * to its own attribute.
  */
-export function strokeWidthOf(element: Element, root: Element): number | undefined {
-  const raw = element.ownerDocument.defaultView?.getComputedStyle?.(element).getPropertyValue("stroke-width");
+export function strokeWidthOf(element: Element, root: Element): StrokeWidth {
+  const style = element.ownerDocument.defaultView?.getComputedStyle?.(element);
+  const raw = style?.getPropertyValue("stroke-width");
   const computed = pixels(raw);
-  if ((raw && attributesComputed(root)) || (computed !== undefined && computed !== 1)) return computed;
+  const effect = style?.getPropertyValue("vector-effect").trim().toLowerCase();
+  const declared = (element as SVGElement).style?.getPropertyValue("vector-effect") ? effect : element.getAttribute("vector-effect")?.trim().toLowerCase();
+  const screen = (effect && (effect !== "none" || attributesComputed(root)) ? effect : declared) === "non-scaling-stroke";
+  if ((raw && attributesComputed(root)) || (computed !== undefined && computed !== 1)) return { width: computed, screen };
   for (let node: Element | null = element; node; node = node === root ? null : node.parentElement) {
     if ((node as SVGElement).style?.getPropertyValue("stroke-width")) break;
     const width = pixels(node.getAttribute("stroke-width"));
-    if (width !== undefined) return width;
+    if (width !== undefined) return { width, screen };
   }
-  return computed;
+  return { width: computed, screen };
 }
 
 /** A length of 0 or more, in px or with no unit; undefined for anything else (a percentage, inherit). */

@@ -57,6 +57,7 @@ export type {
   Rect,
   Sample,
   TextHandle,
+  TextSpace,
   TextStyle,
   TransitionContext,
   TransitionEffect

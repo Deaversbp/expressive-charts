@@ -1423,7 +1423,7 @@ interface ThresholdOptions
 morph(options?: MorphOptions): TransitionEffect
 ```
 
-A transition effect that turns one mark's shape into another's: the default transition of a [`chartSwitch`](#chartswitch) ([architecture.md](architecture.md#morph)). Two closed outlines (bars, slices, points) are sampled at `points`, and each point moves in a straight line to its partner, as one filled path in the mark's colour; two lines morph along their strokes, their width too; an area and a line crossfade. It takes 950 ms base with `"transition"` timing, eased in and out, and a run from `ctx.start` takes the rest of a full run's time, so a switch back retraces. Its end state is the target's own outline.
+A transition effect that turns one mark's shape into another's: the default transition of a [`chartSwitch`](#chartswitch) ([architecture.md](architecture.md#morph)). Two closed outlines (bars, slices, points) are sampled at `points`, and each point moves in a straight line to its partner, as one filled path in the mark's colour, and their holes pair by area and morph too; two lines morph along their strokes, their width too, and keep their `gaps`, the stroke inside one line's gap fading in or out; an area and a line crossfade. It takes 950 ms base with `"transition"` timing, eased in and out, and a run from `ctx.start` takes the rest of a full run's time, so a switch back retraces. Its end state is the target's own outline.
 
 #### `MorphOptions`
 

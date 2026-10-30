@@ -1,5 +1,6 @@
 import { arc } from "d3-shape";
 import { describe as build, easeInOutCubic, matrix, type MarkGeometry, type Point } from "../core";
+import { boundsOf, extremes } from "../core/geometry";
 import { flattenPath } from "../core/geometry/flatten";
 import { parsePath } from "../core/geometry/path";
 import { pointOn } from "../core/geometry/segment";
@@ -122,10 +123,14 @@ const squareHole = (x: number, y: number, size: number): string => `M${x},${y}v$
 /** A square with two holes, the smaller written first, and one with a hole between their sizes. */
 const twoHoles = build.shape({ key: "a", d: square(0, 0, 200) + squareHole(20, 20, 30) + squareHole(80, 80, 100) });
 const oneHole = build.shape({ key: "b", d: square(300, 0, 200) + squareHole(340, 40, 120) });
+/** A ring and a slice of three quarters of it, whose bounds' middle is outside it (Codex on #122). */
+const fullRing = ring("full", 0, 0, 60, 100);
+const threeQuarters = build.arc({ key: "most", cx: 0, cy: 0, inner: 60, outer: 100, start: 0, end: 1.5 * Math.PI });
 const holedPairs: Readonly<Record<string, readonly [MarkGeometry, MarkGeometry]>> = {
   "two rings": [small, large],
   "a ring and a disc": [small, disc],
-  "a shape with two holes and one with one": [twoHoles, oneHole]
+  "a shape with two holes and one with one": [twoHoles, oneHole],
+  "a ring and three quarters of it": [fullRing, threeQuarters]
 };
 
 /** Point k of `count` round a circle, clockwise on screen from its upper left. */
@@ -275,15 +280,39 @@ describe("morph", () => {
       }
     });
 
-    it("shrinks a hole with no partner to a point, or grows it from one, which moves from its centre to the same place in the other mark's bounds", async () => {
-      // The ring's centre is the middle of its bounds, and so is the disc's.
+    it("closes a hole with no partner by half way, or opens it after, half way from its centre to its place in the other mark's bounds", async () => {
+      // The ring's centre is the middle of its bounds, and so is the disc's: (100, 100) lands on (120, 110).
       expect(disc.bounds).toEqual({ x: 60, y: 50, width: 120, height: 120 });
-      for (const p of [0.3, 0.75]) {
-        const [, hole] = subpaths(dOf((await opening(small, disc, p))[0]!));
+      for (const p of [0.15, 0.3, 0.45]) {
+        const [, hole, ...more] = subpaths(dOf((await opening(small, disc, p))[0]!));
+        expect(more).toEqual([]);
         expect(hole).toHaveLength(40);
-        hole!.forEach((point, j) => expect(close(point, mix(round(100, 100, 40, written(j, 40), 40), { x: 120, y: 110 }, p)), `point ${j}`).toBe(true));
+        hole!.forEach((point, j) => expect(close(point, mix(round(100, 100, 40, written(j, 40), 40), { x: 110, y: 105 }, 2 * p)), `point ${j}`).toBe(true));
         expect(await opening(disc, small, 1 - p)).toEqual(await opening(small, disc, p));
       }
+      // From half way on it's gone, and before half way back it isn't there yet.
+      for (const p of [0.5, 0.75]) {
+        expect(subpaths(dOf((await opening(small, disc, p))[0]!))).toHaveLength(1);
+        expect(await opening(disc, small, 1 - p)).toEqual(await opening(small, disc, p));
+      }
+    });
+
+    it("lands a hole with no partner inside the other shape when its place in the bounds isn't, and closes it sooner where it would leave the shape on the way", async () => {
+      // A ring to three quarters of it: the ring's centre is the middle of both bounds, outside the slice.
+      const hole = async (p: number) => subpaths(dOf((await opening(fullRing, threeQuarters, p))[0]!))[1];
+      // It closes at a half, a quarter, an eighth or a sixteenth of the run; here not by half way, where the shape in between has left the ring's middle.
+      let shut = 0;
+      for (const e of [1 / 2, 1 / 4, 1 / 8, 1 / 16]) if ((await hole(e - 0.001)) && !(await hole(e))) shut = e;
+      expect([1 / 4, 1 / 8, 1 / 16]).toContain(shut);
+      // Each point moves in a straight line, so two frames give the point it closes to, and that's where its centre, the ring's, is by then on its way to where it lands.
+      const [early, later] = [(await hole(shut / 4))![0]!, (await hole(shut / 2))![0]!];
+      const closesAt = mix(early, later, 3);
+      const there = { x: closesAt.x / shut, y: closesAt.y / shut };
+      const radius = Math.hypot(there.x, there.y);
+      expect(radius).toBeGreaterThan(70);
+      expect(radius).toBeLessThan(90);
+      // Inside the slice's quarters: anywhere but the upper left.
+      expect(there.x > 0 || there.y > 0).toBe(true);
     });
 
     it("pairs holes by area, largest with largest, whatever order they're written in", async () => {
@@ -295,8 +324,8 @@ describe("morph", () => {
         const u = written(j, 40) / 40;
         expect(close(point, mix(around(80, 80, 100, u), around(340, 40, 120, u), p)), `point ${j}`).toBe(true);
       });
-      // The smaller has no partner: it shrinks to its centre's place in the other square, 35 px in from its top left.
-      smaller!.forEach((point, j) => expect(close(point, mix(around(20, 20, 30, written(j, 40) / 40), { x: 335, y: 35 }, p)), `point ${j}`).toBe(true));
+      // The smaller has no partner: it closes by half way, half way to its centre's place in the other square, 35 px in from its top left.
+      smaller!.forEach((point, j) => expect(close(point, mix(around(20, 20, 30, written(j, 40) / 40), { x: 185, y: 35 }, 2 * p)), `point ${j}`).toBe(true));
     });
 
     it("samples each hole at a quarter of `points`", async () => {
@@ -305,31 +334,39 @@ describe("morph", () => {
       expect(subpaths(dOf(ctx.layer.picture()[0]!)).map((points) => points.length)).toEqual([12, 3]);
     });
 
-    it("keeps a hole a hole under either fill rule on every frame, both ways", async () => {
-      /** Past this, a hole with no partner is less than 0.04 px across, which path data's 0.001 px can't draw. */
-      const SHRUNK = 0.999;
-      /** Where each hole's middle is, and a point of filled area, at progress q from the pair's first mark to its second. */
-      const places: Record<string, (q: number) => { holes: Point[]; filled: Point }> = {
-        "two rings": (q) => ({ holes: [mix({ x: 100, y: 100 }, { x: 300, y: 150 }, q)], filled: mix(round(100, 100, 50, 0, 4), round(300, 150, 93, 0, 4), q) }),
-        "a ring and a disc": (q) => ({ holes: q < SHRUNK ? [mix({ x: 100, y: 100 }, { x: 120, y: 110 }, q)] : [], filled: round(100 + 20 * q, 100 + 10 * q, 55, 0, 4) }),
-        "a shape with two holes and one with one": (q) => ({
-          holes: [mix({ x: 130, y: 130 }, { x: 400, y: 100 }, q), ...(q < SHRUNK ? [mix({ x: 35, y: 35 }, { x: 335, y: 35 }, q)] : [])],
-          filled: mix({ x: 10, y: 10 }, { x: 310, y: 10 }, q)
-        })
+    it("keeps a hole a hole under either fill rule on every frame, both ways, inside the shape", async () => {
+      /** A point of filled area at progress q from the pair's first mark to its second, where one is known all the way. */
+      const filled: Record<string, (q: number) => Point> = {
+        "two rings": (q) => mix(round(100, 100, 50, 0, 4), round(300, 150, 93, 0, 4), q),
+        "a ring and a disc": (q) => round(100 + 20 * q, 100 + 10 * q, 55, 0, 4),
+        "a shape with two holes and one with one": (q) => mix({ x: 10, y: 10 }, { x: 310, y: 10 }, q)
       };
+      let holes = 0;
       for (const [name, [a, b]] of Object.entries(holedPairs)) {
         for (const [from, to, back] of [
           [a, b, false],
           [b, a, true]
         ] as const) {
           for (const { p, drawn } of await frames(from!, to!)) {
-            const { holes, filled } = places[name]!(back ? 1 - p : p);
+            const where = `${name}, ${back ? "back" : "forward"}, at ${p}`;
             const d = dOf(drawn[0]!);
-            for (const hole of holes) expect(winding(d, hole), `${name}, ${back ? "back" : "forward"}, at ${p}`).toBe(0);
-            expect(Math.abs(winding(d, filled)), `${name}, ${back ? "back" : "forward"}, at ${p}`).toBe(1);
+            const [outside, ...rest] = d.match(/M[^M]*/g)!;
+            for (const hole of rest) {
+              const box = boundsOf(flattenPath(parsePath(hole)).flatMap((subpath) => subpath.segments.flatMap(extremes)));
+              // Less than 0.04 px across is more than path data's 0.001 px can draw.
+              if (Math.max(box.width, box.height) < 0.04) continue;
+              const middle = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+              // Unfilled under either rule, where the shape without it is filled: a hole, not a filled island.
+              expect(winding(d, middle), where).toBe(0);
+              expect(Math.abs(winding(outside!, middle)), where).toBe(1);
+              holes++;
+            }
+            const point = filled[name]?.(back ? 1 - p : p);
+            if (point) expect(Math.abs(winding(d, point)), where).toBe(1);
           }
         }
       }
+      expect(holes).toBeGreaterThan(400);
     });
 
     it("passes the transition checks, aligned either way", async () => {

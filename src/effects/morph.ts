@@ -37,6 +37,10 @@ const POINTS = 160;
 const ALIGNS: readonly string[] = ["unroll", "drop"];
 /** Two values of t closer than this are one stop on a line. */
 const SAME_T = 1e-9;
+/** Points across and down the bounds where a hole with no partner may land, when its own place won't do. */
+const GRID = 9;
+/** Times on a hole's way to closing, or from opening, at which it's checked to be inside the shape. */
+const CHECKS = 8;
 
 /** Draws the morph at eased progress p, from 0 (`from`) to 1 (`to`), creating or updating its paths. */
 type Draw = (p: number) => void;
@@ -52,9 +56,11 @@ type Draw = (p: number) => void;
  *   pairing instead of twisting. Between two marks of the same kind, "drop" pairs as "unroll" does.
  *   Holes (the subpaths of an outline's `d` other than the longest) morph too: they pair by area,
  *   largest with largest, each sampled at a quarter of `points` from its upper left. One with no
- *   partner shrinks to a point, or grows from one, which moves from its centre to the same place in
- *   the other mark's bounds, so it keeps with the shape. Each is written the other way round from
- *   the outside, so it stays a hole under either fill rule.
+ *   partner closes by half way, or opens after it, while its centre heads for where it lands in the
+ *   other mark: its centre's place in the other's bounds, or the deepest point of its filled area
+ *   where that place is outside it or near its edge. Where it would leave the shape on the way, it
+ *   closes sooner, as soon as a sixteenth of the way. Each is written the other way round from the
+ *   outside, so it stays a hole under either fill rule.
  * - **Two open outlines** (lines): both strokes are sampled along their length, and the stroke's
  *   width moves from one thickness to the other. Where either line has `gaps`, the stroke inside a
  *   gap of the old line fades in and inside a gap of the new line fades out, each piece at an
@@ -110,10 +116,10 @@ function drawing(from: MarkGeometry, to: MarkGeometry, layer: Layer, points: num
   const b = to.outline.sample(points);
   if (!closed) return from.gaps?.length || to.gaps?.length ? gapped(from, to, layer, a, b) : stroke(from, to, layer, a, b);
   const [shiftA, shiftB] = align === "drop" ? turn(from, to, points) : [0, 0];
-  const holes = holePairs(from, to, points / 4);
+  const holes = holePairs(from, to, a, b, [shiftA, shiftB], points / 4);
   let path: PathHandle | undefined;
   return (p) => {
-    const d = p <= 0 ? from.outline.d : p >= 1 ? to.outline.d : between(a, b, shiftA, shiftB, p, true) + holes.map(([x, y]) => between(x, y, 0, 0, p, true)).join("");
+    const d = p <= 0 ? from.outline.d : p >= 1 ? to.outline.d : between(a, b, shiftA, shiftB, p, true) + holes.map((hole) => holeAt(hole, p)).join("");
     if (path) path.update(d);
     else path = layer.path(d, { fill: "mark" });
   };
@@ -200,19 +206,139 @@ interface Hole {
   readonly area: number;
   /** The centre of its bounds. */
   readonly center: Point;
+  /** Half the larger side of its bounds. */
+  readonly size: number;
 }
 
 /**
- * Two closed outlines' holes, paired by area, largest with largest. A hole with no partner is paired
- * with one point, every point of it: its centre's place in the other mark's bounds, at the same
- * fractions across and down. So it shrinks to that point or grows from it, and moves as the shape
- * does: a hole that shrank where it was would leave a shape that moves, and be drawn filled.
+ * A hole's points and their partners, and the share of the run it takes: a pair morphs all the way,
+ * and a hole with no partner closes by `end`, or opens from `1 - end` when it's `to`'s.
  */
-function holePairs(from: MarkGeometry, to: MarkGeometry, count: number): (readonly [readonly Point[], readonly Point[]])[] {
-  const a = holesOf(from.outline, count);
-  const b = holesOf(to.outline, count);
-  const dot = (hole: Hole, own: Rect, other: Rect): Point[] => new Array<Point>(count).fill(placeIn(hole.center, own, other));
-  return Array.from({ length: Math.max(a.length, b.length) }, (_, k) => [a[k]?.points ?? dot(b[k]!, to.bounds, from.bounds), b[k]?.points ?? dot(a[k]!, from.bounds, to.bounds)] as const);
+interface HolePair {
+  readonly from: readonly Point[];
+  readonly to: readonly Point[];
+  readonly end?: number;
+  readonly opens?: boolean;
+}
+
+/**
+ * Two closed outlines' holes, paired by area, largest with largest, given each outline's samples and
+ * their shifts as drawn. A hole with no partner is paired with one point, every point of it, which its
+ * centre would reach on its way to where it lands in the other mark (`landing`) when it closes, or
+ * opens (`closing`). So it keeps with the shape as it moves, and each point still moves in a straight
+ * line. Both are worked out from the hole's own mark, whichever is `from`, so a run back retraces.
+ */
+function holePairs(from: MarkGeometry, to: MarkGeometry, a: readonly Point[], b: readonly Point[], [shiftA, shiftB]: readonly [number, number], count: number): HolePair[] {
+  const holesA = holesOf(from.outline, count);
+  const holesB = holesOf(to.outline, count);
+  const both = Math.min(holesA.length, holesB.length);
+  const pairs: HolePair[] = holesA.slice(0, both).map((hole, k) => ({ from: hole.points, to: holesB[k]!.points }));
+  // Only one side has holes with no partner: the hole's own mark and samples first, then the other's.
+  const closes = holesA.length > holesB.length;
+  const [ownHoles, otherHoles, other, own, theirs, ownShift, otherShift] = closes
+    ? [holesA, holesB, to, a, b, shiftA, shiftB]
+    : [holesB, holesA, from, b, a, shiftB, shiftA];
+  const n = own.length;
+  const outside = own.map((_, i): Path => [own[(i + ownShift) % n]!, theirs[(i + otherShift) % n]!]);
+  const inner = ownHoles.slice(0, both).map((hole, k) => hole.points.map((p, i): Path => [p, otherHoles[k]!.points[i]!]));
+  const area = [theirs, ...otherHoles.map((hole) => hole.points)];
+  for (const hole of ownHoles.slice(both)) {
+    const { end, point } = closing(hole, landing(hole, (closes ? from : to).bounds, other, area), outside, inner);
+    const dot = new Array<Point>(count).fill(point);
+    pairs.push(closes ? { from: hole.points, to: dot, end } : { from: dot, to: hole.points, end, opens: true });
+  }
+  return pairs;
+}
+
+/** A point's way through a morph, from its own mark's place to its partner's. */
+type Path = readonly [own: Point, other: Point];
+
+/**
+ * When a hole with no partner has closed, as a share of the run from its own mark, and the point it
+ * closes to: by half way, while its centre goes from where it is toward where it lands, or a half,
+ * a quarter or an eighth of that where on the way some point of it would leave the shape, which it
+ * can't follow: checked at each eighth of the way. A sixteenth of the way where none of those will do.
+ */
+function closing(hole: Hole, there: Point, outside: readonly Path[], inner: readonly (readonly Path[])[]): { end: number; point: Point } {
+  let end = 0.5;
+  while (end > 1 / 16 && !stays(hole, mixed(hole.center, there, end), end, outside, inner)) end /= 2;
+  return { end, point: mixed(hole.center, there, end) };
+}
+
+/** Whether every point of the hole is inside the shape at each check on its way to `point` by `end`. */
+function stays(hole: Hole, point: Point, end: number, outside: readonly Path[], inner: readonly (readonly Path[])[]): boolean {
+  for (let j = 1; j < CHECKS; j++) {
+    const t = (end * j) / CHECKS;
+    const at = (path: Path): Point => mixed(path[0], path[1], t);
+    const area = [outside.map(at), ...inner.map((ring) => ring.map(at))];
+    if (hole.points.some((p) => windingAt(mixed(p, point, j / CHECKS), area) === 0)) return false;
+  }
+  return true;
+}
+
+/** Path data for a hole at p: none once a hole with no partner has closed, or before it opens. */
+function holeAt({ from, to, end, opens }: HolePair, p: number): string {
+  if (end === undefined) return between(from, to, 0, 0, p, true);
+  const q = opens ? (p - (1 - end)) / end : p / end;
+  return (opens ? q <= 0 : q >= 1) ? "" : between(from, to, 0, 0, q, true);
+}
+
+const mixed = (a: Point, b: Point, t: number): Point => ({ x: mix(a.x, b.x, t), y: mix(a.y, b.y, t) });
+
+/** A mark's filled area as polygons: its outside, clockwise, and its holes, the other way round. */
+type Area = readonly (readonly Point[])[];
+
+/**
+ * Where a hole with no partner lands in the other mark. Its centre's place in the other's bounds, at the
+ * same fractions across and down, when that's inside the other's filled area by a quarter of the hole's
+ * size or more: so the hole keeps with the shape as it moves, where one that closed where it was would
+ * leave it, and be drawn filled. Otherwise, as in a slice whose bounds' middle is outside it, the
+ * deepest of the other's centre and a grid across its bounds.
+ */
+function landing(hole: Hole, own: Rect, other: MarkGeometry, area: Area): Point {
+  const place = placeIn(hole.center, own, other.bounds);
+  if (depth(place, area) >= hole.size / 4) return place;
+  const { x, y, width, height } = other.bounds;
+  let best = other.center;
+  let deepest = depth(best, area);
+  for (let i = 0; i < GRID; i++) {
+    for (let j = 0; j < GRID; j++) {
+      const point = { x: x + (width * (i + 0.5)) / GRID, y: y + (height * (j + 0.5)) / GRID };
+      const d = depth(point, area);
+      if (d > deepest) [best, deepest] = [point, d];
+    }
+  }
+  return best;
+}
+
+/** How far inside the filled area a point is: its distance to the nearest edge, or 0 when it's outside. */
+function depth(point: Point, area: Area): number {
+  if (windingAt(point, area) === 0) return 0;
+  let nearest = Infinity;
+  for (const ring of area) {
+    ring.forEach((p, i) => {
+      const q = ring[(i + 1) % ring.length]!;
+      const dx = q.x - p.x;
+      const dy = q.y - p.y;
+      const u = dx === 0 && dy === 0 ? 0 : Math.max(0, Math.min(1, ((point.x - p.x) * dx + (point.y - p.y) * dy) / (dx * dx + dy * dy)));
+      nearest = Math.min(nearest, Math.hypot(point.x - p.x - u * dx, point.y - p.y - u * dy));
+    });
+  }
+  return nearest;
+}
+
+/** The area's winding number round a point: 0 outside it and in its holes. */
+function windingAt(point: Point, area: Area): number {
+  let winding = 0;
+  for (const ring of area) {
+    ring.forEach((p, i) => {
+      const q = ring[(i + 1) % ring.length]!;
+      const side = (q.x - p.x) * (point.y - p.y) - (point.x - p.x) * (q.y - p.y);
+      if (p.y <= point.y && q.y > point.y && side > 0) winding++;
+      else if (p.y > point.y && q.y <= point.y && side < 0) winding--;
+    });
+  }
+  return winding;
 }
 
 /** Where `point` would be in `other`, at the same fractions across and down as it is in `own`: half way along a side `own` has no size along. */
@@ -245,7 +371,12 @@ function holesOf(outline: Outline, count: number): Hole[] {
       const round = loopOutline([loop]).sample(4 * count);
       const points = round.filter((_, i) => i % 4 === 0);
       const box = boundsOf(loop.flatMap(extremes));
-      return { points: [points[0]!, ...points.slice(1).reverse()], area: Math.abs(areaOf(round)), center: { x: box.x + box.width / 2, y: box.y + box.height / 2 } };
+      return {
+        points: [points[0]!, ...points.slice(1).reverse()],
+        area: Math.abs(areaOf(round)),
+        center: { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+        size: Math.max(box.width, box.height) / 2
+      };
     })
     .sort((x, y) => y.area - x.area);
 }

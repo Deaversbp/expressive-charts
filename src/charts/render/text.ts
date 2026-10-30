@@ -3,6 +3,7 @@
 // the character count.
 
 import type { Rect } from "../../core";
+import { AVERAGE_WIDTH, boxAround } from "../../core/text-box";
 import { setAttributes, svgElement } from "./svg";
 
 /** Where a piece of text goes: its baseline's anchor point, and how it's anchored there. */
@@ -14,24 +15,13 @@ export interface TextPlacement {
 }
 
 /**
- * How far text reaches, as shares of its size: above its baseline (an accented capital's top), below
- * it (a descender's foot), and past its measured width at either side (a W's lean, an f's hook). So a
- * box holds the text's getBBox() in Chrome with Segoe UI, Arial, Georgia, Verdana and Consolas; a
- * Times New Roman "ff" reaches 0.8 px past it.
- */
-const ASCENT = 1.05;
-const DESCENT = 0.25;
-const SIDE = 0.16;
-
-/**
- * The box `placement`'s text covers, drawn with `className` at `size` px: a mark's `labelBounds`.
- * Chart text has tabular digits, so it's measured with its digits as 0s, and text that counts
- * through values while a change plays is measured once for each shape.
+ * The box `placement`'s text covers, drawn with `className` at `size` px: a mark's `labelBounds`, or
+ * an effect's text (`EffectContext.texts`). Chart text has tabular digits, so it's measured with its
+ * digits as 0s, and text that counts through values while a change plays is measured once for each
+ * shape. How far past its width and baseline the box reaches is in src/core/text-box.ts.
  */
 export function textBox(placement: TextPlacement, measure: Measure, className: string, size: number): Rect {
-  const width = measure(placement.text.replace(/\d/g, "0"), className, size);
-  const start = placement.anchor === "start" ? placement.x : placement.anchor === "end" ? placement.x - width : placement.x - width / 2;
-  return { x: start - SIDE * size, y: placement.y - ASCENT * size, width: width + 2 * SIDE * size, height: (ASCENT + DESCENT) * size };
+  return boxAround(placement, placement.anchor, measure(placement.text.replace(/\d/g, "0"), className, size), size);
 }
 
 type Measure = (text: string, className: string, size: number) => number;
@@ -49,10 +39,8 @@ export interface TextMeasure {
   clear(): void;
 }
 
-/** An estimate of the average glyph width, in em. */
-const AVERAGE_WIDTH = 0.6;
-
-export function textMeasure(svg: SVGSVGElement): TextMeasure {
+/** Measures text drawn in `svg`, or in a group of it such as the overlay, so the CSS that applies there applies. */
+export function textMeasure(svg: SVGElement): TextMeasure {
   const cache = new Map<string, number>();
   const measure = (text: string, className: string, size: number): number => {
     if (text === "") return 0;

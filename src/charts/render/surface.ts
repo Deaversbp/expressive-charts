@@ -1,11 +1,14 @@
-// The runner's surface in SVG: one overlay group per run, above the marks, and the marks' style handles.
-// A run's paths and icons follow its mark: they take the transform an effect gives the mark's body,
-// and dim with it while another mark is hovered. Its text stays put, as the mark's labels do.
+// The runner's surface in SVG: one overlay group per run, above the marks, the marks' style handles,
+// and the box a run's text takes. A run's paths and icons follow its mark: they take the transform an
+// effect gives the mark's body, and dim with it while another mark is hovered. Its text stays put, as
+// the mark's labels do.
 
 import type { MarkHandle, Matrix } from "../../core";
 import type { RunnerSurface } from "../../core/runner";
+import { TEXT_SIZE } from "../../core/text-box";
 import { FOLLOW, svgLayer } from "./layer";
 import { setAttributes, setStyles, svgElement, transformAttribute } from "./svg";
+import { textBox, textMeasure, type TextMeasure } from "./text";
 import { markColorStyles, type SeriesColors } from "./theme";
 
 export interface SvgSurfaceOptions {
@@ -15,6 +18,8 @@ export interface SvgSurfaceOptions {
   mark(key: string): MarkHandle;
   /** The colours the "mark" token means in this mark's groups. */
   colors(key: string): SeriesColors | undefined;
+  /** Measures runs' text: the chart's own measure, so a font load clears both. Default: one measuring in the overlay. */
+  readonly measure?: TextMeasure;
 }
 
 export interface SvgSurface extends RunnerSurface {
@@ -31,6 +36,7 @@ export interface SvgSurface extends RunnerSurface {
 
 export function svgSurface(options: SvgSurfaceOptions): SvgSurface {
   const { overlay } = options;
+  const measure = options.measure ?? textMeasure(overlay);
   const orders = new WeakMap<Element, number>();
   /** Live groups by mark key. */
   const groups = new Map<string, Set<SVGGElement>>();
@@ -66,6 +72,7 @@ export function svgSurface(options: SvgSurfaceOptions): SvgSurface {
         }
       };
     },
+    box: (text, { at, anchor = "start" }) => textBox({ x: at.x, y: at.y, anchor, text }, measure, "ec-text", TEXT_SIZE),
     mark(key) {
       const handle = options.mark(key);
       return {

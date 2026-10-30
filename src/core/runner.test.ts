@@ -2,13 +2,14 @@ import { manualClock } from "./clock";
 import type { MarkData } from "./contracts/data";
 import type { MarkStyle } from "./contracts/drawing";
 import type { DataEffect, EffectContext, GeometryEffect } from "./contracts/effect";
-import type { MarkGeometry } from "./contracts/geometry";
+import type { MarkGeometry, Rect } from "./contracts/geometry";
 import type { Icon } from "./contracts/icon";
 import { linear } from "./easing";
 import { describe as build } from "./geometry";
 import { createMotion, type MotionMode, type ReducedMotionSource } from "./motion";
 import { report } from "./report";
 import { createRunner, type SlotEffects } from "./runner";
+import { estimatedBox } from "./text-box";
 import { recordingSurface } from "./testing";
 
 vi.mock("./report", () => ({ report: vi.fn() }));
@@ -1108,6 +1109,173 @@ describe("createRunner", () => {
         { op: "set", style: { opacity: undefined, emphasis: 1 } },
         { op: "set", style: { emphasis: 0.5 } }
       ]);
+    });
+  });
+
+  describe("where effects' text sits (texts)", () => {
+    /** A box `width` wide at `x`, 10 px high, as a run's text might be. */
+    const at = (x: number, width = 10): Rect => ({ x, y: 0, width, height: 10 });
+
+    /**
+     * Holds a box at its mark's width (so a mark that changes width moves its text) on its first draw
+     * and on every change, and logs what it sees held before it each time: "a [10]" is mark a, placed
+     * past one box at x 10. It stays until cleared, as delta's text does.
+     */
+    function holder(duration = 100): GeometryEffect & { readonly log: string[]; readonly contexts: EffectContext[] } {
+      const log: string[] = [];
+      const contexts: EffectContext[] = [];
+      const place = (mark: MarkGeometry, ctx: EffectContext): void => {
+        log.push(`${mark.key} [${ctx.texts!.held().map((box) => box.x)}]`);
+        ctx.texts!.hold(at(mark.length));
+      };
+      const begin = (mark: MarkGeometry, ctx: EffectContext): void => {
+        contexts.push(ctx);
+        place(mark, ctx);
+        ctx.onChange((moved) => place(moved, ctx));
+      };
+      return {
+        kind: "geometry",
+        log,
+        contexts,
+        async run(mark, ctx) {
+          begin(mark, ctx);
+          await ctx.tween({ duration, timing: "effect", update() {} }).finished;
+        },
+        end: begin,
+        clear() {}
+      };
+    }
+
+    it("gives every run one space on its runner, with text boxed as its surface measures it, or estimated", () => {
+      const decorate = holder();
+      const { runner } = setup({ decorate });
+      runner.enter([input("a"), input("b")]);
+      const [a, b] = decorate.contexts;
+      // jsdom's estimate, at the overlay's 12.5 px: 0.6 em a character, and past the text at either side and above and below its baseline.
+      expect(a!.texts!.box("+2", { at: { x: 10, y: 20 }, anchor: "end" })).toEqual({ x: 10 - 15 - 2, y: 20 - 1.05 * 12.5, width: 15 + 4, height: 1.3 * 12.5 });
+      expect(b!.texts!.box("+2", { at: { x: 10, y: 20 } })).toEqual(estimatedBox("+2", { at: { x: 10, y: 20 } }));
+
+      // A surface that measures text: the runner asks it, with the content and the style.
+      const box = vi.fn((content: string) => at(content.length));
+      const measured = holder();
+      createRunner({ effects: { decorate: measured }, surface: { ...recordingSurface(), box } }).enter([input("a")]);
+      const style = { at: { x: 1, y: 2 }, anchor: "middle" } as const;
+      expect(measured.contexts[0]!.texts!.box("+12", style)).toEqual(at(3));
+      expect(box).toHaveBeenLastCalledWith("+12", style);
+    });
+
+    it("gives each run the boxes held by the runs that started before it, not after", () => {
+      const decorate = holder();
+      const { runner } = setup({ decorate });
+      runner.enter([input("a", 10), input("b", 20), input("c", 30)]);
+      expect(decorate.log).toEqual(["a []", "b [10]", "c [10,20]"]);
+      const [a, b, c] = decorate.contexts;
+      expect(a!.texts!.held()).toEqual([]);
+      expect(b!.texts!.held()).toEqual([at(10)]);
+      expect(c!.texts!.held()).toEqual([at(10), at(20)]);
+    });
+
+    it("keeps the box a run holds until it holds another or undefined", () => {
+      const decorate = holder();
+      const { runner } = setup({ decorate });
+      runner.enter([input("a", 10), input("b", 20)]);
+      const [a, b] = decorate.contexts;
+      a!.texts!.hold(at(40, 5));
+      expect(b!.texts!.held()).toEqual([at(40, 5)]);
+      a!.texts!.hold(undefined);
+      expect(b!.texts!.held()).toEqual([]);
+      a!.texts!.hold(at(50));
+      expect(b!.texts!.held()).toEqual([at(50)]);
+    });
+
+    it("lets go of a run's box when it's cleared, ended or swapped, and keeps it while its run has finished", async () => {
+      const update = holder(1000);
+      const hover = holder();
+      const { runner, reduced, clock } = setup({ update, hover });
+      runner.enter([input("a", 10), input("b", 20)]);
+      /** What a hover on c, starting last, sees held before it. */
+      const held = (): number[] => {
+        runner.hover([input("c", 99)]);
+        const seen = hover.contexts[hover.contexts.length - 1]!.texts!.held().map((box) => box.x);
+        runner.leave(["c"]);
+        return seen;
+      };
+      // Cleared: a leave, a re-trigger, and an update that leaves the mark alone.
+      runner.hover([input("a", 10)]);
+      runner.leave(["a"]);
+      expect(held()).toEqual([]);
+      runner.update([input("a", 11)]);
+      runner.update([input("a", 12)]);
+      expect(held()).toEqual([12]);
+      // A run that has finished keeps its text, as delta's stays.
+      clock.advance(2000);
+      await flush();
+      expect(held()).toEqual([12]);
+      runner.update([input("b", 21)]);
+      expect(held()).toEqual([21]);
+      // Ended: motion turns off mid-run, and the run's end state, in its place, holds its own.
+      reduced.set(true);
+      expect(update.log[update.log.length - 1]).toBe("b []");
+      expect(held()).toEqual([21]);
+      // Swapped: the new effect's end state, in the old run's place, holds its own.
+      const next = holder();
+      runner.swap({ update: next, hover }, [input("a", 12), input("b", 21)]);
+      expect(next.log).toEqual(["b []"]);
+      expect(held()).toEqual([21]);
+      runner.destroy();
+      expect(next.contexts[0]!.texts!.held()).toEqual([]);
+      expect(hover.contexts[0]!.texts!.held()).toEqual([]);
+    });
+
+    it("keeps each runner's text apart, so two charts' text doesn't count against each other", () => {
+      const decorate = holder();
+      const one = setup({ decorate });
+      const two = setup({ decorate });
+      one.runner.enter([input("a", 10)]);
+      two.runner.enter([input("a", 20)]);
+      one.runner.enter([input("b", 30)]);
+      expect(decorate.log).toEqual(["a []", "a []", "b [10]"]);
+    });
+
+    it("tells a mark's runs it moved in the order they started, though one took another's place", () => {
+      const enter = holder();
+      const update = holder();
+      const { runner } = setup({ enter, update }, "off");
+      runner.enter([input("a", 10)]);
+      runner.update([input("a", 20)]);
+      // The new enter run takes the old one's place, before the update run.
+      const again = holder();
+      runner.swap({ enter: again, update }, [input("a", 20)]);
+      runner.change(bar("a", 30));
+      expect([again.log[again.log.length - 1], update.log[update.log.length - 1]]).toEqual(["a []", "a [30]"]);
+    });
+
+    it("tells a run again once the chart is done when text before it moved after it was placed, in the order they started", async () => {
+      const decorate = holder();
+      const { runner } = setup({ decorate });
+      runner.enter([input("a", 10), input("b", 20), input("c", 30)]);
+      decorate.log.length = 0;
+      // The chart tells b, then a: b was placed past a's old box.
+      runner.change(bar("b", 21));
+      runner.change(bar("a", 11));
+      expect(decorate.log).toEqual(["b [10]", "a []"]);
+      await Promise.resolve();
+      // b goes past a's text as it is now, and c, whose mark didn't move, past both.
+      expect(decorate.log).toEqual(["b [10]", "a []", "b [11]", "c [11,21]"]);
+
+      // Text that didn't move tells nothing, and a later run's text never moves an earlier one's.
+      decorate.log.length = 0;
+      runner.change(bar("a", 11));
+      runner.change(bar("c", 31));
+      await Promise.resolve();
+      expect(decorate.log).toEqual(["a []", "c [11,21]"]);
+
+      // Letting go is moving too: the runs after it are placed again without it.
+      decorate.log.length = 0;
+      runner.leave();
+      void runner.exit([input("a", 11)]);
+      await Promise.resolve();
+      expect(decorate.log).toEqual(["b []", "c [21]"]);
     });
   });
 

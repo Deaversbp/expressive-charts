@@ -531,7 +531,7 @@ One mark, described the same way whoever drew it. In chart pixels, with y pointi
   - `center`: `Point`. Its visual centre, for tooltips, rings and labels.
   - `pivot`: `Point`. Where it's attached to the chart: a bar's baseline, a donut's centre, a line's first point.
   - `labelBounds`: `readonly Rect[] | undefined`. The boxes of the text the chart draws for the mark, so an effect's own text can keep clear of them: a bar's category and value labels, the two lines of a slice's label outside the ring, a line's end label. An empty list when the mark has none drawn now. Unset on segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#the-marks-own-labels)).
-  - `nearbyLabels`: `readonly Rect[] | undefined`. The boxes of other marks' text near this one, which an effect's text should keep clear of too: on a line, every other line's end label; on a slice, its neighbours' labels, the nearest each way round. `labelBounds` stays the mark's own. An empty list when none is near; unset when none is known: on bars, segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#other-marks-labels-nearby)).
+  - `nearbyLabels`: `readonly Rect[] | undefined`. The boxes of other marks' text near this one, which an effect's text should keep clear of too: on a line, every other line's end label; on a slice, every other slice's label, in the slices' order. `labelBounds` stays the mark's own. An empty list when none is near; unset when none is known: on bars, segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#other-marks-labels-nearby)).
   - `segments`: `readonly MarkGeometry[] | undefined`. A bar's parts, from the baseline; every bar has at least one.
 
 Build one with [`describe`](#describe).
@@ -697,8 +697,29 @@ One run's context: the only way an effect touches the screen or the clock.
 - `layer`: [`Layer`](#layer). The run's own overlay group, above the marks.
 - `icons`: [`IconSource`](#iconsource). Finds icons by name.
 - `batch`: `{ index, count }`. The mark's place among the marks of its event, for staggering.
-- `onChange(listener)`: calls `listener(mark, data?)` when the mark's geometry moves (a transition's frames, a resize, a line's reveal), until the run is cleared.
+- `onChange(listener)`: calls `listener(mark, data?)` when the mark's geometry moves (a transition's frames, a resize, a line's reveal), and when text held before this run's moved after it was placed (`texts`), until the run is cleared.
 - `previous`: `MarkGeometry | undefined`. The geometry before this update, on update runs.
+- `texts`: [`TextSpace`](#textspace) `| undefined`. Where effects' text sits on this chart or attachment, so an effect's text can keep clear of other effects' text. Our charts, `expressive()` and `fromVegaView()` always give it, and so does `testContext()`. Unset means no other text is known.
+
+#### `TextSpace`
+
+*Under the 0.x promise.*
+
+```ts
+interface TextSpace {
+  box(content: string, style: TextStyle): Rect;
+  held(): readonly Rect[];
+  hold(box: Rect | undefined): void;
+}
+```
+
+Where effects' text sits on one chart or attachment: one space for every run on its runner, so two charts' text never counts against each other. Runs start in the chart's mark order, so the first mark's text keeps its place and the next goes past it; earlier text never moves for later text ([architecture.md](architecture.md#where-effects-text-sits)).
+
+- `box(content, style)`: the box `content` takes drawn with `style`, at the overlay's text size (12.5 px), measured as the chart measures its own text, with its digits as 0s. Where there's no layout, as in jsdom, it's estimated: 0.6 em a character. It reaches 0.16 em past the text at either side, 1.05 em above its baseline and 0.25 em below it, as a mark's `labelBounds` do.
+- `held()`: the boxes held now by the runs on this runner that started before this one.
+- `hold(box)`: this run's text is at `box` from now on, until it holds another, holds `undefined`, or the run is cleared. A run's box stays while its run has finished and its text stays. When a box moves, a later run that was placed before it moved hears `onChange` again once the chart has told every mark that moved, so it can go past the text as it is now.
+
+[`delta()`](#delta) and [`label()`](#label) go past the boxes held before them, and hold the box where their text ends, risen into place. An effect that draws text of its own can do the same; one that ignores `texts` works as before.
 
 #### `TransitionContext`
 
@@ -1323,7 +1344,7 @@ interface TraceOptions
 delta<D = unknown>(options?: DeltaOptions<D>): DataEffect<D>
 ```
 
-A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label and any other line's beside it, outside a slice's label. It keeps clear of the mark's own labels (`labelBounds`) and other marks' near it (`nearbyLabels`). It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until its chart's next update clears it, whether or not that update changes its mark, following the mark as it moves. `data.previous` is the values the last update gave, so an update that replaces one still moving says "+1", not the change from part way. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
+A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label and any other line's beside it, outside a slice's label. It keeps clear of the mark's own labels (`labelBounds`), other marks' near it (`nearbyLabels`), and the text other effects on the chart placed before it ([`texts`](#textspace)), checking its own text's box: the second of two lines' changes goes past the first's. It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until its chart's next update clears it, whether or not that update changes its mark, following the mark as it moves. `data.previous` is the values the last update gave, so an update that replaces one still moving says "+1", not the change from part way. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
 
 The text goes in the overlay, which screen readers don't read: a page that relies on it says the same in its table or its announcement. On a line chart, `update` runs on the points whose values changed too, so a change meant for the line goes in [`only()`](#only) with a filter on the mark's length:
 
@@ -1355,7 +1376,7 @@ A `value` or `format` that isn't a function throws a `TypeError`, and a bad `col
 label<D = unknown>(text: (data: MarkData<D>, mark: MarkGeometry) => string | undefined, options?: LabelOptions): DataEffect<D>
 ```
 
-A data effect, usually for `decorate`: text worked out from the mark's own data, past the end of the mark, as `delta` places it ([architecture.md](architecture.md#delta-and-label)). `text` returns the words, or `undefined` or `""` for none: the last value minus the first on a slope, a step's own signed value, or a field such as `vsLastMonth`. It's typed by the rows it reads, as [`defineDataEffect<D>`](#definedataeffect) is, so a `label` for one kind of row is a type error on a chart of another. It rises into place as `delta` does, then follows every change, its text worked out again from the new data. Its end state is the text in place.
+A data effect, usually for `decorate`: text worked out from the mark's own data, past the end of the mark, as `delta` places it, clear of other effects' text too ([architecture.md](architecture.md#delta-and-label)). `text` returns the words, or `undefined` or `""` for none: the last value minus the first on a slope, a step's own signed value, or a field such as `vsLastMonth`. It's typed by the rows it reads, as [`defineDataEffect<D>`](#definedataeffect) is, so a `label` for one kind of row is a type error on a chart of another. It rises into place as `delta` does, then follows every change, its text worked out again from the new data. Its end state is the text in place.
 
 As with `delta`, the text isn't read by screen readers, and on a line chart `decorate` runs on the points too, so a label meant for the line goes in [`only()`](#only):
 
@@ -1907,6 +1928,7 @@ The [shared options](#chartoptionsd), and:
 
   `update({ hover })` changes it at once: a hover held ends, and focus moves to the nearest stop of the new kind, with its ring, without hovering it. Anything else throws a `TypeError`, and `update()` rejects it.
 - `tooltip`: `boolean | ((d: D, point?: { series: string }) => string)`. As on every chart. With `hover: "point"` a function is given the point's series too, `(d, { series })`, for the point's text and description; with `"x"` it's given the row alone.
+- `room`: `number`. Default 0. Px the layout keeps clear to the right of the end labels, or of the lines' ends with `labels: false`, for text an effect draws past them, such as a `delta` past a line's end label: the plot is that much narrower, and the end labels stay beside it. 0 lays out as without it. Two lines' changes side by side past their end labels take more than one: the season page's need `room: 60` at 1,000 px. A line's text that rises above the plot isn't kept clear. Anything but a number of px, 0 or more, throws a `RangeError`, and `update({ room })` lays the chart out again.
 
 A time axis has ticks on second, minute, hour, day, week, month and year boundaries, each worded for its level in the page's locale ("2026", "Apr", "Feb 8", "3:00 PM"). The chart is 300 px high. `dim` does nothing with `hover: "x"`, since nothing dims.
 
@@ -2770,6 +2792,7 @@ interface TestContextOptions
 - `icons`: `readonly Icon[]`. What `ctx.icons` finds.
 - `batch`: `{ index, count }`. Default: the only one.
 - `previous`: `MarkGeometry`. The geometry before an update.
+- `held`: `readonly Rect[]`. The boxes other effects' text holds, as `texts.held()` gives them: the runs that started before this one. Default none.
 
 #### `TestContext`
 
@@ -2782,8 +2805,9 @@ interface TestContext extends EffectContext
 An [`EffectContext`](#effectcontext) whose `motion` is a [`Motion`](#motion-type), `clock` a [`ManualClock`](#manualclock), `layer` a [`RecordingLayer`](#recordinglayer) and `mark` a [`RecordingMark`](#recordingmark), and:
 
 - `abort()`: aborts the run, as the runner does on leave or a re-trigger.
-- `clear()`: the runner's cleanup after `effect.clear(ctx)`: aborts, empties the layer, resets the mark and drops `onChange` listeners.
+- `clear()`: the runner's cleanup after `effect.clear(ctx)`: aborts, empties the layer, resets the mark, drops `onChange` listeners and lets go of the run's text.
 - `change(mark, data?)`: tells `onChange` listeners the mark moved, as the runner does on every frame of a transition.
+- `texts`: `TextSpace & { readonly holding: Rect | undefined }`. A [`TextSpace`](#textspace) as a chart's runner gives it, with boxes estimated as in jsdom (0.6 em a character), `held()` giving the options' `held`, and `holding` the box the run holds now: undefined until it holds one, and once it holds `undefined` or is cleared.
 
 #### `play()`
 

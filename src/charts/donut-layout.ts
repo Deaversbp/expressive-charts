@@ -179,32 +179,13 @@ export function joinedStarts(values: readonly number[]): number[] {
 }
 
 /**
- * Draws the slices in a frame, in the ring's order, each with its label (placeSlice) and its
- * neighbours' labels as `nearbyLabels`: the nearest label each way round, passing over slices that
- * have none, and one label once when it's the nearest both ways.
+ * Draws the slices in a frame, in the ring's order, each with its label (placeSlice) and every other
+ * slice's label as `nearbyLabels`, in the ring's order: they all sit round the one ring, and text
+ * that goes past a neighbour's label can meet the next one round.
  */
 export function placeSlices<D>(frame: DonutFrame, states: readonly SliceState<D>[], labels: readonly (SliceLabel | undefined)[], measure: Measure): DonutSlice<D>[] {
-  const boxes = labels.map((label) => (label ? labelBoxes(label, measure) : undefined));
-  const labelled = boxes.flatMap((box, i) => (box ? [i] : []));
-  const first = labelled[0];
-  const last = labelled[labelled.length - 1];
-  // The nearest slice with a label before each slice, and after it, going round past the ends.
-  const before: (number | undefined)[] = [];
-  const after: (number | undefined)[] = [];
-  let seen: number | undefined;
-  for (let i = 0; i < states.length; i++) {
-    before[i] = seen ?? (last === i ? undefined : last);
-    if (boxes[i]) seen = i;
-  }
-  seen = undefined;
-  for (let i = states.length - 1; i >= 0; i--) {
-    after[i] = seen ?? (first === i ? undefined : first);
-    if (boxes[i]) seen = i;
-  }
-  return states.map((state, i) => {
-    const sides = before[i] === after[i] ? [before[i]] : [before[i], after[i]];
-    return placeSlice(frame, state, labels[i], measure, sides.flatMap((j) => (j === undefined ? [] : boxes[j]!)));
-  });
+  const boxes = labels.map((label) => (label ? labelBoxes(label, measure) : []));
+  return states.map((state, i) => placeSlice(frame, state, labels[i], measure, boxes.flatMap((box, j) => (j === i ? [] : box))));
 }
 
 /**

@@ -41,7 +41,8 @@ import {
   wiggle,
   type AnyMarkEffect,
   type MarkData,
-  type MarkGeometry
+  type MarkGeometry,
+  type Rect
 } from "./index";
 import { drawnInGaps, flush, type TestContext } from "./core/testing";
 import { cleat, soccerBall } from "./icons/sport";
@@ -1033,6 +1034,22 @@ describe.each(Object.entries(sources))("effects on marks from %s", (_source, mar
         const boxes = [...(mark.labelBounds ?? []), ...(mark.nearbyLabels ?? [])];
         const inside = boxes.some((box) => at.x >= box.x && at.x <= box.x + box.width && at.y >= box.y && at.y <= box.y + box.height);
         expect(inside, mark.key).toBe(false);
+      }
+    }
+  });
+
+  it("delta and label put each mark's text outside every other run's, holding where it is", () => {
+    for (const effect of [delta(), label(() => "+0.25")]) {
+      // One space for every mark, as on a chart: each run in turn, in the marks' order, with the boxes held before it.
+      const held: Rect[] = [];
+      for (const mark of marksOf()) {
+        const ctx = testContext({ held });
+        effect.end(mark, updated(), ctx);
+        const [text] = ctx.layer.drawn.filter((drawn) => drawn.kind === "text");
+        const box = ctx.texts.box(text!.content, text!.style);
+        expect(ctx.texts.holding, mark.key).toEqual(box);
+        for (const other of held) expect(box.x < other.x + other.width - 1e-6 && other.x < box.x + box.width - 1e-6 && box.y < other.y + other.height - 1e-6 && other.y < box.y + box.height - 1e-6, mark.key).toBe(false);
+        held.push(box);
       }
     }
   });

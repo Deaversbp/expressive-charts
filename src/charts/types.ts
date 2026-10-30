@@ -303,6 +303,13 @@ export interface LineChartOptions<D> extends ChartOptions<D> {
    * "x" it's given the row alone.
    */
   readonly tooltip?: boolean | ((d: NoInfer<D>, point?: { readonly series: string }) => string);
+  /**
+   * Px the layout keeps clear to the right of the end labels, or of the lines' ends with `labels:
+   * false`, for text an effect draws past them: a `delta` past a line's end label. The plot is that
+   * much narrower, and the end labels stay beside it. Default 0. Anything but a number of px, 0 or
+   * more, throws a RangeError, and update({ room }) lays the chart out again.
+   */
+  readonly room?: number;
 }
 
 export interface LineChart<D> extends Chart<D, LineChartOptions<D>> {

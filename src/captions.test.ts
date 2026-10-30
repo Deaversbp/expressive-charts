@@ -3,6 +3,8 @@
 // And how far past the chart's edge the text reaches on a chart 320 px wide. This test brings charts
 // and effects together, so it lives beside src/index.ts, the only module allowed to.
 
+import { estimatedBox } from "./core/text-box";
+import { captionPlace } from "./effects/caption";
 import { barChart, delta, describe as build, donutChart, expressive, label, lineChart, only, type MarkData, type MarkGeometry, type Rect } from "./index";
 
 interface Player {
@@ -129,7 +131,7 @@ describe("delta and label on our charts", () => {
     clearOfLabels(svg, chart.marks());
   });
 
-  it("puts a line's change past its end label, and a label meant for the line in only()", async () => {
+  it("puts a line's label past its end label, its change past that label's text, and a label meant for the line in only()", async () => {
     // The last leg is flat, so the line heads straight at its end label.
     const weeks: Week[] = [
       { week: 1, goals: 1 },
@@ -154,7 +156,9 @@ describe("delta and label on our charts", () => {
     expect(caption().x).toBeCloseTo(end().x + end().width + 6, 2);
     await chart.update({ data: weeks.map((w) => (w.week >= 3 ? { ...w, goals: 7 } : w)) });
     expect(drawn(svg, "goals").map((text) => text.text)).toEqual(["4 weeks", "+2"]);
-    expect(drawn(svg, "goals")[1]!.x).toBeCloseTo(end().x + end().width + 6, 2);
+    // The decoration started first, so it keeps its place: the change goes 6 px past its text's box, as the chart measures it.
+    expect(caption().x).toBeCloseTo(end().x + end().width + 6, 2);
+    expect(drawn(svg, "goals")[1]!.x).toBeCloseTo(caption().x + 7 * CHARACTER + 0.16 * 12.5 + 6, 2);
     // Nothing on the points.
     expect(svg.querySelectorAll(`.ec-run[data-key^="goals@"] text`)).toHaveLength(0);
   });
@@ -200,8 +204,8 @@ describe("delta and label clear of other marks' labels", () => {
     clearOfLabels(chart.element, chart.marks());
   });
 
-  it("keeps a slice's change clear of its neighbours' labels, and one whose label is dropped past the label its way along the ring meets", async () => {
-    // Woodwork is too narrow for a label: its way runs along the ring at 12 o'clock, rightwards, into Goal's share.
+  it("keeps a slice's change clear of the other slices' labels, and one whose label is dropped past the labels its text meets along the ring", async () => {
+    // Woodwork is too narrow for a label: its way runs along the ring at 12 o'clock, rightwards, into Goal's share, under Goal's name.
     const shots = [
       { outcome: "Goal", shots: 35 },
       { outcome: "Saved", shots: 20 },
@@ -213,14 +217,17 @@ describe("delta and label clear of other marks' labels", () => {
       const chart = donutChart(container(), { label: "Shots", data: shots, category: "outcome", value: "shots", width, motion: "off", on: { decorate: label(() => "+12.5%") } });
       const marks = chart.marks();
       expect(marks.map((mark) => mark.labelBounds!.length)).toEqual([2, 2, 2, 2, 0]);
-      expect(byKey(marks, "Woodwork").nearbyLabels).toEqual([...byKey(marks, "Blocked").labelBounds!, ...byKey(marks, "Goal").labelBounds!]);
+      expect(byKey(marks, "Woodwork").nearbyLabels).toEqual(marks.flatMap((mark) => mark.labelBounds!));
       clearOfLabels(chart.element, marks);
     }
     const narrow = donutChart(container(), { label: "Shots", data: shots, category: "outcome", value: "shots", width: 320, motion: "off", on: { decorate: label(() => "+12.5%") } });
     const [woodwork] = drawn(narrow.element, "Woodwork");
-    const [, share] = byKey(narrow.marks(), "Goal").labelBounds!;
+    const [name, share] = byKey(narrow.marks(), "Goal").labelBounds!;
     expect(woodwork!.anchor).toBe("start");
-    expect(woodwork!.x).toBeCloseTo(share!.x + share!.width + 6, 2);
+    // Its way passes through Goal's share and more than 6 px under Goal's name, but its text would come within 6 px of the name:
+    // so its box, as the chart measures it, goes 6 px past the name's right side, past the share too.
+    expect(woodwork!.x).toBeCloseTo(name!.x + name!.width + 6 + 0.16 * 12.5, 2);
+    expect(woodwork!.x).toBeGreaterThan(share!.x + share!.width + 6);
   });
 
   it("puts a negative column's change past its value label and its name, which no longer meet, with room too", async () => {
@@ -279,6 +286,143 @@ describe("label from a field the chart doesn't plot", () => {
     expect(texts(chart.element)).toEqual([["+3"], ["-1"]]);
     await chart.update({ data: form.map((row) => ({ ...row, vsLastMonth: row.name === "Okafor" ? "+5" : row.vsLastMonth })) });
     expect(texts(chart.element)).toEqual([["+5"], ["-1"]]);
+  });
+});
+
+describe("delta and label clear of other effects' text (texts)", () => {
+  interface Match {
+    week: number;
+    goals: number;
+    xg: number;
+  }
+  // Goals and xG end 3 px apart and climb the same way, so their changes would meet past the end labels.
+  const matches: Match[] = [
+    { week: 1, goals: 1, xg: 1.4 },
+    { week: 2, goals: 2, xg: 2.3 },
+    { week: 3, goals: 4, xg: 4.1 },
+    { week: 4, goals: 5, xg: 5.2 }
+  ];
+  const lineOnly = (mark: MarkGeometry): boolean => mark.length > 0;
+  /** The caption's place alone, with nothing held before it: its text's own box, as jsdom estimates it. */
+  const alone = (mark: MarkGeometry, content: string) => captionPlace(mark, { held: [], box: (style) => estimatedBox(content, style) });
+
+  it.each([320, 1000])("puts the second of two lines' changes past the first's, and both past both end labels, at %i px, through a change and a resize", async (width) => {
+    const chart = lineChart<Match>(container(), { label: "Goals vs xG", data: matches, x: "week", series: ["goals", "xg"], width, motion: "off", on: { update: only(lineOnly, delta()) } });
+    const check = (): void => {
+      const [goalsText] = drawn(chart.element, "goals");
+      const [xgText] = drawn(chart.element, "xg");
+      const [goals, xg] = [byKey(chart.marks(), "goals"), byKey(chart.marks(), "xg")];
+      // Goals started first: it keeps the place it has alone. xG's would be on it, and goes past it.
+      expect(goalsText!.x).toBeCloseTo(alone(goals, goalsText!.text).at.x, 2);
+      expect(goalsText!.y).toBeCloseTo(alone(goals, goalsText!.text).at.y, 2);
+      const place = alone(xg, xgText!.text);
+      expect(overlaps(drawn(chart.element, "goals")[0]!.box, { ...xgText!.box, x: xgText!.box.x - xgText!.x + place.at.x, y: xgText!.box.y - xgText!.y + place.at.y })).toBe(true);
+      expect(overlaps(goalsText!.box, xgText!.box)).toBe(false);
+      clearOfLabels(chart.element, chart.marks());
+    };
+    await chart.update({ data: matches.map((m) => (m.week === 4 ? { ...m, goals: 6, xg: 6.1 } : m)) });
+    expect(drawn(chart.element, "xg").map((text) => text.text)).toEqual([`+${(0.9).toLocaleString()}`]);
+    check();
+    // A resize moves both lines: each change is placed again, goals' first.
+    await chart.update({ width: width + 80 });
+    check();
+    await chart.update({ data: matches.map((m) => (m.week === 4 ? { ...m, goals: 7, xg: 7.2 } : m)) });
+    check();
+  });
+
+  /** The season page's matchweeks: demo/season.ts's seeded season, its goals and xG so far. */
+  function season(): { week: number; totalGoals: number; totalXg: number }[] {
+    let seed = 670;
+    const random = (): number => (seed = (seed * 48271) % 2147483647) / 2147483647;
+    const weeks: { week: number; totalGoals: number; totalXg: number }[] = [];
+    let totalGoals = 0;
+    let totalXg = 0;
+    for (let i = 0; i < 38; i++) {
+      const xg = Math.round((0.6 + random() * 1.9) * 10) / 10;
+      const lambda = xg * (i < 12 ? 0.8 : i < 26 ? 1.25 : 0.8);
+      let goals = -1;
+      for (let p = 1; p > Math.exp(-lambda); goals++) p *= random();
+      // Each goal's scorer, and the shots: draws the page makes that this test doesn't need.
+      for (let draw = 0; draw <= goals; draw++) random();
+      totalGoals += goals;
+      totalXg = Math.round((totalXg + xg) * 10) / 10;
+      weeks.push({ week: i + 1, totalGoals, totalXg });
+    }
+    return weeks;
+  }
+
+  it.each([
+    [320, 31],
+    [1000, 17]
+  ])("keeps the season page's goals and xG changes inside the chart's width, clear of each other and of both end labels, with room: 60, at %i px", async (width, rise) => {
+    const weeks = season();
+    // The page's own example: "Season to date: 43 goals +2, 39.7 xG +1.8."
+    expect(weeks[24]).toEqual({ week: 25, totalGoals: 43, totalXg: 39.7 });
+    const height = 270;
+    const chart = lineChart(container(), {
+      label: "Goals vs expected goals, season to date",
+      data: weeks.slice(0, 24),
+      x: "week",
+      series: ["totalGoals", "totalXg"],
+      labels: (value, series) => (series === "totalXg" ? `${value.toFixed(1)} xG` : `${Math.round(value)} goals`),
+      width,
+      height,
+      room: 60,
+      motion: "off",
+      on: { update: only(lineOnly, delta()) }
+    });
+    let both = 0;
+    let above = 0;
+    for (let now = 25; now <= 38; now++) {
+      await chart.update({ data: weeks.slice(0, now) });
+      const changes = [...drawn(chart.element, "totalGoals"), ...drawn(chart.element, "totalXg")];
+      if (changes.length === 2) {
+        both++;
+        expect(overlaps(changes[0]!.box, changes[1]!.box), `matchweek ${now}`).toBe(false);
+      }
+      for (const { box, text } of changes) {
+        expect(box.x >= 0 && box.x + box.width <= width && box.y + box.height <= height, `matchweek ${now} "${text}"`).toBe(true);
+        above = Math.max(above, -box.y);
+      }
+      clearOfLabels(chart.element, chart.marks());
+    }
+    // The matchweeks where both change: on main their changes met in 5 of them at 1,000 px and 8 at 320 (M10 step 6).
+    expect(both).toBe(9);
+    // Where a line ends at the top of the plot heading up, its text rises past the end labels above the chart's top, into the
+    // page above it: room keeps space only to the right. On main the goals line's change alone rose 11.7 px at 320 and 5.4 at
+    // 1,000; xG's, past it, rises further.
+    expect(above).toBeGreaterThan(0);
+    expect(above).toBeLessThan(rise);
+  });
+
+  describe("a slice whose label is dropped, on 1,500 random donuts", () => {
+    // As M10 step 3's probe: 2 to 9 slices of 1 to 100, 240 to 800 px wide, each with a 6-character change. Main's code put 61
+    // of the 963 slices whose label was dropped on another slice's label (M10 step 3's own probe: 63 of 592), and 275 changes on
+    // another's change.
+    let seed = 7;
+    const random = (): number => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+    const donuts = Array.from({ length: 1500 }, () => {
+      const count = 2 + Math.floor(random() * 8);
+      const data = Array.from({ length: count }, (_, i) => ({ outcome: `Cat ${i}`, shots: 1 + Math.floor(random() * 100) }));
+      return { data, width: 240 + Math.floor(random() * 560) };
+    });
+
+    it.each([0, 1, 2])("puts its text on no other slice's label, nor any change on another: donuts %i of 3", (third) => {
+      let dropped = 0;
+      for (const { data, width } of donuts.slice(third * 500, third * 500 + 500)) {
+        const chart = donutChart(container(), { label: "Shots", data, category: "outcome", value: "shots", width, motion: "off", on: { decorate: label(() => "+12.5%") } });
+        const marks = chart.marks();
+        const texts = marks.map((mark) => drawn(chart.element, mark.key)[0]!.box);
+        marks.forEach((mark, i) => {
+          if (mark.labelBounds!.length === 0) dropped++;
+          const others = marks.filter((other) => other !== mark);
+          for (const box of others.flatMap((other) => other.labelBounds!)) expect(overlaps(texts[i]!, box), `${width} px, ${mark.key}`).toBe(false);
+          for (const other of others) expect(overlaps(texts[i]!, texts[marks.indexOf(other)]!), `${width} px, ${mark.key} on ${other.key}`).toBe(false);
+        });
+        chart.destroy();
+      }
+      expect(dropped).toBe([299, 330, 334][third]);
+    });
   });
 });
 

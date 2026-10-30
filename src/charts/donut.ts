@@ -139,6 +139,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
   const find = (key: string): SliceRecord<D> | undefined => records.get(key) ?? leaving.get(key);
   const surface = svgSurface({
     overlay: runs,
+    measure,
     // Looked up on each call, so the handle follows the slice's record.
     mark: (key) => ({
       set: (style) => {

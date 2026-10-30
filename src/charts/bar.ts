@@ -144,6 +144,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   const find = (key: string): MarkRecord<D> | undefined => records.get(key) ?? leaving.get(key);
   const surface = svgSurface({
     overlay,
+    measure,
     // Looked up on each call, so the handle follows the mark's record.
     mark: (key) => ({
       set: (style) => {

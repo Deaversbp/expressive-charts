@@ -67,4 +67,23 @@ describe("testContext", () => {
     expect(ctx.mark.style).toEqual({});
     expect(ctx.signal.aborted).toBe(true);
   });
+
+  it("gives a text space as a chart's runner does: boxes estimated as in jsdom, the boxes held before it, and what it holds until cleared", () => {
+    const ctx = testContext();
+    // 0.6 em a character at the overlay's 12.5 px, and past the text at either side and above and below its baseline.
+    expect(ctx.texts.box("+12", { at: { x: 100, y: 50 }, anchor: "middle" })).toEqual({ x: 100 - 11.25 - 2, y: 50 - 1.05 * 12.5, width: 22.5 + 4, height: 1.3 * 12.5 });
+    expect(ctx.texts.held()).toEqual([]);
+    expect(ctx.texts.holding).toBeUndefined();
+    const box = { x: 1, y: 2, width: 3, height: 4 };
+    ctx.texts.hold(box);
+    expect(ctx.texts.holding).toEqual(box);
+    ctx.texts.hold(undefined);
+    expect(ctx.texts.holding).toBeUndefined();
+    ctx.texts.hold(box);
+    ctx.clear();
+    expect(ctx.texts.holding).toBeUndefined();
+
+    const before = [{ x: 10, y: 20, width: 30, height: 16 }];
+    expect(testContext({ held: before }).texts.held()).toEqual(before);
+  });
 });

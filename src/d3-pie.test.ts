@@ -383,6 +383,32 @@ describe("a D3 pie read by tag, with no geometry", () => {
     expectSlices(byTag(d3Ring(padded, arc<Slice>().innerRadius(0).outerRadius(OUTER)).paths).marks(), arcs(narrower, { inner: 0 }));
   });
 
+  it("keeps a ring's clockwise order with a sliver whose inner arc rounds away, and with a slice of half the ring", () => {
+    // In data order, Saved is half the ring from 72°, where d3's rounding leaves its arc's own centre a third of a px out.
+    for (const [rows, sort] of [
+      [
+        [
+          { outcome: "Sliver", shots: 1 },
+          { outcome: "Saved", shots: 300_000 },
+          { outcome: "Off target", shots: 700_000 }
+        ],
+        "value"
+      ],
+      [
+        [
+          { outcome: "Goal", shots: 20 },
+          { outcome: "Saved", shots: 50 },
+          { outcome: "Off target", shots: 30 }
+        ],
+        "none"
+      ]
+    ] as const) {
+      const slices = layout([...rows], sort);
+      expectSlices(byTag(d3Ring(slices).paths).marks(), arcs(slices));
+      document.body.replaceChildren();
+    }
+  });
+
   it("reads a whole ring as describe.arc's whole turn, and a whole disc as a circle, a closed shape, as before", () => {
     const [whole] = layout([{ outcome: "Goal", shots: 58 }]);
     expectSlices(byTag(d3Ring([whole!]).paths).marks(), arcs([whole!]));

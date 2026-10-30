@@ -32,9 +32,40 @@ describe("sliceOf", () => {
   it("reads a donut's padded slices as slices while their sides are within 0.5 px of radii, and as nothing past that", () => {
     const shape = arc<{ startAngle: number; endAngle: number; padAngle: number }>().innerRadius(70).outerRadius(116);
     const padded = (pad: number) => pie<number>().padAngle(pad)([58, 112, 149, 87]).map((slice) => read(shape(slice)!));
-    // 0.002 rad leaves a gap of 0.2 px at the outer edge; 0.01, 1.2 px.
-    expect(padded(0.002).every((spec) => spec !== undefined)).toBe(true);
-    expect(padded(0.01).every((spec) => spec === undefined)).toBe(true);
+    // 0.01 rad leaves a gap of 1.2 px at the outer edge, its sides within 0.5 px of radii; 0.04, 4.6 px.
+    expect(padded(0.01).every((spec) => spec !== undefined)).toBe(true);
+    expect(padded(0.04).every((spec) => spec === undefined)).toBe(true);
+  });
+
+  it("reads a donut's slice so thin that its inner arc rounds away to a point about the donut's centre", () => {
+    // d3.arc() writes 3 decimals, so the inner arc of a slice one millionth of the ring starts and ends at one point.
+    const [sliver] = pie<number>().sort(null)([1, 300_000, 700_000]);
+    const d = arc<{ startAngle: number; endAngle: number }>().innerRadius(70).outerRadius(116)(sliver!)!;
+    expect(d).toMatch(/A70,70,0,0,0,0,-70Z$/);
+    const spec = read(d)!;
+    expect(Math.hypot(spec.cx, spec.cy)).toBeLessThan(0.01);
+    expect([spec.inner, spec.outer]).toEqual([70, 116]);
+    // A pie's sliver has its sides meet at the centre.
+    expect(read(arc<{ startAngle: number; endAngle: number }>().innerRadius(0).outerRadius(116)(sliver!)!)).toMatchObject({ cx: 0, cy: 0, inner: 0, outer: 116 });
+  });
+
+  it("reads whole rings and half-turn slices whatever their start, though a half turn's own centre is unsure by d3's rounding", () => {
+    const shape = arc<{ startAngle: number; endAngle: number }>().outerRadius(116);
+    for (let degrees = 0; degrees < 360; degrees += 1.7) {
+      const start = (degrees * Math.PI) / 180;
+      for (const [inner, turn] of [
+        [70, TURN],
+        [70, Math.PI],
+        [0, Math.PI]
+      ] as const) {
+        const spec = read(shape.innerRadius(inner)({ startAngle: start, endAngle: start + turn })!);
+        expect(spec, `${inner} ${turn} from ${degrees}°`).toBeDefined();
+        expect(Math.hypot(spec!.cx, spec!.cy)).toBeLessThan(0.01);
+        expect(Math.abs(spec!.inner - inner) + Math.abs(spec!.outer - 116)).toBeLessThan(0.01);
+        expect(Math.abs(spec!.start - start) * 116).toBeLessThan(0.01);
+        expect(Math.abs(spec!.end - spec!.start - turn) * 116).toBeLessThan(0.01);
+      }
+    }
   });
 
   it("moves the slice through its matrix: turned, scaled and flipped, and nothing through one that stretches or skews", () => {

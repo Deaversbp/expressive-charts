@@ -39,13 +39,15 @@ export interface ExpressiveOptions<D> {
   readonly value?: (datum: D, element: Element) => number | string | boolean | null | undefined;
   /**
    * Describes every mark yourself, instead of the adapter reading them. Without it, a `<rect>` is a
-   * bar (rects that share a key are its segments), a `<circle>` a point (an ellipse under a transform
-   * that stretches it unevenly or skews it), and a `<path>`, `<line>`, `<polyline>`, `<polygon>` or
-   * `<ellipse>` a shape, read with `describe.shape` from its outline, an open one with its stroke
-   * width as drawn. Each is read through its transforms, and a shape SVG wouldn't draw (a path with no
-   * path data) isn't a mark until it draws something. Any other element (`<text>`, `<g>`, `<use>`,
-   * `<image>`) throws, naming its tag. Use this for those, or to say more than an element
-   * shows: a pie's slice as `describe.arc`, which goes round the pie's centre, or a line by its points.
+   * bar (rects that share a key are its segments; one of its own turned or skewed is a shape), a
+   * `<circle>` a point (an ellipse under a transform that stretches it unevenly or skews it), a
+   * `<path>` that draws a ring's slice that slice, read with `describe.arc`, and any other `<path>`, a
+   * `<line>`, `<polyline>`, `<polygon>` or `<ellipse>` a shape, read with `describe.shape` from its
+   * outline, an open one with its stroke width as drawn. Each is read through its transforms, and a
+   * shape SVG wouldn't draw (a path with no path data) isn't a mark until it draws something. Any
+   * other element (`<text>`, `<g>`, `<use>`, `<image>`) throws, naming its tag. Use this for those,
+   * or to say more or other than an element shows: a padded donut's slice as `describe.arc`, which
+   * goes round the donut's centre, or a line by its points.
    * Called once per mark, with its first element in document order, in the coordinates of the marks'
    * nearest common ancestor. Build it with `describe` and give it the key passed in.
    */

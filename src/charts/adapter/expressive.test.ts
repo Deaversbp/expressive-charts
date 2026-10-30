@@ -13,6 +13,7 @@ import {
   type MotionMode,
   type Sample
 } from "../../core";
+import { parseTransform } from "../../core/geometry";
 import { createRegistry, type PresetFactory } from "../../core/registry";
 import { measurePath } from "../../core/testing";
 import type { ChartEnv } from "../bar";
@@ -2665,6 +2666,245 @@ describe("expressive: circles and shapes", () => {
     expect(overlayOf(svg).querySelector(".ec-focus-ring")!.getAttribute("d")).toBe(fx.marks()[2]!.outline.d);
   });
 
+  describe("turned rects", () => {
+    /** The four corners' path, as a <rect> draws it, with its rounded corners' radii. */
+    const rectPath = (w: number, h: number, rx = 0, ry = rx): string =>
+      rx > 0
+        ? `M${rx},0L${w - rx},0A${rx},${ry} 0 0 1 ${w},${ry}L${w},${h - ry}A${rx},${ry} 0 0 1 ${w - rx},${h}L${rx},${h}A${rx},${ry} 0 0 1 0,${h - ry}L0,${ry}A${rx},${ry} 0 0 1 ${rx},0Z`
+        : `M0,0L${w},0L${w},${h}L0,${h}Z`;
+
+    it("reads a <rect> turned or skewed as the shape describe.shape gives its outline, moved, with its rounded corners", () => {
+      const { elements } = host((plot) => [
+        ["turned", el("rect", { x: 0, y: 0, width: 60, height: 20, transform: "translate(100,50) rotate(30)" }, plot)],
+        ["skewed", el("rect", { width: 40, height: 30 }, el("g", { transform: "translate(200,50) skewX(20)" }, plot))],
+        ["rounded", el("rect", { width: 60, height: 20, rx: 6, transform: "translate(300,50) rotate(-45)" }, plot)],
+        ["ry alone", el("rect", { width: 60, height: 20, ry: 4, transform: "translate(100,150) rotate(10)" }, plot)],
+        ["capped", el("rect", { width: 60, height: 20, rx: 50, ry: 8, transform: "translate(200,150) skewY(15)" }, plot)]
+      ]);
+      const { fx } = setup<string>(elements, named);
+      // In the margin group's coordinates, the overlay's.
+      const moved = (transform: string) => parseTransform(transform);
+      expect(fx.marks().map(seen)).toEqual(
+        [
+          build.shape({ key: "turned", d: rectPath(60, 20), matrix: moved("translate(100,50) rotate(30)") }),
+          build.shape({ key: "skewed", d: rectPath(40, 30), matrix: moved("translate(200,50) skewX(20)") }),
+          // A missing rx takes ry, and each is at most half its side.
+          build.shape({ key: "rounded", d: rectPath(60, 20, 6), matrix: moved("translate(300,50) rotate(-45)") }),
+          build.shape({ key: "ry alone", d: rectPath(60, 20, 4), matrix: moved("translate(100,150) rotate(10)") }),
+          build.shape({ key: "capped", d: rectPath(60, 20, 30, 8), matrix: moved("translate(200,150) skewY(15)") })
+        ].map(seen)
+      );
+      expect(fx.marks()[0]).toMatchObject({ length: 0, outline: { closed: true } });
+      expect(fx.marks()[0]!.center.x).toBeCloseTo(100 + 30 * Math.cos(Math.PI / 6) - 10 * Math.sin(Math.PI / 6), 9);
+    });
+
+    it("keeps document order with a turned rect among bars, which are still bars", () => {
+      const { elements } = host((plot) => [
+        ["low", el("rect", { x: 0, y: 100, width: 50, height: 20 }, plot)],
+        ["turned", el("rect", { width: 40, height: 20, transform: "translate(200,50) rotate(20)" }, plot)],
+        ["high", el("rect", { x: 0, y: 10, width: 80, height: 20 }, plot)]
+      ]);
+      const { fx } = setup<string>(elements, { ...named, keyboard: true });
+      expect(fx.marks().map((mark) => mark.key)).toEqual(["low", "turned", "high"]);
+      expect(fx.marks()[0]).toMatchObject({ start: { x: 0, y: 110 }, end: { x: 50, y: 110 } });
+      expect(fx.marks()[1]).toMatchObject({ length: 0, outline: { closed: true } });
+      fx.focus("low");
+      key(elements[0]!, "ArrowRight");
+      expect(document.activeElement).toBe(elements[1]);
+    });
+
+    it("throws a TypeError for a turned rect that shares its key: a bar's segments are upright", () => {
+      const { plot } = host(() => []);
+      const rects = ["", "rotate(10)"].map((transform, i) =>
+        Object.assign(el("rect", { x: 0, y: i * 30, width: 20, height: 20, ...(transform ? { transform } : {}) }, plot), { __data__: "Okafor" })
+      );
+      expect(() => setup<string>(rects, { ...named, segment: (_d, element) => element.getAttribute("y")! })).toThrow(
+        new TypeError(
+          'expressive: the <rect> of "Okafor" is rotated or skewed, so it isn\'t an upright bar\'s segment. A rect turned on its own is a shape, a mark of its own: give each its own key, or describe the bar with the geometry option.'
+        )
+      );
+    });
+
+    it("reads a rect again on refresh() as it turns, and as a bar once it's upright", () => {
+      const { elements } = host((plot) => [["bar", el("rect", { x: 0, y: 10, width: 80, height: 20 }, plot)]]);
+      const story = recorder();
+      const { fx } = setup<string>(elements, { ...named, on: { update: story.effect } });
+      const bar = fx.marks()[0]!;
+      elements[0]!.setAttribute("transform", "rotate(90)");
+      fx.refresh();
+      // A quarter turn keeps it upright: still a bar.
+      expect(fx.marks()[0]!.length).toBe(80);
+      elements[0]!.setAttribute("transform", "rotate(45)");
+      fx.refresh();
+      expect(seen(fx.marks()[0]!)).toEqual(seen(build.shape({ key: "bar", d: "M0,10L80,10L80,30L0,30Z", matrix: parseTransform("rotate(45)") })));
+      elements[0]!.removeAttribute("transform");
+      fx.refresh();
+      expect(seen(fx.marks()[0]!)).toEqual(seen(bar));
+      // Without value, a bar that becomes a shape changes length: an update, each way.
+      expect(story.log.filter((entry) => entry.startsWith("run"))).toEqual(["run bar from 80", "run bar from 0"]);
+    });
+  });
+
+  describe("slices", () => {
+    /** describe.arc's slice, from 12 o'clock clockwise, in degrees. */
+    const slice = (key: string, cx: number, cy: number, inner: number, outer: number, start: number, end: number) =>
+      build.arc({ key, cx, cy, inner, outer, start: (start * Math.PI) / 180, end: (end * Math.PI) / 180 });
+
+    /** Every point a mark is drawn and walked by: its ends, centre and pivot, its walk, and its outline. */
+    const pointsOf = (mark: MarkGeometry) => [mark.start, mark.end, mark.center, mark.pivot, ...[0, 0.25, 0.5, 0.75, 1].map((t) => mark.path(t)), ...mark.outline.sample(64)];
+
+    /** The marks are those slices within 0.5 px: every point, and the length, thickness and bounds. */
+    function expectSlices(marks: readonly MarkGeometry[], slices: readonly MarkGeometry[]): void {
+      expect(marks.map((mark) => mark.key)).toEqual(slices.map((s) => s.key));
+      marks.forEach((mark, i) => {
+        const expected = slices[i]!;
+        const expectedPoints = pointsOf(expected);
+        const off = pointsOf(mark).map((p, j) => Math.hypot(p.x - expectedPoints[j]!.x, p.y - expectedPoints[j]!.y));
+        expect(Math.max(...off), mark.key).toBeLessThanOrEqual(0.5);
+        for (const name of ["length", "thickness"] as const) expect(Math.abs(mark[name] - expected[name]), `${mark.key} ${name}`).toBeLessThanOrEqual(0.5);
+        for (const name of ["x", "y", "width", "height"] as const) expect(Math.abs(mark.bounds[name] - expected.bounds[name]), `${mark.key} bounds`).toBeLessThanOrEqual(0.5);
+        expect(mark.outline.closed).toBe(true);
+      });
+    }
+
+    it("reads a <path> that draws a ring's slice with describe.arc: a pie's, a donut's and a whole ring, wherever the path starts and whichever way it goes", () => {
+      const at = (x: number, y: number, d: string): Record<string, string> => ({ d, transform: `translate(${x},${y})` });
+      const { elements } = host((plot) => [
+        ["pie", el("path", at(100, 100, "M0,-80A80,80 0 0 1 80,0L0,0Z"), plot)],
+        ["donut", el("path", at(300, 100, "M0,-80A80,80 0 0 1 80,0L50,0A50,50 0 0 0 0,-50Z"), plot)],
+        ["from the centre", el("path", at(100, 300, "M0,0L80,0A80,80 0 0 1 0,80Z"), plot)],
+        ["from the inside", el("path", at(300, 300, "M50,0A50,50 0 0 0 0,-50L0,-80A80,80 0 0 1 80,0Z"), plot)],
+        ["the other way", el("path", at(500, 100, "M0,-80A80,80 0 0 0 -80,0L0,0Z"), plot)],
+        ["most of it", el("path", at(500, 300, "m0 -80 a80 80 0 1 1 -80 80 h30 a50 50 0 1 0 50 -50 z"), plot)],
+        ["whole", el("path", at(700, 100, "M0,-80A80,80 0 1 1 0,80A80,80 0 1 1 0,-80M0,-50A50,50 0 1 0 0,50A50,50 0 1 0 0,-50Z"), plot)]
+      ]);
+      const { fx } = setup<string>(elements, named);
+      // Each round its own centre, in the margin group's coordinates: document order.
+      expectSlices(fx.marks(), [
+        slice("pie", 100, 100, 0, 80, 0, 90),
+        slice("donut", 300, 100, 50, 80, 0, 90),
+        slice("from the centre", 100, 300, 0, 80, 90, 180),
+        slice("from the inside", 300, 300, 50, 80, 0, 90),
+        slice("the other way", 500, 100, 0, 80, 0, -90),
+        slice("most of it", 500, 300, 50, 80, 0, 270),
+        slice("whole", 700, 100, 50, 80, 0, 360)
+      ]);
+      expect(fx.marks()[1]!.pivot).toEqual({ x: 300, y: 100 });
+    });
+
+    it("reads a slice through its transforms: turned, evenly scaled and flipped", () => {
+      const d = "M0,-80A80,80 0 0 1 80,0L50,0A50,50 0 0 0 0,-50Z";
+      const { elements } = host((plot) => [
+        ["turned", el("path", { d, transform: "translate(100,100) rotate(30)" }, plot)],
+        ["scaled", el("path", { d }, el("g", { transform: "translate(300,100) scale(1.5)" }, plot))],
+        ["flipped", el("path", { d, transform: "translate(500,100) scale(-1,1)" }, plot)]
+      ]);
+      const { fx } = setup<string>(elements, named);
+      expectSlices(fx.marks(), [slice("turned", 100, 100, 50, 80, 30, 120), slice("scaled", 300, 100, 75, 120, 0, 90), slice("flipped", 500, 100, 50, 80, 0, -90)]);
+    });
+
+    it("orders slices round one centre clockwise from 12 o'clock, whatever the document's order", () => {
+      const quarter = (from: number) => {
+        const [a, b] = [from, from + 90].map((deg) => [Math.sin((deg * Math.PI) / 180), -Math.cos((deg * Math.PI) / 180)] as const);
+        return `M${80 * a![0]},${80 * a![1]}A80,80 0 0 1 ${80 * b![0]},${80 * b![1]}L${50 * b![0]},${50 * b![1]}A50,50 0 0 0 ${50 * a![0]},${50 * a![1]}Z`;
+      };
+      const { elements } = host((plot) => {
+        const ring = el("g", { transform: "translate(200,100)" }, plot);
+        return [180, 0, 270, 90].map((from) => [`from ${from}`, el("path", { d: quarter(from) }, ring)]);
+      });
+      const { fx } = setup<string>(elements, named);
+      expect(fx.marks().map((mark) => mark.key)).toEqual(["from 0", "from 90", "from 180", "from 270"]);
+    });
+
+    it("reads other paths as shapes, as before: a disc, a lens, a pad angle, rounded corners, an elliptical arc, an open slice, and slices stretched or skewed", () => {
+      const donut = "M0,-80A80,80 0 0 1 80,0L50,0A50,50 0 0 0 0,-50Z";
+      const shapes: [string, string, string][] = [
+        ["disc", "M0,-80A80,80 0 1 1 0,80A80,80 0 1 1 0,-80Z", ""],
+        ["lens", "M0,-80A80,80 0 0 1 80,0L10,10Z", ""],
+        // Its sides 4 px from its radii and along them, as a pad angle sets them: its inner corners are 0.8 px off.
+        ["padded", "M4,-80A80,80 0 0 1 80,-4L50,-4A50,50 0 0 0 4,-50Z", ""],
+        ["rounded", "M0,-74A6,6 0 0 1 6,-80A80,80 0 0 1 80,-6A6,6 0 0 1 74,0L50,0A50,50 0 0 0 0,-50Z", ""],
+        ["elliptical", "M0,-80A80,60 0 0 1 80,0L50,0A50,50 0 0 0 0,-50Z", ""],
+        ["open", "M0,-80A80,80 0 0 1 80,0L50,0A50,50 0 0 0 0,-50", ""],
+        ["two rings one way", "M0,-80A80,80 0 1 1 0,80A80,80 0 1 1 0,-80M0,-50A50,50 0 1 1 0,50A50,50 0 1 1 0,-50Z", ""],
+        ["stretched", donut, "scale(2,1)"],
+        ["skewed", donut, "skewX(10)"]
+      ];
+      const { elements } = host((plot) => shapes.map(([key, d, transform], i) => [key, el("path", { d, transform: `translate(${100 + 200 * (i % 4)},${100 + 200 * Math.floor(i / 4)}) ${transform}` }, plot)]));
+      const { fx } = setup<string>(elements, named);
+      expect(fx.marks().map(seen)).toEqual(
+        shapes.map(([key, d, transform], i) => seen(build.shape({ key, d, width: 2, matrix: parseTransform(`translate(${100 + 200 * (i % 4)},${100 + 200 * Math.floor(i / 4)}) ${transform}`) })))
+      );
+    });
+  });
+
+  describe("non-scaling strokes", () => {
+    it("takes a non-scaling stroke's width as given, in screen px, by attribute and by style, not scaled by the element's transforms", () => {
+      const { elements } = host((plot) => {
+        const scaled = el("g", { transform: "scale(2)", "stroke-width": 3 }, plot);
+        return [
+          ["plain", el("line", { x1: 0, y1: 100, x2: 50, y2: 100 }, plot)],
+          ["scaled", el("line", { x1: 0, y1: 0, x2: 50, y2: 0 }, scaled)],
+          ["attribute", el("line", { x1: 0, y1: 10, x2: 50, y2: 10, "vector-effect": "non-scaling-stroke" }, scaled)],
+          ["style", el("path", { d: "M0,20L50,20", style: "vector-effect: non-scaling-stroke" }, scaled)],
+          ["style over attribute", el("path", { d: "M0,30L50,30", "vector-effect": "non-scaling-stroke", style: "vector-effect: none" }, scaled)],
+          ["on the group", el("path", { d: "M0,40L50,40" }, el("g", { "vector-effect": "non-scaling-stroke" }, scaled))],
+          ["width of its own", el("path", { d: "M0,50L50,50", "stroke-width": 0.5, "vector-effect": "NON-SCALING-STROKE", transform: "scale(4)" }, scaled)]
+        ];
+      });
+      const { fx } = setup<string>(elements, named);
+      // vector-effect isn't inherited, so the group's does nothing.
+      expect(fx.marks().map((mark) => [mark.key, mark.thickness])).toEqual([
+        ["plain", 2],
+        ["scaled", 6],
+        ["attribute", 3],
+        ["style", 3],
+        ["style over attribute", 6],
+        ["on the group", 6],
+        ["width of its own", 0.5]
+      ]);
+    });
+
+    it("takes the vector-effect a browser computes, from a style sheet too", () => {
+      const { elements } = host((plot) => {
+        const scaled = el("g", { transform: "scale(2)", "stroke-width": 3 }, plot);
+        return [
+          ["sheet", el("line", { class: "fixed", x1: 0, y1: 0, x2: 50, y2: 0 }, scaled)],
+          ["sheet over attribute", el("line", { class: "scaling", x1: 0, y1: 10, x2: 50, y2: 10, "vector-effect": "non-scaling-stroke" }, scaled)],
+          ["plain", el("line", { x1: 0, y1: 100, x2: 50, y2: 100 }, plot)]
+        ];
+      });
+      const [fixed, scaling, plain] = elements as SVGElement[] as [SVGElement, SVGElement, SVGElement];
+      browserStyles(
+        new Map<Element, Record<string, string>>([
+          [fixed, { "vector-effect": "non-scaling-stroke", "stroke-width": "3px" }],
+          [scaling, { "vector-effect": "none", "stroke-width": "3px" }],
+          [plain, { "stroke-width": "2px" }]
+        ])
+      );
+      const { fx } = setup<string>(elements, named);
+      expect(fx.marks().map((mark) => mark.thickness)).toEqual([3, 6, 2]);
+    });
+
+    it("turns its screen px into the marks' units by the common ancestor's screen scale, where there's layout", () => {
+      const { svg, plot, elements } = host((plot) => {
+        const scaled = el("g", { transform: "scale(2)", "stroke-width": 3 }, plot);
+        return [
+          ["fixed", el("line", { x1: 0, y1: 0, x2: 50, y2: 0, "vector-effect": "non-scaling-stroke" }, scaled)],
+          ["scaling", el("line", { x1: 0, y1: 10, x2: 50, y2: 10 }, scaled)],
+          ["plain", el("line", { x1: 0, y1: 100, x2: 50, y2: 100 }, plot)]
+        ];
+      });
+      // As if the page zoomed the <svg> to 1.5 times: the margin group, the marks' common ancestor, is 1.5 screen px a unit.
+      const ctm = (k: number, e: number, f: number) => () => ({ a: k, b: 0, c: 0, d: k, e, f });
+      Object.assign(svg, { getScreenCTM: ctm(1.5, 0, 0) });
+      Object.assign(plot, { getScreenCTM: ctm(1.5, 60, 30) });
+      Object.assign(elements[0]!.parentElement!, { getScreenCTM: ctm(3, 60, 30) });
+      const { fx } = setup<string>(elements, named);
+      expect(fx.marks().map((mark) => mark.thickness)).toEqual([2, 6, 2]);
+    });
+  });
+
   describe("with watch", () => {
     const delivered = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -2718,6 +2958,51 @@ describe("expressive: circles and shapes", () => {
       expect(fx.marks()[0]).toMatchObject({ thickness: 6, end: { x: 100, y: 0 } });
       fx.refresh();
       expect(fx.marks()[0]!.thickness).toBe(10);
+    });
+
+    it("reads a bar of one rect that turns in a frame as a shape, and the other bars' baseline without it, until refresh() reads it again", async () => {
+      const { elements } = host((plot) => [
+        ["turning", el("rect", { x: 0, y: 0, width: 80, height: 20 }, plot)],
+        ["still", el("rect", { x: 0, y: 40, width: 60, height: 20 }, plot)]
+      ]);
+      const story = recorder();
+      const { fx, clock } = setup<string>(elements, { ...named, watch: true, on: { decorate: story.effect } });
+      const still = fx.marks()[1]!;
+      story.log.length = 0;
+      elements[0]!.setAttribute("transform", "rotate(10)");
+      await delivered();
+      clock.advance(16);
+      expect(seen(fx.marks().find((mark) => mark.key === "turning")!)).toEqual(seen(build.shape({ key: "turning", d: "M0,0L80,0L80,20L0,20Z", matrix: parseTransform("rotate(10)") })));
+      expect(fx.marks().find((mark) => mark.key === "still")).toEqual(still);
+      expect(story.log).toEqual(["change turning"]);
+      // Upright again in a frame, it stays a shape; refresh() reads it as a bar.
+      elements[0]!.removeAttribute("transform");
+      await delivered();
+      clock.advance(16);
+      expect(fx.marks().find((mark) => mark.key === "turning")).toMatchObject({ length: 0, outline: { closed: true } });
+      fx.refresh();
+      expect(fx.marks().find((mark) => mark.key === "turning")).toMatchObject({ length: 80, start: { x: 0, y: 10 } });
+    });
+
+    it("keeps a non-scaling stroke's width through a frame that scales it, where a scaling one follows the scale", async () => {
+      const { elements } = host((plot) => {
+        const scaled = el("g", { transform: "scale(2)", "stroke-width": 3 }, plot);
+        return [
+          ["fixed", el("line", { x1: 0, y1: 0, x2: 50, y2: 0, "vector-effect": "non-scaling-stroke" }, scaled)],
+          ["scaling", el("line", { x1: 0, y1: 10, x2: 50, y2: 10 }, scaled)],
+          ["plain", el("line", { x1: 0, y1: 100, x2: 50, y2: 100 }, plot)]
+        ];
+      });
+      const { fx, clock } = setup<string>(elements, { ...named, watch: true });
+      expect(fx.marks().map((mark) => mark.thickness)).toEqual([3, 6, 2]);
+      elements[0]!.parentElement!.setAttribute("transform", "scale(3)");
+      await delivered();
+      clock.advance(16);
+      expect(fx.marks().map((mark) => [mark.key, mark.thickness, mark.end.x])).toEqual([
+        ["fixed", 3, 150],
+        ["scaling", 9, 150],
+        ["plain", 2, 50]
+      ]);
     });
   });
 });

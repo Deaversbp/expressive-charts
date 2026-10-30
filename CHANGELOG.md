@@ -25,6 +25,20 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`expressive()` reads a `<rect>` turned or skewed by its transforms** as a closed shape: the shape `describe.shape` gives its outline, rounded corners too, moved by its matrix, as a `<polygon>` is. It used to throw. An upright rect is a bar, as before, and with a turned one among bars, every mark keeps document order, as with a circle or a shape among them. A turned rect that shares its key with other rects still throws a `TypeError`, since a bar's segments are upright. Nothing to write instead.
+
+### Changed
+
+- **`expressive()` reads a pie's or a donut's paths as slices.** A `<path>` that draws a ring's slice, within 0.5 px, is read with `describe.arc`: one circular arc with two straight sides through its centre (a pie's), two arcs about one centre, one each way, joined along radii (a donut's), or a whole ring. Its centre, radii and angles, in `d3.pie()`'s convention, come from the path through its transforms, so a D3 pie read by tag goes clockwise from 12 o'clock, for the arrow keys and in `marks()`, and every effect treats its slices as our donut's: `travel` and `trace` run round a slice's middle, where on a shape they did nothing. It used to read each as a closed shape, in document order. A path with rounded corners, an elliptical arc, a donut's with a pad angle that takes its sides more than 0.5 px off radii, a disc, or one under a transform that stretches or skews it, is a shape, as before. To keep the shapes, give `geometry` with `describe.shape` from each path's `d`.
+
+### Fixed
+
+- **`expressive()` reads a non-scaling stroke's width.** With `vector-effect: non-scaling-stroke`, as an attribute or a computed style, an open shape's width is in screen px, as a browser draws it: its transforms no longer scale it. Where there's layout, it's turned into the marks' units by their common ancestor's screen scale; where there isn't, as in jsdom, it's kept as given. `watch` keeps it through the frames, as it keeps the width.
+
 ## 0.5.0 (29 October 2026)
 
 Curved lines and a hover on one point on the line chart, change labels that keep off other marks' labels, a negative column's value label off its name, curved Vega lines, and smaller pages for the motion core and `describe`. In the effect-author API, the one change is `nearbyLabels` on `MarkGeometry` and on the builders' specs, an addition. The other changes are outside the promise, and each says what to write instead, if anything.

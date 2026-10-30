@@ -642,6 +642,9 @@ function plainPairs(): Record<string, readonly [MarkGeometry, MarkGeometry]> {
  * dropped and at 12 points, from the start and part way, and what end() draws. A digest a pair.
  */
 async function digests(): Promise<Record<string, string>> {
+  // Numbers rounded to 1e-9, as path data is to 0.001: a crossfade's opacity is the eased progress itself, whose last
+  // bits come from Math.pow and Math.cbrt, and those differ between Node 22's V8 and Node 24's.
+  const serial = (calls: unknown): string => JSON.stringify(calls, (_, value: unknown) => (typeof value === "number" ? Math.round(value * 1e9) / 1e9 : value));
   const out: Record<string, string> = {};
   for (const [name, [a, b]] of Object.entries(plainPairs())) {
     let log = "";
@@ -653,11 +656,11 @@ async function digests(): Promise<Record<string, string>> {
         for (const start of [0, 0.37]) {
           const ctx = context(start);
           await play(ctx.clock, morph(options).run(from!, to!, ctx));
-          log += JSON.stringify(ctx.layer.calls);
+          log += serial(ctx.layer.calls);
         }
         const ended = context();
         morph(options).end(from!, to!, ended);
-        log += JSON.stringify(ended.layer.calls);
+        log += serial(ended.layer.calls);
       }
     }
     out[name] = hash(log);
@@ -665,18 +668,18 @@ async function digests(): Promise<Record<string, string>> {
   return out;
 }
 
-/** The digests main (1fdc9e3) gave, with this file's digests() run there, before morph kept gaps and holes. */
+/** The digests main (492d4dc, whose morph is 1fdc9e3's) gave, with this file's digests() run there, before morph kept gaps and holes. */
 const MAIN: Readonly<Record<string, string>> = {
   "slice and column": "4e71e24a7caab38a",
   "bar and column": "15d003d7be32b370",
   "two slices": "e54b3a77cb79c4b9",
   "two lines": "cba394617b15d178",
   "two points": "4d5c06fb489e3540",
-  "a slice and a line": "55fe35ce047dfc6a",
+  "a slice and a line": "18dfa79ee5c881e3",
   "a point and a column": "3ee63627e6172962",
   "a pie slice and a column": "dedb7c7675fd1df8",
   "a shape and a bar": "52e2efdb98c642fe",
-  "a curve and a line": "3347ff7de6f2d7cb",
+  "a curve and a line": "68ed996ec5ca6976",
   "a stack and a short bar": "3598f21fa89d5b1a"
 };
 

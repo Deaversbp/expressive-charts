@@ -50,6 +50,7 @@ const types = {
   Combined: type<lib.Combined<[lib.GeometryEffect]>>(),
   EffectContext: type<lib.EffectContext>(),
   TransitionContext: type<lib.TransitionContext>(),
+  TextSpace: type<lib.TextSpace>(),
   MarkGeometry: type<lib.MarkGeometry>(),
   Outline: type<lib.Outline>(),
   Point: type<lib.Point>(),

@@ -2,11 +2,12 @@
 
 import { manualClock, type ManualClock } from "../clock";
 import type { MarkData } from "../contracts/data";
-import type { EffectContext } from "../contracts/effect";
-import type { MarkGeometry } from "../contracts/geometry";
+import type { EffectContext, TextSpace } from "../contracts/effect";
+import type { MarkGeometry, Rect } from "../contracts/geometry";
 import type { Icon } from "../contracts/icon";
 import { createMotion, type Motion, type MotionMode, type ScalingOverrides } from "../motion";
 import { runScope } from "../runner";
+import { estimatedBox } from "../text-box";
 import { recordingLayer, recordingMark, type RecordingLayer, type RecordingMark } from "./recording";
 
 export interface TestContextOptions {
@@ -17,6 +18,8 @@ export interface TestContextOptions {
   readonly icons?: readonly Icon[];
   readonly batch?: { readonly index: number; readonly count: number };
   readonly previous?: MarkGeometry;
+  /** The boxes other effects' text holds, as `texts.held()` gives them: the runs that started before this one. Default none. */
+  readonly held?: readonly Rect[];
 }
 
 export interface TestContext extends EffectContext {
@@ -24,9 +27,14 @@ export interface TestContext extends EffectContext {
   readonly clock: ManualClock;
   readonly layer: RecordingLayer;
   readonly mark: RecordingMark;
+  /**
+   * Where effects' text sits, as a chart's runner gives it, with text boxes estimated as in jsdom: 0.6
+   * em a character. `holding` is the box the run holds now, undefined once it lets go or is cleared.
+   */
+  readonly texts: TextSpace & { readonly holding: Rect | undefined };
   /** Abort the run, as the runner does on leave or re-trigger. */
   abort(): void;
-  /** The runner's cleanup after effect.clear(ctx): abort, empty the layer, reset the mark, drop onChange listeners. */
+  /** The runner's cleanup after effect.clear(ctx): abort, empty the layer, reset the mark, drop onChange listeners, let go of its text. */
   clear(): void;
   /** Tell onChange listeners the geometry moved, as the runner does on every frame of a transition. */
   change(mark: MarkGeometry, data?: MarkData): void;
@@ -42,6 +50,18 @@ export function testContext(options: TestContextOptions = {}): TestContext {
   const layer = recordingLayer();
   const mark = recordingMark();
   const icons = new Map((options.icons ?? []).map((icon) => [icon.name, icon]));
+  const held = [...(options.held ?? [])];
+  let holding: Rect | undefined;
+  const texts = {
+    box: estimatedBox,
+    held: () => held,
+    hold(box: Rect | undefined) {
+      holding = box;
+    },
+    get holding() {
+      return holding;
+    }
+  };
   // The same run scope the runner gives every run, so clear() here is the runner's cleanup.
   const scope = runScope({
     clock,
@@ -50,7 +70,8 @@ export function testContext(options: TestContextOptions = {}): TestContext {
     mark,
     icons: { get: (name) => icons.get(name) },
     batch: options.batch ?? { index: 0, count: 1 },
-    previous: options.previous
+    previous: options.previous,
+    texts
   });
 
   return {
@@ -59,8 +80,12 @@ export function testContext(options: TestContextOptions = {}): TestContext {
     clock,
     layer,
     mark,
+    texts,
     abort: scope.abort,
-    clear: scope.clear,
+    clear() {
+      scope.clear();
+      holding = undefined;
+    },
     change: scope.change
   };
 }

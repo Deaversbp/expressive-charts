@@ -70,11 +70,32 @@ What each kind of mark gives:
 | `pivot` | middle of the baseline edge | the donut's centre | the first point | the point |
 | `segments` | at least one | none | none | none |
 | `labelBounds` | its category and value labels | its label outside the ring, or none when it's dropped | its end label | none (unset) |
-| `nearbyLabels` | none (unset) | its neighbours' labels, the nearest each way round | every other line's end label | none (unset) |
+| `nearbyLabels` | none (unset) | every other slice's label | every other line's end label | none (unset) |
 
 A mark the library didn't draw has no `labelBounds` or `nearbyLabels` unless the page's `geometry` gives them, so an effect that reads them needs a fallback: past the end of the walk, say.
 
-**Keeping your text clear of labels.** An effect that writes text near a mark should keep it off the mark's own labels and off other marks' near it. Pick where it goes from `labelBounds` alone, as the built-in `delta` and `label` do: along the walk past the end, or out from the mark through its own label. Then go past every box that way meets in both lists, `labelBounds` and `nearbyLabels`, so a neighbour's label pushes your text further along but never turns it. Two lines that end close together then each put their text past both end labels, not on the other's. Text centred on a point reaches out to either side, so measure "past" a box by its top or bottom, not by the side the way leaves it through. Your effect sees only its own mark, so two effects' texts can still meet each other.
+**Keeping your text clear of labels.** An effect that writes text near a mark should keep it off the mark's own labels and off other marks' near it. Pick where it goes from `labelBounds` alone, as the built-in `delta` and `label` do: along the walk past the end, or out from the mark through its own label. Then go past every box that way meets in both lists, `labelBounds` and `nearbyLabels`, so a neighbour's label pushes your text further along but never turns it. Two lines that end close together then each put their text past both end labels, not on the other's. Text centred on a point reaches out to either side, so measure "past" a box by its top or bottom, not by the side the way leaves it through, or better, by your text's own box (below).
+
+**Keeping your text clear of other effects' text.** Your effect sees only its own mark, but `ctx.texts` (a [`TextSpace`](api.md#textspace)) knows where other effects' text sits on the same chart. `box(content, style)` measures your text as the chart measures its labels, `held()` gives the boxes of the runs that started before yours, and `hold(box)` tells the runs after yours where your text is. Place your text clear of `held()` as you place it clear of labels, then hold where it ends:
+
+```ts
+/** Whether boxes `a` and `b` come within `gap` px of each other. */
+const near = (a: Rect, b: Rect, gap: number): boolean =>
+  a.x < b.x + b.width + gap && b.x < a.x + a.width + gap && a.y < b.y + b.height + gap && b.y < a.y + a.height + gap;
+
+/** 10 px past the end of the walk, then on, 2 px at a time, until the text is 6 px clear of the text held before it. */
+function placeText(mark: MarkGeometry, ctx: EffectContext, content: string): TextStyle {
+  const heading = mark.angle(1);
+  const at = (distance: number): TextStyle => ({ at: offset(mark.end, heading, distance), anchor: "start" });
+  const held = ctx.texts?.held() ?? [];
+  let distance = 10;
+  while (ctx.texts && held.some((box) => near(ctx.texts!.box(content, at(distance)), box, 6))) distance += 2;
+  ctx.texts?.hold(ctx.texts.box(content, at(distance)));
+  return at(distance);
+}
+```
+
+Do it on every draw, in `run()`, `end()` and `onChange`: the runner calls `onChange` again when text held before yours moves, though your mark didn't, so your text can follow it. Runs start in the chart's mark order, so the first mark's text keeps its place and the next goes past it; yours never moves another's. The runner lets go of your box when the run is cleared. `texts` can be unset, on a context someone else built: then no other text is known. `testContext({ held })` gives your tests boxes held before, and `ctx.texts.holding` what your effect holds.
 
 **Conventions** ([architecture.md](architecture.md#conventions) has them all):
 
@@ -122,6 +143,7 @@ Each run gets its own context. Everything an effect touches goes through it.
 | `batch` | `{ index, count }`: this mark's place among the marks of one event, for `stagger` |
 | `onChange(listener)` | called with the new geometry (and data) whenever the mark moves: a transition, a resize |
 | `previous` | the geometry before this update, on `update` events |
+| `texts` | where effects' text sits on this chart: `box()`, `held()` and `hold()` ([above](#the-mark-markgeometry)); unset when no other text is known |
 
 **The overlay** (`ctx.layer`):
 
@@ -493,7 +515,7 @@ function stroke(mark: MarkGeometry, ctx: EffectContext, color: Color): (p: numbe
 
 A data effect: "+2" just beyond the end of a mark whose value changed, in the `update` slot. It compares the last sample with the one before the update.
 
-It's a smaller version of the built-in [`delta`](api.md#delta), which puts its text past the mark's own labels and other marks' near it (`labelBounds` and `nearbyLabels`, or outside a slice's label), words the change in the page's locale so 0.1 + 0.2 reads "+0.3", takes a `value` and a `color`, and counts float noise as no change. The built-in [`label`](api.md#label) places and rises the same way, with text worked out from the mark's data.
+It's a smaller version of the built-in [`delta`](api.md#delta), which puts its text past the mark's own labels and other marks' near it (`labelBounds` and `nearbyLabels`, or outside a slice's label) and other effects' text (`ctx.texts`), words the change in the page's locale so 0.1 + 0.2 reads "+0.3", takes a `value` and a `color`, and counts float noise as no change. The built-in [`label`](api.md#label) places and rises the same way, with text worked out from the mark's data.
 
 ```ts
 import { defineDataEffect, offset, type EffectContext, type MarkData, type MarkGeometry, type TextStyle } from "expressive-charts";

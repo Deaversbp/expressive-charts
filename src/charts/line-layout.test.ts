@@ -135,6 +135,22 @@ describe("layoutLines", () => {
     expect(frame.box.right).toBe(640 - (10 + 9 * 7 + 4));
   });
 
+  it("keeps `room` clear to the right of the end labels, or of the lines' ends without them, and lays out as before with none", () => {
+    const options = { data: weeks, x: "week", series: ["goals", "xg"] } as const;
+    const label = (series: string, value: number) => `${value} ${series}`;
+    const labelled = layout<Week>(options, { label });
+    const roomy = layout<Week>(options, { label, room: 30 });
+    // The plot is 30 px narrower, so the end labels beside it are 30 px further from the chart's right edge.
+    expect(roomy.frame.box.right).toBe(labelled.frame.box.right - 30);
+    expect(roomy.frame.box.left).toBe(labelled.frame.box.left);
+    // Without end labels, past the lines' ends: the gridlines' 10 px is inside it.
+    expect(layout<Week>(options, { room: 30 }).frame.box.right).toBe(640 - 30);
+    expect(layout<Week>(options, { room: 4 }).frame.box.right).toBe(630);
+    // 0, as unset, lays out as before.
+    expect(layout<Week>(options, { label, room: 0 })).toEqual(labelled);
+    expect(layout<Week>(options, { room: 0 })).toEqual(layout<Week>(options));
+  });
+
   it("gives each series the decimals its values have", () => {
     expect(layout<Week>({ data: weeks, x: "week", series: ["goals", "xg"] }).decimals).toEqual({ goals: 0, xg: 1 });
   });

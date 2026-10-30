@@ -404,31 +404,24 @@ describe("donutChart: nearbyLabels", () => {
     const chart = donutChart<Shot>(container(), { label: "Shot outcomes", data: shots, category: "outcome", value: "shots", width: 640, ...options }, env);
     return { chart, clock: env.clock, settle: (running: Promise<unknown>) => play(env.clock, running) };
   }
-  /** The slices either side, going round. */
-  const either = (marks: readonly MarkGeometry[]) => (_mark: MarkGeometry, i: number) => [marks[(i + marks.length - 1) % marks.length]!, marks[(i + 1) % marks.length]!];
+  /** Every other slice, in the slices' order. */
+  const others = (marks: readonly MarkGeometry[]) => (mark: MarkGeometry) => marks.filter((other) => other !== mark);
 
-  it("gives each slice its neighbours' labels, either side, going round", () => {
+  it("gives each slice every other slice's labels, in the slices' order", () => {
     const marks = setup().chart.marks();
-    expect(marks.map((mark) => mark.nearbyLabels!.length)).toEqual([4, 4, 4, 4]);
-    expectNearby(marks, either(marks));
+    expect(marks.map((mark) => mark.nearbyLabels!.length)).toEqual([6, 6, 6, 6]);
+    expectNearby(marks, others(marks));
   });
 
-  it("passes over a slice whose label is dropped, to the nearest label that way", () => {
-    // Woodwork, last, has no label: Blocked's neighbour after it is Goal, and Goal's before it is Blocked.
+  it("gives every label past a slice whose label is dropped, which gives none", () => {
+    // Woodwork, last, has no label. Text that goes past a neighbour's label can meet the next one round, so each slice has them all.
     const marks = setup({ data: [...shots, { outcome: "Woodwork", shots: 4 }] }).chart.marks();
-    const [goal, saved, offTarget, blocked, woodwork] = marks as [MarkGeometry, MarkGeometry, MarkGeometry, MarkGeometry, MarkGeometry];
-    expect(woodwork.labelBounds).toEqual([]);
-    const sides: Record<string, MarkGeometry[]> = {
-      Goal: [blocked, saved],
-      Saved: [goal, offTarget],
-      "Off target": [saved, blocked],
-      Blocked: [offTarget, goal],
-      Woodwork: [blocked, goal]
-    };
-    expectNearby(marks, (mark) => sides[mark.key]!);
+    expect(marks[4]!.labelBounds).toEqual([]);
+    expect(marks.map((mark) => mark.nearbyLabels!.length)).toEqual([6, 6, 6, 6, 8]);
+    expectNearby(marks, others(marks));
   });
 
-  it("gives one label once when it's the nearest both ways, and a slice alone none", () => {
+  it("gives each of two slices the other's labels, once, and a slice alone none", () => {
     const two = setup({ data: shots.slice(0, 2) }).chart.marks();
     expectNearby(two, (_mark, i) => [two[1 - i]!]);
     expect(setup({ data: shots.slice(0, 1) }).chart.marks()[0]!.nearbyLabels).toEqual([]);
@@ -439,16 +432,16 @@ describe("donutChart: nearbyLabels", () => {
     const updating = chart.update({ data: shots.map((shot, i) => ({ ...shot, shots: i === 0 ? 300 : shot.shots })) });
     for (let i = 0; i < 8; i++) {
       clock.advance(120);
-      expectNearby(chart.marks(), either(chart.marks()));
+      expectNearby(chart.marks(), others(chart.marks()));
     }
     await settle(updating);
-    expectNearby(chart.marks(), either(chart.marks()));
+    expectNearby(chart.marks(), others(chart.marks()));
 
     const resize = stubResizeObserver();
     const resized = setup({ width: undefined });
     resize(320);
     resized.clock.advance(16);
-    expectNearby(resized.chart.marks(), either(resized.chart.marks()));
+    expectNearby(resized.chart.marks(), others(resized.chart.marks()));
   });
 });
 

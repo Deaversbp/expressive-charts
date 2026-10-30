@@ -4,7 +4,6 @@
 // control shows the donut's staged turn.
 import {
   barChart,
-  describe,
   donutChart,
   expressive,
   flash,
@@ -107,11 +106,9 @@ function attachPie(on: ReturnType<typeof effectsFor>): void {
       // What each slice shows, so a new match flashes the slices whose counts changed, not every arc
       // that moved round because the total grew.
       value: (d) => d.value,
-      // d3.pie() gives the angles; the radii are the arc generator's, read at each refresh.
-      geometry: (_element, d, key) =>
-        describe.arc({ key, cx: 0, cy: 0, inner: pie?.inner ?? 0, outer: pie?.outer ?? 0, start: d.startAngle, end: d.endAngle }),
-      // Tab reaches the pie; the arrow keys go clockwise from 12 o'clock, though d3.pie() returns the
-      // arcs in data order.
+      // No geometry: expressive() reads each path d3.arc() drew as a slice, by its tag, with its centre,
+      // radii and angles, so every effect treats it as the donut's slices. Tab reaches the pie, and the
+      // arrow keys go clockwise from 12 o'clock, though d3.pie() returns the arcs in data order.
       keyboard: true,
       // Named as the donut names its slices: "Saved: 112 shots, 28%".
       markLabel: (d) => `${d.data.outcome}: ${shots(d.value)}, ${Math.round(((d.endAngle - d.startAngle) / (2 * Math.PI)) * 100)}%`,

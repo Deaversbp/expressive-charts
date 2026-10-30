@@ -64,6 +64,9 @@
   #line .ec-line[data-key="totalXg"] .ec-stroke { stroke-dasharray: 6 4; }
   #line .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
   #line .ec-legend-item[data-series="totalXg"] .ec-legend-swatch { border-top-style: dashed; }
+  /* On a phone the lines' changes rise past their end labels, up to 35 px above the plot where the lines
+     end steeply: the legend keeps clear of them. Wider, they go right, into the room the chart keeps. */
+  @media (max-width: 480px) { #line .ec-legend { margin-bottom: 40px; } }
   /* The D3 charts' own styles: they're someone else's charts, so the page styles them, not the library. */
   .d3-box svg { display: block; max-width: 100%; height: auto; overflow: visible; }
   .d3-box .tick { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
@@ -93,7 +96,7 @@
 
   <section class="card" aria-labelledby="linked-title">
     <h2 id="linked-title">Linked by matchweek</h2>
-    <p class="note">Three charts in one <code>link()</code>: the library's <code>barChart</code> and <code>lineChart</code>, and columns drawn with D3 through <code>expressive()</code>. Hover a week in any of them, or Tab in and use the arrow keys, and the same week lights up in the other two, with their own hover effects: a ball up the goals column, a pulse round the line's points and the shots column. Only the chart you're on shows a tooltip or takes focus. After each matchweek, the goals line's change rises past its end label with <code>delta()</code>, clear of xG's label. Only the goals line has one: the two lines end close together and head the same way, so xG's change would land on it. The announcement says both.</p>
+    <p class="note">Three charts in one <code>link()</code>: the library's <code>barChart</code> and <code>lineChart</code>, and columns drawn with D3 through <code>expressive()</code>. Hover a week in any of them, or Tab in and use the arrow keys, and the same week lights up in the other two, with their own hover effects: a ball up the goals column, a pulse round the line's points and the shots column. Only the chart you're on shows a tooltip or takes focus. After each matchweek, each line's change rises past both end labels with <code>delta()</code>, the goals line's first and xG's past it: effects share where their text is, so neither lands on the other. The chart keeps <code>room</code> for them. The announcement says both.</p>
     <div class="seg" id="linked-marks" role="group" aria-label="Linked marks">
       <button type="button" data-value="full" aria-pressed="true">Full hover</button>
       <button type="button" data-value="emphasis" aria-pressed="false">Emphasis only</button>
@@ -138,7 +141,7 @@
     <ul class="checklist">
       <li>Hover a week on the line: its goals column and its shots column light up too. Then pick <b>Emphasis only</b>, and the linked weeks keep their emphasis and dimming without the ball or the pulse.</li>
       <li>Tab into the goals per matchweek and use the arrow keys: the other two charts follow the focused week, and focus stays where it is. Escape ends all three.</li>
-      <li>Press <b>Play next matchweek</b>: a week is added to every chart, the players who scored flash with their change past their bar, the goals line's change rises past its end, and the slope chart's changes follow.</li>
+      <li>Press <b>Play next matchweek</b>: a week is added to every chart, the players who scored flash with their change past their bar, each line's change rises past its end, and the slope chart's changes follow.</li>
       <li>Pick Off, or turn on reduced motion: the changes and the slope chart's labels show at once, and a trace is drawn whole.</li>
       <li>Open the players' data table: its Change and Since matchweek 1 columns say what the charts write over the bars and the lines.</li>
     </ul>

@@ -1,6 +1,7 @@
 // Screenshots of demo/donut.html on a stopped clock: the theme, the ball rolling round a slice on the
 // library's donut and on the D3 pie, a wiggle at its peak and a pulse half-way, keyboard focus and the
-// tooltip. Beside them, DOM checks: reduced motion, the effect picker and "Next match".
+// tooltip. Beside them, DOM checks: reduced motion, the effect picker, "Next match", and the D3 pie's
+// slices, read by tag, in clockwise order whichever way d3.pie() sorts them.
 // Names start with "donut-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
@@ -224,6 +225,27 @@ test.describe("the effect picker", () => {
     await page.clock.runFor(75);
     await expect(pieSlice(page, "Off target")).toHaveCSS("transform", /^matrix\(/);
     expect(await iconTransforms(pie(page))).toEqual([]);
+  });
+});
+
+test.describe("the D3 pie, read by tag", () => {
+  test("its slices go clockwise from 12 o'clock, though d3.pie() returns them in data order, with Largest first too", async ({ page }) => {
+    await openDemo(page, donutDemo);
+    await page.getByRole("group", { name: "Order" }).getByRole("button", { name: "Largest first" }).click();
+    await page.clock.runFor(REST);
+    // The paths are in data order, the order D3 joined them in.
+    const names = await pie(page).locator("path.slice").evaluateAll((paths) => paths.map((path) => path.getAttribute("aria-label")?.split(":")[0]));
+    expect(names).toEqual(["Goal", "Saved", "Off target", "Blocked"]);
+    // expressive() reads each as a slice, with its angles, so focus goes round the ring from the largest
+    // at 12 o'clock. The tab stop stays on the slice it was on, Goal; Home goes to the first.
+    await tabInto(page, pie(page));
+    await expect(pieSlice(page, "Goal")).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(pieSlice(page, "Off target")).toBeFocused();
+    for (const outcome of ["Saved", "Blocked", "Goal"] as const) {
+      await page.keyboard.press("ArrowRight");
+      await expect(pieSlice(page, outcome)).toBeFocused();
+    }
   });
 });
 

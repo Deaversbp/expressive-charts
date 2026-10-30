@@ -68,13 +68,22 @@ export const lineDemo: Demo = {
   }
 };
 
-/** demo/morph.html: the donut and the columns in one chartSwitch, and the bars linked with it. */
+/**
+ * demo/morph.html: the donut and the columns in one chartSwitch, and the bars linked with it; below,
+ * a season's goals and xG in a second chartSwitch, as two line charts and as columns.
+ */
 export const morphDemo: Demo = {
   path: "/morph.html",
+  // About 2,780 px at 1,000 px wide.
+  height: 3000,
   async ready(page) {
     await expect(page.locator('#shots .ec-switch-view[data-view="donut"] .ec-mark')).toHaveCount(4);
     await expect(page.locator('#shots .ec-switch-view[data-view="columns"] .ec-mark')).toHaveCount(4);
     await expect(page.locator("#ranked .ec-mark")).toHaveCount(4);
+    await expect(page.locator('#season .ec-switch-view[data-view="perMatch"] .ec-line')).toHaveCount(2);
+    await expect(page.locator('#season .ec-switch-view[data-view="toDate"] .ec-line')).toHaveCount(2);
+    // The weeks with goals: the feed missed matchweeks 9 and 10.
+    await expect(page.locator('#season .ec-switch-view[data-view="columns"] .ec-mark')).toHaveCount(36);
   }
 };
 

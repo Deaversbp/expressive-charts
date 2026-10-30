@@ -46,6 +46,22 @@
   a { color: var(--link); }
   /* The motion switch sits on the page, darker than the charts' surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
   #motion { --ec-text-muted: var(--muted); }
+  /* The second switch's view picker, as the line page's toggles: a visible label naming its group, kept on one line with it. */
+  .toggles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .pick { display: inline-flex; align-items: center; gap: 8px; }
+  /* A whole number of px high, so the chart below keeps its place on the pixel grid. */
+  .toggles .seg button { line-height: 20px; }
+  #season { min-width: 0; }
+  /* The tooltip function's text is plain; its first line, the week, is bold, as on line.html. */
+  #season .ec-tooltip::first-line { font-weight: 600; }
+  /* xG is a dashed grey, as on line.html: it's what goals are read against. Its palette slot is the
+     second, so its end dot and legend swatch follow, and the switch's overlay draws its line in it,
+     dashed too, as it morphs and fades. */
+  #season { --ec-series-2: var(--ec-text-muted, #75736d); --ec-series-2-strong: var(--ink-2); }
+  #season .ec-line[data-key="xg"] .ec-stroke, #season .ec-switch-overlay [data-key="xg"] path { stroke-dasharray: 6 4; }
+  /* Legend swatches as short lines, so xG's shows its dash. */
+  #season .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
+  #season .ec-legend-item[data-series="xg"] .ec-legend-swatch { border-top-style: dashed; }
 </style>
 </head>
 <body>
@@ -105,6 +121,47 @@
     </section>
   </div>
 
+  <section class="card" aria-labelledby="season-title">
+    <h2 id="season-title">Goals and xG, with missing weeks</h2>
+    <p class="note">The line page's season as a weekly feed recorded it, with no values for matchweeks 9 and 10 and no xG for matchweeks 4 and 5, in a second <code>chartSwitch</code>. Goals and xG per match and season to date are each a <code>lineChart</code>, and goals per match are columns on <code>barChart</code>, keyed as the lines' points are (<code>goals@12</code>). Each point grows into its column, and the two charts' lines morph into each other with their gaps kept. With a week or a column focused, <kbd>V</kbd> goes to the next view, and focus follows the week.</p>
+    <div class="toggles">
+      <span class="pick">
+        <span class="label" id="season-view-label">View</span>
+        <span class="seg" id="season-view" role="group" aria-labelledby="season-view-label">
+          <button type="button" data-value="perMatch" aria-pressed="true">Per match</button>
+          <button type="button" data-value="toDate" aria-pressed="false">Season to date</button>
+          <button type="button" data-value="columns" aria-pressed="false">Columns</button>
+        </span>
+      </span>
+    </div>
+    <!-- chartSwitch() builds the three views here, one shown at a time. -->
+    <div id="season"></div>
+  </section>
+
+  <div class="pair">
+    <section class="card" aria-labelledby="grow-title">
+      <h2 id="grow-title">Points into columns</h2>
+      <ul class="checklist">
+        <li>A line chart draws its points only when they're hovered, so each column grows out of its point's centre, from nothing, and shrinks back into it. You see which week's goals became which column. A crossfade would show none of that.</li>
+        <li>The lines have no partner among the columns, so they fade out over the first half of the switch, and back in over the second half on the way back. xG has no columns, and its points aren't drawn, so only its line fades.</li>
+        <li>Each column is drawn in goals' colour all the way, as its point is: the three views share one <code>colorAssignment</code>, and the switch paints each mark as its own view does.</li>
+        <li>The end labels fade out, and the columns' axis and value labels fade in.</li>
+        <li>The columns leave out matchweeks 9 and 10: a column of no height would say no goals were scored. From either week on a line, focus goes to the first column.</li>
+        <li>Focus follows the week: from a week on a line to its goals' column, and from a column back to its week.</li>
+      </ul>
+    </section>
+
+    <section class="card" aria-labelledby="lines-title">
+      <h2 id="lines-title">Line into line</h2>
+      <ul class="checklist">
+        <li>From Per match to Season to date, each line morphs into the other along its stroke, and keeps its gaps: nothing is drawn where both lines have one.</li>
+        <li>Gaps are matched by how far along the line they fall, not by week. A jagged line per match and a smooth one to date reach matchweek 9 at different points along them, so part way, the stroke where one line has a gap and the other doesn't fades in or out, and some of it crosses the weeks both miss.</li>
+        <li>The switch samples each line at 640 points, four times <code>morph()</code>'s default, so the jagged line keeps its corners within a few px as the morph starts and lands.</li>
+        <li>A line's end dot isn't part of its outline, so the switch doesn't draw it: the dots go as a switch starts and come back as it lands.</li>
+      </ul>
+    </section>
+  </div>
+
   <section class="card" aria-labelledby="try-title">
     <h2 id="try-title">Things to try</h2>
     <ul class="checklist">
@@ -112,6 +169,8 @@
       <li>Watch the labels: they move with their shapes and swap their text half way, while the centre total fades out and the axes fade in.</li>
       <li>Switch with Drop, then with Unroll, and click again mid-way with each: the shapes go back the way they came.</li>
       <li>Hover a bar beside the switch, then a slice: each lights up its partner. Switch to the columns and try again: the link follows the view on show.</li>
+      <li>Pick <b>Columns</b> below, then <b>Per match</b>: the goals points grow into columns and shrink back, while the lines fade. Pick <b>Season to date</b> and watch the gaps at matchweeks 4, 5, 9 and 10.</li>
+      <li>Tab into the line chart below, go to a week with the arrow keys, and press <kbd>V</kbd> three times: focus stays on that week through each view.</li>
     </ul>
   </section>
 </main>

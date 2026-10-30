@@ -3,11 +3,15 @@
 // toggle button switches, and a click mid-way reverses; the align control rebuilds the switch with the
 // other mapping, so the two can be compared. Beside it, the same outcomes as bars, largest first, in
 // one link() with the switch: hovering a bar hovers its slice or column, and the other way round.
+// Below, the line page's season with missing weeks in a second chartSwitch of three views: goals and xG
+// per match and season to date, each a lineChart, and goals per match as columns keyed as the lines'
+// points, so each point grows into its column.
 import {
   barChart,
   chartSwitch,
   colorAssignment,
   donutChart,
+  lineChart,
   link,
   morph,
   motionSwitch,
@@ -144,6 +148,177 @@ segmented("align", (value) => {
   align = value as MorphAlign;
   build(shots.current);
 })(align);
+
+// ── Goals and xG, with missing weeks ─────────────────────────────────────────
+
+/** A matchweek as the feed recorded it: null where it has no value, which is a gap, not a zero. */
+interface Week {
+  readonly week: number;
+  readonly goals: number | null;
+  readonly xg: number | null;
+}
+
+/** The line page's season: seed 42, 38 matchweeks, cumulative goals and xG (a slow start, a hot streak, a late slump). */
+function season(): { week: number; goals: number; xg: number }[] {
+  let seed = 42;
+  const random = (): number => {
+    seed = (seed * 48271) % 2147483647;
+    return seed / 2147483647;
+  };
+  const poisson = (lambda: number): number => {
+    const limit = Math.exp(-lambda);
+    let k = 0;
+    let p = 1;
+    do {
+      k++;
+      p *= random();
+    } while (p > limit);
+    return k - 1;
+  };
+  const weeks: { week: number; goals: number; xg: number }[] = [];
+  let goals = 0;
+  let xg = 0;
+  for (let i = 0; i < 38; i++) {
+    const chance = 0.6 + random() * 1.9;
+    const form = i < 12 ? 0.72 : i < 26 ? 1.32 : 0.7;
+    xg += chance;
+    goals += poisson(chance * form);
+    weeks.push({ week: i + 1, goals, xg: Math.round(xg * 10) / 10 });
+  }
+  return weeks;
+}
+
+/** The weeks the feed missed altogether, and the weeks it has goals but no xG for, as on the line page. */
+const NO_FEED = [9, 10];
+const NO_XG = [4, 5];
+const full = season();
+/** Season to date as the feed recorded it: the line page's chart with missing weeks. */
+const toDate: Week[] = full.map((w) => ({
+  week: w.week,
+  goals: NO_FEED.includes(w.week) ? null : w.goals,
+  xg: NO_FEED.includes(w.week) || NO_XG.includes(w.week) ? null : w.xg
+}));
+/** Each match's own goals and xG, with the same weeks missing. */
+const perMatch: Week[] = full.map((w, i) => {
+  const before = full[i - 1] ?? { goals: 0, xg: 0 };
+  return {
+    week: w.week,
+    goals: NO_FEED.includes(w.week) ? null : w.goals - before.goals,
+    xg: NO_FEED.includes(w.week) || NO_XG.includes(w.week) ? null : Math.round((w.xg - before.xg) * 10) / 10
+  };
+});
+/** A match with goals, as a column. */
+interface Played {
+  readonly week: number;
+  readonly goals: number;
+  readonly xg: number | null;
+}
+/**
+ * Goals per match as columns, for the weeks the feed has: a bar chart draws a missing value as 0, which
+ * would say no goals were scored.
+ */
+const played: Played[] = perMatch.flatMap((d) => (d.goals === null ? [] : [{ week: d.week, goals: d.goals, xg: d.xg }]));
+
+/** "1 goal", "18 goals". */
+const goals = (value: number): string => `${value} ${value === 1 ? "goal" : "goals"}`;
+/** "18 goals", "goals missing". */
+const feedGoals = (d: Week): string => (d.goals === null ? "goals missing" : goals(d.goals));
+/** "19.0 xG", "xG missing". */
+const feedXg = (d: { readonly xg: number | null }): string => (d.xg === null ? "xG missing" : `${d.xg.toFixed(1)} xG`);
+/** "+0.4 vs expected", to a tenth and signed, as the line page has it; nothing where either value is missing. */
+function feedVersus(d: Week): string {
+  if (d.goals === null || d.xg === null) return "";
+  const tenths = Math.round((d.goals - d.xg) * 10) / 10;
+  return `${tenths >= 0 ? "+" : ""}${tenths.toFixed(1)} vs expected`;
+}
+
+/** Every view is this tall, so the three share their grid cell without moving the card. */
+const HEIGHT = 300;
+
+/** One of the two line views: goals and xG, with what's missing said where a value would be, as on the line page. */
+const lines = (container: HTMLElement, colors: ColorAssignment, data: readonly Week[], label: string, description: string) =>
+  lineChart<Week>(container, {
+    label,
+    description,
+    data,
+    x: "week",
+    series: ["goals", "xg"],
+    colors,
+    seriesLabels: { goals: "Goals scored", xg: "Expected goals (xG)" },
+    labels: (value, series) => (series === "xg" ? `${value.toFixed(1)} xG` : goals(Math.round(value))),
+    tooltip: (d) => [`Matchweek ${d.week}`, `${feedGoals(d)} · ${feedXg(d)}`, feedVersus(d)].filter(Boolean).join("\n"),
+    // Each week's name has both its values, and says what's missing; the description adds only the gap.
+    markLabel: (d) => `Matchweek ${d.week}: ${feedGoals(d)}, ${feedXg(d)}`,
+    markDescription: feedVersus,
+    table: { category: "Matchweek" },
+    height: HEIGHT
+  });
+
+/**
+ * The three views. The lines' points and the columns share their keys, `goals@12`, so each point grows
+ * into its column; the two line charts' lines share theirs, `goals` and `xg`, so each morphs into the
+ * other. Each chart's label is what the switch announces when it lands there.
+ */
+const seasonViews = {
+  perMatch: (container: HTMLElement, colors: ColorAssignment) =>
+    lines(container, colors, perMatch, "Goals and xG per match", "Goals scored and expected goals in each of 38 matchweeks, from a weekly feed. It has no values for matchweeks 9 and 10, and no xG for matchweeks 4 and 5."),
+  toDate: (container: HTMLElement, colors: ColorAssignment) =>
+    lines(container, colors, toDate, "Goals and xG, season to date", "Cumulative goals scored and expected goals over 38 matchweeks, from a weekly feed. It has no values for matchweeks 9 and 10, and no xG for matchweeks 4 and 5."),
+  columns: (container: HTMLElement, colors: ColorAssignment) =>
+    barChart<Played>(container, {
+      label: "Goals per match, as columns",
+      description: "Goals scored in each matchweek the feed has: it has no values for matchweeks 9 and 10.",
+      data: played,
+      x: "week",
+      y: "goals",
+      // Keyed as the line charts key their goals points, so each column pairs with its point.
+      key: (d) => `goals@${d.week}`,
+      orientation: "vertical",
+      colors,
+      seriesLabels: { goals: "Goals scored" },
+      tooltip: (d) => `Matchweek ${d.week}\n${goals(d.goals)} · ${feedXg(d)}`,
+      markLabel: (d) => `Matchweek ${d.week}: ${goals(d.goals)}`,
+      markDescription: feedXg,
+      table: { category: "Matchweek" },
+      height: HEIGHT
+    })
+};
+type SeasonView = keyof typeof seasonViews;
+/** The views in the toggles' order, which V steps through. */
+const seasonOrder: readonly SeasonView[] = ["perMatch", "toDate", "columns"];
+
+// Goals take the first palette slot, as on the line page, and xG the second, which the page's CSS makes
+// a dashed grey. Shared by the three views, so goals' points and columns have one colour.
+const seasonSwitch = chartSwitch("#season", {
+  views: seasonViews,
+  initial: "perMatch",
+  // Four times morph()'s 160 points, so a jagged line per match keeps its corners within 2.5 px as a
+  // switch to the other line starts and lands, rather than 11.
+  transition: morph({ points: 640 }),
+  colors: colorAssignment({ goals: 1, xg: 2 }),
+  announce: true
+});
+
+/** Switches to `view`, and shows it picked. A pick mid-way reverses, or lands and goes on, as the switch decides. */
+function showSeason(view: SeasonView): void {
+  void seasonSwitch.show(view);
+  pickSeason(view);
+}
+
+// Focus stays on the toggle.
+const pickSeason = segmented("season-view", (value) => showSeason(value as SeasonView));
+pickSeason(seasonSwitch.current);
+
+// With a week or a column focused, V goes to the next view, and focus follows the week: from a week on
+// a line to its goals' column, and back. The toggles can't do that: focus that has left the switch
+// stays put.
+document.querySelector("#season")?.addEventListener("keydown", (event) => {
+  const { key, altKey, ctrlKey, metaKey, target } = event as KeyboardEvent;
+  if ((key !== "v" && key !== "V") || altKey || ctrlKey || metaKey) return;
+  if (!(target instanceof Element) || !target.closest(".ec-chart [data-key]")) return;
+  event.preventDefault();
+  showSeason(seasonOrder[(seasonOrder.indexOf(seasonSwitch.current) + 1) % seasonOrder.length]!);
+});
 
 // The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.
 motionSwitch("#motion");

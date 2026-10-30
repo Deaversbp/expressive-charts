@@ -25,6 +25,22 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **A line chart as a chart switch's view.** Its points grow into columns keyed as they are, and back: key the columns with the bar chart's `key` (``key: (d) => `goals@${d.week}` ``).
+  - Each point pairs with its column and grows out of a dot of no size at its centre, or out of its own dot when it's alone between gaps, while the lines fade out over the first half. Back, each column shrinks into its point.
+  - Between two line charts, the lines morph by series and their end labels move. The points stay hidden, but for a value alone between gaps, which morphs as its dot.
+  - Focus follows the x: from an x to its first series' point's column, and back to the x, or to the point with `hover: "point"`.
+- **`paintOf(key)` and `standsFor(key)` on `ChartSwitchView`,** both optional, with the `ChartSwitchPaint` type. `paintOf` gives the name a mark's colour comes from in the switch's assignment, and whether its chart draws it at rest; `standsFor` gives the keys a focus stop stands for, in the order the next view tries them. The bar, donut and line charts' handles have `paintOf`, and the line chart's has `standsFor`. A view without them is drawn by key, as before, so no page needs to change.
+
+### Changed
+
+### Fixed
+
+- **A chart switch draws each mark in its view's colour.** It drew each pair, and each mark that fades, in its key's colour, so columns coloured by series (the default) each took a colour of their own while they morphed, and the switch asked the shared assignment for a slot for every key. A switch whose views colour by key, such as a donut and its `colorBy: "category"` columns, draws as before.
+
 ## 0.5.0 (29 October 2026)
 
 Curved lines and a hover on one point on the line chart, change labels that keep off other marks' labels, a negative column's value label off its name, curved Vega lines, and smaller pages for the motion core and `describe`. In the effect-author API, the one change is `nearbyLabels` on `MarkGeometry` and on the builders' specs, an addition. The other changes are outside the promise, and each says what to write instead, if anything.

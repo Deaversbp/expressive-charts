@@ -1,5 +1,7 @@
 // chartSwitch on a donut and category columns sharing one colour assignment, with a recording
-// transition effect: src/morph.test.ts switches the same charts with the real morph().
+// transition effect: src/morph.test.ts switches the same charts with the real morph(). Below them,
+// line charts and columns keyed as their points (M11 step 1): src/line-switch.test.ts switches
+// those with morph().
 
 import { createMotion, easeInOutCubic, manualClock, type MarkGeometry, type MotionMode, type TransitionEffect } from "../core";
 import { createRegistry, type PresetFactory } from "../core/registry";
@@ -7,9 +9,11 @@ import { flush } from "../core/testing";
 import { barChart } from "./bar";
 import { colorAssignment, type ColorAssignment } from "./colors";
 import { donutChart } from "./donut";
+import { lineChart } from "./line";
+import { link } from "./link";
 import { seriesColors, stylesheet } from "./render/theme";
 import type { ChartEnv } from "./shell/setup";
-import { chartSwitch, type ChartSwitchViews } from "./switch";
+import { chartSwitch, type ChartSwitchView, type ChartSwitchViews } from "./switch";
 
 interface Outcome {
   readonly outcome: string;
@@ -920,5 +924,488 @@ describe("chartSwitch: checks", () => {
     await expect(switcher.show("c" as "a")).rejects.toThrow(new TypeError('chartSwitch: there\'s no view "c". The views are "a", "b".'));
     expect(() => switcher.chart("c" as "a")).toThrow(/there's no view "c"/);
     expect(switcher.current).toBe("a");
+  });
+});
+
+// ── Line charts in a switch (M11 step 1) ─────────────────────────────────────
+
+interface Week {
+  readonly week: number;
+  readonly goals: number | null;
+  readonly xg: number | null;
+}
+
+/** Per match, with missing weeks: goals in weeks 4 and 6 are each alone between gaps, so their points are drawn at rest. */
+const perMatch: Week[] = [
+  { week: 1, goals: 1, xg: 0.8 },
+  { week: 2, goals: 2, xg: 1.4 },
+  { week: 3, goals: null, xg: 1.1 },
+  { week: 4, goals: 1, xg: null },
+  { week: 5, goals: null, xg: 2 },
+  { week: 6, goals: 3, xg: 1.7 }
+];
+
+/** Season to date, with the same gaps. */
+const toDate: Week[] = [
+  { week: 1, goals: 1, xg: 0.8 },
+  { week: 2, goals: 3, xg: 2.2 },
+  { week: 3, goals: null, xg: 3.3 },
+  { week: 4, goals: 4, xg: null },
+  { week: 5, goals: null, xg: 5.3 },
+  { week: 6, goals: 7, xg: 7 }
+];
+
+interface Played {
+  readonly week: number;
+  readonly goals: number;
+}
+
+/** Goals per match as columns: the weeks with a value. */
+const played: Played[] = perMatch.flatMap((d) => (d.goals === null ? [] : [{ week: d.week, goals: d.goals }]));
+
+interface LineSetupOptions {
+  readonly mode?: MotionMode;
+  readonly hover?: "x" | "point";
+  /** The columns' rows. Default: the weeks played. */
+  readonly columns?: readonly Played[];
+}
+
+/**
+ * Goals and xG per match and season to date as line charts, and goals per match as columns keyed as
+ * the points are ("goals@2"), on one colour assignment that records the names it's asked for.
+ */
+function lineSetup(options: LineSetupOptions = {}) {
+  const clock = manualClock();
+  const motion = createMotion({ mode: options.mode ?? "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+  const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion, clock };
+  const target = document.body.appendChild(document.createElement("div"));
+  const transition = recorder();
+  const assignment = colorAssignment();
+  const asked: string[] = [];
+  const colors: ColorAssignment = {
+    slot(key) {
+      asked.push(key);
+      return assignment.slot(key);
+    }
+  };
+  const lineOf = (label: string, data: readonly Week[]) => (container: HTMLElement, shared: ColorAssignment) =>
+    lineChart<Week>(container, { label, data, x: "week", series: ["goals", "xg"], hover: options.hover ?? "x", colors: shared, width: 600 }, env);
+  const views = {
+    perMatch: lineOf("Per match", perMatch),
+    toDate: lineOf("Season to date", toDate),
+    columns: (container: HTMLElement, shared: ColorAssignment) =>
+      barChart<Played>(
+        container,
+        { label: "Goals per match", data: options.columns ?? played, x: (d) => String(d.week), y: "goals", key: (d) => `goals@${d.week}`, orientation: "vertical", colors: shared, width: 600 },
+        env
+      )
+  } satisfies ChartSwitchViews;
+  const switcher = chartSwitch(target, { views, initial: "perMatch", transition: transition.effect, colors }, env);
+  const wrapper = target.querySelector(":scope > .ec-switch") as HTMLDivElement;
+  const overlay = wrapper.querySelector(":scope > .ec-switch-overlay") as SVGSVGElement;
+  const container = (view: string) => wrapper.querySelector(`:scope > .ec-switch-view[data-view="${view}"]`) as HTMLDivElement;
+  const land = async () => {
+    clock.advance(950);
+    await flush();
+  };
+  return { switcher, target, wrapper, overlay, container, clock, motion, env, transition, colors, asked, land, line: switcher.chart("perMatch"), toDate: switcher.chart("toDate"), columns: switcher.chart("columns") };
+}
+
+const color = (colors: ColorAssignment, name: string): string => seriesColors(colors.slot(name)).color;
+const markColor = (element: Element): string => (element as SVGElement).style.getPropertyValue("--ec-mark");
+const runsIn = (overlay: SVGSVGElement): SVGGElement[] => Array.from(overlay.querySelectorAll(".ec-switch-runs > .ec-run"));
+const fadesIn = (overlay: SVGSVGElement): SVGGElement[] => Array.from(overlay.querySelectorAll(".ec-switch-fades > .ec-switch-fade"));
+const markOf = (chart: { marks(): readonly MarkGeometry[] }, key: string): MarkGeometry => chart.marks().find((mark) => mark.key === key)!;
+
+/** The view as a switch uses it, without paintOf() or standsFor(): as a view drawn by another library would be. */
+function bare(chart: ChartSwitchView): ChartSwitchView {
+  return {
+    element: chart.element,
+    marks: () => chart.marks(),
+    labels: () => chart.labels(),
+    focus: (key) => chart.focus(key),
+    leave: () => chart.leave(),
+    destroy: () => chart.destroy()
+  };
+}
+
+describe("chartSwitch: a line chart and columns keyed as its points", () => {
+  it("grows each column out of its point, from a dot of no size at its centre, and fades the lines out over the first half, each in its series' colour", () => {
+    const { switcher, overlay, line, columns, clock, transition, colors, asked } = lineSetup();
+    void switcher.show("columns");
+    // Each column with its point, by key, in the columns' order; xG's points have no partner.
+    expect(transition.runs.map((run) => [run.from.key, run.to.key, run.start])).toEqual([
+      ["goals@1", "goals@1", 0],
+      ["goals@2", "goals@2", 0],
+      ["goals@4", "goals@4", 0],
+      ["goals@6", "goals@6", 0]
+    ]);
+    for (const run of transition.runs) {
+      const point = markOf(line, run.from.key);
+      expect(run.to.outline.d).toBe(markOf(columns, run.to.key).outline.d);
+      if (run.from.key === "goals@4" || run.from.key === "goals@6") {
+        // Alone between gaps: drawn at rest, so its own dot.
+        expect(run.from.outline.d).toBe(point.outline.d);
+        continue;
+      }
+      // Hidden at rest: a dot of no size at its centre.
+      expect(run.from.bounds).toEqual({ x: point.center.x, y: point.center.y, width: 0, height: 0 });
+      expect(run.from.center).toEqual(point.center);
+      expect(run.from.outline.closed).toBe(true);
+      expect(run.from.outline.sample(8).every((p) => p.x === point.center.x && p.y === point.center.y)).toBe(true);
+    }
+    // Every pair in goals' colour, as the points and the columns are drawn.
+    for (const group of runsIn(overlay)) expect(markColor(group)).toBe(color(colors, "goals"));
+    // The lines fade out where they stand, in their colours; the hidden points don't fade at all.
+    const fades = fadesIn(overlay);
+    expect(fades.map((fade) => fade.getAttribute("data-key"))).toEqual(["goals", "xg"]);
+    for (const fade of fades) {
+      const key = fade.getAttribute("data-key")!;
+      expect(markColor(fade)).toBe(color(colors, key));
+      expect(fade.querySelector("path")!.getAttribute("d")).toBe(markOf(line, key).outline.d);
+    }
+    const opacity = () => fades.map((fade) => Number(fade.getAttribute("opacity")));
+    expect(opacity()).toEqual([1, 1]);
+    clock.advance(300);
+    expect(opacity()).toEqual([1, 1].map(() => round(1 - at(300) / 0.5)));
+    clock.advance(200);
+    expect(opacity()).toEqual([0, 0]);
+    // The assignment is asked for series' names only, never a point's key.
+    expect(asked.filter((name) => name.includes("@"))).toEqual([]);
+  });
+
+  it("shrinks each column back into its point, and fades the lines in over the second half", async () => {
+    const { switcher, overlay, line, columns, clock, transition, colors, land } = lineSetup();
+    void switcher.show("columns");
+    await land();
+    transition.runs.length = 0;
+    void switcher.show("perMatch");
+    // In the line chart's order: its points, row by row.
+    expect(transition.runs.map((run) => run.to.key)).toEqual(["goals@1", "goals@2", "goals@4", "goals@6"]);
+    for (const run of transition.runs) {
+      const point = markOf(line, run.to.key);
+      expect(run.from.outline.d).toBe(markOf(columns, run.from.key).outline.d);
+      if (run.to.key === "goals@4" || run.to.key === "goals@6") expect(run.to.outline.d).toBe(point.outline.d);
+      else expect(run.to.bounds).toEqual({ x: point.center.x, y: point.center.y, width: 0, height: 0 });
+    }
+    for (const group of runsIn(overlay)) expect(markColor(group)).toBe(color(colors, "goals"));
+    const fades = fadesIn(overlay);
+    expect(fades.map((fade) => fade.getAttribute("data-key"))).toEqual(["goals", "xg"]);
+    const opacity = () => fades.map((fade) => Number(fade.getAttribute("opacity")));
+    expect(opacity()).toEqual([0, 0]);
+    clock.advance(700);
+    expect(opacity()).toEqual([1, 1].map(() => round((at(700) - 0.5) / 0.5)));
+    clock.advance(249);
+    expect(opacity()).toEqual([1, 1].map(() => round((at(949) - 0.5) / 0.5)));
+  });
+
+  it("fades the columns' labels in and the lines' end labels out, matched by key and role as now", () => {
+    const { switcher, overlay, line, columns } = lineSetup();
+    void switcher.show("columns");
+    const copies = Array.from(overlay.querySelectorAll(".ec-switch-labels > text"));
+    expect(copies).toHaveLength(line.labels().length + columns.labels().length);
+    // None moves: each has no partner, so each fades.
+    for (const copy of copies) expect(copy.getAttribute("visibility")).toBeNull();
+    expect(copies.map((copy) => copy.getAttribute("opacity"))).toEqual([...line.labels().map(() => "1"), ...columns.labels().map(() => "0")]);
+  });
+});
+
+describe("chartSwitch: two line charts", () => {
+  it("morphs their lines by series and moves their end labels; their points stay hidden, but for a value alone between gaps, played as its dot", () => {
+    const { switcher, overlay, line, toDate, clock, transition, colors } = lineSetup();
+    void switcher.show("toDate");
+    expect(transition.runs.map((run) => run.to.key)).toEqual(["goals", "xg", "goals@4", "goals@6"]);
+    for (const run of transition.runs) {
+      expect(run.from.outline.d).toBe(markOf(line, run.from.key).outline.d);
+      expect(run.to.outline.d).toBe(markOf(toDate, run.to.key).outline.d);
+    }
+    expect(runsIn(overlay).map((group) => markColor(group))).toEqual(["goals", "xg", "goals", "goals"].map((name) => color(colors, name)));
+    // Every mark has a partner: nothing fades.
+    expect(fadesIn(overlay)).toEqual([]);
+    // Each end label moves from its place to its partner's.
+    const label = (chart: typeof line, key: string) => chart.labels().find((each) => each.key === key && each.role === "value")!;
+    clock.advance(300);
+    const s = at(300);
+    for (const key of ["goals", "xg"]) {
+      const from = label(line, key);
+      const to = label(toDate, key);
+      const copy = overlayLabels(overlay).find((each) => each.text === from.text)!;
+      expect(copy).toMatchObject({ x: round(mix(from.x, to.x, s)), y: round(mix(from.y, to.y, s)), shown: true });
+    }
+  });
+});
+
+describe("chartSwitch: a line's gaps in the overlay", () => {
+  it("keeps each line's gaps when its view is mapped into the overlay's px", () => {
+    // The season to date drawn at half size, 30 px down: its marks are mapped, the per-match ones aren't.
+    const proto = SVGElement.prototype as unknown as { getScreenCTM?: () => unknown };
+    proto.getScreenCTM = function (this: SVGElement) {
+      if (this.classList.contains("ec-switch-overlay")) return { a: 1, b: 0, c: 0, d: 1, e: 10, f: 20 };
+      return this.closest('[data-view="toDate"]') ? { a: 0.5, b: 0, c: 0, d: 0.5, e: 10, f: 50 } : { a: 1, b: 0, c: 0, d: 1, e: 10, f: 20 };
+    };
+    try {
+      const { switcher, line, toDate, transition } = lineSetup();
+      void switcher.show("toDate");
+      for (const key of ["goals", "xg"]) {
+        const run = transition.runs.find((each) => each.to.key === key)!;
+        const own = markOf(toDate, key);
+        expect(own.gaps?.length).toBeGreaterThan(0);
+        expect(run.to.center).toEqual({ x: own.center.x / 2, y: own.center.y / 2 + 30 });
+        expect(run.to.gaps).toEqual(own.gaps);
+        expect(run.from.gaps).toEqual(markOf(line, key).gaps);
+      }
+    } finally {
+      delete proto.getScreenCTM;
+    }
+  });
+});
+
+describe("chartSwitch: each mark in its view's colour", () => {
+  /** A donut by outcome and columns of the same outcomes coloured by series ("shots"), each optionally without paintOf(). */
+  function shots(options: { readonly bare?: boolean } = {}) {
+    const clock = manualClock();
+    const motion = createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion, clock };
+    const transition = recorder();
+    const colors = colorAssignment();
+    const wrap = (chart: ChartSwitchView) => (options.bare ? bare(chart) : chart);
+    const switcher = chartSwitch(
+      document.body.appendChild(document.createElement("div")),
+      {
+        views: {
+          donut: (container, shared) => wrap(donutChart(container, { label: "Shots", data: outcomes, category: "outcome", value: "shots", colors: shared, width: 600 }, env)),
+          columns: (container, shared) => wrap(barChart(container, { label: "Shots", data: outcomes.slice(0, 3), x: "outcome", y: "shots", orientation: "vertical", colors: shared, width: 600 }, env))
+        },
+        initial: "donut",
+        transition: transition.effect,
+        colors
+      },
+      env
+    );
+    const overlay = document.querySelector(".ec-switch-overlay") as SVGSVGElement;
+    return { switcher, overlay, clock, colors };
+  }
+
+  it("draws a pair whose views colour it differently in the new view's colour, and each mark that fades in its own view's", async () => {
+    const { switcher, overlay, clock, colors } = shots();
+    void switcher.show("columns");
+    // The columns are coloured by their series, the slices by outcome.
+    expect(runsIn(overlay).map((group) => [group.getAttribute("data-key"), markColor(group)])).toEqual(["Goal", "Saved", "Off target"].map((key) => [key, color(colors, "shots")]));
+    expect(fadesIn(overlay).map((fade) => [fade.getAttribute("data-key"), markColor(fade)])).toEqual([["Blocked", color(colors, "Blocked")]]);
+    // A switch back mid-way plays the same picture backwards, in the same colours.
+    clock.advance(300);
+    void switcher.show("donut");
+    expect(runsIn(overlay).map((group) => markColor(group))).toEqual([1, 2, 3].map(() => color(colors, "shots")));
+    clock.advance(950);
+    await flush();
+    // Landed on the donut: a new switch to it draws in the slices' colours, by outcome.
+    void switcher.show("columns");
+    clock.advance(950);
+    await flush();
+    void switcher.show("donut");
+    expect(runsIn(overlay).map((group) => [group.getAttribute("data-key"), markColor(group)])).toEqual(["Goal", "Saved", "Off target"].map((key) => [key, color(colors, key)]));
+    expect(fadesIn(overlay).map((fade) => [fade.getAttribute("data-key"), markColor(fade)])).toEqual([["Blocked", color(colors, "Blocked")]]);
+  });
+
+  it("draws a view without paintOf() by key, as before", () => {
+    const { switcher, overlay, colors } = shots({ bare: true });
+    void switcher.show("columns");
+    expect(runsIn(overlay).map((group) => [group.getAttribute("data-key"), markColor(group)])).toEqual(["Goal", "Saved", "Off target"].map((key) => [key, color(colors, key)]));
+    expect(fadesIn(overlay).map((fade) => [fade.getAttribute("data-key"), markColor(fade)])).toEqual([["Blocked", color(colors, "Blocked")]]);
+  });
+
+  it("gives each chart's paint: a slice by key, a bar by key or by its first series, a line and its points by series", () => {
+    const { switcher } = shots();
+    const donut = switcher.chart("donut") as ChartSwitchView;
+    expect(donut.paintOf!("Saved")).toEqual({ color: "Saved", drawn: true });
+    expect(donut.paintOf!("Woodwork")).toBeUndefined();
+    const columns = switcher.chart("columns") as ChartSwitchView;
+    expect(columns.paintOf!("Saved")).toEqual({ color: "shots", drawn: true });
+    expect(columns.paintOf!("Blocked")).toBeUndefined();
+    const { line, columns: byPoint } = lineSetup();
+    const view = line as ChartSwitchView;
+    expect(view.paintOf!("goals")).toEqual({ color: "goals", drawn: true });
+    expect(view.paintOf!("xg@2")).toEqual({ color: "xg", drawn: false });
+    expect(view.paintOf!("goals@4")).toEqual({ color: "goals", drawn: true });
+    // An x isn't a mark.
+    expect(view.paintOf!("2")).toBeUndefined();
+    expect((byPoint as ChartSwitchView).paintOf!("goals@2")).toEqual({ color: "goals", drawn: true });
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion: createMotion({ mode: "off" }), clock: manualClock() };
+    const byCategory = barChart(document.body.appendChild(document.createElement("div")), { label: "Shots", data: outcomes, x: "outcome", y: "shots", colorBy: "category", width: 600 }, env) as ChartSwitchView;
+    expect(byCategory.paintOf!("Saved")).toEqual({ color: "Saved", drawn: true });
+    const stack = barChart(document.body.appendChild(document.createElement("div")), { label: "Weeks", data: played.map((d) => ({ ...d, assists: 1 })), x: (d) => String(d.week), stack: ["assists", "goals"], width: 600 }, env) as ChartSwitchView;
+    expect(stack.paintOf!("2")).toEqual({ color: "assists", drawn: true });
+  });
+});
+
+describe("chartSwitch: focus across line charts", () => {
+  const focused = () => document.activeElement?.getAttribute("data-key");
+
+  it("moves focus from an x to its first series' point's column, and back to the x", async () => {
+    const { switcher, line, columns, land } = lineSetup();
+    line.focus("2");
+    expect(focused()).toBe("2");
+    expect((line as ChartSwitchView).standsFor!("2")).toEqual(["goals@2", "xg@2", "2"]);
+    void switcher.show("columns");
+    await land();
+    expect(columns.element.contains(document.activeElement)).toBe(true);
+    expect(focused()).toBe("goals@2");
+    void switcher.show("perMatch");
+    await land();
+    expect(line.element.contains(document.activeElement)).toBe(true);
+    expect(focused()).toBe("2");
+  });
+
+  it("moves focus from an x whose first series is missing there to that series' column, when the columns have it", async () => {
+    // Every week a column, a missing value as 0.
+    const { switcher, line, columns, land } = lineSetup({ columns: perMatch.map((d) => ({ week: d.week, goals: d.goals ?? 0 })) });
+    line.focus("3");
+    expect((line as ChartSwitchView).standsFor!("3")).toEqual(["goals@3", "xg@3", "3"]);
+    void switcher.show("columns");
+    await land();
+    expect(columns.element.contains(document.activeElement)).toBe(true);
+    expect(focused()).toBe("goals@3");
+  });
+
+  it("moves focus from a point to its column and back, with hover: \"point\"", async () => {
+    const { switcher, line, columns, land } = lineSetup({ hover: "point" });
+    line.focus("goals@2");
+    expect(focused()).toBe("goals@2");
+    expect((line as ChartSwitchView).standsFor!("goals@2")).toEqual(["goals@2"]);
+    void switcher.show("columns");
+    await land();
+    expect(columns.element.contains(document.activeElement)).toBe(true);
+    expect(focused()).toBe("goals@2");
+    void switcher.show("perMatch");
+    await land();
+    expect(line.element.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement?.classList.contains("ec-stop")).toBe(true);
+    expect(focused()).toBe("goals@2");
+  });
+
+  it("moves focus to the new view's first mark when it has none of the keys", async () => {
+    const { switcher, line, columns, land } = lineSetup();
+    line.focus("5");
+    void switcher.show("columns");
+    await land();
+    expect(columns.element.contains(document.activeElement)).toBe(true);
+    expect(focused()).toBe("goals@1");
+  });
+
+  it("moves focus from an x to the same x in another line chart, and with motion off too", async () => {
+    const { switcher, line, toDate, land } = lineSetup();
+    line.focus("3");
+    void switcher.show("toDate");
+    await land();
+    expect(toDate.element.contains(document.activeElement)).toBe(true);
+    expect(focused()).toBe("3");
+
+    const off = lineSetup({ mode: "off" });
+    off.line.focus("2");
+    void off.switcher.show("columns");
+    expect(off.columns.element.contains(document.activeElement)).toBe(true);
+    expect(focused()).toBe("goals@2");
+  });
+});
+
+describe("chartSwitch: a line view", () => {
+  it("takes part in a link through the line view on show, by x, before and after a switch", async () => {
+    const { switcher, line, env, land } = lineSetup();
+    const bars = barChart<Played>(document.body.appendChild(document.createElement("div")), { label: "Goals", data: played, x: (d) => String(d.week), y: "goals", orientation: "vertical", width: 400 }, env);
+    link([bars, switcher]);
+    const hot = (chart: { readonly element: Element }) => Array.from(chart.element.querySelectorAll(".ec-hot"), (element) => element.getAttribute("data-key"));
+    const bar = (key: string) => bars.element.querySelector(`.ec-mark[data-key="${key}"] .ec-segment`)!;
+    const x = (key: string) => line.element.querySelector(`.ec-column[data-key="${key}"] .ec-hit`)!;
+    pointer("pointerover", bar("2"));
+    expect(hot(line)).toEqual(["goals@2", "xg@2"]);
+    pointer("pointerleave", bars.element);
+    expect(hot(line)).toEqual([]);
+    pointer("pointerover", x("4"));
+    expect(hot(bars)).toEqual(["4"]);
+    pointer("pointerleave", line.element);
+    expect(hot(bars)).toEqual([]);
+
+    void switcher.show("columns");
+    await land();
+    void switcher.show("perMatch");
+    await land();
+    pointer("pointerover", bar("6"));
+    expect(hot(line)).toEqual(["goals@6", "xg@6"]);
+    pointer("pointerleave", bars.element);
+    pointer("pointerover", x("1"));
+    expect(hot(bars)).toEqual(["1"]);
+  });
+
+  it("lands at once with motion off, without playing the pairs", async () => {
+    const { switcher, overlay, container, transition, clock } = lineSetup({ mode: "off" });
+    await switcher.show("columns");
+    expect(transition.runs).toEqual([]);
+    for (const layer of Array.from(overlay.children)) expect(layer.children).toHaveLength(0);
+    expect(container("columns").classList.contains("ec-switch-inactive")).toBe(false);
+    expect(container("perMatch").classList.contains("ec-switch-inactive")).toBe(true);
+    expect(clock.idle).toBe(true);
+  });
+
+  it("lands a switch when the cell is resized", async () => {
+    const observers: { callback: ResizeObserverCallback; target?: Element }[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        private readonly entry: { callback: ResizeObserverCallback; target?: Element };
+        constructor(callback: ResizeObserverCallback) {
+          this.entry = { callback };
+          observers.push(this.entry);
+        }
+        observe(target: Element) {
+          this.entry.target = target;
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    const { switcher, wrapper, overlay, container, clock } = lineSetup();
+    const watcher = observers.find((observer) => observer.target === wrapper)!;
+    const resize = (width: number) => watcher.callback([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver);
+    resize(600);
+    const landed = vi.fn();
+    void switcher.show("columns").then(landed);
+    clock.advance(300);
+    resize(480);
+    expect(container("columns").classList.contains("ec-switching")).toBe(false);
+    expect(container("perMatch").classList.contains("ec-switch-inactive")).toBe(true);
+    for (const layer of Array.from(overlay.children)) expect(layer.children).toHaveLength(0);
+    await flush();
+    expect(landed).toHaveBeenCalledTimes(1);
+  });
+
+  it("lands a switch first when show() asks for a third view, then switches from there", async () => {
+    const { switcher, line, columns, toDate, container, clock, transition } = lineSetup();
+    line.focus("2");
+    const first = vi.fn();
+    void switcher.show("columns").then(first);
+    clock.advance(300);
+    transition.runs.length = 0;
+    const third = vi.fn();
+    void switcher.show("toDate").then(third);
+    await flush();
+    expect(first).toHaveBeenCalledTimes(1);
+    // From the columns, landed, to the points they grew from: hidden in the season to date, but where goals are alone.
+    expect(transition.runs.map((run) => [run.from.key, run.start])).toEqual([
+      ["goals@1", 0],
+      ["goals@2", 0],
+      ["goals@4", 0],
+      ["goals@6", 0]
+    ]);
+    expect(transition.runs[0]!.from.outline.d).toBe(markOf(columns, "goals@1").outline.d);
+    const point = markOf(toDate, "goals@1");
+    expect(transition.runs[0]!.to.bounds).toEqual({ x: point.center.x, y: point.center.y, width: 0, height: 0 });
+    expect(transition.runs[2]!.to.outline.d).toBe(markOf(toDate, "goals@4").outline.d);
+    clock.advance(950);
+    await flush();
+    expect(third).toHaveBeenCalledTimes(1);
+    expect(["perMatch", "columns", "toDate"].map((view) => container(view).classList.contains("ec-switch-inactive"))).toEqual([true, true, false]);
+    // Focus went on with the week.
+    expect(toDate.element.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement?.getAttribute("data-key")).toBe("2");
   });
 });

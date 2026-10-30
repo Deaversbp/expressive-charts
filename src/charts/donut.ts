@@ -38,6 +38,7 @@ import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
+import type { ChartSwitchPaint } from "./switch";
 import { chartTable, tableModel, type TableModel } from "./table";
 import { chartTooltip } from "./tooltip";
 import type { Chart, DonutChartOptions } from "./types";
@@ -773,6 +774,9 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
         ...chartLabel(record.key, "category", record.drawnLabel?.category, record.label),
         ...chartLabel(record.key, "value", record.drawnLabel?.share, record.share)
       ]),
+
+    // For a chart switch: a slice takes its own key's colour.
+    paintOf: (key: string): ChartSwitchPaint | undefined => (records.has(key) ? { color: key, drawn: true } : undefined),
 
     destroy() {
       if (destroyed) return;

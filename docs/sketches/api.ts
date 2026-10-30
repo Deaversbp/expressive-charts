@@ -119,6 +119,9 @@ export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 // `announce` says the new view's label; the handle has chart(view), typed as that view's function
 // returns it; and ChartSwitch is typed by the views record rather than by their names. Since M9 step
 // 2 the handle also has on(), marks() and leave(), the view on show's, so link() takes a switch.
+// NEW in M11 step 1: ChartSwitchView has optional paintOf(key) (ChartSwitchPaint: the name a mark's
+// colour comes from, and whether it's drawn at rest) and standsFor(key) (the keys a focus stop stands
+// for), which the charts' handles have, so a line chart is a view: its points grow into columns.
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 

@@ -67,6 +67,7 @@ import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
+import type { ChartSwitchPaint } from "./switch";
 import { chartTable, tableModel, type TableModel } from "./table";
 import { monthsOn } from "./time";
 import { chartTooltip, summaryContent, type TooltipContent, type TooltipRow } from "./tooltip";
@@ -1539,6 +1540,18 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
     // A line's end label is its value; points have none.
     labels: () => lineOrder.flatMap((line) => chartLabel(line.key, "value", line.drawnLabel, line.label)),
+
+    // For a chart switch: a line and its points take their series' colour, and of the points only a
+    // value alone between gaps is drawn at rest. An x stands for each series' point there, in series
+    // order (a missing value's key too, which another view may have), then itself.
+    paintOf(key: string): ChartSwitchPaint | undefined {
+      const record = lines.get(key) ?? points.get(key);
+      return record && { color: record.series, drawn: record.kind === "line" || record.group.classList.contains("ec-alone") };
+    },
+
+    standsFor(key: string): string[] {
+      return rows.has(key) ? [...laidOut.series.map((series) => pointKey(series, key)), key] : [key];
+    },
 
     destroy() {
       if (destroyed) return;

@@ -767,6 +767,8 @@ function mapMark(mark: MarkGeometry, m: Matrix): MarkGeometry {
       return Math.atan2(m[1] * cos + m[3] * sin, m[0] * cos + m[2] * sin);
     },
     slice: (t0, t1) => path(mark.slice(t0, t1)),
+    // At the same t: the transform keeps angles, so it scales every length along the walk alike.
+    ...(mark.gaps === undefined ? {} : { gaps: mark.gaps }),
     thickness: mark.thickness * scale,
     outline: { d: path(outline.d), closed: outline.closed, sample: (n) => outline.sample(n).map(point) },
     bounds: boxIn(m, mark.bounds),

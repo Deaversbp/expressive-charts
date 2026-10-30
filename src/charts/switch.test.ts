@@ -1135,6 +1135,31 @@ describe("chartSwitch: two line charts", () => {
   });
 });
 
+describe("chartSwitch: a line's gaps in the overlay", () => {
+  it("keeps each line's gaps when its view is mapped into the overlay's px", () => {
+    // The season to date drawn at half size, 30 px down: its marks are mapped, the per-match ones aren't.
+    const proto = SVGElement.prototype as unknown as { getScreenCTM?: () => unknown };
+    proto.getScreenCTM = function (this: SVGElement) {
+      if (this.classList.contains("ec-switch-overlay")) return { a: 1, b: 0, c: 0, d: 1, e: 10, f: 20 };
+      return this.closest('[data-view="toDate"]') ? { a: 0.5, b: 0, c: 0, d: 0.5, e: 10, f: 50 } : { a: 1, b: 0, c: 0, d: 1, e: 10, f: 20 };
+    };
+    try {
+      const { switcher, line, toDate, transition } = lineSetup();
+      void switcher.show("toDate");
+      for (const key of ["goals", "xg"]) {
+        const run = transition.runs.find((each) => each.to.key === key)!;
+        const own = markOf(toDate, key);
+        expect(own.gaps?.length).toBeGreaterThan(0);
+        expect(run.to.center).toEqual({ x: own.center.x / 2, y: own.center.y / 2 + 30 });
+        expect(run.to.gaps).toEqual(own.gaps);
+        expect(run.from.gaps).toEqual(markOf(line, key).gaps);
+      }
+    } finally {
+      delete proto.getScreenCTM;
+    }
+  });
+});
+
 describe("chartSwitch: each mark in its view's colour", () => {
   /** A donut by outcome and columns of the same outcomes coloured by series ("shots"), each optionally without paintOf(). */
   function shots(options: { readonly bare?: boolean } = {}) {

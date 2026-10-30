@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M10 are complete (§9). M10 built curved lines and a hover on one point on the line chart, change labels that keep clear of other marks' labels, curved Vega lines, smaller pages for the motion core and `describe`, and a build on stable releases. **0.5.0 is on npm**, published from CI through npm's trusted publishing with provenance on 29 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.5.0)), after 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M10 are complete (§9). M10 built curved lines and a hover on one point on the line chart, change labels that keep clear of other marks' labels, curved Vega lines, smaller pages for the motion core and `describe`, and a build on stable releases. M11, for 0.6.0, is planned in §9: a line chart as a chart switch's view, change text that keeps clear of other marks' change text, more host marks read by tag, a tidier hover on one point, `morph` that keeps gaps and holes, and a toolchain tidy. **0.5.0 is on npm**, published from CI through npm's trusted publishing with provenance on 29 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.5.0)), after 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -3260,6 +3260,225 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **0.5.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M10 is done.
 
 **Status: complete (29 October 2026).** Every item on the list holds. Steps 1 to 7 built and checked the first seven, and 0.5.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 8).
+
+### M11: Lines in a switch, and changes that keep clear of each other (0.6.0)
+
+A line chart as a chart switch's view, its points growing into columns and its gaps kept through the morph; change text that keeps clear of other marks' change text; more host marks read by tag; a tidier hover on one point; `morph` that keeps a shape's holes; a toolchain tidy; and last, 0.6.0 on npm.
+
+**Demo:** the morph page gets a second card: a season's goals and xG with missing weeks, switching between Per match and Season to date as lines and Per match as columns. On the season page, both lines show each matchweek's change again, clear of each other. The donut page's D3 pie is read by tag.
+
+**Where M11 starts** (checked against main at `b646d0f` while planning, 29 October 2026):
+
+- **Already built.**
+  - **0.5.0** is npm's `latest`, published through trusted publishing with provenance. npm lists `0.0.0-stage` and `0.1.0` to `0.5.0`. GitHub has no open issues or pull requests. Main is 0.5.0's code, with this plan's last edits.
+  - **The switch** takes bar, donut and line charts as views, but a line's points don't suit it yet (architecture.md's "Not fitted yet"). Points aren't drawn at rest, so the overlay would draw dots that weren't there. They're keyed `goals@12` and coloured by series, but the overlay draws each pair, and each mark that fades, in its key's colour (`colors.slot(key)` in `src/charts/switch.ts`), which would give each point a colour of its own. Marks pair by key, and one with no partner fades where it stands.
+  - **`morph`** (`src/effects/morph.ts`) samples a line's outline along its whole walk, so between two lines with gaps it joins them part way; its first and last frames are the lines' own. Between closed outlines it samples the longest subpath, so a shape's holes show only at the ends, in the outlines' own `d`.
+  - **A switch back doesn't jump.** M5 step 4 measured up to 0.17 px at real speed. M6 step 4 started the switch's tween and the pairs' runs at one time, and `src/morph.test.ts` checks a reverse on a clock that moves while it's read.
+  - **Change labels.** `captionPlace` (`src/effects/caption.ts`, internal) goes past the mark's `labelBounds` and `nearbyLabels`.
+    - An effect sees only its own mark, so two lines ending close together put their changes past the same end labels, where they can meet. On the season page they met in 5 of the 9 matchweeks where both change at 1,000 px, and in 8 of 9 at 320 px, so it shows only the goals line's change (M10 step 6).
+    - A box is in the way when the line the text is placed along passes within 6 px of it. Text centred along a slice's ring reaches further to each side, so in M10 step 3's probe, 63 of 592 slices whose label was dropped put their text on another slice's label.
+    - Effects can't measure text: a `TextHandle` has only `update` and `remove`.
+    - The line chart has no `room`, and at full width the season page's changes ran past the chart into the card's padding in 10 of 14 matchweeks.
+  - **The adapter.** `expressive()` throws on a rotated or skewed `<rect>` ("isn't an upright bar"). It reads a `<path>` as a closed shape with its own centre, so a D3 pie read by tag keeps document order and its slices aren't slices; the donut page gives `geometry` with `describe.arc` instead. A stroke's width is scaled by the element's transform, and `vector-effect: non-scaling-stroke` isn't read (M9 step 6).
+  - **The hover on one point.** Of two points as near the pointer, the series first in `series` wins (`nearestPoint` in `src/charts/line.ts`). So a point drawn on another can't be hovered by the pointer from its centre; the keyboard reaches it (M10 step 7). With `hover: "point"`, the x's names are still worked out for their hidden columns, so `markLabel` is called for every x as well as every point.
+  - **The build.** tsdown 0.23.3, pinned, with rolldown-plugin-dts 0.28.8 and rolldown 1.2.15. TypeScript 7.0.2 runs `typecheck` (2.5 s), and 6.0.3, as `typescript-6`, the API docs test. TypeScript 7.1 is still in beta (7.1.0-beta, and nightly 7.1.0-dev builds), so that test stays on TypeScript 6's API. vite 8.3.5 and jsdom 30.1.3 are out (main has 8.3.4 and 29.1.1); neither is part of M11.
+  - **Testing.** 2,672 unit tests in 109 files pass. The visual suite ran 692 tests, with 58 skipped, at M10 step 7 (250 in each browser). In M10 step 6, WebKit's stress-page date line ("part way through its play") once went past its 30 s wait under 4 workers; alone it takes 32 to 37 s.
+  - **Sizes** (gzip, against their budgets, on `b646d0f`, 0.5.0's code): everything 80.0 KB of 86 (81,943 bytes: 6.0 KB left), `barChart` 30.8 of 34, the line page's set 40.3 of 41 (41,313 bytes: 671 left), the switch's set 41.2 of 45, `expressive` and `travel` 31.4 of 34, `describe` and `matrix` 6.6 of 7.5, `motion` and `animated` 1.7 of 2, the script-tag bundle 79.7 of 88, `dist/index.js` 115.2 of 123.5, `dist/index.cjs` 113.3 of 124, `dist/testing.js` 22.8 of 24.5, and the stylesheet 2.4 of 2.5.
+- **Gaps.**
+  - A line chart can't be a switch view in practice, and `morph` joins a line's gaps and shows a shape's holes only at its ends.
+  - Two marks' change text can meet, and a slice's, with its label dropped, can sit on a neighbour's label. The line chart keeps no room for that text.
+  - A rotated `<rect>` throws, a D3 pie read by tag isn't read as slices, and a non-scaling stroke's width is read wrong.
+  - A point drawn on another can't be hovered by the pointer from its centre, and `markLabel` is called for hidden x's.
+- **Out of date** (each fixed by the step named):
+  - tsdown 0.23.4 is out (29 October). It still asks for rolldown-plugin-dts `^0.28.8`, so 0.29.0, stable the same day, isn't taken; both pin `get-tsconfig 5.0.0-beta.6`. `npm dedupe` would hoist `magic-string` and `commander` (step 6).
+  - `docs/a11y-audit.md`'s link to M8 misses GitHub's anchor, which ends in a hyphen for a heading that ends in ✅ (step 6).
+  - architecture.md's chart switch says a line's points don't suit it yet, and so does api.md's `ChartSwitchView` (step 1). architecture.md's Gaps says `morph` joins two lines' gaps part way (step 2).
+
+**What M11 takes from the backlog and the notes, and what stays:**
+
+| Item | Goes to |
+| --- | --- |
+| Line charts as switch views (M6 decision 3), with `morph` across gaps (M8 step 3) | Decisions 1, 4, 8, 10 and 11, steps 1 and 2 |
+| Two lines' changes meeting each other, and a slice with its label dropped beside a neighbour's label (M10 step 3's notes), and a line chart's room for them (M10 step 6's notes) | Decisions 1, 5 and 12, step 3 |
+| A rotated `<rect>` read as a closed shape, a pie's slices read by tag, and `vector-effect: non-scaling-stroke` widths (M9 step 6's notes) | Decisions 2, 7 and 13, step 4 |
+| Points drawn on each other, and `markLabel` called for x's and points (M10 steps 2 and 7's notes) | Decisions 2, 6 and 14, step 5 |
+| `morph` between shapes with holes (M9 step 3's notes) | Decisions 2 and 11, step 2 |
+| tsdown 0.23.4, `npm dedupe`, WebKit's wait on the stress page, and the audit's link to M8 (M10's notes) | Decisions 2 and 15, step 6 |
+| A switch back's 0.17 px jump (M5 step 4's notes) | Done in M6 step 4 (above) |
+| `api-docs.test.ts` on TypeScript 7's API, rolldown-plugin-dts 0.29.0, and a stable `get-tsconfig` | Stay: TypeScript 7.1 is in beta, tsdown asks for 0.28.8, and both plugin releases pin the beta |
+| Switching between host charts, a transition effect reporting its progress, time zones by name, drawing a mark itself in, recolouring at once on `update({ colors })`, decorations below a line chart's points, `threshold` exact on curved Vega lines, a lighter path than `refresh()` for Vega, a bar's per-frame cost, VoiceOver + Safari, a written audit table for `stress.html`, square caps and bevel joins, a curved line's fade beside a row coming or going, a mark's `opacity` reaching its decorations, and M8's notes | Stay: in the backlog, or in the notes |
+
+When step 1 lands, it marks the backlog's line charts as switch views as built in M11. The other items come from the notes.
+
+**Decided while planning M11 (29 October 2026):** decisions 1–8 are yours, and 9–16 follow from them and the code.
+
+1. **M11 builds two things:** lines in a switch (a line chart as a chart switch's view, to and from columns and other line charts, with `morph` keeping a line's gaps), and changes that keep clear of each other (one mark's change text off another's, and a slice's off a neighbour's label when its own is dropped).
+2. **Four smaller items join them:** more host marks read by tag (a rotated `<rect>`, a pie's slices and non-scaling strokes); a tidier hover on one point (points drawn on each other, and `markLabel` once a stop); `morph` between shapes with holes; and a toolchain and test tidy.
+3. **One release, 0.6.0, when M11 is done.**
+4. **A line's points grow into columns.** From a line chart to columns, each point pairs with its column by key and grows out of the line where it sits, and the line fades out over the first half; back, they shrink into it. The page keys its columns as the points are keyed (`goals@12`). Not a crossfade, which would show nothing of which value became which column.
+5. **Effects share where their text is.** The effect context tells an effect where other effects' text sits on the same chart, and `delta` and `label` go past it, as they go past `nearbyLabels`. The mark first in the chart's order keeps its place. Lines get `room`, as bars have. Not a line's change beside its own end label, which would help lines only.
+6. **Of points drawn on each other, the nearer line wins.** The pointer hovers the one whose line passes nearer it; exactly on the centre, the series first in `series` wins, as now. One point a hover, as now, not both at once.
+7. **A pie's path is read as a slice:** `describe.arc`, from its centre, radii and angles, so it's ordered clockwise and every effect treats it as our donut's slices. Anything else stays a shape. Not the order alone.
+8. **The demos:** a new card on the morph page, a season's goals and xG with missing weeks as Per match and Season to date lines and Per match columns; the season page's xG line with its change again; and the donut page's D3 pie read by tag.
+9. **What's an addition and what isn't** (the 0.x promise). 0.6.0 is a minor release. In the effect-author API, `texts` on `EffectContext` is an addition; nothing in it changes or goes.
+
+   | Change | Under the promise? | Kind |
+   | --- | --- | --- |
+   | `texts` on `EffectContext`, and its type, `TextSpace` | Yes | An optional field: an addition. An effect that doesn't read it works as before, and a context without it is still one |
+   | `delta` and `label` going past other effects' text, and checking their text's own box | No: the built-in effects | A fix: text that landed on another mark's change, or a slice's on a neighbour's label, now goes past it. Listed under Fixed |
+   | `morph` keeping a line's gaps and a shape's holes | No: the built-in effects | A fix: lines without gaps and outlines without holes morph as before, byte for byte. Listed under Fixed |
+   | A line chart as a switch view, and the switch drawing each mark in its view's colour | No: the charts | Additions: optional methods on `ChartSwitchView`, which the three charts' handles have. A switch whose views colour their marks by key draws as before |
+   | `room` on `lineChart` | No: the charts | An addition: its default, 0, lays out as before |
+   | The nearer line winning, and `markLabel` called once a stop | No: the charts | A fix, and a change: a page that counts `markLabel`'s calls with `hover: "point"` sees fewer. Listed under Changed |
+   | `expressive()` reading a rotated `<rect>`, a slice's path as a slice, and a non-scaling stroke | No: the adapters | The `<rect>` is an addition (it threw), and the stroke a fix. A D3 pie read by tag gets slices where it had shapes, so its effects act as on our donut: a change, listed under Changed, with `geometry` to keep the shapes |
+   | tsdown 0.23.4, and `npm dedupe` | The published types | Nothing changes while every exported name has the same type, which the comparison checks. A difference stops the step |
+   | WebKit's wait, and the audit's link | No: the repository | Tests and docs only |
+
+10. **Lines in a switch** (decisions 1 and 4).
+    - **Pairs** go by key, as now. A line chart's lines pair with another line chart's by series, and morph along their strokes, gaps kept (decision 11). Its points pair with the other view's marks of the same key: another line chart's points, or columns keyed as the points are, which a page gives with the bar chart's `key` (`key: (d) => \`goals@${d.week}\``). A mark with no partner fades, as now: the line, going to columns, fades out over the first half.
+    - **What each view draws.** `ChartSwitchView` gets an optional method, `paintOf(key)`, which gives the name a mark's colour comes from in the shared assignment, and whether its chart draws it at rest. The bar, donut and line charts' handles have it. A line and its points take their series' colour, and of the points only a value alone between gaps is drawn at rest. A bar takes the colour `colorBy` gives it (its key, or its first part's series), and a slice its key.
+    - **The overlay** draws each pair, and each mark that fades, in the colour its view gives it. A pair whose two colours differ is drawn in the new view's; pages keep them the same, as `colors` and `colorBy` do now. A view without `paintOf` is drawn by key, as now, so the morph page's donut and columns, which colour by key, draw as before.
+    - **A mark its view doesn't draw at rest** starts or ends as a dot of no size at its centre, so a column grows out of its point and shrinks back into it. A pair that neither view draws isn't played, so two line charts' points stay hidden.
+    - **Labels** pair by key and role, as now. A line's end label has no partner among columns and fades, and the columns' names and value labels fade in.
+    - **Focus** follows the x. A view's chart can say which keys its focused stop stands for, with a second optional method on `ChartSwitchView`: a line chart's x stands for its points, in series order, then itself. The switch lands on the first of them the new view has, through `focus(key)`, as now, and otherwise on the first mark. So focus goes from an x to its first series' point's column, and from a column back to its point, or its x with `hover: "x"`.
+    - **A link** to the switch works as now: the view on show takes part, a line chart by x.
+    - api.md's `ChartSwitchView` and architecture.md's "Not fitted yet" say what's fitted now.
+11. **`morph` keeps gaps and holes** (decisions 1 and 2).
+    - **Between two lines,** the stroke inside a gap of the old line fades in as the morph goes, and the stroke inside a gap of the new line fades out. Each piece is drawn at an opacity of 1 − ((1 − p) · a + p · b), where p is the eased progress, and a and b are 1 inside the old and the new line's gap and 0 outside. So the first and last frames are the lines' own, nothing is drawn inside a gap both lines have, and nothing jumps. The gaps come from `MarkGeometry.gaps`, at the samples' `t`.
+    - **Between two closed outlines with holes,** each hole morphs as the outside does. Holes pair by area, largest with largest, each sampled at a quarter of `points` from its upper left, and each point moves in a straight line to its partner. A hole with no partner shrinks to a point at its centre, or grows from one. Holes are written the other way round from the outside, as `describe.shape` writes them, so a hole stays a hole under either fill rule. They come from the outline's `d`: its subpaths other than the longest.
+    - A line without gaps, and an outline without holes, morph as now, byte for byte. A closed outline and an open one still crossfade.
+    - The contract doesn't change: `morph` reads `gaps` and the outline's `d`.
+12. **Change text that keeps clear** (decisions 1 and 5).
+    - **`EffectContext.texts?: TextSpace`:** where effects' text sits on this chart or attachment. Every run on one runner shares one space. Unset means no other text is known, as with `nearbyLabels`. The charts' and attachments' runners always give it, and so do the testing entry's contexts (`testContext()`, and `checkEffect` through it). Its methods:
+      - `box(content, style)`: the box `content` takes, drawn with `style`, measured as the chart measures its own text (estimated where there's no layout), at the overlay's text size.
+      - `held()`: the boxes held by the runs on this runner that started before this one.
+      - `hold(box)`: this run's text is at `box` from now on, until it holds another, holds `undefined`, or the run is cleared.
+    - **Earlier text keeps its place.** At an update, runs start in the chart's mark order, so the first mark's change keeps its place and the next goes past it. Earlier runs never move for later ones. When marks move, their runs hear it in mark order too, so text placed again keeps the same rule; the step checks that the runner tells them so.
+    - **`delta` and `label`** (through `caption`) go 6 px past the farthest held box their way meets, as past `nearbyLabels`, and hold the box where their text ends, risen into place.
+    - **Their text's own box.** With `box()`, `captionPlace` moves the text along its way until its own box meets none of the boxes in the way, 6 px clear, rather than checking a 6 px band along the way. So text centred along a slice's ring keeps off a label beside it. Without `texts`, it uses the band, as now.
+    - **`room` on `lineChart`:** px the layout keeps clear to the right of the end labels, for text an effect draws past them. Its default, 0, lays out as now. It's checked as `barChart`'s is (a `RangeError` for anything but a number of px, 0 or more), and `update({ room })` lays the chart out again.
+    - **The promise.** `texts` and `TextSpace` are additions. The conformance sweep checks every source's text outside every other run's.
+13. **More host marks read by tag** (decisions 2 and 7).
+    - **A rotated or skewed `<rect>`** is a closed shape, read through `describe.shape` from its outline, with its rounded corners, moved by its matrix, as a `<polygon>` is, instead of throwing. An upright one is a bar, as now. With one among bars, every mark keeps document order, as with a circle or a shape among them.
+    - **A slice.** A `<path>` whose data is a ring's slice is read with `describe.arc`. That's one circular arc with two straight sides through its centre (a pie's slice), two arcs about one centre, one each way, joined along radii (a donut's), or a whole ring.
+      - Its centre, radii and angles, in `d3.pie()`'s convention, come from the path through its matrix, and the path must match them within 0.5 px.
+      - A path with a pad angle, rounded corners or an elliptical arc stays a shape, as now, and so does one under a matrix that doesn't keep circles.
+      - Slices round one centre are ordered clockwise from 12 o'clock (`ringOrder`), as with `geometry`.
+    - **`vector-effect: non-scaling-stroke`,** as an attribute or a computed style, means the stroke's width is in screen px. It isn't scaled by the element's transform. Where there's layout, it's turned into the marks' common units by the common ancestor's screen scale; where there isn't, as in jsdom, it's kept as given. `watch` follows it, as it follows the width.
+    - **The donut page's D3 pie** is read by tag, with no `geometry` (step 7), and its marks are the ones `describe.arc` gave it, within 0.5 px.
+14. **A tidier hover on one point** (decisions 2 and 6).
+    - **Points drawn on each other.** When the nearest revealed points are within a px of each other, the pointer hovers the one whose line passes nearest it. That's the distance from the pointer to each line's stroke, as drawn, within a dot's radius of the point; a value alone between gaps counts as its dot. Of two as near, the series first in `series` wins, as now. The hover held on the dot (M10 step 7) and touch keep the rule. The keys are as now.
+    - **`markLabel`** is called for the stops shown. With `hover: "point"`, the x's names aren't worked out while their columns are hidden, and `update({ hover: "x" })` works them out. So with `"point"`, `markLabel` is called once for each point, with the same arguments as now.
+15. **The toolchain and the tests** (decision 2).
+    - **tsdown** goes to 0.23.4, pinned exactly. It takes rolldown-plugin-dts 0.28.8, as 0.23.3 does, and rolldown `~1.2.15`. M10 step 5's comparison runs again: the files byte for byte, and, where any differ, each entry's names as an ES module and as CommonJS, each exported name's type read with TypeScript 6's API, and the sizes. A published type or name that differs, or a size that grows by more than 1 KB, stops the step to ask you.
+    - **rolldown-plugin-dts 0.29.0** waits for a tsdown that asks for it, and `get-tsconfig` for a stable release: 0.28.8 and 0.29.0 both pin its 5.0.0 beta.
+    - **`npm dedupe`** tidies the lockfile (its dry run hoists `magic-string` and `commander`). The build stays the same byte for byte, and `npm ls` reports no problems.
+    - **WebKit's wait.** The stress page's date line waits up to 60 s for its readout, from 30, and its test's timeout goes up to match.
+    - **The audit's link** to M8 gets GitHub's anchor, ending in a hyphen.
+    - **`api-docs.test.ts` stays on TypeScript 6's API** until TypeScript 7.1 is out; then it and `typescript-6` can go.
+16. **The rest.**
+    - **Accessibility.** A new script, L, for NVDA + Chrome. It covers the morph page's new card: its three views, each switch announced, focus following the week from a line's x to its column and back, and a point's name in the line views. It covers the season page's two changes after a matchweek, with the announcement as now, and the donut page's D3 pie read by tag, its slices in clockwise order with their names as before. You run it.
+    - **Docs.** Each step adds its exports to api.md (`src/api-docs.test.ts` fails otherwise), its sections to architecture.md, and its entries to CHANGELOG, under a new `## Unreleased` above 0.5.0 with Added, Changed and Fixed lists. The effects guide says how an effect's text keeps clear of other effects' text with `texts`.
+    - **Sizes.**
+      - The line page's set has 671 bytes of room, everything 6.0 KB, the switch's set 3.8, and `expressive` and `travel` 2.6.
+      - Steps 1, 3 and 5 add to the line page's set. Step 3's space is in every chart's runner and its `room` in the line chart's layout, so it can expect to take that set past its budget.
+      - Steps 1 and 2 add to the switch's set, step 4 to `expressive` and `travel`'s, and step 3 to every chart's set and the testing entry. Every step but 6 adds to everything, `dist/index.js`, `dist/index.cjs` and the script-tag bundle.
+      - A step that takes a size past its budget raises it in the same PR, to its size plus 10%, and says why (CONTRIBUTING's Bundle size). A step that lands later merges main first and keeps the raised budget.
+    - **A step the demos find.** If step 7's pages or audit find a problem in the library, you choose whether it's fixed before 0.6.0. If it is, it's a step of its own, in a session step 7 starts, and the planning session places it in this plan before the release, as M10's step 7 was.
+    - **The release** goes as CONTRIBUTING's Releasing says, through trusted publishing. Nothing is published, tagged or released without your go-ahead in that session.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `package.json`, `src/index.ts`, `src/core/index.ts`, `src/charts/index.ts`, `src/effects/index.ts`, `src/charts/types.ts`, `src/charts/line.ts`, `src/charts/adapter/expressive.ts`, `src/conformance.test.ts`, `src/promise.test.ts`, `scripts/size-budget.json`, `src/core/README.md`, `src/charts/README.md`, `src/effects/README.md`, `docs/architecture.md`, `docs/api.md`, `docs/effects-guide.md`, `docs/sketches/api.ts`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md` and this plan.
+
+- **`line.ts`** has three owners. Step 1 owns what its handle gives the switch (`paintOf` and the keys a focused stop stands for). Step 3 owns `room`: read and checked with the other options, and passed to the layout. Step 5 owns its Hover section's nearest point and the names (`nearestPoint`, `namesFor` and `pointNamesFor`).
+- **`expressive.ts`:** step 4 owns its reading, and step 3 the text measure its surface is given, if it needs one.
+- **Step 3 alone** changes the contracts, the runner and `caption.ts`; step 2 alone `morph.ts`; step 1 alone `switch.ts`.
+- `typecheck` requires an explicit type on every new export. The first step to land adds CHANGELOG's Unreleased.
+
+Each step's session reads the hand-over notes in its notes folder first, `plan-0-6.md` from planning among them, and writes its own there: commits, files, decisions beyond the brief, where the plan and the code differ, and follow-ups.
+
+**Wave 1** (parallel):
+
+1. **Lines in a switch** (decision 10). Owns `src/charts/switch.ts` (the pairs' colours, marks not drawn at rest, and focus across a switch), the optional methods on `ChartSwitchView`, what the charts' handles give the switch (small edits in `bar.ts`, `donut.ts` and `line.ts`), `src/charts/switch.test.ts`, and `src/line-switch.test.ts` (new: the real charts and `morph()`).
+   - Tests:
+     - A line chart and columns keyed as its points: each point paired with its column, grown from a dot of no size at its centre; the line fading out over the first half; every pair in its series' colour; and back the same way, with no jump on a switch back.
+     - Two line charts of the same series: lines paired by series and morphed, points not played, the end labels moved, and a value alone between gaps drawn as its dot.
+     - Colours: each pair, and each mark that fades, in its view's colour; a pair whose colours differ in the new view's; a view without `paintOf` by key; and the morph page's donut and columns, which colour by key, as on main.
+     - Focus: from an x to its first series' point's column and back, from a point with `hover: "point"`, and to the first mark when nothing matches. A link through a line view.
+     - Motion off, a resize, and a third view landing, as now.
+     - With step 2 merged, two lines with gaps through `morph()`: nothing drawn inside a gap both have, on any frame.
+   - **Done when** every existing test passes unchanged, but any that pinned a pair's colour by key where its view colours it otherwise, each named in the PR, and a switch between a donut and columns draws as before.
+   - Docs: architecture.md (Switching between charts, with "Not fitted yet" gone), api.md (`ChartSwitchView`, `chartSwitch`'s views, and columns keyed as a line's points), README's Charts line, the backlog's line charts as switch views, CHANGELOG (Added).
+   - Budgets it may raise: the switch's set, and the line page's set if its part of `line.ts` takes it past its room.
+2. **`morph` keeps gaps and holes** (decision 11). Owns `src/effects/morph.ts`, `src/effects/morph.test.ts`, and `morph`'s sources in `src/conformance.test.ts`.
+   - Tests:
+     - Two lines with the same gaps and with different ones, and a line with gaps to one without: the first and last frames the lines' own, nothing drawn inside a gap both have, each gap fading in or out, and no jump on any frame (`checkTransition`).
+     - Two D3 rings, and a ring to a disc: each hole morphing to its partner, one with no partner shrinking to its centre, and a hole a hole under either fill rule on every frame.
+     - Lines without gaps, and outlines without holes, byte for byte as on main.
+     - A reverse from part way.
+   - **Done when** every existing test passes unchanged.
+   - Docs: architecture.md (morph, and Gaps), api.md (`morph`), CHANGELOG (Fixed).
+   - Budgets it may raise: the switch's set, which carries `morph`, and everything.
+3. **Change text that keeps clear** (decision 12). Owns `texts` and `TextSpace` in `src/core/contracts/effect.ts`, one space per runner in `src/core/runner.ts`, the testing entry's contexts (`src/core/testing/context.ts`), the surfaces' text measure in `src/charts/render/surface.ts`, `src/effects/caption.ts` (with `delta.ts` and `label.ts` as they need), `room` on `LineChartOptions` (`src/charts/types.ts`), read and checked in `line.ts` and laid out in `src/charts/line-layout.ts`, and their tests.
+   - Tests:
+     - The space: `box` as the chart measures text, and estimated in jsdom; `held` giving the boxes of runs started before, not after; `hold` replacing and letting go; boxes let go when a run is cleared, ended or swapped; and one space a runner, so two charts' text doesn't count against each other.
+     - `captionPlace`: past a held box along a heading and out from a centre; the text's own box against each box in the way; centred text along a ring off a label beside it; and without `texts`, as now.
+     - On real marks (`src/captions.test.ts`): two lines ending close together, each with `delta`, the second past the first's text and both past both end labels, at 320 px and wide, through a change and a resize. The season page's goals and xG lines, with `room`, inside the chart at 320 and 1,000 px. On 1,500 random donuts, as M10 step 3's probe ran, no slice with its label dropped puts its text on another's label (63 of 592 on main).
+     - `room`: the plot narrower by it, with the end labels beside the plot as now; `update({ room })`; the `RangeError`; and 0 laying out as main does, byte for byte.
+     - The sweep: every source's text outside every other run's.
+   - **Done when** every existing test passes unchanged, but any that pinned a caption's place where its own box now meets a box the band missed, each named in the PR.
+   - Docs: architecture.md (Change labels, the effect context, the line chart's layout), api.md (`texts`, `TextSpace`, `room`), the effects guide (keeping text clear of other effects' text), the sketch, CHANGELOG (`texts` and `room` under Added, the text's place under Fixed).
+   - Budgets it may raise: the line page's set (likely: 671 bytes of room), and every chart's set, the testing entry, everything, `dist/index.js`, `dist/index.cjs` and the script-tag bundle if they go past.
+4. **More host marks read by tag** (decision 13). Owns reading in `src/charts/adapter/expressive.ts` (`rectPiece`, `shapeMark`, and a slice reader, which may be a new file), `strokeWidthOf` in `src/charts/adapter/host-style.ts`, `src/charts/adapter/space.ts` as it needs, `src/charts/adapter/expressive.test.ts`, `src/d3-pie.test.ts`, and the new sources in `src/conformance.test.ts`.
+   - Tests:
+     - A rotated and a skewed `<rect>`, rounded too, each read as the shape `describe.shape` gives its outline moved; among bars, document order.
+     - A D3 pie and a D3 donut read by tag: each slice the mark `describe.arc` gives, within 0.5 px, in clockwise order, sorted by value too; a whole ring; and a pie in a rotated or scaled group.
+     - Paths with a pad angle, rounded corners, an elliptical arc or a non-uniform scale read as shapes, as on main.
+     - `vector-effect: non-scaling-stroke` on a scaled line and path, by attribute and by style, with `watch`.
+     - Every effect through the sweep on the pie read by tag and on the rotated rects.
+   - **Done when** every existing test passes unchanged, but any that pinned the throw on a rotated `<rect>`, or a pie's slice read by tag as a shape, each named in the PR.
+   - Docs: architecture.md (Adapters: shapes, slices by tag, stroke widths), api.md (`expressive()`), README's Adapters line, CHANGELOG (the `<rect>` under Added, the slices under Changed, the stroke under Fixed).
+   - Budgets it may raise: `expressive` and `travel`'s set (2.6 KB of room), and everything.
+5. **A tidier hover on one point** (decision 14). Owns the line chart's Hover section in `src/charts/line.ts` (its nearest point and the names: `nearestPoint`, `namesFor` and `pointNamesFor`) and `src/charts/line-hover.test.ts`.
+   - Tests: two points at one place (goals equal to xG), the pointer just off it along each line hovering that line's point, and at the centre the first series, with the hover held on the dot and by touch; three lines through one point; a value alone between gaps where another line passes; `markLabel` called once for each point with `"point"` and once for each x with `"x"`; and `update({ hover })` both ways naming every stop.
+   - **Done when** every existing test passes unchanged, but any that counted `markLabel`'s calls with `"point"`, each named in the PR.
+   - Docs: architecture.md (Line chart: the hover on one point), api.md (`hover`, `markLabel`), CHANGELOG (the points under Fixed, `markLabel`'s calls under Changed).
+   - Budgets it may raise: the line page's set.
+6. **The toolchain and the tests** (decision 15). Owns tsdown's version in `package.json` and the lockfile, the wait in `tests/visual/stress.spec.ts`, the link to M8 in `docs/a11y-audit.md`, and CONTRIBUTING's toolchain lines.
+   - Checks: the comparison of tsdown 0.23.4's build with main's; `npm ls rolldown-plugin-dts` naming 0.28.8; `npm dedupe`, with the build the same; `typecheck`; the suite; `pack-check` on 5.4, 6 and 7; `build:site`; the stress page in WebKit, in Docker with 4 workers; and CI on Node 22 and 24.
+   - **Done when** `npm run typecheck && npm test && npm run build`, `npm run size` and `npm run pack-check` pass, the build is the same, and the audit's link reaches M8.
+   - Docs: CONTRIBUTING (tsdown's version), and CHANGELOG only if what's published changes.
+
+**Wave 2** (after steps 1 to 5 land):
+
+7. **The demos, their screenshots, the audit and script L.** Owns `demo/morph.*`, `demo/season.*`, `demo/donut.*` and `demo/d3-pie.ts`, their visual specs and baselines, README's GIFs if they differ, `docs/a11y-audit.md` (but step 6's link), and section L of `docs/a11y-check.md`.
+   - **The morph page:** a second card, a season's goals and xG with missing weeks, in a switch of three views. A group of three toggle buttons with a visible label picks them, as the line page's toggles do: Per match and Season to date as `lineChart`s, and Per match as goals' columns, keyed as its points. `announce: true`. Design notes say why the points grow into columns while the line fades, and what the gaps do through a morph.
+   - **The season page:** xG's line gets `delta()` again, beside the goals line's, with `room`, each clear of the other and of every label at 1,000 and 320 px. The announcement is as now.
+   - **The donut page:** its D3 pie is read by tag, with no `geometry`, and its effects work as before. Its design note says so.
+   - **README's GIFs** are compared with their pages, and made again if they differ.
+   - **Screenshots,** made in Docker: the new card in each view, and half way from a line to columns and between the two lines; the season page after a matchweek with both changes; and every page whose picture changed. Reduced motion and Off are checked in the DOM.
+   - **Script L,** for NVDA + Chrome (decision 16). You run it.
+   - **The walk:** you look at the pages in the browser, at 320 px too.
+   - In two PRs, as M10 step 6: the pages, their tests and baselines, the audit and script L first; then script L's results and the walk.
+   - Docs: a11y-audit.md (the morph page's new card, the season page's rows, the donut page's pie, the Browsers count), a11y-check.md (section L and its results), CONTRIBUTING's visual tests.
+
+**Wave 3:**
+
+8. **Publish 0.6.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.6.0 entry, README's status, its script tag (`@0.6`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.6.0's code, and this plan's status line and M11's ✅.
+   - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you, compared with 0.5.0's) and `npm publish --dry-run`. The PR has their results.
+   - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com.
+   - **Then, on your go-ahead in that session:** the `v0.6.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
+   - **After:** check npm (the version, README, provenance), install 0.6.0 in a fresh project and load each entry as an ES module and as CommonJS, and check jsDelivr's `@0.6`.
+
+**Done when:**
+- **Lines in a switch.** A line chart is a chart switch's view. Its points grow into columns keyed as they are, and back; two line charts' lines morph with their gaps kept; each mark is drawn in its view's colour; and focus follows the x. A switch between a donut and columns draws as before.
+- **`morph`** keeps a line's gaps and a shape's holes on every frame.
+- **Changes keep clear.** `delta` and `label` keep off other effects' text through `EffectContext.texts`, and a slice's text keeps off its neighbours' labels with its own dropped. `lineChart` has `room`.
+- **Host marks.** `expressive()` reads a rotated `<rect>` as a shape, a pie's paths as slices in clockwise order, and a non-scaling stroke's width.
+- **The point hover.** A point drawn on another can be hovered by the pointer, and `markLabel` is called once a stop.
+- **The build.** tsdown 0.23.4 builds the same published types, the lockfile is deduped, and WebKit's stress-page check holds up under load.
+- **The demos** show all of it, with their screenshots and the audit, and script L passed with NVDA + Chrome.
+- **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise changes only by `texts`, an addition.
+- **0.6.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M11 is done.
 
 ### Backlog (after 0.1)
 

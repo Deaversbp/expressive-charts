@@ -25,6 +25,18 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+### Changed
+
+- **A line chart with `hover: "point"` calls `markLabel` once for each point,** the stops it shows, with the same arguments as before. It used to call it for every x as well, for the x's hidden columns, which aren't named now; `update({ hover: "x" })` names them. A page that counts `markLabel`'s calls with `"point"` sees fewer. Nothing to write instead.
+
+### Fixed
+
+- **A line chart's point drawn on another's can be hovered by the pointer.** With `hover: "point"`, where other lines' points are drawn within a px of the nearest, as where goals equal xG, the pointer hovers the one whose line passes nearest it: its stroke as drawn, curved and with its gaps, within 9 px along it of the point. A value alone between gaps counts as its dot. So the pointer just off them along a line hovers that line's point, and at their centre the series first in `series`, as before. Before, the first series always won there, and the others could be reached only by the keyboard. The hover held on a dot while its tooltip shows, touch and a click keep the rule; the keys are as before.
+
 ## 0.5.0 (29 October 2026)
 
 Curved lines and a hover on one point on the line chart, change labels that keep off other marks' labels, a negative column's value label off its name, curved Vega lines, and smaller pages for the motion core and `describe`. In the effect-author API, the one change is `nearbyLabels` on `MarkGeometry` and on the builders' specs, an addition. The other changes are outside the promise, and each says what to write instead, if anything.

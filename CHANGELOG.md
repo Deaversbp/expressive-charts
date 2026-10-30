@@ -25,6 +25,16 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
+- **`morph` keeps a line's gaps and a shape's holes.** Between two lines with gaps, it joined them part way; now the stroke inside a gap of the old line fades in as it goes, and inside a gap of the new line fades out, so nothing is drawn inside a gap both have and nothing jumps. Between two shapes with holes, such as two D3 rings, the holes showed only at the ends; now each hole morphs to its partner, largest with largest, and one with no partner shrinks to a point as the shape moves, or grows from one. A hole stays a hole under either fill rule. Lines without gaps and outlines without holes morph as before, byte for byte, so nothing to write instead.
+
 ## 0.5.0 (29 October 2026)
 
 Curved lines and a hover on one point on the line chart, change labels that keep off other marks' labels, a negative column's value label off its name, curved Vega lines, and smaller pages for the motion core and `describe`. In the effect-author API, the one change is `nearbyLabels` on `MarkGeometry` and on the builders' specs, an addition. The other changes are outside the promise, and each says what to write instead, if anything.

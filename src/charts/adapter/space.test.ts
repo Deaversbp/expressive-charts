@@ -108,6 +108,14 @@ describe("attributesOf", () => {
     expect(["cx", "r", "cy"].map(attributesOf(circle))).toEqual(["5", "12.5", null]);
     expect(attributesOf(polyline)("points")).toBe("1,2 3,4");
   });
+
+  it("reads an attribute that isn't there as null, though a browser gives its length as 0", () => {
+    const svg = svgTree(`<svg xmlns="${SVG}"><rect width="60" height="20" ry="4"/></svg>`);
+    const rect = svg.querySelector("rect")!;
+    // A browser's lengths: a missing rx is 0, where SVG takes the ry.
+    Object.assign(rect, { rx: { baseVal: { value: 0 } }, ry: { baseVal: { value: 4 } } });
+    expect(["rx", "ry"].map(attributesOf(rect))).toEqual([null, "4"]);
+  });
 });
 
 describe("boxIn and rectOf", () => {

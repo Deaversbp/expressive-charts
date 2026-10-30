@@ -93,9 +93,12 @@ export function rectOf(element: Element): Rect {
 /**
  * Reads an element's attributes for its geometry. A length is as the browser resolves it
  * (percentages, units), and anything else, or a length where there's no layout (jsdom), as written.
+ * One that isn't there is null, though a browser gives it a length of 0: a <rect>'s missing rx takes
+ * its ry.
  */
 export function attributesOf(element: Element): (name: string) => string | null {
   return (name) => {
+    if (!element.hasAttribute(name)) return null;
     const animated = (element as unknown as Record<string, { baseVal?: { value?: unknown } } | undefined>)[name];
     return typeof animated?.baseVal?.value === "number" ? String(animated.baseVal.value) : element.getAttribute(name);
   };

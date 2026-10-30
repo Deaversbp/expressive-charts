@@ -1,13 +1,14 @@
 // The plan §8 conformance checks for the built-in effects, through checkEffect, on real marks from
-// twenty-two sources: bars from the reference barChart, from expressive() on bars drawn by other code and
+// twenty-seven sources: bars from the reference barChart, from expressive() on bars drawn by other code and
 // from a stacked Observable Plot bar through expressive(), the slices of the reference donutChart, the
 // slices of a D3 pie through expressive(), the lines and points of the reference lineChart, on a full
 // season and on one with missing weeks, each straight and curved, the lines of a D3 line chart, of a D3 line with missing
 // weeks and of a Plot line through expressive(), and shapes through expressive(), each described from
 // its own path data with describe.shape: a D3 curve, the same with missing weeks, a D3 area, and D3
 // rings, areas with holes. And marks expressive() reads by tag, with no geometry: a D3 scatter's
-// circles and Plot's dots as points, the D3 curves and area again, and a line, a polyline, a polygon,
-// an ellipse, a D3 symbol and a stretched circle as shapes. And a Vega-Lite line drawn as a curve
+// circles and Plot's dots as points, the D3 curves and area again, a line, a polyline, a polygon,
+// an ellipse, a D3 symbol and a stretched circle as shapes, the D3 donut and a D3 pie as slices, and
+// rects turned, skewed and rounded as shapes, with a bar among them. And a Vega-Lite line drawn as a curve
 // through fromVegaView(), on the season and with missing weeks. Lines have samples from samplesAlong. Each source also draws its marks at another size, as a resize would,
 // for the check that effects follow onChange. On lines with gaps, no effect draws inside one, on any
 // frame. This test brings charts and effects together, so it lives beside src/index.ts, the only
@@ -551,6 +552,46 @@ function shapeElementMarks(moved = false): readonly MarkGeometry[] {
   ).marks();
 }
 
+/**
+ * The real D3 donut again, read by tag with only a key: each path a slice, through describe.arc,
+ * clockwise from 12 o'clock. With `inner` 0, a pie. Smaller when moved.
+ */
+function pieTagMarks(moved = false, inner = moved ? 60 : 70): readonly MarkGeometry[] {
+  const outer = moved ? 100 : 116;
+  const slices = select(document.body)
+    .append("svg")
+    .attr("width", 640)
+    .attr("height", 300)
+    .append("g")
+    .attr("transform", "translate(320,150)")
+    .selectAll<SVGPathElement, PieArcDatum<Shot>>("path")
+    .data(pie<Shot>().value((d) => d.shots)(shots))
+    .join("path")
+    .attr("d", arc<PieArcDatum<Shot>>().innerRadius(inner).outerRadius(outer));
+  return expressive(slices, { key: (d) => d.data.outcome, value: (d) => d.value }).marks();
+}
+
+/**
+ * Rects read by tag in a margin group: three turned, skewed or rounded, each a closed shape from its
+ * outline, and an upright bar among them, still a bar. Smaller when moved.
+ */
+function turnedRectMarks(moved = false): readonly MarkGeometry[] {
+  const k = moved ? 0.8 : 1;
+  const svg = el("svg", { width: 640, height: 300 }, document.body);
+  const plotArea = el("g", { transform: "translate(20,20)", fill: "#2a78d6" }, svg);
+  const rects: [string, SVGElement][] = [
+    ["turned", el("rect", { width: 120 * k, height: 30 * k, transform: `translate(${60 * k},${40 * k}) rotate(30)` }, plotArea)],
+    ["bar", el("rect", { x: 0, y: 200 * k, width: 160 * k, height: 24 * k }, plotArea)],
+    ["skewed", el("rect", { width: 80 * k, height: 60 * k, transform: `translate(${300 * k},${60 * k}) skewX(20)` }, plotArea)],
+    ["rounded", el("rect", { width: 100 * k, height: 40 * k, rx: 8 * k, transform: `translate(${480 * k},${120 * k}) rotate(-45)` }, plotArea)]
+  ];
+  for (const [name, rect] of rects) (rect as unknown as { __data__: string }).__data__ = name;
+  return expressive<string>(
+    rects.map(([, rect]) => rect),
+    { key: (name) => name }
+  ).marks();
+}
+
 const effects: Record<string, AnyMarkEffect> = {
   "ball rolling": travel(soccerBall),
   "cleat stepping": travel(cleat),
@@ -615,7 +656,10 @@ const byTag: Record<string, Source> = {
   "D3 curve read by tag": (moved) => d3CurveTagMarks(weeks, moved),
   "D3 curve with missing weeks read by tag": gapped["D3 curve with missing weeks read by tag"]!,
   "D3 area read by tag": d3AreaTagMarks,
-  "line, polyline, polygon, ellipse, symbol and stretched circle read by tag": shapeElementMarks
+  "line, polyline, polygon, ellipse, symbol and stretched circle read by tag": shapeElementMarks,
+  "D3 donut read by tag": (moved) => pieTagMarks(moved),
+  "D3 pie read by tag": (moved) => pieTagMarks(moved, 0),
+  "turned rects and a bar read by tag": turnedRectMarks
 };
 const sources: Record<string, Source> = {
   ...bars,
@@ -974,6 +1018,31 @@ describe("marks read by tag through expressive()", () => {
     // An ellipse's arcs are flattened, within 0.1 px of the curve.
     const { x, y, width, height } = shapes[5]!.bounds;
     expect([x - 260, y - 210, width - 80, height - 40].every((off) => Math.abs(off) <= 0.1)).toBe(true);
+  });
+
+  it("reads the D3 donut's slices as describe.arc describes them through geometry, within 0.5 px, in the same order", () => {
+    const points = (mark: MarkGeometry) => [mark.start, mark.end, mark.center, mark.pivot, ...mark.outline.sample(64)];
+    for (const moved of [false, true]) {
+      const read = pieTagMarks(moved);
+      const given = pieMarks(moved);
+      expect(read.map((mark) => mark.key)).toEqual(given.map((mark) => mark.key));
+      read.forEach((mark, i) => {
+        const expected = points(given[i]!);
+        expect(Math.max(...points(mark).map((p, j) => Math.hypot(p.x - expected[j]!.x, p.y - expected[j]!.y))), mark.key).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(mark.length - given[i]!.length), mark.key).toBeLessThanOrEqual(0.5);
+      });
+    }
+  });
+
+  it("reads turned and skewed rects as closed shapes, in document order with the bar among them, which is still a bar", () => {
+    const marks = turnedRectMarks();
+    expect(marks.map((mark) => [mark.key, mark.outline.closed, mark.length])).toEqual([
+      ["turned", true, 0],
+      ["bar", true, 160],
+      ["skewed", true, 0],
+      ["rounded", true, 0]
+    ]);
+    expect(marks[1]).toMatchObject({ start: { x: 0, y: 212 }, end: { x: 160, y: 212 } });
   });
 });
 

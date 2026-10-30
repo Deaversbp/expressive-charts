@@ -1,12 +1,15 @@
 // expressive(): effects on SVG marks drawn by other code (M1 step 10, for rects; M9 step 6, for
-// circles and shapes). It reads keys, rows and geometry from the host's elements, plays the effect
-// slots through the runner on an overlay at the end of the root <svg>, and listens for pointer events
-// once, on that <svg>. Keyboard focus is barChart's (../keyboard.ts), on the host's elements. Like the
-// charts it never names an effect, and destroy() leaves the host's DOM as it found it.
+// circles and shapes; M11 step 4, for turned rects, slices and non-scaling strokes). It reads keys,
+// rows and geometry from the host's elements, plays the effect slots through the runner on an overlay
+// at the end of the root <svg>, and listens for pointer events once, on that <svg>. Keyboard focus is
+// barChart's (../keyboard.ts), on the host's elements. Like the charts it never names an effect, and
+// destroy() leaves the host's DOM as it found it.
 //
-// Rects that share a key are a bar, each a segment of it. A <circle> is a point, and a <path>, <line>,
-// <polyline>, <polygon> or <ellipse> is read through describe.shape from its outline: each is a mark
-// of its own. A page describes anything else with the `geometry` option, which wins over all of it.
+// Rects that share a key are a bar, each a segment of it. A <circle> is a point, a <path> that draws a
+// ring's slice is read with describe.arc (./slice.ts), and any other <path>, a <line>, <polyline>,
+// <polygon> or <ellipse>, and a <rect> turned or skewed, is read through describe.shape from its
+// outline: each is a mark of its own. A page describes anything else with the `geometry` option,
+// which wins over all of it.
 //
 // Geometry is in the marks' nearest common ancestor's coordinates. The overlay carries that
 // ancestor's transform but sits on the root, because some hosts (Vega) remove foreign children from
@@ -23,6 +26,7 @@
 import type { Baseline, MarkData, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
 import { defaultClock, matrix } from "../../core";
 import { invert } from "../../core/geometry";
+import { describeArc } from "../../core/geometry/describe/arc";
 import { describePoint } from "../../core/geometry/describe/point";
 import { describeShape } from "../../core/geometry/describe/shape";
 import { formatPath, shapeOutline } from "../../core/geometry/path";
@@ -44,7 +48,8 @@ import { labelsMoved } from "../shell/transitions";
 import type { MarkEvents } from "../types";
 import { baselines, describeRects, isBaseline, union, visualOrder, type RectPart } from "./bars";
 import { hostEdits } from "./edits";
-import { hostColors, hostMarkHandle, strokeWidthOf, type HostMarkHandle, type HostPart } from "./host-style";
+import { hostColors, hostMarkHandle, strokeWidthOf, type HostMarkHandle, type HostPart, type StrokeWidth } from "./host-style";
+import { sliceOf } from "./slice";
 import { boundRows, commonAncestor, readSource, rootOf } from "./source";
 import { attributesOf, axisAligned, between, boxIn, keepsCircles, ownTransform, rectOf, scaleOf, screenMatrices, type ScreenMatrix } from "./space";
 import type { Attachment, ExpressiveOptions, MarkSource } from "./types";
@@ -55,8 +60,8 @@ interface Part<D> extends HostPart {
   readonly series: string | undefined;
   /** What `value` returned for it; undefined without `value`. */
   readonly value: unknown;
-  /** A shape's stroke width in its own units, as the last full read found it, which watch keeps. */
-  readonly strokeWidth?: number | undefined;
+  /** A shape's stroke width, in its own units or in screen px, as the last full read found it, which watch keeps. */
+  readonly stroke?: StrokeWidth | undefined;
 }
 
 /** A mark as read from the host's elements. */
@@ -89,8 +94,8 @@ interface ReadContext {
   readonly screen: ScreenMatrix;
   /** Computed on a full read; watch keeps the last ones, since it doesn't watch colours. */
   readonly colors: (element: Element) => HostPart["colors"];
-  /** A shape's stroke width in its own units: computed on a full read, and kept by watch, as colours are. */
-  readonly strokeWidth: (element: Element) => number | undefined;
+  /** A shape's stroke width: computed on a full read, and kept by watch, as colours are. */
+  readonly stroke: (element: Element) => StrokeWidth | undefined;
 }
 
 /** An element of a mark as read from the source, before its geometry. */
@@ -200,7 +205,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       group.push({ element, datum, series, value: options.value?.(datum, element) });
     });
 
-    const at: ReadContext = { svg, common, screen: screenMatrices(), colors: (element) => colorsOf(element, svg), strokeWidth: (element) => strokeWidthOf(element, svg) };
+    const at: ReadContext = { svg, common, screen: screenMatrices(), colors: (element) => colorsOf(element, svg), stroke: (element) => strokeWidthOf(element, svg) };
     const named = (mark: Unnamed<D>): Drawn<D> => ({ ...mark, label: labelOf(mark.key, mark.parts) });
     const keys = [...groups.keys()];
 
@@ -214,7 +219,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     const shapes: Unnamed<D>[] = [];
     keys.forEach((key, index) => {
       const pieces = groups.get(key)!;
-      if (pieces[0]!.element.localName === "rect") bars.push(index);
+      if (pieces[0]!.element.localName === "rect" && !turned(pieces, at)) bars.push(index);
       else {
         const mark = shapeMark(key, pieces[0]!, index, at);
         if (mark) shapes.push(mark);
@@ -245,14 +250,24 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   /**
+   * Whether a <rect> of its own is turned or skewed, so it's a shape, as a <polygon> is. Rects that
+   * share a key are a bar's segments, which rectPiece checks.
+   */
+  function turned(pieces: readonly Piece<D>[], at: ReadContext): boolean {
+    return pieces.length === 1 && !axisAligned(transformOf(pieces[0]!.element, at));
+  }
+
+  /**
    * A <rect>'s box in the marks' common coordinates, through its parent's coordinates and its own
    * transform attribute. Its own CSS transform is the adapter's (an effect's), so it isn't read back.
-   * Rects that aren't upright throw.
+   * A rect that isn't upright throws: it would be a shape, a mark of its own, but it shares its key.
    */
   function rectPiece(key: string, piece: Piece<D>, at: ReadContext): Piece<D> & { readonly rect: RectPart } {
     const m = transformOf(piece.element, at);
     if (!axisAligned(m)) {
-      throw new TypeError(`expressive: the <rect> of "${key}" is rotated or skewed, so it isn't an upright bar. Describe it with the geometry option.`);
+      throw new TypeError(
+        `expressive: the <rect> of "${key}" is rotated or skewed, so it isn't an upright bar's segment. A rect turned on its own is a shape, a mark of its own: give each its own key, or describe the bar with the geometry option.`
+      );
     }
     return { ...piece, rect: { box: boxIn(m, rectOf(piece.element)), series: piece.series, radius: radiusOf(piece.element) } };
   }
@@ -271,10 +286,12 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   /**
    * A <circle> or another shape, a mark of its own, in the marks' common coordinates through its
    * transforms, as a rect's are. A circle is a point at its centre, with its radius, unless they
-   * stretch it unevenly or skew it: then it's a shape, an ellipse. The others are read through
-   * describe.shape from their outline, an open one with its stroke width as drawn, scaled with it. A
-   * stroke width of 0 reads as 1 px, describe.shape's default. A part's `segment` names its series.
-   * Undefined for a shape SVG wouldn't draw, such as a path with no path data.
+   * stretch it unevenly or skew it: then it's a shape, an ellipse. A path that draws a ring's slice,
+   * within 0.5 px, is that slice, through describe.arc. The others, a <rect> turned or skewed among
+   * them, are read through describe.shape from their outline, an open one with its stroke width as
+   * drawn: scaled with it, or with `vector-effect: non-scaling-stroke` in screen px. A stroke width
+   * of 0 reads as 1 px, describe.shape's default. A part's `segment` names its series. Undefined for
+   * a shape SVG wouldn't draw, such as a path with no path data.
    */
   function shapeMark(key: string, piece: Piece<D>, index: number, at: ReadContext): Unnamed<D> | undefined {
     const { element, series } = piece;
@@ -287,7 +304,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     };
     const r = tag === "circle" ? length("r") : 0;
     let geometry: MarkGeometry;
-    let strokeWidth: number | undefined;
+    let stroke: StrokeWidth | undefined;
     if (tag === "circle" && (keepsCircles(m) || !(r > 0))) {
       // A circle with no radius, which SVG wouldn't draw, is still a dot: a host may grow it from 0.
       const center = matrix.apply(m, { x: length("cx"), y: length("cy") });
@@ -295,14 +312,32 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     } else {
       const commands = shapeOutline(tag, attribute);
       if (commands[0]?.op !== "M" || commands.every((command) => command.op === "M")) return undefined;
-      strokeWidth = tag === "circle" ? undefined : at.strokeWidth(element);
-      const width = round((strokeWidth ?? 1) * scaleOf(m));
-      // A path's own data, unrounded; the others' outlines are written out.
-      const d = tag === "path" ? (attribute("d") ?? "") : formatPath(commands);
-      geometry = describeShape({ key, series, d, matrix: m, width: width > 0 ? width : 1 });
+      // Kept for a slice too: in a later frame its path may be another shape.
+      stroke = tag === "circle" ? undefined : at.stroke(element);
+      const slice = tag === "path" ? sliceOf(commands, m) : undefined;
+      if (slice) geometry = describeArc({ key, series, ...slice });
+      else {
+        const width = round(widthOf(stroke, m, at));
+        // A path's own data, unrounded; the others' outlines are written out.
+        const d = tag === "path" ? (attribute("d") ?? "") : formatPath(commands);
+        geometry = describeShape({ key, series, d, matrix: m, width: width > 0 ? width : 1 });
+      }
     }
-    const parts = [{ ...part(piece, outlineOf(geometry, series, 1), at), strokeWidth }];
+    const parts = [{ ...part(piece, outlineOf(geometry, series, 1), at), stroke }];
     return { key, geometry, parts, index, ...(tag === "circle" ? { circle: true as const } : {}) };
+  }
+
+  /**
+   * A stroke's width in the marks' common units: scaled by the element's transforms, or, with
+   * `vector-effect: non-scaling-stroke`, screen px taken back through the common ancestor's screen
+   * scale where there's layout, and as given where there isn't. 1 px where none is given.
+   */
+  function widthOf(stroke: StrokeWidth | undefined, m: Matrix, at: ReadContext): number {
+    const width = stroke?.width ?? 1;
+    if (!stroke?.screen) return width * scaleOf(m);
+    const screen = at.screen(at.common);
+    const scale = screen ? scaleOf(screen) : 0;
+    return scale > 0 ? width / scale : width;
   }
 
   /** From an element's user space into the marks' common one: its parent's, then its own transform attribute. */
@@ -810,11 +845,21 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       if (element.contains(ancestor)) overlayMoved = true;
       else for (const record of order) if (record.mark.parts.some((part) => element.contains(part.element))) changed.add(record);
     }
-    if (overlayMoved) placeOverlay();
-    if (changed.size === 0) return;
+    // A non-scaling stroke's width in the marks' units goes by the common ancestor's screen scale, so
+    // its marks are read again when that ancestor moves, and follow only if the width changed.
+    const rescaled = new Set<MarkRecord<D>>();
+    if (overlayMoved) {
+      placeOverlay();
+      for (const record of order) if (!changed.has(record) && record.mark.parts.some((part) => part.stroke?.screen)) rescaled.add(record);
+    }
+    if (changed.size === 0 && rescaled.size === 0) return;
 
     // Throws (reported by the clock) on marks it can't read, before anything changes.
-    const { records, marks } = reread([...changed]);
+    const read = reread([...changed, ...rescaled]);
+    const kept = read.records.flatMap((record, i) => (rescaled.has(record) && !geometryChanged(record.mark.geometry, read.marks[i]!.geometry) ? [] : [i]));
+    if (kept.length === 0) return;
+    const records = kept.map((i) => read.records[i]!);
+    const marks = kept.map((i) => read.marks[i]!);
     records.forEach((record, i) => {
       const mark = marks[i]!;
       record.mark = mark;
@@ -833,8 +878,9 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
    * The marks that changed again, as the host draws them now: their rows, geometry and samples, in the
    * coordinates of the last full read. Their values, colours, stroke widths and names stay as that read
    * found them, and so do their elements. Bars whose baseline changed come too, though they didn't
-   * move. A shape that draws nothing in this frame stays as it was, until refresh() reads it. Throws,
-   * changing nothing, on marks it can't read.
+   * move. A bar of one rect that turns in this frame is a shape from now on, as a full read would read
+   * it, and a turned rect stays a shape until refresh() reads it. A shape that draws nothing in this
+   * frame stays as it was, until refresh() reads it. Throws, changing nothing, on marks it can't read.
    */
   function reread(changed: readonly MarkRecord<D>[]): { readonly records: MarkRecord<D>[]; readonly marks: ReadMark<D>[] } {
     const at: ReadContext = {
@@ -842,7 +888,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       common: ancestor!,
       screen: screenMatrices(),
       colors: (element) => owners.get(element)?.part.colors,
-      strokeWidth: (element) => owners.get(element)?.part.strokeWidth
+      stroke: (element) => owners.get(element)?.part.stroke
     };
     const rowOf = rowsNow();
     const piecesOf = ({ parts }: ReadMark<D>): Piece<D>[] => parts.map((part) => ({ element: part.element, datum: rowOf(part.element), series: part.series, value: part.value }));
@@ -850,17 +896,18 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       const marks = changed.map(({ mark }): Drawn<D> => ({ ...givenMark(mark.key, piecesOf(mark), mark.index, at), label: mark.label }));
       return { records: [...changed], marks: withData(marks) };
     }
-    const rects = new Map(changed.flatMap((record) => (record.mark.rect ? [[record, piecesOf(record.mark).map((piece) => rectPiece(record.key, piece, at))] as const] : [])));
-    const edges = edgesNow(rects);
+    const shapes = new Set(changed.filter((record) => !record.mark.rect || turned(record.mark.parts, at)));
+    const rects = new Map(changed.flatMap((record) => (shapes.has(record) ? [] : [[record, piecesOf(record.mark).map((piece) => rectPiece(record.key, piece, at))] as const])));
+    const edges = edgesNow(rects, shapes);
     for (const record of order) {
-      if (record.mark.rect && !rects.has(record) && edges.get(record) !== record.mark.rect.edge) {
+      if (record.mark.rect && !rects.has(record) && !shapes.has(record) && edges.get(record) !== record.mark.rect.edge) {
         rects.set(record, piecesOf(record.mark).map((piece) => rectPiece(record.key, piece, at)));
       }
     }
     const records = [...rects.keys()];
     const marks = records.map((record): Drawn<D> => ({ ...rectMark(record.key, rects.get(record)!, edges.get(record)!, record.mark.index, at), label: record.mark.label }));
     for (const record of changed) {
-      if (record.mark.rect) continue;
+      if (!shapes.has(record)) continue;
       const mark = shapeMark(record.key, piecesOf(record.mark)[0]!, record.mark.index, at);
       if (!mark) continue;
       records.push(record);
@@ -870,13 +917,13 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   }
 
   /**
-   * Each live bar's baseline now. With "auto", the edge every bar shares is found again from their
-   * boxes (the new ones of the bars read this frame), as a full read would, so a bar that ends a
-   * transition on the other side of the line grows from it the other way. In a frame where no edge is
-   * shared (a bar crossing the line), each keeps the one it had.
+   * Each live bar's baseline now, but those turned into shapes this frame. With "auto", the edge every
+   * bar shares is found again from their boxes (the new ones of the bars read this frame), as a full
+   * read would, so a bar that ends a transition on the other side of the line grows from it the other
+   * way. In a frame where no edge is shared (a bar crossing the line), each keeps the one it had.
    */
-  function edgesNow(rects: ReadonlyMap<MarkRecord<D>, readonly (Piece<D> & { readonly rect: RectPart })[]>): Map<MarkRecord<D>, Baseline> {
-    const bars = order.filter((record) => record.mark.rect);
+  function edgesNow(rects: ReadonlyMap<MarkRecord<D>, readonly (Piece<D> & { readonly rect: RectPart })[]>, shapes: ReadonlySet<MarkRecord<D>>): Map<MarkRecord<D>, Baseline> {
+    const bars = order.filter((record) => record.mark.rect && !shapes.has(record));
     const kept = new Map(bars.map((record) => [record, record.mark.rect!.edge]));
     if (options.baseline !== undefined && options.baseline !== "auto") return kept;
     const boxes = bars.map((record) => {

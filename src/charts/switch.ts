@@ -1,9 +1,9 @@
 // A chart switch: views of the same data in one place, one shown at a time, and a transition effect
 // that turns each mark of one view into its own mark in the next, as the lab's donut turns into
-// columns. It reads only what a chart's handle reports (marks and labels by key, focus by key, its
-// <svg>, its events and its hover for links), so it never names a chart type, and it plays whatever
-// transition effect it's given: the composition root (src/index.ts) fills in morph() when the page
-// leaves it out.
+// columns, or a line's points into columns. It reads only what a chart's handle reports (marks and
+// labels by key, how it paints each mark, focus by key and what a stop stands for, its <svg>, its
+// events and its hover for links), so it never names a chart type, and it plays whatever transition
+// effect it's given: the composition root (src/index.ts) fills in morph() when the page leaves it out.
 //
 // A switch runs along one line, s, from 0 (the view it began in, `a`) to 1 (the view it went to,
 // `b`). The pairs morph at s; the labels move and swap their text, the unmatched marks fade, and the
@@ -16,6 +16,7 @@
 
 import { defaultClock, easeInOutCubic, linear, matrix, tween, type Clock, type MarkGeometry, type Matrix, type MotionEnv, type Point, type TransitionEffect, type Tween } from "../core";
 import { unease } from "../core/easing";
+import { describePoint } from "../core/geometry/describe/point";
 import { formatPath, parsePath, transformPath } from "../core/geometry/path";
 import { isTransitionEffect, playTransition, type Transition, type TransitionPair, type TransitionSurface } from "../core/transition";
 import { between, boxIn } from "./adapter/space";
@@ -31,7 +32,8 @@ import type { ChartLabel, MarkEvents } from "./types";
 /**
  * What a chart switch uses of each view's chart. A reference chart's handle has all of it: its
  * `<svg>` (which takes `ec-morphing` while its marks morph in the switch's overlay), its marks and
- * labels as drawn, focus by key, leave() to end its hover, and destroy(). A reference chart also
+ * labels as drawn, focus by key, leave() to end its hover, and destroy(); how it paints each mark
+ * (paintOf), and, a line chart's, what its focus stops stand for (standsFor). A reference chart also
  * has on(), which the switch's on() hears, and a hover a link can drive; a view without them isn't
  * heard and isn't linked.
  */
@@ -42,6 +44,25 @@ export interface ChartSwitchView {
   focus(key: string): void;
   leave(): void;
   destroy(): void;
+  /**
+   * How the chart paints the mark `key`: the name its colour comes from, and whether it's drawn at
+   * rest. Without it, or for a key it doesn't know, the switch draws the mark in its key's colour.
+   */
+  paintOf?(key: string): ChartSwitchPaint | undefined;
+  /**
+   * The keys the focus stop `key` stands for, in the order the next view's focus(key) is tried with
+   * them: a line chart's x stands for each series' point key there, in series order, then itself.
+   * Without it, a stop stands for its own key.
+   */
+  standsFor?(key: string): readonly string[];
+}
+
+/** How a view's chart paints one of its marks: what a switch draws it in. */
+export interface ChartSwitchPaint {
+  /** The name its colour comes from in the switch's assignment (`colors.slot(color)`): a line's or a point's series, a bar's key or first series, a slice's key. */
+  readonly color: string;
+  /** Whether the chart draws it at rest. A line chart's points aren't, but for a value alone between gaps; a mark that isn't starts or ends a switch as a dot of no size at its centre. */
+  readonly drawn: boolean;
 }
 
 /**
@@ -124,9 +145,9 @@ interface View {
   readonly port: LinkPort | undefined;
 }
 
-/** Where focus was when a switch began, if it was in the view it left: on a mark (its key) or elsewhere. */
+/** Where focus was when a switch began, if it was in the view it left: on a stop (the keys it stands for) or elsewhere (none). */
 interface FocusMemory {
-  readonly key: string | undefined;
+  readonly keys: readonly string[];
 }
 
 /** What a switch draws in its overlay besides the pairs, at each s. */
@@ -145,6 +166,8 @@ interface Switch {
   /** From a to b, in b's order; `reversed` is the same pairs from b to a, in the same order, so the overlay stacks the same way back. */
   readonly pairs: readonly TransitionPair[];
   readonly reversed: readonly TransitionPair[];
+  /** Where the pairs' runs draw, each in its colour: both ways, so a switch back draws the same picture. */
+  readonly surface: TransitionSurface;
   readonly scene: Scene;
   readonly focus: FocusMemory | undefined;
   /** The run's eased progress from where it began to where it's heading, as last drawn: the shapes' progress, as morph draws them. */
@@ -214,18 +237,18 @@ export function chartSwitch<T extends ChartSwitchViews>(
   // Made now: screen readers miss text in a region that appears with it.
   const announcer: Announcer | undefined = options.announce ? chartAnnouncer(overlay) : undefined;
 
-  /** Each pair's run draws in a group of its own, in its key's colour, stacked by the pair's place. */
+  /** Each pair's run draws in a group of its own, in the colour named for its place (`paints`), stacked by that place. */
   const orders = new WeakMap<Element, number>();
-  const surface: TransitionSurface = {
+  const surfaceFor = (paints: readonly string[]): TransitionSurface => ({
     group(key, order) {
       const group = svgElement("g", { class: "ec-run", "data-key": key }, runsLayer);
-      setStyles(group, markColorStyles(seriesColors(colors.slot(key))));
+      setStyles(group, markColorStyles(seriesColors(colors.slot(paints[order] ?? key))));
       orders.set(group, order);
       const above = Array.from(runsLayer.children).find((child) => (orders.get(child) ?? -Infinity) > order);
       runsLayer.insertBefore(group, above ?? null);
       return { ...svgLayer(group), clear: () => group.remove() };
     }
-  };
+  });
 
   let current: string = options.initial;
   let active: Switch | undefined;
@@ -271,19 +294,21 @@ export function chartSwitch<T extends ChartSwitchViews>(
     const element = focused();
     if (!element || !from.container.contains(element)) return undefined;
     const keyed = element.closest("[data-key]");
-    return { key: keyed && from.chart.element.contains(keyed) ? (keyed.getAttribute("data-key") ?? undefined) : undefined };
+    const key = keyed && from.chart.element.contains(keyed) ? keyed.getAttribute("data-key") : null;
+    return { keys: key === null ? [] : (from.chart.standsFor?.(key) ?? [key]) };
   }
 
-  /** Focus that was in the old view goes to the same key in the new one, or to its first mark, unless it has moved on outside the switch. */
+  /**
+   * Focus that was in the old view goes to the first key its stop stood for that the new one takes,
+   * or to its first mark, unless it has moved on outside the switch.
+   */
   function restoreFocus(to: View, memory: FocusMemory | undefined): void {
     if (!memory) return;
     const now = focused();
     if (now && now !== doc.body && now !== doc.documentElement && !wrapper.contains(now)) return;
     const inside = (): boolean => to.chart.element.contains(focused());
-    if (memory.key !== undefined) to.chart.focus(memory.key);
-    if (inside()) return;
-    for (const mark of to.chart.marks()) {
-      to.chart.focus(mark.key);
+    for (const key of [...memory.keys, ...to.chart.marks().map((mark) => mark.key)]) {
+      to.chart.focus(key);
       if (inside()) return;
     }
   }
@@ -333,7 +358,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
       each.container.setAttribute("inert", "");
       each.chart.element.classList.add("ec-morphing");
     }
-    const { pairs, scene } = prepare(from, to);
+    const { pairs, surface, scene } = prepare(from, to);
     const { done, settle } = deferred();
     const session: Switch = {
       a: from,
@@ -341,6 +366,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
       forward: true,
       pairs,
       reversed: pairs.map(({ from: a, to: b }) => ({ from: b, to: a })),
+      surface,
       scene,
       focus: memory,
       progress: 0,
@@ -371,7 +397,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
     // reverse begins exactly where they are. An effect can't say how far it has got, so this schedule
     // is the switch's: an effect that keeps to it stays in step.
     const started = startClock(clock);
-    session.transition = playTransition(session.forward ? session.pairs : session.reversed, { effect, surface, start: begin, motion, clock: started.clock, icons: env.icons });
+    session.transition = playTransition(session.forward ? session.pairs : session.reversed, { effect, surface: session.surface, start: begin, motion, clock: started.clock, icons: env.icons });
     session.driver = drive(begin, at, { clock: started.clock, motion });
     started.release();
     void Promise.all([session.driver.finished, session.transition.finished]).then(([result]) => {
@@ -418,23 +444,39 @@ export function chartSwitch<T extends ChartSwitchViews>(
     session.settle();
   }
 
-  /** Both views' marks and labels in overlay px, the pairs matched by key, and what's drawn with them. */
-  function prepare(a: View, b: View): { pairs: TransitionPair[]; scene: Scene } {
+  /**
+   * Both views' marks and labels in overlay px, the pairs matched by key, and what's drawn with them.
+   * Each mark is drawn in the colour its view paints it, a pair in the new view's. A mark its view
+   * doesn't draw at rest is a dot of no size at its centre, so a column grows out of a line's point;
+   * a pair neither view draws isn't played, and a mark with no partner that isn't drawn doesn't fade.
+   */
+  function prepare(a: View, b: View): { pairs: TransitionPair[]; surface: TransitionSurface; scene: Scene } {
     const toA = between(overlay, a.chart.element, wrapper);
     const toB = between(overlay, b.chart.element, wrapper);
     const from = a.chart.marks().map((mark) => mapMark(mark, toA));
     const to = b.chart.marks().map((mark) => mapMark(mark, toB));
     const fromByKey = new Map(from.map((mark) => [mark.key, mark]));
     const toKeys = new Set(to.map((mark) => mark.key));
-    const pairs = to.flatMap((mark) => {
+    const pairs: TransitionPair[] = [];
+    const paints: string[] = [];
+    for (const mark of to) {
       const partner = fromByKey.get(mark.key);
-      return partner ? [{ from: partner, to: mark }] : [];
-    });
+      if (!partner) continue;
+      const was = paintOf(a, partner);
+      const will = paintOf(b, mark);
+      if (!was.drawn && !will.drawn) continue;
+      pairs.push({ from: was.drawn ? partner : dot(partner), to: will.drawn ? mark : dot(mark) });
+      paints.push(will.color);
+    }
 
     const drawings: ((s: number) => void)[] = [];
     // Marks with no partner fade where they stand: out over the first half, in over the second.
-    for (const mark of from) if (!toKeys.has(mark.key)) drawings.push(fadeMark(mark, fadeOut));
-    for (const mark of to) if (!fromByKey.has(mark.key)) drawings.push(fadeMark(mark, fadeIn));
+    const fade = (view: View, mark: MarkGeometry, opacity: (s: number) => number): void => {
+      const paint = paintOf(view, mark);
+      if (paint.drawn) drawings.push(fadeMark(mark, paint.color, opacity));
+    };
+    for (const mark of from) if (!toKeys.has(mark.key)) fade(a, mark, fadeOut);
+    for (const mark of to) if (!fromByKey.has(mark.key)) fade(b, mark, fadeIn);
 
     // Labels match by key and role. A pair moves from one place to the other and swaps its text half
     // way; a label with no partner fades, as a mark does.
@@ -460,6 +502,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
 
     return {
       pairs,
+      surface: surfaceFor(paints),
       scene: {
         draw: (s) => {
           for (const draw of drawings) draw(s);
@@ -473,10 +516,10 @@ export function chartSwitch<T extends ChartSwitchViews>(
     };
   }
 
-  /** A mark with no partner, drawn as its outline in its key's colour. */
-  function fadeMark(mark: MarkGeometry, opacity: (s: number) => number): (s: number) => void {
+  /** A mark with no partner, drawn as its outline in the colour named `color`. */
+  function fadeMark(mark: MarkGeometry, color: string, opacity: (s: number) => number): (s: number) => void {
     const group = svgElement("g", { class: "ec-switch-fade", "data-key": mark.key }, fadesLayer);
-    setStyles(group, markColorStyles(seriesColors(colors.slot(mark.key))));
+    setStyles(group, markColorStyles(seriesColors(colors.slot(color))));
     svgLayer(group).path(mark.outline.d, mark.outline.closed ? { fill: "mark" } : { stroke: "mark", width: mark.thickness });
     return (s) => setAttributes(group, { opacity: opacity(s) });
   }
@@ -686,6 +729,16 @@ const fadeIn = (s: number): number => clamp((s - HALF) / (1 - HALF));
 const clamp = (value: number): number => Math.min(1, Math.max(0, value));
 /** Weighted on both sides, as morph mixes, so a switch back puts a label where the switch forward had it. */
 const mix = (x: number, y: number, s: number): number => x * (1 - s) + y * s;
+
+/** How the view paints the mark: by its chart's paintOf(), or else in its key's colour, drawn. */
+function paintOf(view: View, mark: MarkGeometry): ChartSwitchPaint {
+  return view.chart.paintOf?.(mark.key) ?? { color: mark.key, drawn: true };
+}
+
+/** A mark its view doesn't draw: a dot of no size at its centre, which a partner grows out of or shrinks into. */
+function dot(mark: MarkGeometry): MarkGeometry {
+  return describePoint({ key: mark.key, ...(mark.series === undefined ? {} : { series: mark.series }), x: mark.center.x, y: mark.center.y, r: 0 });
+}
 
 const isIdentity = (m: Matrix): boolean => m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
 

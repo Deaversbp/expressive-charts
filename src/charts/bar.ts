@@ -35,6 +35,7 @@ import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
+import type { ChartSwitchPaint } from "./switch";
 import { chartTable, tableModel, type TableModel } from "./table";
 import { chartTooltip, summaryContent } from "./tooltip";
 import type { BarChartOptions, Chart } from "./types";
@@ -722,6 +723,13 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
         ...chartLabel(record.key, "category", record.shown.label, record.label),
         ...chartLabel(record.key, "value", record.shown.value, record.value)
       ]),
+
+    // For a chart switch: the colour drawMark gives the bar, its own or its first part's series'.
+    paintOf(key: string): ChartSwitchPaint | undefined {
+      const record = records.get(key);
+      const first = record?.shown.geometry.segments?.[0];
+      return record && { color: byCategory(current) ? key : (first?.series ?? first?.key ?? key), drawn: true };
+    },
 
     destroy() {
       if (destroyed) return;

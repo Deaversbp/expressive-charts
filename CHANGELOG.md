@@ -29,6 +29,11 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Added
 
+- **A line chart as a chart switch's view.** Its points grow into columns keyed as they are, and back: key the columns with the bar chart's `key` (``key: (d) => `goals@${d.week}` ``).
+  - Each point pairs with its column and grows out of a dot of no size at its centre, or out of its own dot when it's alone between gaps, while the lines fade out over the first half. Back, each column shrinks into its point.
+  - Between two line charts, the lines morph by series and their end labels move. The points stay hidden, but for a value alone between gaps, which morphs as its dot.
+  - Focus follows the x: from an x to its first series' point's column, and back to the x, or to the point with `hover: "point"`.
+- **`paintOf(key)` and `standsFor(key)` on `ChartSwitchView`,** both optional, with the `ChartSwitchPaint` type. `paintOf` gives the name a mark's colour comes from in the switch's assignment, and whether its chart draws it at rest; `standsFor` gives the keys a focus stop stands for, in the order the next view tries them. The bar, donut and line charts' handles have `paintOf`, and the line chart's has `standsFor`. A view without them is drawn by key, as before, so no page needs to change.
 - **`expressive()` reads a `<rect>` turned or skewed by its transforms** as a closed shape: the shape `describe.shape` gives its outline, rounded corners too, moved by its matrix, as a `<polygon>` is. It used to throw. An upright rect is a bar, as before, and with a turned one among bars, every mark keeps document order, as with a circle or a shape among them. A turned rect that shares its key with other rects still throws a `TypeError`, since a bar's segments are upright. Nothing to write instead.
 
 ### Changed
@@ -37,6 +42,7 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Fixed
 
+- **A chart switch draws each mark in its view's colour.** It drew each pair, and each mark that fades, in its key's colour, so columns coloured by series (the default) each took a colour of their own while they morphed, and the switch asked the shared assignment for a slot for every key. A switch whose views colour by key, such as a donut and its `colorBy: "category"` columns, draws as before.
 - **`expressive()` reads a non-scaling stroke's width.** With `vector-effect: non-scaling-stroke`, as an attribute or a computed style, an open shape's width is in screen px, as a browser draws it: its transforms no longer scale it. Where there's layout, it's turned into the marks' units by their common ancestor's screen scale; where there isn't, as in jsdom, it's kept as given. `watch` keeps it through the frames, as it keeps the width.
 
 ## 0.5.0 (29 October 2026)

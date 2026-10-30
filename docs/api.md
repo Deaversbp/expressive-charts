@@ -2141,7 +2141,7 @@ interface ColorAssignment {
 chartSwitch<T extends ChartSwitchViews>(target: string | Element, options: ChartSwitchOptions<T>): ChartSwitch<T>
 ```
 
-Views of the same data in one place, one shown at a time, which turns each mark into the mark with its key in the next view: a donut turning into columns ([architecture.md](architecture.md#switching-between-charts)). Each view is a function that draws its chart in the container it's given. Labels move with their shapes and swap their text half way, a key in only one view fades, and the old view's axes, legend and table fade out as the new one's fade in. Only the view shown can be seen, reached or read; focus on a mark moves to its key in the new view; and a switch back mid-way reverses from where the shapes are. A switch takes 950 ms in Presentation and 200 ms in Analysis, and jumps with motion off. Options that aren't a switch's throw a `TypeError`. Returns [`ChartSwitch<T>`](#chartswitcht).
+Views of the same data in one place, one shown at a time, which turns each mark into the mark with its key in the next view: a donut turning into columns, or a line chart's points into columns keyed as they are ([architecture.md](architecture.md#switching-between-charts)). Each view is a function that draws its chart in the container it's given. Each mark is drawn in its view's colour. Labels move with their shapes and swap their text half way, a key in only one view fades, and the old view's axes, legend and table fade out as the new one's fade in. Only the view shown can be seen, reached or read; focus on a mark moves to its key in the new view, and focus on a line chart's x to its first series' point there; and a switch back mid-way reverses from where the shapes are. A switch takes 950 ms in Presentation and 200 ms in Analysis, and jumps with motion off. Options that aren't a switch's throw a `TypeError`. Returns [`ChartSwitch<T>`](#chartswitcht).
 
 ```ts
 import { barChart, chartSwitch, donutChart, link } from "expressive-charts";
@@ -2159,6 +2159,22 @@ await shots.chart("columns").update({ data: nextMatch }); // the bar chart itsel
 shots.on("hover", (event) => console.log(event.data.datum.shots)); // the view on show's hover
 const totals = barChart("#totals", { label: "Shot outcomes", data: outcomes, y: "outcome", x: "shots" });
 link([shots, totals]);                               // the view on show hovers with the bars beside it
+```
+
+A line chart is a view too. Key the columns as its points are (`"goals@12"`), with the bar chart's `key`, and each point grows into its column while the lines fade. Between two line charts, the lines morph by series, and the points stay hidden but for a value alone between gaps.
+
+```ts
+import { barChart, chartSwitch, lineChart } from "expressive-charts";
+
+const season = chartSwitch("#season", {
+  views: {
+    perMatch: (el, colors) => lineChart(el, { label: "Goals and xG per match", data: weeks, x: "week", series: ["goals", "xg"], colors }),
+    columns: (el, colors) =>
+      barChart(el, { label: "Goals per match", data: weeks, x: (d) => String(d.week), y: "goals", key: (d) => `goals@${d.week}`, orientation: "vertical", colors })
+  },
+  initial: "perMatch"
+});
+await season.show("columns");                         // focus on week 12's x goes to its column, goals@12
 ```
 
 #### `ChartSwitch<T>`
@@ -2183,11 +2199,25 @@ A switch can be in a [link](#link): its view on show hovers with the other sourc
 interface ChartSwitchOptions<T extends ChartSwitchViews>
 ```
 
-- `views`: `T`, required. The views by name, each drawn once, when the switch is made.
+- `views`: `T`, required. The views by name, each drawn once, when the switch is made: a bar chart, a donut or a line chart, or anything else that's a [`ChartSwitchView`](#chartswitchview).
 - `initial`: a view's name, required. The view shown first.
 - `transition`: `TransitionEffect`. Plays each pair of marks with the same key. Default [`morph()`](#morph). The switch draws the labels and fades on morph's schedule, so one with other timing still plays, but its shapes drift from the labels.
 - `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots by key, given to every view's function. Default: a new assignment.
 - `announce`: `boolean`. Default false. A polite live region that says the new view's label after each switch.
+
+#### `ChartSwitchPaint`
+
+```ts
+interface ChartSwitchPaint {
+  readonly color: string;
+  readonly drawn: boolean;
+}
+```
+
+How a view's chart paints one of its marks, as its `paintOf(key)` gives it.
+
+- `color`: the name its colour comes from in the switch's assignment, as `colors.slot(color)`. A bar's is its key with `colorBy: "category"`, and otherwise its first part's series; a slice's is its key; a line's and its points' are their series.
+- `drawn`: whether the chart draws it at rest. A line chart's points aren't, but for a value alone between gaps.
 
 #### `ChartSwitchView`
 
@@ -2199,10 +2229,15 @@ interface ChartSwitchView {
   focus(key: string): void;
   leave(): void;
   destroy(): void;
+  paintOf?(key: string): ChartSwitchPaint | undefined;
+  standsFor?(key: string): readonly string[];
 }
 ```
 
-What a switch uses of each view's chart. The bar, donut and line charts' handles have all of it, though a line chart's points don't suit a switch yet. A view's function that returns something without these throws. They also have `on()`, which the switch's `on()` hears, and a hover a [link](#link) can drive: a view without them isn't heard or linked.
+What a switch uses of each view's chart. The bar, donut and line charts' handles have all of it: a line chart's has `standsFor`, the others don't need it. A view's function that returns something without the six methods that aren't optional throws. They also have `on()`, which the switch's `on()` hears, and a hover a [link](#link) can drive: a view without them isn't heard or linked.
+
+- `paintOf(key)`: optional. How the chart paints the mark `key` ([`ChartSwitchPaint`](#chartswitchpaint)). The switch draws each pair in its new view's colour, and each mark that fades in its own view's. A mark that isn't drawn at rest starts or ends as a dot of no size at its centre, so a column grows out of its point, and a pair that neither view draws isn't played. Without it, or for a key it doesn't know, the mark is drawn in its key's colour, drawn at rest.
+- `standsFor(key)`: optional. The keys the focus stop `key` stands for, in the order the next view's `focus(key)` is tried with them. A line chart's x stands for each series' point key there, in series order, then itself; anything else stands for its own key. Focus lands on the first the next view takes, or else on its first mark.
 
 #### `ChartSwitchViewFactory`
 

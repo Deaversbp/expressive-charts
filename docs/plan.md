@@ -3443,10 +3443,27 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
    - **Done when** every existing test passes unchanged, but any that counted `markLabel`'s calls with `"point"`, each named in the PR.
    - Docs: architecture.md (Line chart: the hover on one point), api.md (`hover`, `markLabel`), CHANGELOG (the points under Fixed, `markLabel`'s calls under Changed).
    - Budgets it may raise: the line page's set.
-6. **The toolchain and the tests** (decision 15). Owns tsdown's version in `package.json` and the lockfile, the wait in `tests/visual/stress.spec.ts`, the link to M8 in `docs/a11y-audit.md`, and CONTRIBUTING's toolchain lines.
+6. ✅ **The toolchain and the tests** (decision 15). Owns tsdown's version in `package.json` and the lockfile, the wait in `tests/visual/stress.spec.ts`, the link to M8 in `docs/a11y-audit.md`, and CONTRIBUTING's toolchain lines.
    - Checks: the comparison of tsdown 0.23.4's build with main's; `npm ls rolldown-plugin-dts` naming 0.28.8; `npm dedupe`, with the build the same; `typecheck`; the suite; `pack-check` on 5.4, 6 and 7; `build:site`; the stress page in WebKit, in Docker with 4 workers; and CI on Node 22 and 24.
    - **Done when** `npm run typecheck && npm test && npm run build`, `npm run size` and `npm run pack-check` pass, the build is the same, and the audit's link reaches M8.
    - Docs: CONTRIBUTING (tsdown's version), and CHANGELOG only if what's published changes.
+   - **Built** (29 October 2026) as decision 15 describes, the comparison first:
+     - **tsdown 0.23.4,** pinned exactly. It takes rolldown-plugin-dts 0.28.8, as 0.23.3 did, and rolldown stays 1.2.15. `npm ls rolldown-plugin-dts` names 0.28.8, under tsdown. Its only other change in the lockfile is `tinyps` in place of `tree-kill`. npm was as the plan says on the day.
+     - **The comparison** of its build with main's (`1fdc9e3`), before anything else changed, with M10 step 5's scripts:
+       - **The files:** the same 33 in `dist/`, each byte for byte the same, the chunks' names too.
+       - **The names:** each entry's names as an ES module and as CommonJS (55, 3 and 6), and `ExpressiveCharts`'s 55, are the same. Every script parses as ES2020.
+       - **The types,** read with TypeScript 6.0.3's API, in the `.d.ts` and `.d.cts` files: all 462 top-level declarations and the four entries' 420 exports print the same. 408 are identical; the same 12 as in M10 step 5 are assignable both ways instead, as they are between main and a copy of main.
+       - **The sizes:** all the same, to the byte.
+       - Nothing differed, so the step went on.
+     - **`npm dedupe`:** one `commander` 7.2.0 at the top in place of two nested copies, and one `magic-string` 1.4.5 in place of vitest's two nested 1.4.3s. `npm ls` reports no problems, and after `npm ci` from the new lockfile every file in `dist/` is still byte for byte main's.
+     - **WebKit's wait:** the date line's readout is waited for up to 60 s, from 30, and the two tests that play the date line have 120 s, from 90. In WebKit in Docker with 4 workers, the stress spec's 17 tests passed twice; "part way through its play" took 35.1 and 33.5 s. In the first run, with the unit suite running beside it, the reduced-motion and Off tests took 47 and 56 s of their 90; in the second, 22 and 24.
+     - **The audit's link** to M8 ends in a hyphen (`…-030-`), the anchor GitHub's rendered plan gives its heading.
+     - **Checks:** `typecheck` (2.2 s), 2,672 tests in 109 files, the build, the size check (every size main's), `pack-check` on 5.4.5, 6.0.3 and 7.0.2 (37 files, 1.52 MB packed, 5.65 MB unpacked), and `build:site` pass. CI on Node 22 and 24 runs with the PR.
+     - **Docs:** CONTRIBUTING (tsdown 0.23.4, and why the plugin's 0.29.0 and a stable `get-tsconfig` wait). No CHANGELOG entry, since nothing published changes.
+   - **Decisions beyond the plan:**
+     - **The longer wait is the date line's alone.** `reported()` waits 60 s for the date line and 30 for the other cases, and only the two tests that play the date line get 30 s more, so a case that hangs fails as soon as before. The reduced-motion and Off tests keep 90 s: the date line jumps there.
+     - **architecture.md's Build outputs** names 0.23.4, in one sentence, outside the step's docs, so it doesn't call 0.23.3 today's.
+     - **`npm dedupe` moves vitest's `magic-string` from 1.4.3 to 1.4.5,** inside vitest's range: the plan said it hoists it. Nothing the build uses changes.
 
 **Wave 2** (after steps 1 to 5 land):
 

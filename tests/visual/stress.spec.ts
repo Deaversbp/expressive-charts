@@ -30,6 +30,14 @@ const day = (page: Page, date: string): Locator => lineChart(page).locator(`.ec-
 /** A play's base duration on the page. */
 const PLAY = 8000;
 
+/**
+ * How long a case's readout is waited for. The date line's play is the slowest: in WebKit in Docker, under 4
+ * workers, its readout once took more than 30 s. So it's waited for up to 60 s, and a test that plays it has 30 s
+ * more than the others ({@link LINE_TEST}).
+ */
+const wait = (name: Case): number => (name === "line" ? 60_000 : 30_000);
+const LINE_TEST = 120_000;
+
 /** Runs the clock a little at a time until the case's readout reports its next run. */
 async function reported(page: Page, name: Case, runs = 1): Promise<void> {
   await expect
@@ -38,7 +46,7 @@ async function reported(page: Page, name: Case, runs = 1): Promise<void> {
         await page.clock.runFor(250);
         return readout(page, name).getAttribute("data-run");
       },
-      { timeout: 30_000, intervals: [0] }
+      { timeout: wait(name), intervals: [0] }
     )
     .toBe(String(runs));
 }
@@ -83,6 +91,7 @@ test("nothing plays by itself", async ({ page }) => {
 test.describe("each start button runs its case, and the readout reports it", () => {
   for (const name of CASES) {
     test(name, async ({ page }) => {
+      if (name === "line") test.setTimeout(LINE_TEST);
       await openDemo(page, stressDemo);
       await start(page, name).click();
       // The date line plays for 8 s; the other cases end within 3.
@@ -104,6 +113,7 @@ test.describe("the date line", () => {
   });
 
   test("part way through its play: the red so far, and the arrow at the tip", async ({ page }) => {
+    test.setTimeout(LINE_TEST);
     await openDemo(page, stressDemo);
     const atRest = await iconTransforms(lineChart(page));
     await playButton(page).click();

@@ -23,6 +23,7 @@ import {
   delta,
   describe as build,
   donutChart,
+  easeInOutCubic,
   expressive,
   flash,
   fromVegaView,
@@ -996,6 +997,65 @@ function shapePairs(): Record<string, readonly [MarkGeometry, MarkGeometry]> {
   };
 }
 
+/** Pairs of shapes with holes, for morph: two D3 rings, each hole with a partner, and a ring and a D3 scatter's dot, its hole with none. */
+function ringPairs(): Record<string, readonly [MarkGeometry, MarkGeometry]> {
+  const [ring, otherRing] = d3RingMarks() as [MarkGeometry, MarkGeometry];
+  const [dot] = d3ScatterMarks() as [MarkGeometry];
+  return {
+    "two rings": [ring, otherRing],
+    "a ring and a dot": [ring, dot]
+  };
+}
+
+/**
+ * Pairs of lines with gaps, for morph: real lines missing weeks, with each other, with the full
+ * season, and drawn smaller.
+ */
+function gapPairs(): Record<string, readonly [MarkGeometry, MarkGeometry]> {
+  const [goals, xg] = lineGappedMarks() as [MarkGeometry, MarkGeometry];
+  const [season] = lineMarks() as [MarkGeometry];
+  const [d3Goals] = d3GappedMarks() as [MarkGeometry];
+  const [smaller] = d3GappedMarks(true) as [MarkGeometry];
+  const [curved] = d3CurveGappedMarks() as [MarkGeometry];
+  return {
+    "two lines missing different weeks": [goals, xg],
+    "a line missing a week and the full season": [goals, season],
+    "a D3 line missing a week and the same smaller": [d3Goals, smaller],
+    "a line and a D3 curve missing the same week": [goals, curved]
+  };
+}
+
+/** Where both marks have a gap, as [from, to] values of t. */
+const sharedGaps = (a: MarkGeometry, b: MarkGeometry): [number, number][] =>
+  (a.gaps ?? []).flatMap(([a0, a1]) => (b.gaps ?? []).flatMap(([b0, b1]): [number, number][] => (Math.min(a1, b1) > Math.max(a0, b0) ? [[Math.max(a0, b0), Math.min(a1, b1)]] : [])));
+
+/**
+ * What morph draws inside a gap both lines have, on every frame of a run: at each end, inside the
+ * line's own gaps; part way, inside the gaps both have on the line part way, each t's point moved
+ * from `from`'s toward `to`'s by the eased progress. Both walks run straight across those gaps.
+ */
+async function morphInGaps(from: MarkGeometry, to: MarkGeometry): Promise<string[]> {
+  const ctx = { ...testContext(), start: 0 };
+  let settled = false;
+  void morph()
+    .run(from, to, ctx)
+    .then(() => (settled = true));
+  const problems: string[] = [];
+  const look = (p: number): void => {
+    const mid = { key: from.key, gaps: sharedGaps(from, to), path: (t: number) => ({ x: from.path(t).x * (1 - p) + to.path(t).x * p, y: from.path(t).y * (1 - p) + to.path(t).y * p }) };
+    const mark = p <= 0 ? from : p >= 1 ? to : (mid as unknown as MarkGeometry);
+    for (const problem of drawnInGaps(mark, ctx.layer.drawn)) problems.push(`at ${p}, ${problem}`);
+  };
+  await flush();
+  for (let ms = 0; !settled; ms += 16) {
+    look(easeInOutCubic(Math.min(1, ms / 950)));
+    ctx.clock.advance(16);
+    await flush();
+  }
+  look(1);
+  return problems;
+}
+
 describe("morph on shapes", () => {
   it.each([
     ["morph", morph()],
@@ -1003,6 +1063,30 @@ describe("morph on shapes", () => {
     ["morph, dropped", morph({ align: "drop" })]
   ] as const)("%s passes the transition checks between shapes, and from a shape to a bar and a slice", async (name, effect) => {
     await checkTransition(effect, { name, pairs: shapePairs() });
+  });
+
+  it.each([
+    ["morph, unrolled", morph({ align: "unroll" })],
+    ["morph, dropped", morph({ align: "drop" })]
+  ] as const)("%s passes the transition checks between two rings, and from a ring to a dot, holes and all", async (name, effect) => {
+    await checkTransition(effect, { name, pairs: ringPairs() });
+  });
+});
+
+describe("morph on lines with gaps", () => {
+  it("passes the transition checks", async () => {
+    await checkTransition(morph(), { name: "morph", pairs: gapPairs() });
+  });
+
+  it.each(Object.keys(gapPairs()))("draws nothing inside a gap both lines have, on any frame, between %s", async (name) => {
+    const [a, b] = gapPairs()[name]!;
+    expect(a.gaps?.length).toBeGreaterThan(0);
+    for (const [from, to] of [
+      [a, b],
+      [b, a]
+    ] as const) {
+      expect(await morphInGaps(from, to)).toEqual([]);
+    }
   });
 });
 

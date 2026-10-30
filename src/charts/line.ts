@@ -14,10 +14,11 @@
 // through the runner, which draws on the SVG surface. What doesn't depend on lines (events, hover and
 // focus, transitions and leaving marks, DOM order, size and fonts) is in shell/. Each x is a hover
 // target standing for every series' point there; the lines themselves are never hovered. With
-// `hover: "point"`, each point is a target instead: the pointer hovers the nearest, the others
-// dim, and the keys go along its line and between lines.
+// `hover: "point"`, each point is a target instead: the pointer hovers the nearest (of points drawn
+// on each other, the one whose line passes nearest), the others dim, and the keys go along its line
+// and between lines.
 
-import type { AnimateOptions, Animated, MarkData, MarkGeometry, Sample, TweenResult } from "../core";
+import type { AnimateOptions, Animated, MarkData, MarkGeometry, Point, Sample, TweenResult } from "../core";
 import { animated, defaultClock, interpolateNumber, interpolateRecord, matrix } from "../core";
 import { invert } from "../core/geometry";
 import { resolveEffects } from "../core/registry";
@@ -246,8 +247,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
   let laidOut: LineLayout<D>;
   let firstTable: TableModel | undefined;
-  /** Each x's accessible name, by row key, for the latest layout. */
-  let names: ReadonlyMap<string, string>;
+  /** With `hover: "x"`, each x's accessible name, by row key, for the latest layout. With "point" the x's are hidden, and unnamed. */
+  let names: ReadonlyMap<string, string> | undefined;
   /** With `hover: "point"`, each point's, by its key. */
   let pointNames: ReadonlyMap<string, string> | undefined;
   try {
@@ -255,7 +256,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     // but the <svg> is in place yet (no listeners, observers or elements beside it), so that's all to undo.
     laidOut = layout(current);
     firstTable = tableFor(current, laidOut);
-    names = namesFor(current, laidOut);
+    names = hoverKind === "x" ? namesFor(current, laidOut) : undefined;
     pointNames = hoverKind === "point" ? pointNamesFor(current, laidOut) : undefined;
   } catch (error) {
     svg.remove();
@@ -265,6 +266,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   const findMark = (key: string): MarkRecord<D> | undefined => points.get(key) ?? lines.get(key) ?? leaving.get(key);
   const surface = svgSurface({
     overlay,
+    measure,
     // Looked up on each call, so the handle follows the mark's record.
     mark: (key) => ({
       set: (style) => {
@@ -315,7 +317,9 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     const encoding = lineEncoding(opts);
     const series = encoding.series.map((s) => s.series);
     checkNeeds(using, series, "lineChart");
-    const next = layoutLines({ data: opts.data, encoding, width: opts.width ?? measuredWidth, height: opts.height, format: format(opts), measure, label: labeler(opts, true) });
+    const { room = 0 } = opts;
+    if (!(typeof room === "number" && Number.isFinite(room) && room >= 0)) throw new RangeError(`lineChart: room must be a number of px, 0 or more, got ${String(room)}.`);
+    const next = layoutLines({ data: opts.data, encoding, width: opts.width ?? measuredWidth, height: opts.height, format: format(opts), measure, label: labeler(opts, true), room });
     // A series named "a@b" and a key "c" make the same point key as "a" and "b@c".
     const keys = new Set(next.series);
     for (const row of next.rows) {
@@ -834,22 +838,51 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
   /**
    * The revealed point nearest `at`, in the <svg>'s units, by distance: of two as near, the series
-   * first in `series`, then the first x. A missing value has no point.
+   * first in `series`, then the first x. A missing value has no point. Of points drawn on each other,
+   * within a px of the nearest, it's the one whose line passes nearest `at`: of two as near, the
+   * series first.
    */
-  function nearestPoint(at: { readonly x: number; readonly y: number }): PointRecord<D> | undefined {
+  function nearestPoint(at: Point): PointRecord<D> | undefined {
+    const shown = rowOrder.filter(revealed).flatMap(livePoints);
     let best: PointRecord<D> | undefined;
     let far = Infinity;
     let rank = Infinity;
-    for (const record of rowOrder) {
-      if (!revealed(record)) continue;
-      for (const point of livePoints(record)) {
-        const { x, y } = point.shown.geometry.center;
-        const d = (x - at.x) ** 2 + (y - at.y) ** 2;
-        const r = laidOut.series.indexOf(point.series);
-        if (d < far || (d === far && r < rank)) [best, far, rank] = [point, d, r];
-      }
+    for (const point of shown) {
+      const d = apart(point.shown.geometry.center, at);
+      const r = laidOut.series.indexOf(point.series);
+      if (d < far || (d === far && r < rank)) [best, far, rank] = [point, d, r];
     }
-    return best;
+    if (!best) return undefined;
+    // The points drawn on it: each line's nearest within a px.
+    const center = best.shown.geometry.center;
+    const on = new Map<string, PointRecord<D>>();
+    for (const point of shown) {
+      const { center: c } = point.shown.geometry;
+      const known = on.get(point.series);
+      if (apart(c, center) <= 1 && (!known || apart(c, at) < apart(known.shown.geometry.center, at))) on.set(point.series, point);
+    }
+    if (on.size < 2) return best;
+    let pick = best;
+    let near = Infinity;
+    for (const series of laidOut.series) {
+      const point = on.get(series);
+      if (!point) continue;
+      const d = passing(point, at);
+      if (d < near) [pick, near] = [point, d];
+    }
+    return pick;
+  }
+
+  /**
+   * How near `at` a point's line passes: its stroke as drawn, curved and with its gaps, within two
+   * dots' radii along it of the point, so past a dot drawn on the point. A point with no stroke
+   * there, a value alone between gaps, counts as its dot.
+   */
+  function passing(point: PointRecord<D>, at: Point): number {
+    const { geometry, data } = point.shown;
+    const line = lines.get(point.series);
+    const stroke = line && strokeNear(line.shown, data.samples[0]!.at, geometry.center, at, 2 * DOT_RADIUS);
+    return stroke ?? Math.max(0, Math.hypot(at.x - geometry.center.x, at.y - geometry.center.y) - DOT_RADIUS);
   }
 
   /**
@@ -1109,12 +1142,14 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
   /**
    * The x's accessible name, from where it's heading, and its description (`markDescription`, or a
-   * tooltip function's text). With `hover: "point"` its column is hidden, and isn't described: a tooltip
-   * function written for points, `(d, { series })`, would be given the row alone.
+   * tooltip function's text). With `hover: "point"` its column is hidden, and is neither named nor
+   * described: `markLabel` is called for the stops shown, and a tooltip function written for points,
+   * `(d, { series })`, would be given the row alone. update() names them again with "x".
    */
   function labelColumn(record: RowRecord<D>): void {
-    record.column.setAttribute("aria-label", names.get(record.key)!);
-    if (hoverKind === "x") tooltip.describe(record.column, record.row);
+    if (hoverKind !== "x") return;
+    record.column.setAttribute("aria-label", names!.get(record.key)!);
+    tooltip.describe(record.column, record.row);
   }
 
   /** Says what an update changed, in the live region: the chart's summary, or the page's text from it. */
@@ -1442,7 +1477,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       const swapped = "on" in next ? nextEffects(effects, current.on, merged.on, env.presets) : effects;
       const nextLayout = layout(merged, swapped);
       const nextTable = tableFor(merged, nextLayout);
-      const nextNames = namesFor(merged, nextLayout);
+      const nextNames = kind === "x" ? namesFor(merged, nextLayout) : undefined;
       const nextPointNames = kind === "point" ? pointNamesFor(merged, nextLayout) : undefined;
       if ("colors" in next) colors = toColorAssignment(merged.colors);
       const previous = current;
@@ -1628,6 +1663,47 @@ function sameAt(a: Sample["at"], b: Sample["at"]): boolean {
   return a === b || (a instanceof Date && b instanceof Date && a.getTime() === b.getTime());
 }
 
+/** The squared distance between two points. */
+function apart(a: Point, b: Point): number {
+  return (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+}
+
+/**
+ * How near `at` a line's stroke passes within `reach` px along it, either way, of its vertex at x
+ * `x`, drawn at `from`, up to a gap; undefined where none is drawn there (a gap either side) or the
+ * line has no vertex at `x`.
+ */
+function strokeNear<D>({ geometry, data: { samples } }: Placed<D>, x: Sample["at"], from: Point, at: Point, reach: number): number | undefined {
+  const i = samples.findIndex((sample) => sameAt(sample.at, x));
+  if (i < 0 || !(geometry.length > 0)) return undefined;
+  const t = samples[i]!.t;
+  const span = reach / geometry.length;
+  let near: number | undefined;
+  for (const way of [-1, 1]) {
+    let a = from;
+    for (let j = i; ; j += way) {
+      const next = samples[j + way];
+      // A gap is before the later of the two.
+      if (!next || (way > 0 ? next : samples[j]!).gapBefore) break;
+      const to = way > 0 ? Math.min(next.t, t + span) : Math.max(next.t, t - span);
+      const b = geometry.path(to);
+      near = Math.min(near ?? Infinity, toSegment(at, a, b));
+      if (to !== next.t) break;
+      a = b;
+    }
+  }
+  return near;
+}
+
+/** The distance from `p` to the segment from `a` to `b`. */
+function toSegment(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length = dx * dx + dy * dy;
+  const u = length > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length)) : 0;
+  return Math.hypot(p.x - a.x - u * dx, p.y - a.y - u * dy);
+}
+
 /** Each series' value with its label, leaving out the missing ones: what `markLabel` is given. Copies, so a page can't change the layout's. */
 function labelled<D>(values: readonly LineValue[], options: LineChartOptions<D>): { series: string; label: string; value: number }[] {
   return present(values).map((v) => ({ series: v.series, label: seriesLabel(options.seriesLabels, v.series), value: v.value }));
@@ -1666,9 +1742,9 @@ function worded<D>(options: LineChartOptions<D>, datum: D, mark: MarkSummary): s
 }
 
 /**
- * Every x's name in `layout`, by key, worked out before anything changes: "12: 15 goals, 14.2 xg",
- * each series' value with its label, or the page's wording from `markLabel`. An empty name, or a throw
- * (reported), keeps the default, so a focus stop is never left unnamed.
+ * With `hover: "x"`, every x's name in `layout`, by key, worked out before anything changes: "12: 15
+ * goals, 14.2 xg", each series' value with its label, or the page's wording from `markLabel`. An empty
+ * name, or a throw (reported), keeps the default, so a focus stop is never left unnamed.
  */
 function namesFor<D>(options: LineChartOptions<D>, layout: LineLayout<D>): ReadonlyMap<string, string> {
   const formatted = format(options);

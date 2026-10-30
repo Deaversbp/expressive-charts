@@ -16,6 +16,9 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // PathHandle, TextStyle, TextHandle, Layer, EffectContext (with previous), GeometryEffect,
 // DataEffect, TransitionEffect, TransitionContext (with start), MarkEffect, AnyMarkEffect, Combined; and the effect slots
 // (EffectSlot, EffectSlots, EffectOption, PresetName). The runner that plays slots is internal.
+// NEW in M11 step 3: EffectContext has an optional `texts`, a TextSpace (box, held, hold): where
+// effects' text sits on the same chart, one space a runner, so an effect's text keeps clear of other
+// effects' text (M11 decision 12). testContext gives one too, with `held` in its options.
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -70,7 +73,9 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // NEW: every builder's spec takes labelBounds (M7 decision 4) and nearbyLabels (M10 decision 11), the
 // boxes of the mark's own labels and of other marks' labels near it, passed through to MarkGeometry.
 // delta and label pick their way from the first and go past both, so their text keeps clear of the
-// mark's own labels and its neighbours'.
+// mark's own labels and its neighbours'. Since M11 they go past other effects' text through
+// EffectContext.texts too, checking their text's own box, and a slice's nearbyLabels are every other
+// slice's label.
 
 // NEW: samplesAlong(mark, points) projects data points (in mark coordinates) onto a mark's walk,
 // giving data effects their samples. Built in M4 step 4 (src/core/geometry), with the SamplePoint type
@@ -107,7 +112,8 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // and reveal() takes a Date too), it has no `pointer` option, since the crosshair is its hover (M4
 // decision 9), and `labels` words its end labels. NEW in M5: barChart's `colorBy: "category"` colours
 // each bar by its key, so a ColorAssignment shared with a donut keeps each category's colour (M5
-// decision 8).
+// decision 8). NEW in M11 step 3: lineChart's `room`, px kept clear to the right of its end labels,
+// as barChart's is past its labels.
 
 /** NEW NoInfer on `on` (built): without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
 export interface ChartOptions<D> extends BuiltChartOptions<D> {}

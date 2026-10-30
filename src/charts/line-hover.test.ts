@@ -1,5 +1,7 @@
 // lineChart({ hover: "point" }) (M10 step 2): the pointer, touch and the keys hover one point, the
 // nearest, with the other lines dimmed; links still go by x; update({ hover }) changes it at once.
+// Of points drawn on each other, the one whose line passes nearest the pointer (M11 step 5); and
+// markLabel names the stops shown.
 
 import { createMotion, manualClock, type EffectContext, type GeometryEffect, type MarkGeometry, type MotionMode } from "../core";
 import { createRegistry, type PresetFactory } from "../core/registry";
@@ -8,7 +10,7 @@ import { barChart } from "./bar";
 import { lineChart } from "./line";
 import { link } from "./link";
 import type { ChartEnv } from "./shell/setup";
-import type { LineChart, LineChartOptions, MarkEvents } from "./types";
+import type { LineChart, LineChartOptions, MarkEvents, MarkSummary } from "./types";
 
 interface Week {
   week: number;
@@ -372,6 +374,190 @@ describe('lineChart({ hover: "point" }): onto the tooltip', () => {
     svg.querySelector(".ec-stops > .ec-hit")!.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: goals.x, clientY: goals.y - 3 }));
     expect(nearerXg(goals, xg, goals.y - 3)).toBe(true);
     expect(focused()).toBe("goals@2");
+  });
+});
+
+describe('lineChart({ hover: "point" }): points drawn on each other', () => {
+  /** A dot's radius, as the chart draws it. */
+  const DOT = 4.5;
+  /** Goals equal to xG at week 2: their points are drawn at one place, and their lines go off apart. */
+  const level = weeks.map((row) => (row.week === 2 ? { ...row, xg: 2 } : row));
+
+  /** Where the line through the point `key` is drawn `px` along it from the point: after it, or before it for px < 0. */
+  function onLine(chart: LineChart<never>, key: string, px: number) {
+    const line = chart.marks().find((mark) => mark.key === key.slice(0, key.indexOf("@")))!;
+    const { x } = chart.marks().find((mark) => mark.key === key)!.center;
+    // The walk goes left to right: the point's t, by halves.
+    let [lo, hi] = [0, 1];
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      if (line.path(mid).x < x) lo = mid;
+      else hi = mid;
+    }
+    return line.path(hi + px / line.length);
+  }
+  /** `px` straight across the straight line through the point `key`, to its left, from `from` (the point). */
+  function across(chart: LineChart<never>, key: string, px: number, from?: { x: number; y: number }) {
+    const center = chart.marks().find((mark) => mark.key === key)!.center;
+    const ahead = onLine(chart, key, 1);
+    const [dx, dy] = [ahead.x - center.x, ahead.y - center.y];
+    const length = Math.hypot(dx, dy);
+    const { x, y } = from ?? center;
+    return { x: x + (dy / length) * px, y: y - (dx / length) * px };
+  }
+
+  it("hovers the point whose line passes nearest the pointer, just off it along each line, and the first series' at its centre", () => {
+    for (const curve of ["linear", "monotone"] as const) {
+      const { chart, at, pointTo } = setup({ data: level, tooltip: false, curve });
+      const events = listen(chart);
+      expect(at("xg@2")).toEqual(at("goals@2"));
+      const moves: [string, number][] = [
+        ["goals@2", 3],
+        ["xg@2", 3],
+        ["goals@2", -3],
+        ["xg@2", -3]
+      ];
+      for (const [key, px] of moves) {
+        const { x, y } = onLine(chart as LineChart<never>, key, px);
+        pointTo(x, y, "pointerover");
+        expect([curve, key, px, events[events.length - 1]]).toEqual([curve, key, px, `hover ${key} pointer 1/1`]);
+      }
+      const centre = at("goals@2");
+      pointTo(centre.x, centre.y);
+      expect([curve, events[events.length - 1]]).toEqual([curve, "hover goals@2 pointer 1/1"]);
+      document.body.textContent = "";
+    }
+    const swapped = setup({ data: level, tooltip: false, series: ["xg", "goals"] });
+    const events = listen(swapped.chart);
+    const centre = swapped.at("goals@2");
+    swapped.pointTo(centre.x, centre.y, "pointerover");
+    expect(events).toEqual(["hover xg@2 pointer 1/1"]);
+  });
+
+  it("keeps the rule with the hover held on the dot: off it, the nearer line wins", () => {
+    const { chart, at, pointTo } = setup({ data: level });
+    const line = chart as LineChart<never>;
+    const events = listen(chart);
+    const to = ({ x, y }: { x: number; y: number }) => pointTo(x, y);
+    const xg = onLine(line, "xg@2", 3);
+    pointTo(xg.x, xg.y, "pointerover");
+    expect(shown()).toBe(true);
+    // On xG's dot, the hover's held: at the centre, and just off it along goals' line.
+    to(at("goals@2"));
+    to(onLine(line, "goals@2", 3));
+    expect(events).toEqual(["hover xg@2 pointer 1/1"]);
+    // Off the dot, along each line.
+    to(onLine(line, "goals@2", DOT + 1.5));
+    to(onLine(line, "xg@2", -(DOT + 1.5)));
+    expect(events).toEqual(["hover xg@2 pointer 1/1", "leave xg@2", "hover goals@2 pointer 1/1", "leave goals@2", "hover xg@2 pointer 1/1"]);
+  });
+
+  it("keeps the rule by touch", () => {
+    const { chart, svg, at } = setup({ data: level });
+    const line = chart as LineChart<never>;
+    const events = listen(chart);
+    const hit = svg.querySelector(".ec-stops > .ec-hit")!;
+    const tap = ({ x, y }: { x: number; y: number }) => {
+      hit.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+      hit.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: x, clientY: y }));
+    };
+    tap(onLine(line, "xg@2", DOT + 1.5));
+    tap(onLine(line, "goals@2", -(DOT + 1.5)));
+    // At the centre, on the hovered dot, it's held.
+    tap(at("goals@2"));
+    expect(events).toEqual(["hover xg@2 touch 1/1", "leave xg@2", "hover goals@2 touch 1/1"]);
+  });
+
+  it("tells three lines through one point apart, each way along them", () => {
+    interface Row {
+      x: number;
+      a: number;
+      b: number;
+      c: number;
+    }
+    // At 2, a rises, b is level and c falls, each through 3.
+    const rows: Row[] = [
+      { x: 1, a: 1, b: 3, c: 5 },
+      { x: 2, a: 3, b: 3, c: 3 },
+      { x: 3, a: 5, b: 3, c: 1 }
+    ];
+    const { chart, at, pointTo } = setup<Row>({ label: "Three lines", data: rows, x: "x", series: ["a", "b", "c"], tooltip: false });
+    const events = listen(chart);
+    expect([at("b@2"), at("c@2")]).toEqual([at("a@2"), at("a@2")]);
+    for (const key of ["c@2", "a@2", "b@2"]) {
+      for (const px of [3, -3]) {
+        const { x, y } = onLine(chart as LineChart<never>, key, px);
+        pointTo(x, y, "pointerover");
+        expect([key, px, events[events.length - 1]]).toEqual([key, px, `hover ${key} pointer 1/1`]);
+      }
+    }
+    const centre = at("a@2");
+    pointTo(centre.x, centre.y);
+    expect(events[events.length - 1]).toBe("hover a@2 pointer 1/1");
+  });
+
+  it("counts a value alone between gaps as its dot, where another line passes through it", () => {
+    interface Row {
+      x: number;
+      a: number;
+      b: number | null;
+    }
+    // b's value at 3 is alone, drawn as a dot on a's line.
+    const rows: Row[] = [
+      { x: 1, a: 1, b: 0 },
+      { x: 2, a: 2, b: null },
+      { x: 3, a: 3, b: 3 },
+      { x: 4, a: 4, b: null },
+      { x: 5, a: 5, b: 0 }
+    ];
+    for (const series of [
+      ["a", "b"],
+      ["b", "a"]
+    ] as const) {
+      const { chart, at, point, pointTo } = setup<Row>({ label: "A dot on a line", data: rows, x: "x", series, tooltip: false });
+      const line = chart as LineChart<never>;
+      const events = listen(chart);
+      expect(point("b@3").classList.contains("ec-alone")).toBe(true);
+      expect(at("b@3")).toEqual(at("a@3"));
+      const to = ({ x, y }: { x: number; y: number }) => pointTo(x, y, "pointerover");
+      // On the dot, off a's line: b's. Past the dot along a's line, or a px off it: a's, either way.
+      const moves: [{ x: number; y: number }, string][] = [
+        [across(line, "a@3", 3), "b@3"],
+        [onLine(line, "a@3", DOT + 1.5), "a@3"],
+        [across(line, "a@3", -3), "b@3"],
+        [onLine(line, "a@3", -(DOT + 1.5)), "a@3"],
+        [across(line, "a@3", 3), "b@3"],
+        [across(line, "a@3", 1, onLine(line, "a@3", DOT + 1.5)), "a@3"],
+        [across(line, "a@3", -3), "b@3"],
+        [across(line, "a@3", -1, onLine(line, "a@3", -(DOT + 1.5))), "a@3"],
+        // At the centre, the first series'.
+        [at("a@3"), `${series[0]}@3`]
+      ];
+      for (const [where, key] of moves) {
+        to(where);
+        expect([series, where, events[events.length - 1]]).toEqual([series, where, `hover ${key} pointer 1/1`]);
+      }
+      document.body.textContent = "";
+    }
+  });
+
+  it("does the same on a time axis", () => {
+    interface Day {
+      day: Date;
+      goals: number;
+      xg: number;
+    }
+    const days: Day[] = level.map((row) => ({ day: new Date(Date.UTC(2026, 7, row.week)), goals: row.goals!, xg: row.xg! }));
+    const key = (series: string) => `${series}@${days[1]!.day.toISOString()}`;
+    const { chart, at, pointTo } = setup<Day>({ label: "Days", data: days, x: "day", tooltip: false });
+    const events = listen(chart);
+    for (const series of ["xg", "goals"]) {
+      const { x, y } = onLine(chart as LineChart<never>, key(series), 3);
+      pointTo(x, y, "pointerover");
+    }
+    const centre = at(key("xg"));
+    pointTo(centre.x, centre.y);
+    expect(events).toEqual([`hover ${key("xg")} pointer 1/1`, `leave ${key("xg")}`, `hover ${key("goals")} pointer 1/1`]);
   });
 });
 
@@ -783,5 +969,60 @@ describe('lineChart: update({ hover })', () => {
     await expect(chart.update({ hover: "Point" as never })).rejects.toThrow(new TypeError('lineChart: hover must be "x" or "point", got "Point".'));
     expect(svg.querySelector(".ec-stops")).toBeNull();
     expect(svg.querySelector(".ec-columns")!.hasAttribute("display")).toBe(false);
+  });
+});
+
+describe("lineChart: markLabel, for the stops shown", () => {
+  const named = () => vi.fn((_: Week, mark: MarkSummary) => `Named ${mark.key}`);
+  const keysOf = (markLabel: ReturnType<typeof named>) => markLabel.mock.calls.map(([, mark]) => mark.key);
+  const points = ["goals@1", "xg@1", "goals@2", "xg@2", "goals@3", "xg@3", "goals@4", "xg@4"];
+  const labels = (svg: SVGSVGElement, selector: string) => Array.from(svg.querySelectorAll(selector), (element) => element.getAttribute("aria-label"));
+
+  it('is called once for each point with hover: "point", given that series alone, and the x\'s aren\'t named', () => {
+    const markLabel = named();
+    const { svg } = setup({ markLabel });
+    expect(keysOf(markLabel)).toEqual(points);
+    expect(markLabel).toHaveBeenCalledWith(weeks[1], { key: "xg@2", category: "2", values: [{ series: "xg", label: "xg", value: 2.1 }], total: 2.1, format: expect.any(Function), text: "2: 2.1 xg" });
+    expect(labels(svg, ".ec-stop")).toEqual(["goals@1", "goals@2", "goals@3", "goals@4", "xg@1", "xg@2", "xg@3", "xg@4"].map((key) => `Named ${key}`));
+    expect(labels(svg, ".ec-column")).toEqual([null, null, null, null]);
+    // A missing value has no point, and isn't named.
+    document.body.textContent = "";
+    const gapped = named();
+    setup({ data: weeks.map((row) => (row.week === 3 ? { ...row, goals: null } : row)), markLabel: gapped });
+    expect(keysOf(gapped)).toEqual(points.filter((key) => key !== "goals@3"));
+  });
+
+  it('is called once for each x with hover: "x", given every series', () => {
+    const markLabel = named();
+    const { svg } = setup({ hover: "x", markLabel });
+    expect(keysOf(markLabel)).toEqual(["1", "2", "3", "4"]);
+    expect(markLabel).toHaveBeenCalledWith(weeks[1], expect.objectContaining({ key: "2", category: "2", values: [{ series: "goals", label: "goals", value: 2 }, { series: "xg", label: "xg", value: 2.1 }], text: "2: 2 goals, 2.1 xg" }));
+    expect(labels(svg, ".ec-column")).toEqual(["Named 1", "Named 2", "Named 3", "Named 4"]);
+  });
+
+  it("names every stop when update() changes the hover, either way, and with data", async () => {
+    const markLabel = named();
+    const { chart, svg, settle } = setup({ markLabel });
+    chart.focus("xg@2");
+    markLabel.mockClear();
+    await settle(chart.update({ hover: "x" }));
+    expect(keysOf(markLabel)).toEqual(["1", "2", "3", "4"]);
+    expect(labels(svg, ".ec-column")).toEqual(["Named 1", "Named 2", "Named 3", "Named 4"]);
+    expect(document.activeElement!.getAttribute("aria-label")).toBe("Named 2");
+    markLabel.mockClear();
+    await settle(chart.update({ hover: "point" }));
+    expect(keysOf(markLabel)).toEqual(points);
+    expect(document.activeElement!.getAttribute("aria-label")).toBe("Named goals@2");
+    expect(labels(svg, ".ec-stop")).toHaveLength(8);
+    expect(labels(svg, ".ec-stop").every((label) => label?.startsWith("Named "))).toBe(true);
+    // A change of data with "point" names the points alone, and with "x" the x's alone.
+    markLabel.mockClear();
+    await settle(chart.update({ data: [...weeks, { week: 5, goals: 6, xg: 5.1 }] }));
+    expect(keysOf(markLabel)).toEqual([...points, "goals@5", "xg@5"]);
+    expect(svg.querySelector('.ec-stop[data-key="xg@5"]')!.getAttribute("aria-label")).toBe("Named xg@5");
+    markLabel.mockClear();
+    await settle(chart.update({ hover: "x", data: weeks.slice(1) }));
+    expect(keysOf(markLabel)).toEqual(["2", "3", "4"]);
+    expect(labels(svg, ".ec-column:not([aria-hidden])")).toEqual(["Named 2", "Named 3", "Named 4"]);
   });
 });

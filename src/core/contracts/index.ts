@@ -22,6 +22,7 @@ export type {
   EffectContext,
   GeometryEffect,
   MarkEffect,
+  TextSpace,
   TransitionContext,
   TransitionEffect
 } from "./effect";

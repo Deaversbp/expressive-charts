@@ -531,7 +531,7 @@ One mark, described the same way whoever drew it. In chart pixels, with y pointi
   - `center`: `Point`. Its visual centre, for tooltips, rings and labels.
   - `pivot`: `Point`. Where it's attached to the chart: a bar's baseline, a donut's centre, a line's first point.
   - `labelBounds`: `readonly Rect[] | undefined`. The boxes of the text the chart draws for the mark, so an effect's own text can keep clear of them: a bar's category and value labels, the two lines of a slice's label outside the ring, a line's end label. An empty list when the mark has none drawn now. Unset on segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#the-marks-own-labels)).
-  - `nearbyLabels`: `readonly Rect[] | undefined`. The boxes of other marks' text near this one, which an effect's text should keep clear of too: on a line, every other line's end label; on a slice, its neighbours' labels, the nearest each way round. `labelBounds` stays the mark's own. An empty list when none is near; unset when none is known: on bars, segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#other-marks-labels-nearby)).
+  - `nearbyLabels`: `readonly Rect[] | undefined`. The boxes of other marks' text near this one, which an effect's text should keep clear of too: on a line, every other line's end label; on a slice, every other slice's label, in the slices' order. `labelBounds` stays the mark's own. An empty list when none is near; unset when none is known: on bars, segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#other-marks-labels-nearby)).
   - `segments`: `readonly MarkGeometry[] | undefined`. A bar's parts, from the baseline; every bar has at least one.
 
 Build one with [`describe`](#describe).
@@ -697,8 +697,29 @@ One run's context: the only way an effect touches the screen or the clock.
 - `layer`: [`Layer`](#layer). The run's own overlay group, above the marks.
 - `icons`: [`IconSource`](#iconsource). Finds icons by name.
 - `batch`: `{ index, count }`. The mark's place among the marks of its event, for staggering.
-- `onChange(listener)`: calls `listener(mark, data?)` when the mark's geometry moves (a transition's frames, a resize, a line's reveal), until the run is cleared.
+- `onChange(listener)`: calls `listener(mark, data?)` when the mark's geometry moves (a transition's frames, a resize, a line's reveal), and when text held before this run's moved after it was placed (`texts`), until the run is cleared.
 - `previous`: `MarkGeometry | undefined`. The geometry before this update, on update runs.
+- `texts`: [`TextSpace`](#textspace) `| undefined`. Where effects' text sits on this chart or attachment, so an effect's text can keep clear of other effects' text. Our charts, `expressive()` and `fromVegaView()` always give it, and so does `testContext()`. Unset means no other text is known.
+
+#### `TextSpace`
+
+*Under the 0.x promise.*
+
+```ts
+interface TextSpace {
+  box(content: string, style: TextStyle): Rect;
+  held(): readonly Rect[];
+  hold(box: Rect | undefined): void;
+}
+```
+
+Where effects' text sits on one chart or attachment: one space for every run on its runner, so two charts' text never counts against each other. Runs start in the chart's mark order, so the first mark's text keeps its place and the next goes past it; earlier text never moves for later text ([architecture.md](architecture.md#where-effects-text-sits)).
+
+- `box(content, style)`: the box `content` takes drawn with `style`, at the overlay's text size (12.5 px), measured as the chart measures its own text, with its digits as 0s. Where there's no layout, as in jsdom, it's estimated: 0.6 em a character. It reaches 0.16 em past the text at either side, 1.05 em above its baseline and 0.25 em below it, as a mark's `labelBounds` do.
+- `held()`: the boxes held now by the runs on this runner that started before this one.
+- `hold(box)`: this run's text is at `box` from now on, until it holds another, holds `undefined`, or the run is cleared. A run's box stays while its run has finished and its text stays. When a box moves, a later run that was placed before it moved hears `onChange` again once the chart has told every mark that moved, so it can go past the text as it is now.
+
+[`delta()`](#delta) and [`label()`](#label) go past the boxes held before them, and hold the box where their text ends, risen into place. An effect that draws text of its own can do the same; one that ignores `texts` works as before.
 
 #### `TransitionContext`
 
@@ -1323,7 +1344,7 @@ interface TraceOptions
 delta<D = unknown>(options?: DeltaOptions<D>): DataEffect<D>
 ```
 
-A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label and any other line's beside it, outside a slice's label. It keeps clear of the mark's own labels (`labelBounds`) and other marks' near it (`nearbyLabels`). It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until its chart's next update clears it, whether or not that update changes its mark, following the mark as it moves. `data.previous` is the values the last update gave, so an update that replaces one still moving says "+1", not the change from part way. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
+A data effect for the `update` slot: the change since the last update, as text past the end of the mark ([architecture.md](architecture.md#delta-and-label)). The change is `value(data) − value(data.previous)`, worded by `format`: "+2" past a bar's value label, centred above a column's, past a line's end label and any other line's beside it, outside a slice's label. It keeps clear of the mark's own labels (`labelBounds`), other marks' near it (`nearbyLabels`), and the text other effects on the chart placed before it ([`texts`](#textspace)), checking its own text's box: the second of two lines' changes goes past the first's. It rises 8 px into place and fades in over 400 ms base with `"effect"` timing, then stays until its chart's next update clears it, whether or not that update changes its mark, following the mark as it moves. `data.previous` is the values the last update gave, so an update that replaces one still moving says "+1", not the change from part way. Its end state is the text in place, so reduced motion shows the change. With no `previous`, or no change (float noise counts as none), it draws nothing. The text is in the theme's `"text"` colour, never the series'.
 
 The text goes in the overlay, which screen readers don't read: a page that relies on it says the same in its table or its announcement. On a line chart, `update` runs on the points whose values changed too, so a change meant for the line goes in [`only()`](#only) with a filter on the mark's length:
 
@@ -1355,7 +1376,7 @@ A `value` or `format` that isn't a function throws a `TypeError`, and a bad `col
 label<D = unknown>(text: (data: MarkData<D>, mark: MarkGeometry) => string | undefined, options?: LabelOptions): DataEffect<D>
 ```
 
-A data effect, usually for `decorate`: text worked out from the mark's own data, past the end of the mark, as `delta` places it ([architecture.md](architecture.md#delta-and-label)). `text` returns the words, or `undefined` or `""` for none: the last value minus the first on a slope, a step's own signed value, or a field such as `vsLastMonth`. It's typed by the rows it reads, as [`defineDataEffect<D>`](#definedataeffect) is, so a `label` for one kind of row is a type error on a chart of another. It rises into place as `delta` does, then follows every change, its text worked out again from the new data. Its end state is the text in place.
+A data effect, usually for `decorate`: text worked out from the mark's own data, past the end of the mark, as `delta` places it, clear of other effects' text too ([architecture.md](architecture.md#delta-and-label)). `text` returns the words, or `undefined` or `""` for none: the last value minus the first on a slope, a step's own signed value, or a field such as `vsLastMonth`. It's typed by the rows it reads, as [`defineDataEffect<D>`](#definedataeffect) is, so a `label` for one kind of row is a type error on a chart of another. It rises into place as `delta` does, then follows every change, its text worked out again from the new data. Its end state is the text in place.
 
 As with `delta`, the text isn't read by screen readers, and on a line chart `decorate` runs on the points too, so a label meant for the line goes in [`only()`](#only):
 
@@ -1402,7 +1423,7 @@ interface ThresholdOptions
 morph(options?: MorphOptions): TransitionEffect
 ```
 
-A transition effect that turns one mark's shape into another's: the default transition of a [`chartSwitch`](#chartswitch) ([architecture.md](architecture.md#morph)). Two closed outlines (bars, slices, points) are sampled at `points`, and each point moves in a straight line to its partner, as one filled path in the mark's colour; two lines morph along their strokes, their width too; an area and a line crossfade. It takes 950 ms base with `"transition"` timing, eased in and out, and a run from `ctx.start` takes the rest of a full run's time, so a switch back retraces. Its end state is the target's own outline.
+A transition effect that turns one mark's shape into another's: the default transition of a [`chartSwitch`](#chartswitch) ([architecture.md](architecture.md#morph)). Two closed outlines (bars, slices, points) are sampled at `points`, and each point moves in a straight line to its partner, as one filled path in the mark's colour, and their holes pair by area and morph too; two lines morph along their strokes, their width too, and keep their `gaps`, the stroke inside one line's gap fading in or out; an area and a line crossfade. It takes 950 ms base with `"transition"` timing, eased in and out, and a run from `ctx.start` takes the rest of a full run's time, so a switch back retraces. Its end state is the target's own outline.
 
 #### `MorphOptions`
 
@@ -1897,16 +1918,17 @@ The [shared options](#chartoptionsd), and:
 - `timeZone`: `"UTC" | "local"`. Default `"UTC"`. A time axis's zone: ticks fall on its boundaries, and names, the tooltip and the table say times in it. A date-only value such as `new Date("2026-01-05")` is UTC midnight, so in UTC it's 5 January on every machine. `"local"` follows the viewer's clock.
 - `xFormat`: `(x: Date | number) => string`. Words an x for people: in its name, the tooltip's title, the table's row headers and announcements. Default: a medium date in the page's locale ("Jan 5, 2026"), with the time when any x has one; a number as it is. The ticks keep their own wording.
 - `hover`: `"x" | "point"`. Default `"x"`: the pointer anywhere over the chart, touch and the keys hover every series' point at the nearest x, with a crosshair and nothing dimmed, and the x's are the focus stops. `"point"` hovers one point:
-  - **The pointer** anywhere over the plot, and touch, hover the revealed point nearest it, by distance; of two as near, the series first in `series`. Leaving the plot leaves. A missing value, or a point past the reveal, has nothing to hover. `hover` fires for that point alone, and its hover effect plays on it.
+  - **The pointer** anywhere over the plot, and touch, hover the revealed point nearest it, by distance; of two as near, the series first in `series`. Where other lines' points are drawn within a px of it, as where goals equal xG, it's the one whose line passes nearest the pointer, by its stroke as drawn within 9 px along it of the point; a value alone between gaps counts as its dot. So the pointer just off them along a line hovers that line's point, and at their centre the series first in `series`. Leaving the plot leaves. A missing value, or a point past the reveal, has nothing to hover. `hover` fires for that point alone, and its hover effect plays on it.
   - **Dimming.** The point shows in its strong colour, and its line and their decorations stay at full strength. Every other line and point dims to `--ec-dim-opacity`, with its decorations; text keeps its contrast. `dim: false` keeps them.
   - **The tooltip** sits above the point, or below it without room, with no crosshair: the x in bold, then that series' value with its label ("3.6 xg"), or a tooltip function's text. While it shows, the pointer stays on the point while it's on its dot, though another is nearer, so it can go straight from the point onto the tooltip.
   - **Keys.** One tab stop, on a point. Left and Right go along its line to the next x where it has a value, Up and Down to the point above or below at its x, by where they're drawn, Home and End to the line's first and last value, and Page Down and Page Up a page along it: a calendar month on a time axis, otherwise a tenth of its points. Escape ends the hover, and focus stays.
-  - **Names.** Each point is an image named by its x and its value, "12: 15 goals", or by `markLabel`, given that series alone in `values`. The x's aren't stops.
+  - **Names.** Each point is an image named by its x and its value, "12: 15 goals", or by `markLabel`, given that series alone in `values`. The x's aren't stops, and aren't named: `markLabel` is called once for each point, and `update({ hover: "x" })` names the x's.
   - **Links** still go by x: a point hovered hovers the others at its x, and a link's hover shows at every series' point there, with nothing dimmed, as with `"x"`.
   - **`focus(key)`** takes a point's key, or an x's, for its first series' point there.
 
   `update({ hover })` changes it at once: a hover held ends, and focus moves to the nearest stop of the new kind, with its ring, without hovering it. Anything else throws a `TypeError`, and `update()` rejects it.
 - `tooltip`: `boolean | ((d: D, point?: { series: string }) => string)`. As on every chart. With `hover: "point"` a function is given the point's series too, `(d, { series })`, for the point's text and description; with `"x"` it's given the row alone.
+- `room`: `number`. Default 0. Px the layout keeps clear to the right of the end labels, or of the lines' ends with `labels: false`, for text an effect draws past them, such as a `delta` past a line's end label: the plot is that much narrower, and the end labels stay beside it. 0 lays out as without it. Two lines' changes side by side past their end labels take more than one: the season page's need `room: 60` at 1,000 px. A line's text that rises above the plot isn't kept clear. Anything but a number of px, 0 or more, throws a `RangeError`, and `update({ room })` lays the chart out again.
 
 A time axis has ticks on second, minute, hour, day, week, month and year boundaries, each worded for its level in the page's locale ("2026", "Apr", "Feb 8", "3:00 PM"). The chart is 300 px high. `dim` does nothing with `hover: "x"`, since nothing dims.
 
@@ -1949,7 +1971,7 @@ What every chart takes. The bar, donut and line charts add their own.
 - `dim`: `boolean`. Default true. Dims the other marks' bodies while one is hovered (to `--ec-dim-opacity`), with the paths and icons their effects draw, not their labels or text effects draw, which keep their contrast. The hovered mark's emphasis stays either way.
 - `legend`: `boolean | LegendOptions`. Default true: a swatch and a name for each series above the chart, when there are two entries or more. A donut, or bars with `colorBy: "category"`, list their categories instead, even one. `{ entries }` adds the page's own ([`LegendOptions`](#legendoptions)); `false` turns it off.
 - `tooltip`: `boolean | ((d: D) => string)`. Default true: the category, each value in `format` with its label, and a stack's total, beside the hovered or focused mark. A function gives a row's text instead, with `"\n"` for line breaks, set as text and never as HTML; an empty string shows none. Escape hides it. The pointer can move onto it, to read or select its text, and the hover stays while it's there; beside a mark, a clear bridge across the gap leads to it ([architecture.md](architecture.md#reference-charts)).
-- `markLabel`: `(d: D, mark: MarkSummary) => string`. Words each mark's accessible name, which by default is the category and each value: "Okafor: 16 goals, 4 assists" ([`MarkSummary`](#marksummary)). An empty result, or a throw (reported), keeps the default, so a mark is never unnamed.
+- `markLabel`: `(d: D, mark: MarkSummary) => string`. Words each mark's accessible name, which by default is the category and each value: "Okafor: 16 goals, 4 assists" ([`MarkSummary`](#marksummary)). An empty result, or a throw (reported), keeps the default, so a mark is never unnamed. It's called once for each focus stop when the chart is drawn and as each update starts, never per frame: on a line chart each x, or with `hover: "point"` each point.
 - `markDescription`: `false | ((d: D) => string)`. Each mark's accessible description: what its name doesn't say. Default: a tooltip function's text. `false` describes nothing.
 - `table`: `boolean | "hidden" | TableOptions<D>`. Default true: a closed "Data table" after the chart, the fallback every screen reader can read, with the rows in the chart's order. `"hidden"` keeps it out of sight but still read; `false` removes it ([`TableOptions`](#tableoptionsd)).
 - `announce`: `boolean | ((change: ChartChange) => string | undefined)`. Default false. A polite live region that sums up each update ("Sorted A to Z. Okafor and Tanaka changed"). A function words it instead ([`ChartChange`](#chartchange)); an empty string or `undefined` says nothing.
@@ -2273,7 +2295,7 @@ The same effects on SVG charts drawn by other code: D3, Observable Plot, a hand-
 expressive<D = unknown>(target: MarkSource<D>, options: ExpressiveOptions<D>): Attachment<D>
 ```
 
-Attaches effects to SVG marks drawn by other code. `target` is a selector, an element, a list of elements or a D3 selection, whose data types the callbacks ([`MarkSource`](#marksourced)). `<rect>`s are read as bars, stacks included, `<circle>`s as points, and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements as shapes, from their own path data with [`describe.shape`](#shapespec), each through its transforms. Anything else takes a `geometry` built with [`describe`](#describe), which wins over all of them. Call `refresh()` after the host redraws, which fires `enter`, `update` and `exit` by key, or pass `watch: true` to follow the host's own transitions frame by frame. Marks it can't read, bad samples and missing series throw before anything changes. Options: [`ExpressiveOptions<D>`](#expressiveoptionsd). Returns [`Attachment<D>`](#attachmentd).
+Attaches effects to SVG marks drawn by other code. `target` is a selector, an element, a list of elements or a D3 selection, whose data types the callbacks ([`MarkSource`](#marksourced)). `<rect>`s are read as bars, stacks included, `<circle>`s as points, a `<path>` that draws a ring's slice as that slice, with [`describe.arc`](#arcspec), and other `<path>`s, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements, and `<rect>`s turned or skewed, as shapes, from their own path data with [`describe.shape`](#shapespec), each through its transforms. Anything else takes a `geometry` built with [`describe`](#describe), which wins over all of them. Call `refresh()` after the host redraws, which fires `enter`, `update` and `exit` by key, or pass `watch: true` to follow the host's own transitions frame by frame. Marks it can't read, bad samples and missing series throw before anything changes. Options: [`ExpressiveOptions<D>`](#expressiveoptionsd). Returns [`Attachment<D>`](#attachmentd).
 
 D3 stacked bars, a D3 pie and a D3 line:
 
@@ -2293,11 +2315,11 @@ const fx = expressive(bars, {
 });
 fx.refresh(bars);                                    // after the page redraws: enter, update and exit by key
 
-// slices: <path>s drawn with d3.pie() and d3.arc().innerRadius(70).outerRadius(116), in a <g> at the centre.
+// slices: <path>s drawn with d3.pie() and d3.arc(), in a <g> at the centre. Each is read from its own d as a
+// slice, with describe.arc: its centre, radii and angles as d3.pie() gives them.
 expressive(slices, {
   key: (d) => d.data.outcome,
   value: (d) => d.value,                             // or one new value updates every slice
-  geometry: (_el, d, key) => describe.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle }),
   keyboard: true,                                    // clockwise from 12 o'clock
   on: { hover: travel(soccerBall) }
 });
@@ -2314,7 +2336,7 @@ expressive(lines, {
 });
 ```
 
-This line's `geometry` and `samples` are built from the rows bound to each path, so `watch` follows the line only while the page updates those rows every frame, as a reveal does (`paths.datum(…).attr("d", …)` on each frame). A D3 transition that binds the new rows once and interpolates the path's `d` would show only its end: the overlay jumps to the final line. There, leave `geometry` out, so the path is read from its own path data, which `watch` reads again each frame, or call `refresh()` when the transition ends. Rects, circles and shapes need nothing: they're read from the element.
+This line's `geometry` and `samples` are built from the rows bound to each path, so `watch` follows the line only while the page updates those rows every frame, as a reveal does (`paths.datum(…).attr("d", …)` on each frame). A D3 transition that binds the new rows once and interpolates the path's `d` would show only its end: the overlay jumps to the final line. There, leave `geometry` out, so the path is read from its own path data, which `watch` reads again each frame, or call `refresh()` when the transition ends. Rects, circles, slices and shapes need nothing: they're read from the element.
 
 Circles and shapes read by their tags, with no `geometry`: a D3 scatter and a curve.
 
@@ -2340,7 +2362,7 @@ expressive(lines, {
 });
 ```
 
-A circle under an uneven scale or a skew is read as an ellipse, a shape. An open shape's width is its stroke width as drawn, scaled by its transforms; a width of 0 reads as 1 px. A shape SVG wouldn't draw, such as a path with no path data, isn't a mark until it draws something. A circle or a shape is a mark of its own: a key it shares with another element throws a `TypeError`. Each keeps document order in `marks()` and for the arrow keys, and so does every mark when circles or shapes are among the rects. A pie's slices read as shapes would each have their own centre, so describe them with `describe.arc`, as above, to go round the pie clockwise.
+A circle under an uneven scale or a skew is read as an ellipse, a shape, and so is a `<rect>` turned or skewed, from its outline, rounded corners too. A path is a slice when it's one circular arc with two straight sides through its centre (a pie's), two arcs about one centre, one each way, joined along radii (a donut's), or a whole ring, within 0.5 px, under a transform that keeps circles; anything else is a shape, such as a slice with rounded corners or a donut's with a pad angle. An open shape's width is its stroke width as drawn, scaled by its transforms, or with `vector-effect: non-scaling-stroke` in screen px, not scaled; a width of 0 reads as 1 px. A shape SVG wouldn't draw, such as a path with no path data, isn't a mark until it draws something. A circle, a slice or a shape is a mark of its own: a key it shares with another element throws a `TypeError`. Each keeps document order in `marks()` and for the arrow keys, and so does every mark when circles or shapes are among the rects, but slices round one centre go clockwise from 12 o'clock.
 
 **Observable Plot** binds each rect to its row's index, so pass `datum`. Its dots are `<circle>`s, read by tag as points with the same `datum`. Plot draws a new `<svg>` each time, so pass `refresh()` the new one's rects. After a transform that derives new data (`groupY`, `binX`), the index is into Plot's derived rows, not yours: read them through the mark's `render` option instead. A Plot line's path is bound to its series' row indices, with `-1` where Plot breaks the line at a missing value: pass `datum: (el) => el.__data__.filter((i) => i >= 0).map((i) => rows[i])`, a `geometry` from those rows' points through Plot's own scales (`plot.scale("x").apply(r.week)`), and `samples` from `samplesAlong` on the same points. Where Plot leaves a gap, give `describe.line` the `breaks`: the indices, among those rows, of the ones after each `-1`. The accessors are tested against Plot 0.6.17.
 
@@ -2368,7 +2390,7 @@ interface ExpressiveOptions<D>
 - `datum`: `(element: Element) => D`. The element's row. Default: a selection's `data()`, else `element.__data__`, D3's convention.
 - `segment`: `(datum: D, element: Element) => string`. Names the parts of a mark that share a key: a stack's series. They're ordered from the baseline. On a circle or another shape it names the mark's `series`, so a data effect reads it through `related`.
 - `value`: `(datum: D, element: Element) => number | string | boolean | null | undefined`. What an element shows, so `refresh()` can tell a change in values from a new layout: given, an update means a value changed, as on our charts; without it, a length changed, so a resize updates every bar. Return a number or a string.
-- `geometry`: `(element: Element, datum: D, key: string) => MarkGeometry`. Describes every mark yourself, with `describe`, in the coordinates of the marks' nearest common ancestor, instead of the adapter reading `<rect>`s as bars, `<circle>`s as points and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements as shapes. Give it for anything else (`<text>`, `<g>`, `<use>` and `<image>` throw, naming the tag), or to say more than an element shows: a pie's slices with `describe.arc`, which go round its centre. Called once per mark with its first element.
+- `geometry`: `(element: Element, datum: D, key: string) => MarkGeometry`. Describes every mark yourself, with `describe`, in the coordinates of the marks' nearest common ancestor, instead of the adapter reading `<rect>`s as bars, `<circle>`s as points and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements as shapes. Give it for anything else (`<text>`, `<g>`, `<use>` and `<image>` throw, naming the tag), or to say more or other than an element shows: a padded donut's slices with `describe.arc`, which go round its centre, or a pie's slices as the shapes their paths draw, with `describe.shape`. Called once per mark with its first element.
 - `samples`: `(datum: D, mark: MarkGeometry) => readonly Sample[]`. Data effects' values along the mark. Default: rects with a numeric `value` get the bar chart's samples, and circles with one get it as their one sample, `{ t: 0, value }`; other marks get none. Bad samples throw.
 - `baseline`: `Baseline | "auto"`. Default `"auto"`: the line every rect has an edge on. A rect whose other edge is on it grows the other way, as a negative bar.
 - `motion`: `Motion | MotionMode`. As on a chart.
@@ -2395,7 +2417,7 @@ interface Attachment<D>
 - `refresh(source?)`: reads the marks again, from `source` if it's given and from then on, and fires `enter`, `update` and `exit` by key. A mark that only moved follows without an event. A read that finds a new row, a new value, or a mark entering or leaving is an update, which ends the last one's `update` effects (a `delta`) on the marks it leaves alone; one that finds none keeps them. It throws, changing nothing, on marks it can't read.
 - `update({ on })`: `Promise<void>`. Swaps the effects for a new `on`, as a chart's `update({ on })` does ([architecture.md](architecture.md#adapters)): a slot given the same effect or preset name keeps its runs, and a slot left out is emptied. A changed slot's new effect starts where the old one's runs were: `decorate` again on every mark, a held hover replayed with the new hover effect, and `enter`, `update` and `exit` at their end state, so nothing enters again. Focus and the tab stop stay, nothing fires, and a data effect finds the series it reads (`needs`), following them from then on. It resolves once that's done, at once. It rejects, changing nothing, on an `on` it can't resolve (an unknown preset name), a series a data effect needs that the marks don't have, or any other option, which can't change yet.
 - `on(type, listener)`: listens for [`MarkEvents`](#markeventsd), and returns a function that stops it.
-- `marks()`: `readonly MarkGeometry[]`. The marks in visual order: bars top to bottom, columns left to right, a pie's slices described with `describe.arc` clockwise from 12 o'clock, and other marks in document order: circles, shapes, marks described with `geometry`, and bars among circles or shapes.
+- `marks()`: `readonly MarkGeometry[]`. The marks in visual order: bars top to bottom, columns left to right, a pie's slices, read by tag or described with `describe.arc`, clockwise from 12 o'clock, and other marks in document order: circles, shapes, marks described with `geometry`, and bars among circles or shapes.
 - `focus(key)`: with `keyboard`, moves focus to the mark, which plays its hover effects.
 - `leave()`: ends the hover, pointer or keyboard, as the viewer moving away would: the emphasis, the dimming and the hover effects end, and `leave` fires for each mark that was hovered. A link's hover shown on it ends too. Focus stays where it is, with its ring, as after Escape. It does nothing when nothing is hovered.
 - `destroy()`: clears every effect and puts back everything the adapter changed.
@@ -2805,6 +2827,7 @@ interface TestContextOptions
 - `icons`: `readonly Icon[]`. What `ctx.icons` finds.
 - `batch`: `{ index, count }`. Default: the only one.
 - `previous`: `MarkGeometry`. The geometry before an update.
+- `held`: `readonly Rect[]`. The boxes other effects' text holds, as `texts.held()` gives them: the runs that started before this one. Default none.
 
 #### `TestContext`
 
@@ -2817,8 +2840,9 @@ interface TestContext extends EffectContext
 An [`EffectContext`](#effectcontext) whose `motion` is a [`Motion`](#motion-type), `clock` a [`ManualClock`](#manualclock), `layer` a [`RecordingLayer`](#recordinglayer) and `mark` a [`RecordingMark`](#recordingmark), and:
 
 - `abort()`: aborts the run, as the runner does on leave or a re-trigger.
-- `clear()`: the runner's cleanup after `effect.clear(ctx)`: aborts, empties the layer, resets the mark and drops `onChange` listeners.
+- `clear()`: the runner's cleanup after `effect.clear(ctx)`: aborts, empties the layer, resets the mark, drops `onChange` listeners and lets go of the run's text.
 - `change(mark, data?)`: tells `onChange` listeners the mark moved, as the runner does on every frame of a transition.
+- `texts`: `TextSpace & { readonly holding: Rect | undefined }`. A [`TextSpace`](#textspace) as a chart's runner gives it, with boxes estimated as in jsdom (0.6 em a character), `held()` giving the options' `held`, and `holding` the box the run holds now: undefined until it holds one, and once it holds `undefined` or is cleared.
 
 #### `play()`
 

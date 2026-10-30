@@ -130,6 +130,8 @@ export interface LineLayoutInput<D> {
   readonly measure: Measure;
   /** A line's end label for a value, measured for the right margin; undefined with `labels: false`. */
   readonly label: ((series: string, value: number) => string) | undefined;
+  /** Px kept clear to the right of the end labels, or the lines' ends without them. Default 0. */
+  readonly room?: number;
 }
 
 type Measure = (text: string, className: string, size: number) => number;
@@ -238,10 +240,10 @@ export function layoutLines<D>(input: LineLayoutInput<D>): LineLayout<D> {
   const xTexts = ticked.map((tick) => tick.text);
   const xWidths = xTexts.map((text) => measure(text, "ec-tick", TICK_SIZE));
 
-  // The values' labels on the left; the end labels, or the last x label, on the right.
+  // The values' labels on the left; the end labels, or the last x label, on the right, with `room` past the end labels.
   const labelWidth = input.label ? widest(distinctLabels(rows, input.label), "ec-value", VALUE_SIZE, measure) : 0;
   const left = Math.max(widest(yTexts, "ec-tick", TICK_SIZE, measure) + 10, (xWidths[0] ?? 0) / 2 + 2);
-  const right = Math.max(GRID_PAST + 2, (xWidths[xWidths.length - 1] ?? 0) / 2 + 2, labelWidth > 0 ? LABEL_GAP + labelWidth + 4 : 0);
+  const right = Math.max(GRID_PAST + 2, (xWidths[xWidths.length - 1] ?? 0) / 2 + 2, (labelWidth > 0 ? LABEL_GAP + labelWidth + 4 : 0) + (input.room ?? 0));
   const frame: LineFrame = {
     scale: { lo: domain.lo, hi: domain.hi },
     box: { xLo, xHi, left, right: Math.max(left, width - right), top: TOP, bottom: Math.max(TOP, height - AXIS), width, height }

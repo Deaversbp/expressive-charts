@@ -3,9 +3,29 @@
 import type { MotionView } from "../motion";
 import type { Tween, TweenOptions } from "../tween";
 import type { MarkData } from "./data";
-import type { Layer, MarkHandle } from "./drawing";
-import type { MarkGeometry } from "./geometry";
+import type { Layer, MarkHandle, TextStyle } from "./drawing";
+import type { MarkGeometry, Rect } from "./geometry";
 import type { IconSource } from "./icon";
+
+/**
+ * Where effects' text sits on one chart or attachment: one space for every run on its runner, so an
+ * effect's text can keep clear of other effects' text. Runs start in the chart's mark order, so text
+ * goes past the text of the runs before it, and never moves for the runs after it.
+ */
+export interface TextSpace {
+  /**
+   * The box `content` takes drawn with `style`, at the overlay's text size, measured as the chart
+   * measures its own text (estimated where there's no layout). Its digits are measured as 0s.
+   */
+  box(content: string, style: TextStyle): Rect;
+  /** The boxes the runs on this runner that started before this one hold now. */
+  held(): readonly Rect[];
+  /**
+   * This run's text is at `box` from now on, until it holds another, holds undefined, or the run is
+   * cleared. When it moves, the runs after it that are placed against it hear `onChange` again.
+   */
+  hold(box: Rect | undefined): void;
+}
 
 export interface EffectContext {
   /** Aborted on leave, re-trigger, data update or destroy. */
@@ -20,10 +40,15 @@ export interface EffectContext {
   readonly icons: IconSource;
   /** Position in a multi-mark event, for stagger. */
   readonly batch: { readonly index: number; readonly count: number };
-  /** Called when the geometry moves (transitions, resizes, line reveals); unsubscribed on clear. */
+  /**
+   * Called when the geometry moves (transitions, resizes, line reveals), and when text held before
+   * this run's moved after it was placed (`texts`); unsubscribed on clear.
+   */
   onChange(listener: (mark: MarkGeometry, data?: MarkData) => void): void;
   /** The mark's geometry before this update, on update events. */
   readonly previous?: MarkGeometry;
+  /** Where effects' text sits on this chart or attachment. Unset means no other text is known. */
+  readonly texts?: TextSpace;
 }
 
 export interface GeometryEffect {

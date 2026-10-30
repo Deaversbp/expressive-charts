@@ -5,7 +5,7 @@
 
 import { createMotion, describe as geometry, easeInOutCubic, manualClock, type MarkGeometry, type Point } from "./core";
 import { createRegistry, type PresetFactory } from "./core/registry";
-import { flush } from "./core/testing";
+import { drawnInGaps, flush } from "./core/testing";
 import { barChart, chartSwitch, colorAssignment, lineChart, type ChartEnv } from "./charts";
 import { seriesColors } from "./charts/render/theme";
 import { morph } from "./effects";
@@ -100,6 +100,17 @@ const byKey = (marks: readonly MarkGeometry[]) => new Map(marks.map((mark) => [m
 const mix = (a: Point, b: Point, p: number): Point => ({ x: a.x * (1 - p) + b.x * p, y: a.y * (1 - p) + b.y * p });
 const near = (a: Point, b: Point): boolean => Math.abs(a.x - b.x) <= 0.0011 && Math.abs(a.y - b.y) <= 0.0011;
 const markColor = (element: Element): string => (element as SVGElement).style.getPropertyValue("--ec-mark");
+
+/** Where both marks have a gap, as [from, to] values of t. */
+const sharedGaps = (a: MarkGeometry, b: MarkGeometry): [number, number][] =>
+  (a.gaps ?? []).flatMap(([a0, a1]) => (b.gaps ?? []).flatMap(([b0, b1]): [number, number][] => (Math.min(a1, b1) > Math.max(a0, b0) ? [[Math.max(a0, b0), Math.min(a1, b1)]] : [])));
+
+/**
+ * The line part way, as far as drawnInGaps reads it: each t's point moved from `from`'s toward
+ * `to`'s by p, with the gaps both have. Both walks run straight across those, so it does too.
+ */
+const partWay = (from: MarkGeometry, to: MarkGeometry, p: number): MarkGeometry =>
+  ({ key: from.key, gaps: sharedGaps(from, to), path: (t: number) => mix(from.path(t), to.path(t), p) }) as unknown as MarkGeometry;
 
 afterEach(() => {
   document.body.textContent = "";
@@ -213,5 +224,39 @@ describe("chartSwitch with morph(): two line charts", () => {
     for (const [key, path] of shapes(overlay)) expect(path.getAttribute("d")).toBe(to.get(key)!.outline.d);
     await land();
     for (const layer of Array.from(overlay.children)) expect(layer.children).toHaveLength(0);
+  });
+});
+
+describe("chartSwitch with morph(): two line charts with missing weeks (M11 step 2)", () => {
+  it("draws nothing inside a gap both lines have, on any frame, both ways, and fades the rest of each line's gaps", async () => {
+    const { switcher, overlay, line, season, clock, land } = setup();
+    for (const [view, fromChart, toChart] of [
+      ["toDate", line, season],
+      ["perMatch", season, line]
+    ] as const) {
+      const from = byKey(fromChart.marks());
+      const to = byKey(toChart.marks());
+      void switcher.show(view);
+      let fading = 0;
+      for (let ms = 0; ms < 950; ms += 16) {
+        const p = easeInOutCubic(ms / 950);
+        for (const key of ["goals", "xg"]) {
+          const [a, b] = [from.get(key)!, to.get(key)!];
+          // Both miss the same weeks, at about the same t, so their gaps overlap.
+          expect(sharedGaps(a, b).length, key).toBeGreaterThan(0);
+          const paths = Array.from(overlay.querySelectorAll(`.ec-switch-runs > .ec-run[data-key="${key}"] path`));
+          expect(paths.length, key).toBeGreaterThan(0);
+          const mark = p <= 0 ? a : partWay(a, b, p);
+          const drawn = paths.map((path, id) => ({ kind: "path" as const, id, d: path.getAttribute("d")!, paint: {} }));
+          expect(drawnInGaps(mark, drawn), `${key} to ${view} at ${p}`).toEqual([]);
+          fading += paths.filter((path) => path.hasAttribute("opacity")).length;
+        }
+        clock.advance(16);
+      }
+      // The parts of a gap that only one line has fade in or out.
+      expect(fading).toBeGreaterThan(0);
+      await land();
+      for (const layer of Array.from(overlay.children)) expect(layer.children).toHaveLength(0);
+    }
   });
 });

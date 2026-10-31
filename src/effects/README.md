@@ -13,7 +13,7 @@ Effect plugins and combinators. Effects read only `MarkGeometry` (plus `MarkData
 | `delta.ts` | `delta({ value, format, color })`: a data effect for the update slot, the change since the last update ("+2") past the mark's own labels, rising into place and staying |
 | `label.ts` | `label(text, { color })`: a data effect, usually for decorate, text worked out from the mark's data, placed and risen as `delta`'s is, worded again on every change |
 | `caption.ts` | Internal: where `delta`'s and `label`'s text goes (past the end, or past the mark's `labelBounds`, then clear of `nearbyLabels` and other effects' text held in `ctx.texts`, by its own box), what it holds, and its rise |
-| `morph.ts` | `morph({ points, align })`: a transition effect that turns one mark's outline into another's, point by point (areas, holes too), along the stroke (lines, gaps kept), or by a crossfade |
+| `morph.ts` | `morph({ points, align })`: a transition effect that turns one mark's outline into another's, point by point (areas, holes too), by x or along the stroke (lines, gaps kept), or by a crossfade |
 | `gaits.ts` | `gaits.roll()`, `gaits.step()`, `gaits.slide()`: how an icon moves while it travels |
 | `combinators.ts` | `sequence`, `parallel`, `only`, and `stagger` (never a default) |
 | `define.ts` | `defineEffect` and `defineDataEffect`: effects written outside the library, from their `run` and `end` ([guide](../../docs/effects-guide.md)) |

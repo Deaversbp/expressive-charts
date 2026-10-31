@@ -5,7 +5,7 @@
 
 import { createMotion, describe as geometry, easeInOutCubic, manualClock, type MarkGeometry, type Point } from "./core";
 import { createRegistry, type PresetFactory } from "./core/registry";
-import { drawnInGaps, flush } from "./core/testing";
+import { flush, measurePath } from "./core/testing";
 import { barChart, chartSwitch, colorAssignment, donutChart, lineChart, type ChartEnv } from "./charts";
 import { seriesColors } from "./charts/render/theme";
 import { morph } from "./effects";
@@ -100,17 +100,6 @@ const byKey = (marks: readonly MarkGeometry[]) => new Map(marks.map((mark) => [m
 const mix = (a: Point, b: Point, p: number): Point => ({ x: a.x * (1 - p) + b.x * p, y: a.y * (1 - p) + b.y * p });
 const near = (a: Point, b: Point): boolean => Math.abs(a.x - b.x) <= 0.0011 && Math.abs(a.y - b.y) <= 0.0011;
 const markColor = (element: Element): string => (element as SVGElement).style.getPropertyValue("--ec-mark");
-
-/** Where both marks have a gap, as [from, to] values of t. */
-const sharedGaps = (a: MarkGeometry, b: MarkGeometry): [number, number][] =>
-  (a.gaps ?? []).flatMap(([a0, a1]) => (b.gaps ?? []).flatMap(([b0, b1]): [number, number][] => (Math.min(a1, b1) > Math.max(a0, b0) ? [[Math.max(a0, b0), Math.min(a1, b1)]] : [])));
-
-/**
- * The line part way, as far as drawnInGaps reads it: each t's point moved from `from`'s toward
- * `to`'s by p, with the gaps both have. Both walks run straight across those, so it does too.
- */
-const partWay = (from: MarkGeometry, to: MarkGeometry, p: number): MarkGeometry =>
-  ({ key: from.key, gaps: sharedGaps(from, to), path: (t: number) => mix(from.path(t), to.path(t), p) }) as unknown as MarkGeometry;
 
 afterEach(() => {
   document.body.textContent = "";
@@ -230,35 +219,131 @@ describe("chartSwitch with morph(): two line charts", () => {
   });
 });
 
-describe("chartSwitch with morph(): two line charts with missing weeks (M11 step 2)", () => {
-  it("draws nothing inside a gap both lines have, on any frame, both ways, and fades the rest of each line's gaps", async () => {
-    const { switcher, overlay, line, season, clock, land } = setup();
+describe("chartSwitch with morph(): the morph page's season, per match and to date, paired by x (M12 step 2)", () => {
+  /** The morph page's season (demo/morph.ts): seed 42, 38 matchweeks, cumulative goals and xG. */
+  function season(): { week: number; goals: number; xg: number }[] {
+    let seed = 42;
+    const random = (): number => {
+      seed = (seed * 48271) % 2147483647;
+      return seed / 2147483647;
+    };
+    const poisson = (lambda: number): number => {
+      const limit = Math.exp(-lambda);
+      let k = 0;
+      let p = 1;
+      do {
+        k++;
+        p *= random();
+      } while (p > limit);
+      return k - 1;
+    };
+    const weeks: { week: number; goals: number; xg: number }[] = [];
+    let [goals, xg] = [0, 0];
+    for (let i = 0; i < 38; i++) {
+      const chance = 0.6 + random() * 1.9;
+      xg += chance;
+      goals += poisson(chance * (i < 12 ? 0.72 : i < 26 ? 1.32 : 0.7));
+      weeks.push({ week: i + 1, goals, xg: Math.round(xg * 10) / 10 });
+    }
+    return weeks;
+  }
+  // As on the morph page: no values for weeks 9 and 10, and no xG for weeks 4 and 5.
+  const full = season();
+  const gone = (week: number, xg: boolean): boolean => [9, 10].includes(week) || (xg && [4, 5].includes(week));
+  const toDateSeason: Week[] = full.map((w) => ({ week: w.week, goals: gone(w.week, false) ? null : w.goals, xg: gone(w.week, true) ? null : w.xg }));
+  const perMatchSeason: Week[] = full.map((w, i) => {
+    const before = full[i - 1] ?? { goals: 0, xg: 0 };
+    return { week: w.week, goals: gone(w.week, false) ? null : w.goals - before.goals, xg: gone(w.week, true) ? null : Math.round((w.xg - before.xg) * 10) / 10 };
+  });
+
+  function seasonSwitch() {
+    const clock = manualClock();
+    const motion = createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion, clock };
+    const target = document.body.appendChild(document.createElement("div"));
+    const switcher = chartSwitch(
+      target,
+      {
+        views: {
+          perMatch: (el, shared) => lineChart<Week>(el, { label: "Per match", data: perMatchSeason, x: "week", series: ["goals", "xg"], colors: shared, width: 600, height: 300 }, env),
+          toDate: (el, shared) => lineChart<Week>(el, { label: "Season to date", data: toDateSeason, x: "week", series: ["goals", "xg"], colors: shared, width: 600, height: 300 }, env)
+        },
+        initial: "perMatch",
+        // morph()'s default points.
+        transition: morph(),
+        colors: colorAssignment()
+      },
+      env
+    );
+    const overlay = target.querySelector(".ec-switch-overlay") as SVGSVGElement;
+    return { switcher, overlay, clock, perMatch: switcher.chart("perMatch"), toDate: switcher.chart("toDate") };
+  }
+
+  /** The x's of a line's walk across the weeks both lines miss, at eased progress p: each share of the way across moved from one line's x toward the other's. */
+  function bothMiss(a: MarkGeometry, b: MarkGeometry, p: number): [number, number][] {
+    const shares = (mark: MarkGeometry): [number, number][] => (mark.gaps ?? []).map(([t0, t1]) => [t0, t1].map((t) => (mark.path(t).x - mark.start.x) / (mark.end.x - mark.start.x)) as [number, number]);
+    const x = (s: number): number => (a.start.x + s * (a.end.x - a.start.x)) * (1 - p) + (b.start.x + s * (b.end.x - b.start.x)) * p;
+    return shares(a).flatMap(([a0, a1]) => shares(b).flatMap(([b0, b1]): [number, number][] => (Math.min(a1, b1) > Math.max(a0, b0) ? [[x(Math.max(a0, b0)), x(Math.min(a1, b1))]] : [])));
+  }
+
+  /** The lines of path data, as [from, to]. */
+  const linesOf = (d: string): [Point, Point][] => {
+    const out: [Point, Point][] = [];
+    let pen: Point | undefined;
+    for (const { op, args } of measurePath(d).commands) {
+      const point = { x: args[args.length - 2]!, y: args[args.length - 1]! };
+      if (op === "L" && pen) out.push([pen, point]);
+      pen = point;
+    }
+    return out;
+  };
+
+  /** How far a point is from the nearest of the lines. */
+  const offLines = (point: Point, lines: readonly [Point, Point][]): number =>
+    Math.min(
+      ...lines.map(([a, b]) => {
+        const [dx, dy] = [b.x - a.x, b.y - a.y];
+        const u = dx === 0 && dy === 0 ? 0 : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy)));
+        return Math.hypot(point.x - a.x - u * dx, point.y - a.y - u * dy);
+      })
+    );
+
+  it("draws nothing in the weeks both lines miss on any 16 ms frame, both ways, fades nothing, keeps each end dot on its line's end, and draws each line's own polyline next to each end, through every vertex within 0.01 px", async () => {
+    const { switcher, overlay, clock, perMatch, toDate } = seasonSwitch();
     for (const [view, fromChart, toChart] of [
-      ["toDate", line, season],
-      ["perMatch", season, line]
+      ["toDate", perMatch, toDate],
+      ["perMatch", toDate, perMatch]
     ] as const) {
       const from = byKey(fromChart.marks());
       const to = byKey(toChart.marks());
       void switcher.show(view);
-      let fading = 0;
       for (let ms = 0; ms < 950; ms += 16) {
         const p = easeInOutCubic(ms / 950);
         for (const key of ["goals", "xg"]) {
           const [a, b] = [from.get(key)!, to.get(key)!];
-          // Both miss the same weeks, at about the same t, so their gaps overlap.
-          expect(sharedGaps(a, b).length, key).toBeGreaterThan(0);
+          // By t, the lines' gaps don't meet: one line per match is longer than the same to date.
+          expect(a.gaps).not.toEqual(b.gaps);
           const paths = Array.from(overlay.querySelectorAll(`.ec-switch-runs > .ec-run[data-key="${key}"] path`));
-          expect(paths.length, key).toBeGreaterThan(0);
-          const mark = p <= 0 ? a : partWay(a, b, p);
-          const drawn = paths.map((path, id) => ({ kind: "path" as const, id, d: path.getAttribute("d")!, paint: {} }));
-          expect(drawnInGaps(mark, drawn), `${key} to ${view} at ${p}`).toEqual([]);
-          fading += paths.filter((path) => path.hasAttribute("opacity")).length;
+          // One path at full strength: the two miss the same weeks, so no part of either's gaps fades.
+          expect(paths.map((path) => path.getAttribute("opacity")), `${key} at ${p}`).toEqual([null]);
+          const drawn = linesOf(paths[0]!.getAttribute("d")!);
+          const missed = bothMiss(a, b, p);
+          expect(missed.length, key).toBe(key === "goals" ? 1 : 2);
+          for (const [x0, x1] of missed) {
+            const [lo, hi] = [Math.min(x0, x1), Math.max(x0, x1)];
+            const across = drawn.filter(([m, n]) => Math.max(m.x, n.x) > lo + 0.01 && Math.min(m.x, n.x) < hi - 0.01);
+            expect(across, `${key} to ${view} at ${p}`).toEqual([]);
+          }
+          // Its end dot sits on the drawn line's end: both lines' ends are a stop, at a share of 1 on each.
+          expect(near(endDotIn(lineRun(overlay, key)), drawn[drawn.length - 1]![1]), `${key}'s end dot to ${view} at ${p}`).toBe(true);
+          // Next to each end, the stroke runs through every vertex of that end's line.
+          const end = ms === 16 ? a : ms === 944 ? b : undefined;
+          for (const vertex of end ? measurePath(end.outline.d).points : []) expect(offLines(vertex, drawn), `${key} to ${view} at ${p}: ${vertex.x},${vertex.y}`).toBeLessThan(0.01);
         }
         clock.advance(16);
       }
-      // The parts of a gap that only one line has fade in or out.
-      expect(fading).toBeGreaterThan(0);
-      await land();
+      clock.advance(950);
+      await flush();
       for (const layer of Array.from(overlay.children)) expect(layer.children).toHaveLength(0);
     }
   });

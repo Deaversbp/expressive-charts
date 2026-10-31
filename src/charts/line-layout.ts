@@ -130,8 +130,8 @@ export interface LineLayoutInput<D> {
   readonly measure: Measure;
   /** A line's end label for a value, measured for the right margin; undefined with `labels: false`. */
   readonly label: ((series: string, value: number) => string) | undefined;
-  /** Px kept clear to the right of the end labels, or the lines' ends without them. Default 0. */
-  readonly room?: number;
+  /** Px kept clear to the right of the end labels, or the lines' ends without them, and above the plot: a number is to the right. Default 0. */
+  readonly room?: LineChartOptions<D>["room"];
 }
 
 type Measure = (text: string, className: string, size: number) => number;
@@ -226,6 +226,19 @@ export function lineEncoding<D>(options: LineChartOptions<D>): LineEncoding<D> {
   };
 }
 
+/** Throws a RangeError on a `room` that isn't a number of px, 0 or more, or an object whose `right` and `top` are each one or unset. */
+export function checkRoom(room: unknown): void {
+  const px = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0;
+  if (typeof room !== "object" || room === null || Array.isArray(room)) {
+    if (room !== undefined && !px(room)) throw new RangeError(`lineChart: room must be a number of px, 0 or more, got ${typeof room === "object" ? JSON.stringify(room) : String(room)}.`);
+    return;
+  }
+  for (const side of ["right", "top"] as const) {
+    const value: unknown = (room as Record<string, unknown>)[side];
+    if (value !== undefined && !px(value)) throw new RangeError(`lineChart: room.${side} must be a number of px, 0 or more, got ${String(value)}.`);
+  }
+}
+
 export function layoutLines<D>(input: LineLayoutInput<D>): LineLayout<D> {
   const { width, measure } = input;
   const height = input.height ?? HEIGHT;
@@ -240,13 +253,15 @@ export function layoutLines<D>(input: LineLayoutInput<D>): LineLayout<D> {
   const xTexts = ticked.map((tick) => tick.text);
   const xWidths = xTexts.map((text) => measure(text, "ec-tick", TICK_SIZE));
 
-  // The values' labels on the left; the end labels, or the last x label, on the right, with `room` past the end labels.
+  // The values' labels on the left; the end labels, or the last x label, on the right, with `room` past the end labels, and above the plot.
+  const room = typeof input.room === "number" ? { right: input.room } : input.room;
   const labelWidth = input.label ? widest(distinctLabels(rows, input.label), "ec-value", VALUE_SIZE, measure) : 0;
   const left = Math.max(widest(yTexts, "ec-tick", TICK_SIZE, measure) + 10, (xWidths[0] ?? 0) / 2 + 2);
-  const right = Math.max(GRID_PAST + 2, (xWidths[xWidths.length - 1] ?? 0) / 2 + 2, (labelWidth > 0 ? LABEL_GAP + labelWidth + 4 : 0) + (input.room ?? 0));
+  const right = Math.max(GRID_PAST + 2, (xWidths[xWidths.length - 1] ?? 0) / 2 + 2, (labelWidth > 0 ? LABEL_GAP + labelWidth + 4 : 0) + (room?.right ?? 0));
+  const top = TOP + (room?.top ?? 0);
   const frame: LineFrame = {
     scale: { lo: domain.lo, hi: domain.hi },
-    box: { xLo, xHi, left, right: Math.max(left, width - right), top: TOP, bottom: Math.max(TOP, height - AXIS), width, height }
+    box: { xLo, xHi, left, right: Math.max(left, width - right), top, bottom: Math.max(top, height - AXIS), width, height }
   };
 
   const decimalsBy: Record<string, number> = {};

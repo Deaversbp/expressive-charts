@@ -25,6 +25,12 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`room` on `lineChart` takes sides:** `{ right, top }`. `top` is px the layout keeps clear above the plot, below the chart's top, for text an effect draws above it, such as a `delta` past a line that ends near the top heading up. The plot is that much shorter, and its value labels and end labels move with it. A side that isn't given is 0, so a number is `{ right }` as before, and a number, `{}` and `{ right }` lay out as before. Anything but a number of px, 0 or more, or an object of them by side, throws a `RangeError`, and `update({ room })` lays the chart out again. `barChart`'s `room` stays a number.
+
 ## 0.6.0 (30 October 2026)
 
 Line charts in a chart switch, their points growing into columns, change text that keeps clear of other effects' text, with room for it on the line chart, and `morph` keeping a line's gaps and a shape's holes. `expressive()` reads more marks by tag (a turned `<rect>`, a pie's slices and a non-scaling stroke), and the hover on one point reaches a point drawn on another. In the effect-author API, the one change is `texts` on `EffectContext`, with its type, `TextSpace`, an addition. The other changes are outside the promise, and each says what to write instead, if anything.

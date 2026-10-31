@@ -187,6 +187,40 @@ async function hoverPoint(page: Page, key: string): Promise<{ x: number; y: numb
 }
 
 /**
+ * The whole px nearest the places `by` px along a point's own line from its centre, before it and after.
+ * Where another line's point is drawn on it, the line that passes nearer the pointer has the hover, and
+ * at the centre the series first in `series`, so the pointer reaches it just off its centre, along its line.
+ */
+async function alongLine(page: Page, key: string, by: number): Promise<{ x: number; y: number }[]> {
+  return line(page).evaluate(
+    (root, [key, by]) => {
+      const stroke = root.querySelector<SVGPathElement>(`.ec-line[data-key="${key.split("@")[0]}"] .ec-stroke`)!;
+      const dot = root.querySelector(`.ec-point[data-key="${key}"] .ec-dot`)!.getBoundingClientRect();
+      const centre = { x: dot.x + dot.width / 2, y: dot.y + dot.height / 2 };
+      const screen = stroke.getScreenCTM()!;
+      const total = stroke.getTotalLength();
+      const at = (length: number): DOMPoint => stroke.getPointAtLength(Math.min(total, Math.max(0, length))).matrixTransform(screen);
+      // The length along the stroke nearest the centre, to a tenth of a px.
+      let nearest = 0;
+      for (const step of [1, 0.1]) {
+        let far = Infinity;
+        const [from, to] = step === 1 ? [0, total] : [nearest - 1, nearest + 1];
+        for (let length = from; length <= to; length += step) {
+          const p = at(length);
+          const d = Math.hypot(p.x - centre.x, p.y - centre.y);
+          if (d < far) [nearest, far] = [length, d];
+        }
+      }
+      return [-by, by].map((way) => {
+        const p = at(nearest + way);
+        return { x: Math.round(p.x), y: Math.round(p.y) };
+      });
+    },
+    [key, by] as const
+  );
+}
+
+/**
  * The first chart as a point hover leaves it: the opacity each line's stroke and end dot, and each line's
  * decoration (threshold's red and the ball), are drawn at, and the texts drawn at less than full strength.
  * The hover's CSS transitions run on the browser's own time, so they're finished first.
@@ -626,6 +660,7 @@ test.describe("Nearest point", () => {
         return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
       };
       const tooltip = line(page).locator(".ec-tooltip");
+      const hot = (): Promise<string | null> => line(page).locator(".ec-point.ec-hot").getAttribute("data-key");
       const lost: string[] = [];
       for (const series of ["goals", "xg"]) {
         for (let n = 1; n <= 38; n++) {
@@ -633,12 +668,32 @@ test.describe("Nearest point", () => {
           await page.mouse.move(2, 2);
           const at = await hoverPoint(page, key);
           await page.clock.runFor(FRAME * 2);
-          if ((await line(page).locator(".ec-point.ec-hot").getAttribute("data-key")) !== key) {
+          if ((await hot()) !== key) {
             // Only where the other line's point is drawn within a px or so, as at weeks 7 and 13 (goals = xG):
-            // of two as near, the series first in `series` has it.
+            // of two as near, the series first in `series` has it at the centre. Just off it, along its own
+            // line, the pointer hovers it; then onto the centre, where its dot holds the hover.
             const [mine, other] = await Promise.all([dot(key), dot(`${series === "goals" ? "xg" : "goals"}@${n}`)]);
-            if (Math.hypot(mine.x - other.x, mine.y - other.y) >= 1.5) lost.push(`${key}: not hovered at its centre`);
-            continue;
+            if (Math.hypot(mine.x - other.x, mine.y - other.y) >= 1.5) {
+              lost.push(`${key}: not hovered at its centre`);
+              continue;
+            }
+            const tries = await Promise.all([2, 2.5, 3].map((by) => alongLine(page, key, by)));
+            for (const near of tries.flat()) {
+              await page.mouse.move(2, 2);
+              await page.mouse.move(near.x, near.y);
+              await page.clock.runFor(FRAME * 2);
+              if ((await hot()) === key) break;
+            }
+            if ((await hot()) !== key) {
+              lost.push(`${key}: not hovered at its centre, or just off it along its line`);
+              continue;
+            }
+            await page.mouse.move(at.x, at.y);
+            await page.clock.runFor(FRAME * 2);
+            if ((await hot()) !== key) {
+              lost.push(`${key}: not held at its centre`);
+              continue;
+            }
           }
           const tip = (await tooltip.boundingBox())!;
           const above = (await tooltip.getAttribute("data-side")) === "above";
@@ -702,6 +757,8 @@ test.describe("Nearest point", () => {
   }
 
   test("the tooltip never covers the focus ring, at any point of either line", async ({ page }) => {
+    // 76 points, two frames each: in WebKit in Docker, under 4 workers, it once took more than 30 s.
+    test.setTimeout(60_000);
     await openAtRest(page);
     await toggle(page, "Nearest point").click();
     await tabInto(page, line(page));

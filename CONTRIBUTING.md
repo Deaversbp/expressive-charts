@@ -28,9 +28,11 @@ The build uses none of them. tsdown (`tsdown.config.ts`), 0.23.4 pinned exactly,
 
 tsdown 0.23.4 takes rolldown-plugin-dts 0.28.8. The plugin's 0.29.0 waits for a tsdown that asks for it. Both pin `get-tsconfig` 5.0.0-beta.6, a beta, so the build waits for a stable release of it too.
 
+One Rolldown, 1.2.16, builds the package and bundles the size check's import sets: tsdown asks for `~1.2.15`, and Vite 8.3.5, which the size check and the demo site use, for `~1.2.14`, so the lockfile keeps a single copy. A new Rolldown can change the build and the sizes at once, so compare its build with main's before taking it: the files byte for byte, and where any differ, each entry's names as an ES module and as CommonJS, its types and the sizes.
+
 `pack-check` (`scripts/pack-check.mjs`) packs the package, installs the tarball in a new project in the system's temporary folder, imports every entry in Node as ES modules and as CommonJS with no DOM, and typechecks a small consumer against it with each of the three TypeScripts, under `bundler`, `node16` (ES module) and `node16` (CommonJS) resolution. Each must read its own declarations: `.d.ts` for `import`, `.d.cts` for `require`, the stylesheet's included. CI runs it after the build. `-- --keep` keeps the temporary project.
 
-Working on the library needs Node.js 22.18 or newer, or 24.11 or newer on 24, as tsdown asks (CI tests 22 and 24). The package itself needs Node.js 22 or newer.
+Working on the library needs Node.js 22.18 or newer, or 24.11 or newer on 24, as tsdown asks (CI tests 22 and 24). The package itself needs Node.js 22 or newer. The unit tests run in jsdom 29: jsdom 30 needs Node.js 22.22.2 or newer on 22, or 24.15 or newer on 24, so it waits until working on the library asks for that.
 
 ## Visual tests
 
@@ -59,6 +61,8 @@ After `test:visual:update`, look at the changed images in `tests/visual/__screen
 Without Docker, run **Update visual baselines** from the repository's Actions tab on your branch: it writes the changed screenshots in the same image and uploads them as the `visual-baselines` artifact, to unzip over `tests/visual/__screenshots__/` and commit.
 
 `npm run test:visual` runs Playwright directly. On Windows and macOS it skips the screenshot comparisons and runs only the DOM checks; it needs the browsers once (`npx playwright install chromium firefox webkit`), or `-- --project=chromium` for Chromium alone. `test:visual:update` writes Chromium's baselines only, since they're the only ones.
+
+The DOM checks that measure text follow the fonts too, and Docker's run is the one that counts. On Windows, `a11y.spec.ts`'s text spacing fails on `stress.html` in Chromium. A chart measures each text once, when it draws, so the spacing the test adds after load widens the text without a new layout. Windows' Segoe UI fits every 10th of the 100 bar names, 5.7 px apart, and the spacing's 11 px runs them together; Docker's wider font fits every 20th, 43 px apart. The fix is in the plan's backlog.
 
 The Docker image's tag follows `@playwright/test` in `package.json`. When you upgrade Playwright, pin the exact version, change the image tag in `.github/workflows/ci.yml` and `visual-baselines.yml` to match, and regenerate the baselines.
 

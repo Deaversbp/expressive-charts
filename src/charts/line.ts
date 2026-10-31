@@ -192,6 +192,8 @@ const STAGE = 500;
 /** The focus ring's px: a gap in the surface colour around the point, then the ring. */
 const RING_GAP = 2;
 const RING = 2;
+/** The ring in the surface colour round a point's dot and a line's end dot (render/theme.ts). */
+const DOT_RING = 2;
 /** A walk shorter than this draws nothing, as effects treat it. */
 const VISIBLE = 0.5;
 
@@ -1463,6 +1465,16 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   hover.sync();
   runner.enter(liveMarks().map(input));
 
+  /**
+   * The stop that takes focus for `key`: an x, for its own key or one of its points'; with `hover:
+   * "point"`, a point, for its own key or its x's, whose first series' point it is.
+   */
+  function stopFor(key: string): string | undefined {
+    const row = rows.get(key);
+    if (hoverKind === "x") return (row ?? points.get(key)?.row)?.key;
+    return (points.get(key) ?? (row && livePoints(row)[0]))?.key;
+  }
+
   return linkable(hover.link, {
     element: svg,
 
@@ -1553,17 +1565,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     marks: () => [...lineOrder.map((line) => line.shown.geometry), ...rowOrder.filter(revealed).flatMap((record) => livePoints(record).map((point) => point.shown.geometry))],
 
     focus(key) {
-      if (destroyed) return;
-      // An x takes focus, for its own key or one of its points'; with `hover: "point"`, a point, for
-      // its own key or its x's, whose first series' point it is.
-      const row = rows.get(key);
-      if (hoverKind === "x") {
-        const record = row ?? points.get(key)?.row;
-        if (record) hover.focus(record.key);
-        return;
-      }
-      const point = points.get(key) ?? (row && livePoints(row)[0]);
-      if (point) hover.focus(point.key);
+      const stop = destroyed ? undefined : stopFor(key);
+      if (stop !== undefined) hover.focus(stop);
     },
 
     leave() {
@@ -1574,15 +1577,24 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     labels: () => lineOrder.flatMap((line) => chartLabel(line.key, "value", line.drawnLabel, line.label)),
 
     // For a chart switch: a line and its points take their series' colour, and of the points only a
-    // value alone between gaps is drawn at rest. An x stands for each series' point there, in series
-    // order (a missing value's key too, which another view may have), then itself.
+    // value alone between gaps is drawn at rest, with its ring; a line has its end dot, unless it
+    // has no values, with its ring. An x stands for each series' point there, in series order (a
+    // missing value's key too, which another view may have), then itself. Tab from outside lands on
+    // the stop focus(key) would focus.
     paintOf(key: string): ChartSwitchPaint | undefined {
-      const record = lines.get(key) ?? points.get(key);
-      return record && { color: record.series, drawn: record.kind === "line" || record.group.classList.contains("ec-alone") };
+      const line = lines.get(key);
+      if (line) return { color: line.series, drawn: true, ...(line.end.getAttribute("visibility") === "hidden" ? {} : { end: DOT_RADIUS, ring: DOT_RING }) };
+      const point = points.get(key);
+      return point && (point.group.classList.contains("ec-alone") ? { color: point.series, drawn: true, ring: DOT_RING } : { color: point.series, drawn: false });
     },
 
     standsFor(key: string): string[] {
       return rows.has(key) ? [...laidOut.series.map((series) => pointKey(series, key)), key] : [key];
+    },
+
+    moveTabStop(key: string): boolean {
+      const stop = destroyed ? undefined : stopFor(key);
+      return stop !== undefined && hover.moveTabStop(stop);
     },
 
     destroy() {

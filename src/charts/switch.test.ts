@@ -1,7 +1,8 @@
 // chartSwitch on a donut and category columns sharing one colour assignment, with a recording
 // transition effect: src/morph.test.ts switches the same charts with the real morph(). Below them,
 // line charts and columns keyed as their points (M11 step 1): src/line-switch.test.ts switches
-// those with morph().
+// those with morph(). Last, a line's end dot and a point's ring, and the tab stop following when
+// focus is outside the switch (M12 step 1).
 
 import { createMotion, easeInOutCubic, manualClock, type MarkGeometry, type MotionMode, type TransitionEffect } from "../core";
 import { createRegistry, type PresetFactory } from "../core/registry";
@@ -968,6 +969,8 @@ interface LineSetupOptions {
   readonly hover?: "x" | "point";
   /** The columns' rows. Default: the weeks played. */
   readonly columns?: readonly Played[];
+  /** What the switch is given of a view's chart in its place, as a view drawn otherwise would be. Typed as the chart, for tests that use only what a view has. */
+  readonly wrap?: { readonly [view in "perMatch" | "toDate" | "columns"]?: (chart: ChartSwitchView) => ChartSwitchView };
 }
 
 /**
@@ -988,16 +991,20 @@ function lineSetup(options: LineSetupOptions = {}) {
       return assignment.slot(key);
     }
   };
-  const lineOf = (label: string, data: readonly Week[]) => (container: HTMLElement, shared: ColorAssignment) =>
-    lineChart<Week>(container, { label, data, x: "week", series: ["goals", "xg"], hover: options.hover ?? "x", colors: shared, width: 600 }, env);
+  const wrapped = <C extends ChartSwitchView>(view: "perMatch" | "toDate" | "columns", chart: C): C => (options.wrap?.[view]?.(chart) as C | undefined) ?? chart;
+  const lineOf = (view: "perMatch" | "toDate", label: string, data: readonly Week[]) => (container: HTMLElement, shared: ColorAssignment) =>
+    wrapped(view, lineChart<Week>(container, { label, data, x: "week", series: ["goals", "xg"], hover: options.hover ?? "x", colors: shared, width: 600 }, env));
   const views = {
-    perMatch: lineOf("Per match", perMatch),
-    toDate: lineOf("Season to date", toDate),
+    perMatch: lineOf("perMatch", "Per match", perMatch),
+    toDate: lineOf("toDate", "Season to date", toDate),
     columns: (container: HTMLElement, shared: ColorAssignment) =>
-      barChart<Played>(
-        container,
-        { label: "Goals per match", data: options.columns ?? played, x: (d) => String(d.week), y: "goals", key: (d) => `goals@${d.week}`, orientation: "vertical", colors: shared, width: 600 },
-        env
+      wrapped(
+        "columns",
+        barChart<Played>(
+          container,
+          { label: "Goals per match", data: options.columns ?? played, x: (d) => String(d.week), y: "goals", key: (d) => `goals@${d.week}`, orientation: "vertical", colors: shared, width: 600 },
+          env
+        )
       )
   } satisfies ChartSwitchViews;
   const switcher = chartSwitch(target, { views, initial: "perMatch", transition: transition.effect, colors }, env);
@@ -1224,9 +1231,10 @@ describe("chartSwitch: each mark in its view's colour", () => {
     expect(columns.paintOf!("Blocked")).toBeUndefined();
     const { line, columns: byPoint } = lineSetup();
     const view = line as ChartSwitchView;
-    expect(view.paintOf!("goals")).toEqual({ color: "goals", drawn: true });
+    // A line with its end dot and the dot's ring, and a point drawn at rest with its ring (M12 step 1).
+    expect(view.paintOf!("goals")).toEqual({ color: "goals", drawn: true, end: 4.5, ring: 2 });
     expect(view.paintOf!("xg@2")).toEqual({ color: "xg", drawn: false });
-    expect(view.paintOf!("goals@4")).toEqual({ color: "goals", drawn: true });
+    expect(view.paintOf!("goals@4")).toEqual({ color: "goals", drawn: true, ring: 2 });
     // An x isn't a mark.
     expect(view.paintOf!("2")).toBeUndefined();
     expect((byPoint as ChartSwitchView).paintOf!("goals@2")).toEqual({ color: "goals", drawn: true });
@@ -1407,5 +1415,391 @@ describe("chartSwitch: a line view", () => {
     // Focus went on with the week.
     expect(toDate.element.contains(document.activeElement)).toBe(true);
     expect(document.activeElement?.getAttribute("data-key")).toBe("2");
+  });
+});
+
+// ── End dots, rings and the tab stop (M12 step 1) ────────────────────────────
+
+/** The end dots drawn in a group, as its own children. */
+const endsIn = (group: Element): SVGCircleElement[] => Array.from(group.querySelectorAll(":scope > circle.ec-switch-end"));
+const dotOf = (circle: Element) => ({ x: number(circle, "cx"), y: number(circle, "cy"), r: number(circle, "r"), ring: number(circle, "stroke-width") });
+/** The ring round a filled path: its width, or undefined for none. */
+const ringOf = (path: Element): number | undefined => ((path as SVGElement).style.stroke ? number(path, "stroke-width") : undefined);
+/** What the line chart draws at the end of the line `key`: its own `.ec-end`, whose 2 px ring is the stylesheet's. */
+const ownEnd = (chart: { readonly element: Element }, key: string) => ({ ...dotOf(chart.element.querySelector(`.ec-line[data-key="${key}"] .ec-end`)!), ring: 2 });
+const endAt = (at: { readonly x: number; readonly y: number }, r = 4.5, ring = 2) => ({ x: round(at.x), y: round(at.y), r, ring });
+/** The key of the chart's tab stop: its element with tabindex 0. */
+const stopIn = (chart: { readonly element: Element }): string | null | undefined => chart.element.querySelector('[tabindex="0"]')?.closest("[data-key]")?.getAttribute("data-key");
+const ringShown = (chart: { readonly element: Element }): boolean => Array.from(chart.element.querySelectorAll(".ec-focus-ring")).some((ring) => !ring.closest('[visibility="hidden"]'));
+
+/** The view as a switch uses it, its marks painted as its chart paints them but with no end dots or rings: as a view drawn by another library might be. */
+function withoutEnds(chart: ChartSwitchView): ChartSwitchView {
+  return {
+    ...bare(chart),
+    paintOf(key) {
+      const paint = chart.paintOf!(key);
+      return paint && { color: paint.color, drawn: paint.drawn };
+    }
+  };
+}
+
+describe("chartSwitch: a line's end dot and a point's ring (M12 step 1)", () => {
+  it("fades each line out with its end dot, where its chart draws it, in its colour and with its ring, as a switch to the columns starts", () => {
+    expect(stylesheet).toContain(":where(.ec-chart .ec-end) { fill: var(--ec-mark); stroke: var(--ec-surface, #fcfcfb); stroke-width: 2;");
+    const { switcher, overlay, line, clock, colors } = lineSetup();
+    void switcher.show("columns");
+    const fades = fadesIn(overlay);
+    expect(fades.map((fade) => fade.getAttribute("data-key"))).toEqual(["goals", "xg"]);
+    for (const fade of fades) {
+      const key = fade.getAttribute("data-key")!;
+      // The line, then its dot above it, both in the fade's group, so they fade together.
+      const [path, end, ...rest] = Array.from(fade.children);
+      expect([path!.tagName, rest]).toEqual(["path", []]);
+      expect(endsIn(fade)).toEqual([end]);
+      expect(dotOf(end!)).toEqual(ownEnd(line, key));
+      expect(dotOf(end!)).toEqual(endAt(markOf(line, key).end));
+      // Filled in its line's colour, the fade's, its ring in the surface's; the line has none.
+      expect(markColor(fade)).toBe(color(colors, key));
+      expect(markColor(end!)).toBe("");
+      expect((end as SVGElement).style.fill.startsWith("var(--ec-mark,")).toBe(true);
+      expect((end as SVGElement).style.stroke.startsWith("var(--ec-surface,")).toBe(true);
+      expect((path as SVGElement).style.fill).toBe("none");
+      expect((path as SVGElement).style.stroke.startsWith("var(--ec-mark,")).toBe(true);
+    }
+    clock.advance(300);
+    expect(fades.map((fade) => Number(fade.getAttribute("opacity")))).toEqual([1, 1].map(() => round(1 - at(300) / 0.5)));
+    for (const fade of fades) expect(dotOf(endsIn(fade)[0]!)).toEqual(ownEnd(line, fade.getAttribute("data-key")!));
+  });
+
+  it("fades each line in with its end dot on the way back from the columns", async () => {
+    const { switcher, overlay, line, clock, land } = lineSetup();
+    void switcher.show("columns");
+    await land();
+    void switcher.show("perMatch");
+    const fades = fadesIn(overlay);
+    expect(fades.map((fade) => [fade.getAttribute("data-key"), fade.getAttribute("opacity"), endsIn(fade).length])).toEqual([
+      ["goals", "0", 1],
+      ["xg", "0", 1]
+    ]);
+    clock.advance(700);
+    for (const fade of fades) {
+      expect(Number(fade.getAttribute("opacity"))).toBe(round((at(700) - 0.5) / 0.5));
+      expect(dotOf(endsIn(fade)[0]!)).toEqual(ownEnd(line, fade.getAttribute("data-key")!));
+    }
+  });
+
+  it("keeps a value alone between gaps' ring as a switch to its column starts, and takes it off as the point grows, and back", async () => {
+    const { switcher, overlay, clock, land } = lineSetup();
+    const rings = () => runsIn(overlay).map((group) => [group.getAttribute("data-key"), ringOf(group.querySelector("path")!)]);
+    void switcher.show("columns");
+    // The hidden points start as dots of no size, with no ring; the points alone keep theirs.
+    expect(rings()).toEqual([
+      ["goals@1", undefined],
+      ["goals@2", undefined],
+      ["goals@4", 2],
+      ["goals@6", 2]
+    ]);
+    for (const group of runsIn(overlay)) expect(endsIn(group)).toEqual([]);
+    const path = runsIn(overlay)[2]!.querySelector("path")!;
+    expect(path.style.stroke.startsWith("var(--ec-surface,")).toBe(true);
+    expect(path.style.fill.startsWith("var(--ec-mark,")).toBe(true);
+    // Mixed from 2 to the column's 0 by the shapes' progress.
+    clock.advance(300);
+    expect(rings().slice(2)).toEqual([2, 2].map((ring, i) => [`goals@${4 + 2 * i}`, round(mix(ring, 0, at(300)))]));
+    clock.advance(649);
+    expect(rings()[2]![1]).toBeLessThan(0.001);
+    await land();
+    // Back, from 0 to 2.
+    void switcher.show("perMatch");
+    expect(rings().slice(2)).toEqual([
+      ["goals@4", 0],
+      ["goals@6", 0]
+    ]);
+    clock.advance(300);
+    expect(rings().slice(2)).toEqual([2, 2].map((ring, i) => [`goals@${4 + 2 * i}`, round(mix(0, ring, at(300)))]));
+  });
+
+  it("moves each end dot straight from its line's end to the other line's, by the shapes' progress, above its line in its colour, and back with no jump", async () => {
+    const { switcher, overlay, line, toDate, clock, land } = lineSetup();
+    const dots = () => runsIn(overlay).flatMap((group) => endsIn(group).map((end) => [group.getAttribute("data-key"), dotOf(end)]));
+    const expected = (s: number) =>
+      ["goals", "xg"].map((key) => {
+        const [a, b] = [markOf(line, key).end, markOf(toDate, key).end];
+        return [key, endAt({ x: mix(a.x, b.x, s), y: mix(a.y, b.y, s) })];
+      });
+    void switcher.show("toDate");
+    expect(dots()).toEqual(expected(0));
+    expect(dots().map(([, end]) => end)).toEqual(["goals", "xg"].map((key) => ownEnd(line, key)));
+    // The last thing in its line's group, inheriting the group's colour.
+    for (const group of runsIn(overlay).slice(0, 2)) {
+      expect(group.lastElementChild).toBe(endsIn(group)[0]);
+      expect(markColor(endsIn(group)[0]!)).toBe("");
+    }
+    // The points alone between gaps keep their rings, 2 in both views.
+    const rings = () => runsIn(overlay).slice(2).map((group) => ringOf(group.querySelector("path")!));
+    expect(rings()).toEqual([2, 2]);
+    clock.advance(300);
+    expect(dots()).toEqual(expected(at(300)));
+    expect(rings()).toEqual([2, 2]);
+    // A switch back mid-way plays the same picture backwards from where it is.
+    const before = dots();
+    void switcher.show("perMatch");
+    expect(dots()).toEqual(before);
+    clock.advance(200);
+    const back = dots();
+    void switcher.show("toDate");
+    expect(dots()).toEqual(back);
+    await land();
+    expect(dots()).toEqual([]);
+  });
+
+  it("fades an end dot whose partner has none where it stands, in its own view's colour, as a mark with no partner does", async () => {
+    const { switcher, overlay, line, clock, colors, land } = lineSetup({ wrap: { toDate: withoutEnds } });
+    void switcher.show("toDate");
+    const dots = () => runsIn(overlay).flatMap((group) => endsIn(group).map((end) => [group.getAttribute("data-key"), dotOf(end), end.getAttribute("opacity"), markColor(end)]));
+    // Its own colour, set on the dot: the pair's group has the new view's.
+    expect(dots()).toEqual(["goals", "xg"].map((key) => [key, ownEnd(line, key), "1", color(colors, key)]));
+    clock.advance(300);
+    expect(dots().map(([, end, opacity]) => [end, Number(opacity)])).toEqual(["goals", "xg"].map((key) => [ownEnd(line, key), round(1 - at(300) / 0.5)]));
+    await land();
+    // Back: the dot fades in over the second half, where its chart draws it.
+    void switcher.show("perMatch");
+    expect(dots().map(([key, end, opacity]) => [key, end, opacity])).toEqual(["goals", "xg"].map((key) => [key, ownEnd(line, key), "0"]));
+    clock.advance(700);
+    expect(dots().map(([, , opacity]) => Number(opacity))).toEqual([1, 1].map(() => round((at(700) - 0.5) / 0.5)));
+  });
+
+  it("scales each end dot and ring as its view's <svg> is scaled into the overlay", () => {
+    // The season to date drawn at half size, 30 px down, as in the gaps' test above.
+    const proto = SVGElement.prototype as unknown as { getScreenCTM?: () => unknown };
+    proto.getScreenCTM = function (this: SVGElement) {
+      if (this.classList.contains("ec-switch-overlay")) return { a: 1, b: 0, c: 0, d: 1, e: 10, f: 20 };
+      return this.closest('[data-view="toDate"]') ? { a: 0.5, b: 0, c: 0, d: 0.5, e: 10, f: 50 } : { a: 1, b: 0, c: 0, d: 1, e: 10, f: 20 };
+    };
+    try {
+      const { switcher, overlay, line, toDate, clock } = lineSetup();
+      void switcher.show("toDate");
+      clock.advance(300);
+      const s = at(300);
+      for (const group of runsIn(overlay).slice(0, 2)) {
+        const key = group.getAttribute("data-key")!;
+        const [a, b] = [markOf(line, key).end, markOf(toDate, key).end];
+        expect(dotOf(endsIn(group)[0]!)).toEqual(endAt({ x: mix(a.x, b.x / 2, s), y: mix(a.y, b.y / 2 + 30, s) }, round(mix(4.5, 2.25, s)), round(mix(2, 1, s))));
+      }
+      expect(runsIn(overlay).slice(2).map((group) => ringOf(group.querySelector("path")!))).toEqual([2, 2].map(() => round(mix(2, 1, s))));
+    } finally {
+      delete proto.getScreenCTM;
+    }
+  });
+
+  it("draws no end dots or rings for views without them: the donut and its columns, and a line chart without them", () => {
+    const { switcher, overlay } = setup();
+    void switcher.show("columns");
+    expect(overlay.querySelectorAll("circle")).toHaveLength(0);
+    for (const path of Array.from(overlay.querySelectorAll("path"))) expect([path.style.stroke, path.getAttribute("stroke-width")]).toEqual(["", null]);
+
+    // Line charts whose paints have neither, as a view drawn otherwise might: to each other, and to the columns.
+    const lines = lineSetup({ wrap: { perMatch: withoutEnds, toDate: withoutEnds } });
+    void lines.switcher.show("toDate");
+    expect(lines.overlay.querySelectorAll("circle")).toHaveLength(0);
+    for (const path of Array.from(lines.overlay.querySelectorAll(".ec-switch-runs path"))) expect(ringOf(path)).toBeUndefined();
+    const other = lineSetup({ wrap: { perMatch: withoutEnds } });
+    void other.switcher.show("columns");
+    expect(other.overlay.querySelectorAll("circle")).toHaveLength(0);
+    expect(runsIn(other.overlay).map((group) => ringOf(group.querySelector("path")!))).toEqual([undefined, undefined, undefined, undefined]);
+  });
+});
+
+describe("chartSwitch: the tab stop follows when focus is outside (M12 step 1)", () => {
+  /** A button outside the switch, with focus, as a toggle has after a press. */
+  const toggle = (): HTMLButtonElement => {
+    const button = document.body.appendChild(document.createElement("button"));
+    button.focus();
+    return button;
+  };
+
+  it("moves the new view's tab stop to the first key the old one's stood for, with nothing focused, no ring and no hover, and Tab lands there", async () => {
+    const { switcher, line, columns, land } = lineSetup();
+    line.focus("4");
+    const button = toggle();
+    expect(stopIn(line)).toBe("4");
+    expect(stopIn(columns)).toBe("goals@1");
+    const events: string[] = [];
+    columns.on("hover", (event) => events.push(`hover ${event.mark.key}`));
+    columns.on("leave", (event) => events.push(`leave ${event.mark.key}`));
+    void switcher.show("columns");
+    await land();
+    expect(document.activeElement).toBe(button);
+    expect(stopIn(columns)).toBe("goals@4");
+    expect(ringShown(columns)).toBe(false);
+    expect(columns.element.classList.contains("ec-hovering")).toBe(false);
+    expect(events).toEqual([]);
+    // Tab from the toggle: focus goes to the tab stop, which shows its ring and plays its hover.
+    (columns.element.querySelector('[tabindex="0"]') as SVGElement).focus();
+    expect(document.activeElement?.getAttribute("data-key")).toBe("goals@4");
+    expect(ringShown(columns)).toBe(true);
+    expect(events).toEqual(["hover goals@4"]);
+  });
+
+  it("moves it from a column to its x, and from an x to the same x in another line chart", async () => {
+    const { switcher, line, toDate, columns, land } = lineSetup();
+    void switcher.show("columns");
+    await land();
+    columns.focus("goals@6");
+    toggle();
+    void switcher.show("perMatch");
+    await land();
+    expect(stopIn(line)).toBe("6");
+    void switcher.show("toDate");
+    await land();
+    expect(stopIn(toDate)).toBe("6");
+    expect(ringShown(line) || ringShown(toDate)).toBe(false);
+    expect(document.activeElement?.tagName).toBe("BUTTON");
+  });
+
+  it("moves it to a point with hover: \"point\", and from a point to its column", async () => {
+    const { switcher, line, columns, land } = lineSetup({ hover: "point" });
+    line.focus("goals@2");
+    toggle();
+    void switcher.show("columns");
+    await land();
+    expect(stopIn(columns)).toBe("goals@2");
+    columns.focus("goals@4");
+    toggle();
+    void switcher.show("perMatch");
+    await land();
+    expect(stopIn(line)).toBe("goals@4");
+  });
+
+  it("keeps the new view's own tab stop when it takes none of the keys", async () => {
+    const { switcher, line, columns, land } = lineSetup();
+    void switcher.show("columns");
+    await land();
+    columns.focus("goals@6");
+    toggle();
+    void switcher.show("perMatch");
+    await land();
+    // Week 5's goals are missing, so the columns have no goals@5.
+    line.focus("5");
+    toggle();
+    void switcher.show("columns");
+    await land();
+    expect(stopIn(columns)).toBe("goals@6");
+  });
+
+  it("with focus in the old view, moves focus as before, and the tab stop with it", async () => {
+    const { switcher, line, columns, land } = lineSetup();
+    line.focus("2");
+    void switcher.show("columns");
+    await land();
+    expect(document.activeElement?.getAttribute("data-key")).toBe("goals@2");
+    expect(stopIn(columns)).toBe("goals@2");
+    expect(ringShown(columns)).toBe(true);
+  });
+
+  it("moves the tab stop, not focus, when focus has moved on outside the switch meanwhile", async () => {
+    const { switcher, line, columns, clock, land } = lineSetup();
+    line.focus("2");
+    void switcher.show("columns");
+    clock.advance(300);
+    const button = toggle();
+    await land();
+    expect(document.activeElement).toBe(button);
+    expect(stopIn(columns)).toBe("goals@2");
+    expect(ringShown(columns)).toBe(false);
+  });
+
+  it("moves it with motion off too, before show() returns", () => {
+    const { switcher, line, columns } = lineSetup({ mode: "off" });
+    line.focus("6");
+    const button = toggle();
+    void switcher.show("columns");
+    expect(document.activeElement).toBe(button);
+    expect(stopIn(columns)).toBe("goals@6");
+  });
+
+  it("carries it on to a third view, when a switch to it lands the one before", async () => {
+    const { switcher, line, columns, toDate, clock, land } = lineSetup();
+    line.focus("2");
+    toggle();
+    void switcher.show("columns");
+    clock.advance(300);
+    void switcher.show("toDate");
+    await land();
+    expect(stopIn(toDate)).toBe("2");
+    // The columns were landed on the way, not shown: their stop stays their own.
+    expect(stopIn(columns)).toBe("goals@1");
+  });
+
+  it("reads the old view's tab stop with nothing focused at all", async () => {
+    const { switcher, line, columns, land } = lineSetup();
+    line.focus("4");
+    (document.activeElement as SVGElement).blur();
+    expect(document.activeElement).toBe(document.body);
+    void switcher.show("columns");
+    await land();
+    expect(document.activeElement).toBe(document.body);
+    expect(stopIn(columns)).toBe("goals@4");
+  });
+
+  it("leaves a view without moveTabStop() with its own tab stop", async () => {
+    const { switcher, line, columns, land } = lineSetup({ wrap: { columns: bare } });
+    line.focus("4");
+    toggle();
+    void switcher.show("columns");
+    await land();
+    expect(stopIn(columns)).toBe("goals@1");
+  });
+});
+
+describe("each chart's moveTabStop() (M12 step 1)", () => {
+  function charts(hover: "x" | "point" = "x") {
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion: createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } }), clock: manualClock() };
+    const place = () => document.body.appendChild(document.createElement("div"));
+    const donut = donutChart(place(), { label: "Shots", data: outcomes, category: "outcome", value: "shots", width: 600 }, env);
+    const bars = barChart(place(), { label: "Shots", data: outcomes, x: "outcome", y: "shots", width: 600 }, env);
+    const line = lineChart<Week>(place(), { label: "Per match", data: perMatch, x: "week", series: ["goals", "xg"], hover, width: 600 }, env);
+    const events = vi.fn();
+    for (const chart of [donut, bars, line] as const) {
+      chart.on("hover", events);
+      chart.on("leave", events);
+    }
+    return { donut: donut as typeof donut & ChartSwitchView, bars: bars as typeof bars & ChartSwitchView, line: line as typeof line & ChartSwitchView, events };
+  }
+
+  it("moves the tab stop of a donut, a bar chart and a line chart without focus: nothing fires, and no ring shows", () => {
+    const { donut, bars, line, events } = charts();
+    expect([donut.moveTabStop!("Saved"), bars.moveTabStop!("Blocked"), line.moveTabStop!("goals@4")]).toEqual([true, true, true]);
+    expect([stopIn(donut), stopIn(bars), stopIn(line)]).toEqual(["Saved", "Blocked", "4"]);
+    // An x for its own key too.
+    expect(line.moveTabStop!("3")).toBe(true);
+    expect(stopIn(line)).toBe("3");
+    expect(document.activeElement).toBe(document.body);
+    expect([donut, bars, line].map(ringShown)).toEqual([false, false, false]);
+    expect([donut, bars, line].map((chart) => chart.element.classList.contains("ec-hovering"))).toEqual([false, false, false]);
+    expect(events).not.toHaveBeenCalled();
+    // Only one stop each.
+    for (const chart of [donut, bars, line]) expect(chart.element.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+  });
+
+  it("moves a line chart's to a point with hover: \"point\", for its own key or its x's first series' point", () => {
+    const { line } = charts("point");
+    expect(line.moveTabStop!("xg@5")).toBe(true);
+    expect(stopIn(line)).toBe("xg@5");
+    expect(line.moveTabStop!("4")).toBe(true);
+    expect(stopIn(line)).toBe("goals@4");
+  });
+
+  it("does nothing for a key the chart doesn't take, while one of its marks has focus, or once it's destroyed", () => {
+    const { donut, bars, line } = charts();
+    expect([donut.moveTabStop!("Woodwork"), bars.moveTabStop!("Woodwork"), line.moveTabStop!("goals@9"), line.moveTabStop!("9")]).toEqual([false, false, false, false]);
+    expect([stopIn(donut), stopIn(bars), stopIn(line)]).toEqual(["Goal", "Goal", "1"]);
+    // Focus keeps the stop with it.
+    line.focus("2");
+    expect(line.moveTabStop!("4")).toBe(false);
+    expect(stopIn(line)).toBe("2");
+    expect(document.activeElement?.getAttribute("data-key")).toBe("2");
+    donut.destroy();
+    expect(donut.moveTabStop!("Saved")).toBe(false);
   });
 });

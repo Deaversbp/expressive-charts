@@ -256,8 +256,10 @@ interface Course {
  * are each line's at that share of its own span, so the ends pair with the ends, and two lines over
  * the same x's pair each x with the same x. Shares within `SAME_X` of a stop's first are that stop,
  * at each line's own vertex where it has one there, so a vertex of each in the same place, as path
- * data has it, pair exactly. Each stretch between two stops is of the kind its middles are, inside
- * either line's gaps or not. Undefined for any other two lines.
+ * data has it, pair exactly. A stop takes one vertex of each line at most: another of the same line
+ * starts a stop of its own, so no vertex is lost to a neighbour however close. Each stretch between
+ * two stops is of the kind its middles are, inside either line's gaps or not. Undefined for any other
+ * two lines.
  */
 function acrossX(from: MarkGeometry, to: MarkGeometry, points: number): { stops: Stop[]; kinds: number[] } | undefined {
   const a = courseOf(from);
@@ -274,7 +276,7 @@ function acrossX(from: MarkGeometry, to: MarkGeometry, points: number): { stops:
   const merged: [first: number, a?: number, b?: number][] = [];
   for (const [s, whose] of all) {
     let stop = merged[merged.length - 1];
-    if (!stop || s - stop[0] > same) merged.push((stop = [s]));
+    if (!stop || s - stop[0] > same || (whose > 0 && stop[whose] !== undefined)) merged.push((stop = [s]));
     if (whose === 1) stop[1] ??= s;
     if (whose === 2) stop[2] ??= s;
   }
@@ -352,7 +354,8 @@ function corners(course: Course): readonly number[] {
     kept.push(shares[first]!, shares[low]!, shares[high]!, shares[i - 1]!);
     first = i;
   }
-  return kept;
+  // A vertex that's two of those, or a gap's end, once.
+  return Array.from(new Set(kept));
 }
 
 /** The line's points at each share, in order: on the straight piece between the vertices either side. */

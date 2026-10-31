@@ -101,8 +101,8 @@ function onShare(mark: MarkGeometry, s: number, points: readonly Point[] = verti
 /**
  * The stops two lines that pair by x are drawn at, through their vertices, as each line's share of the
  * way across: `points` evenly across and each vertex's, in order. Shares within 0.01 px of a stop's
- * first, across the wider line, are that stop, each line at its own vertex there if it has one, and
- * the ends are at 0 and 1.
+ * first, across the wider line, are that stop, each line at its own vertex there if it has one, but
+ * one vertex of each line at most, and the ends are at 0 and 1.
  */
 function stopsOf(a: readonly Point[], b: readonly Point[], points = 160): [number, number][] {
   const span = (line: readonly Point[]): number => line[line.length - 1]!.x - line[0]!.x;
@@ -110,7 +110,8 @@ function stopsOf(a: readonly Point[], b: readonly Point[], points = 160): [numbe
   const same = 0.01 / Math.max(Math.abs(span(a)), Math.abs(span(b)));
   const stops: { first: number; own: (number | undefined)[] }[] = [];
   for (const [s, whose] of [...Array.from({ length: points }, (_, i): [number, number] => [i / (points - 1), 0]), ...shares(a, 1), ...shares(b, 2)].sort((x, y) => x[0] - y[0])) {
-    if (stops.length === 0 || s - stops[stops.length - 1]!.first > same) stops.push({ first: s, own: [] });
+    const last = stops[stops.length - 1];
+    if (!last || s - last.first > same || (whose > 0 && last.own[whose] !== undefined)) stops.push({ first: s, own: [] });
     const own = stops[stops.length - 1]!.own;
     if (whose > 0 && own[whose] === undefined) own[whose] = s;
   }
@@ -654,6 +655,30 @@ describe("morph", () => {
       });
       // Between the values, every point is where both lines are at the same x.
       for (const at of onSmooth) expect(near(at, mix(onShare(jagged, shareOf(jagged, at.x)), onShare(smooth, shareOf(smooth, at.x)), 0.5))).toBe(true);
+    });
+
+    it("keeps every vertex of a line however close its neighbours: a peak 0.005 px from the vertices either side, and next to either end", async () => {
+      // Codex on #134: with one stop for a line's vertices within 0.01 px, the first of these drew flat part way.
+      const peaks: [Point[], number][] = [
+        [[{ x: 0, y: 0 }, { x: 0.005, y: 100 }, { x: 0.009, y: 0 }, { x: 100, y: 0 }], 1],
+        [[{ x: 0, y: 0 }, { x: 0.004, y: 100 }, { x: 50, y: 0 }, { x: 100, y: 0 }], 1],
+        [[{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 99.996, y: 100 }, { x: 100, y: 0 }], 2]
+      ];
+      for (const [points, k] of peaks) {
+        const peak = build.line({ key: "goals", series: "goals", points, width: 2 });
+        const lower = build.line({ key: "goals", series: "goals", points: points.map(({ x, y }) => ({ x, y: y / 2 + 10 })), width: 2 });
+        for (const [from, to] of [
+          [peak, peak],
+          [peak, lower],
+          [lower, peak]
+        ] as const) {
+          const [drawn] = await opening(from, to, 0.5);
+          const highest = Math.max(...measurePath(dOf(drawn!)).points.map((point) => point.y));
+          expect(highest, `peak at ${points[k]!.x}`).toBeCloseTo((vertices(from)[k]!.y + vertices(to)[k]!.y) / 2, 3);
+          drawsAsLine(await opening(from, to, 1e-4), from);
+          drawsAsLine(await opening(from, to, 1 - 1e-4), to);
+        }
+      }
     });
 
     it("draws each line's own path data on its first and last frames, and its own polyline next to them, through every vertex within 0.01 px", async () => {

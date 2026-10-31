@@ -778,6 +778,9 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
     // For a chart switch: a slice takes its own key's colour.
     paintOf: (key: string): ChartSwitchPaint | undefined => (records.has(key) ? { color: key, drawn: true } : undefined),
 
+    // For a chart switch: Tab from outside lands on the slice with this key.
+    moveTabStop: (key: string): boolean => !destroyed && hover.moveTabStop(key),
+
     destroy() {
       if (destroyed) return;
       destroyed = true;

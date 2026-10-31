@@ -14,7 +14,7 @@
 // link while it rests, and the link's hover shows in it. While a switch plays, neither view can be
 // reached, so a link's hover waits for it to land and shows in the new view.
 
-import { defaultClock, easeInOutCubic, linear, matrix, tween, type Clock, type MarkGeometry, type Matrix, type MotionEnv, type Point, type TransitionEffect, type Tween } from "../core";
+import { defaultClock, easeInOutCubic, linear, matrix, tween, type Clock, type Layer, type MarkGeometry, type Matrix, type MotionEnv, type PathHandle, type Point, type TransitionEffect, type Tween } from "../core";
 import { unease } from "../core/easing";
 import { describePoint } from "../core/geometry/describe/point";
 import { formatPath, parsePath, transformPath } from "../core/geometry/path";
@@ -24,8 +24,8 @@ import { chartAnnouncer, type Announcer } from "./announce";
 import { toColorAssignment, type ColorAssignment } from "./colors";
 import { linkable, portOf, type LinkListener, type LinkPort, type RowsOf } from "./link";
 import { svgLayer } from "./render/layer";
-import { setAttributes, setStyles, svgElement } from "./render/svg";
-import { injectStyles, markColorStyles, seriesColors } from "./render/theme";
+import { setAttributes, setStyles, SVG_NS, svgElement } from "./render/svg";
+import { cssColor, injectStyles, markColorStyles, seriesColors } from "./render/theme";
 import { resolveTarget, type ChartEnv } from "./shell/setup";
 import type { ChartLabel, MarkEvents } from "./types";
 
@@ -33,9 +33,9 @@ import type { ChartLabel, MarkEvents } from "./types";
  * What a chart switch uses of each view's chart. A reference chart's handle has all of it: its
  * `<svg>` (which takes `ec-morphing` while its marks morph in the switch's overlay), its marks and
  * labels as drawn, focus by key, leave() to end its hover, and destroy(); how it paints each mark
- * (paintOf), and, a line chart's, what its focus stops stand for (standsFor). A reference chart also
- * has on(), which the switch's on() hears, and a hover a link can drive; a view without them isn't
- * heard and isn't linked.
+ * (paintOf), a line chart's what its focus stops stand for (standsFor), and its tab stop moved
+ * without focus (moveTabStop). A reference chart also has on(), which the switch's on() hears, and a
+ * hover a link can drive; a view without them isn't heard and isn't linked.
  */
 export interface ChartSwitchView {
   readonly element: SVGSVGElement;
@@ -55,14 +55,25 @@ export interface ChartSwitchView {
    * Without it, a stop stands for its own key.
    */
   standsFor?(key: string): readonly string[];
+  /**
+   * Moves the chart's tab stop to the stop focus(key) would focus, without focus, so no ring shows
+   * and nothing hovers: Tab lands there next. Returns whether it did. After a switch that focus
+   * wasn't in, the new view's tab stop goes to the first key the old one's stood for that it takes.
+   * Without it, a view keeps its own tab stop.
+   */
+  moveTabStop?(key: string): boolean;
 }
 
 /** How a view's chart paints one of its marks: what a switch draws it in. */
 export interface ChartSwitchPaint {
   /** The name its colour comes from in the switch's assignment (`colors.slot(color)`): a line's or a point's series, a bar's key or first series, a slice's key. */
   readonly color: string;
-  /** Whether the chart draws it at rest. A line chart's points aren't, but for a value alone between gaps; a mark that isn't starts or ends a switch as a dot of no size at its centre. */
+  /** Whether the chart draws it at rest. A line chart's points aren't, but for a value alone between gaps; a mark that isn't starts or ends a switch as a dot of no size at its centre, with no end dot or ring. */
   readonly drawn: boolean;
+  /** The radius of the dot the chart draws at the end of the mark's walk, in its `<svg>`'s units: a line chart's line has one of 4.5. Unset: no dot. */
+  readonly end?: number;
+  /** The width of the ring in `--ec-surface` the chart draws round the mark's filled shape, or round its end dot when it has one: 2 round a line chart's point and end dot. Unset: none. */
+  readonly ring?: number;
 }
 
 /**
@@ -145,9 +156,30 @@ interface View {
   readonly port: LinkPort | undefined;
 }
 
-/** Where focus was when a switch began, if it was in the view it left: on a stop (the keys it stands for) or elsewhere (none). */
+/**
+ * Where focus was when a switch began: in the view it left (`focused`), on a stop (the keys it
+ * stands for) or elsewhere (none); or outside it, when it's that view's tab stop and its keys.
+ */
 interface FocusMemory {
   readonly keys: readonly string[];
+  readonly focused: boolean;
+}
+
+/** A dot a chart draws at the end of a mark's walk, in overlay px: where, its radius and the width of its ring. */
+interface EndDot {
+  readonly at: Point;
+  readonly r: number;
+  readonly ring: number;
+}
+
+/**
+ * What a pair's run draws besides the shape its transition draws, as its two views' charts draw
+ * them: the ring round its filled shape, and its line's end dot. Made only for a pair with either.
+ */
+interface Extras {
+  /** The run's layer in `group`: its filled shapes ringed, and the end dots kept above them. */
+  wrap(layer: Layer, group: SVGGElement): Layer;
+  draw(s: number): void;
 }
 
 /** What a switch draws in its overlay besides the pairs, at each s. */
@@ -237,18 +269,88 @@ export function chartSwitch<T extends ChartSwitchViews>(
   // Made now: screen readers miss text in a region that appears with it.
   const announcer: Announcer | undefined = options.announce ? chartAnnouncer(overlay) : undefined;
 
-  /** Each pair's run draws in a group of its own, in the colour named for its place (`paints`), stacked by that place. */
+  /**
+   * Each pair's run draws in a group of its own, in the colour named for its place (`paints`),
+   * stacked by that place, with its ring and end dot (`extras`) where it has them.
+   */
   const orders = new WeakMap<Element, number>();
-  const surfaceFor = (paints: readonly string[]): TransitionSurface => ({
+  const surfaceFor = (paints: readonly string[], extras: readonly (Extras | undefined)[]): TransitionSurface => ({
     group(key, order) {
       const group = svgElement("g", { class: "ec-run", "data-key": key }, runsLayer);
       setStyles(group, markColorStyles(seriesColors(colors.slot(paints[order] ?? key))));
       orders.set(group, order);
       const above = Array.from(runsLayer.children).find((child) => (orders.get(child) ?? -Infinity) > order);
       runsLayer.insertBefore(group, above ?? null);
-      return { ...svgLayer(group), clear: () => group.remove() };
+      const layer = svgLayer(group);
+      return { ...(extras[order]?.wrap(layer, group) ?? layer), clear: () => group.remove() };
     }
   });
+
+  /**
+   * The ring round a pair's filled shape, its width mixed from a's (`rings[0]`) to b's, and its
+   * line's end dot: with a dot on both sides, one dot, moving straight from end to end by the
+   * shapes' progress, its radius and ring mixed; with one on one side, that dot fading where it
+   * stands, as a mark with no partner does, in its own view's colour (`dotColors`).
+   */
+  function extrasFor(rings: readonly [number, number], ends: readonly [EndDot | undefined, EndDot | undefined], dotColors: readonly [string, string]): Extras | undefined {
+    const [ringA, ringB] = rings;
+    const [endA, endB] = ends;
+    if (ringA === 0 && ringB === 0 && !endA && !endB) return undefined;
+    const dots: { readonly element: SVGCircleElement; readonly draw: (s: number) => void }[] = [];
+    if (endA && endB) {
+      const element = endDot();
+      const draw = (s: number): void =>
+        placeDot(element, { at: { x: mix(endA.at.x, endB.at.x, s), y: mix(endA.at.y, endB.at.y, s) }, r: mix(endA.r, endB.r, s), ring: mix(endA.ring, endB.ring, s) });
+      dots.push({ element, draw });
+    } else {
+      ([[endA, fadeOut, dotColors[0]], [endB, fadeIn, dotColors[1]]] as const).forEach(([end, opacity, color]) => {
+        if (!end) return;
+        const element = endDot();
+        setStyles(element, markColorStyles(seriesColors(colors.slot(color))));
+        placeDot(element, end);
+        dots.push({ element, draw: (s) => setAttributes(element, { opacity: opacity(s) }) });
+      });
+    }
+    const ringed = ringA > 0 || ringB > 0;
+    let width = ringA;
+    /** The ringed shapes the run has drawn, with their path data now. */
+    const shapes = new Map<PathHandle, string>();
+    return {
+      wrap(layer, group) {
+        // A new run: the last one's group went with its shapes.
+        shapes.clear();
+        const raise = (): void => {
+          for (const dot of dots) group.appendChild(dot.element);
+        };
+        raise();
+        return {
+          ...layer,
+          path(d, paint) {
+            const ring = ringed && paint.fill !== undefined && paint.stroke === undefined;
+            const handle = layer.path(d, ring ? { ...paint, stroke: "surface", width } : paint);
+            raise();
+            if (!ring) return handle;
+            shapes.set(handle, d);
+            return {
+              update(next, nextPaint) {
+                shapes.set(handle, next);
+                handle.update(next, nextPaint);
+              },
+              remove() {
+                shapes.delete(handle);
+                handle.remove();
+              }
+            };
+          }
+        };
+      },
+      draw(s) {
+        width = mix(ringA, ringB, s);
+        for (const [handle, d] of shapes) handle.update(d, { width });
+        for (const dot of dots) dot.draw(s);
+      }
+    };
+  }
 
   let current: string = options.initial;
   let active: Switch | undefined;
@@ -289,23 +391,32 @@ export function chartSwitch<T extends ChartSwitchViews>(
     return (wrapper.getRootNode() as Document | ShadowRoot).activeElement ?? null;
   }
 
-  /** Read before anything is hidden: a browser may move focus off an element that turns hidden. */
+  /**
+   * Read before anything is hidden: a browser may move focus off an element that turns hidden. With
+   * focus outside the view (on a toggle, say), its tab stop, where Tab would go back in.
+   */
   function readFocus(from: View): FocusMemory | undefined {
     const element = focused();
-    if (!element || !from.container.contains(element)) return undefined;
-    const keyed = element.closest("[data-key]");
+    const inside = element !== null && from.container.contains(element);
+    const keyed = (inside ? element : from.chart.element.querySelector('[tabindex="0"]'))?.closest("[data-key]");
     const key = keyed && from.chart.element.contains(keyed) ? keyed.getAttribute("data-key") : null;
-    return { keys: key === null ? [] : (from.chart.standsFor?.(key) ?? [key]) };
+    if (!inside && key === null) return undefined;
+    return { keys: key === null ? [] : (from.chart.standsFor?.(key) ?? [key]), focused: inside };
   }
 
   /**
    * Focus that was in the old view goes to the first key its stop stood for that the new one takes,
-   * or to its first mark, unless it has moved on outside the switch.
+   * or to its first mark, unless it has moved on outside the switch. Otherwise the new view's tab
+   * stop goes to the first of those keys it takes, without focus, so Tab lands there.
    */
   function restoreFocus(to: View, memory: FocusMemory | undefined): void {
     if (!memory) return;
     const now = focused();
-    if (now && now !== doc.body && now !== doc.documentElement && !wrapper.contains(now)) return;
+    const away = now !== null && now !== doc.body && now !== doc.documentElement && !wrapper.contains(now);
+    if (!memory.focused || away) {
+      for (const key of memory.keys) if (to.chart.moveTabStop?.(key)) return;
+      return;
+    }
     const inside = (): boolean => to.chart.element.contains(focused());
     for (const key of [...memory.keys, ...to.chart.marks().map((mark) => mark.key)]) {
       to.chart.focus(key);
@@ -446,19 +557,23 @@ export function chartSwitch<T extends ChartSwitchViews>(
 
   /**
    * Both views' marks and labels in overlay px, the pairs matched by key, and what's drawn with them.
-   * Each mark is drawn in the colour its view paints it, a pair in the new view's. A mark its view
-   * doesn't draw at rest is a dot of no size at its centre, so a column grows out of a line's point;
-   * a pair neither view draws isn't played, and a mark with no partner that isn't drawn doesn't fade.
+   * Each mark is drawn in the colour its view paints it, a pair in the new view's, with the ring and
+   * end dot its chart draws. A mark its view doesn't draw at rest is a dot of no size at its centre,
+   * so a column grows out of a line's point; a pair neither view draws isn't played, and a mark with
+   * no partner that isn't drawn doesn't fade.
    */
   function prepare(a: View, b: View): { pairs: TransitionPair[]; surface: TransitionSurface; scene: Scene } {
     const toA = between(overlay, a.chart.element, wrapper);
     const toB = between(overlay, b.chart.element, wrapper);
+    const scaleA = scaleOf(toA);
+    const scaleB = scaleOf(toB);
     const from = a.chart.marks().map((mark) => mapMark(mark, toA));
     const to = b.chart.marks().map((mark) => mapMark(mark, toB));
     const fromByKey = new Map(from.map((mark) => [mark.key, mark]));
     const toKeys = new Set(to.map((mark) => mark.key));
     const pairs: TransitionPair[] = [];
     const paints: string[] = [];
+    const extras: (Extras | undefined)[] = [];
     for (const mark of to) {
       const partner = fromByKey.get(mark.key);
       if (!partner) continue;
@@ -467,16 +582,22 @@ export function chartSwitch<T extends ChartSwitchViews>(
       if (!was.drawn && !will.drawn) continue;
       pairs.push({ from: was.drawn ? partner : dot(partner), to: will.drawn ? mark : dot(mark) });
       paints.push(will.color);
+      extras.push(extrasFor([ringOf(was, scaleA), ringOf(will, scaleB)], [endOf(was, partner, scaleA), endOf(will, mark, scaleB)], [was.color, will.color]));
     }
 
     const drawings: ((s: number) => void)[] = [];
+    if (extras.some((each) => each !== undefined)) {
+      drawings.push((s) => {
+        for (const each of extras) each?.draw(s);
+      });
+    }
     // Marks with no partner fade where they stand: out over the first half, in over the second.
-    const fade = (view: View, mark: MarkGeometry, opacity: (s: number) => number): void => {
+    const fade = (view: View, mark: MarkGeometry, scale: number, opacity: (s: number) => number): void => {
       const paint = paintOf(view, mark);
-      if (paint.drawn) drawings.push(fadeMark(mark, paint.color, opacity));
+      if (paint.drawn) drawings.push(fadeMark(mark, paint, scale, opacity));
     };
-    for (const mark of from) if (!toKeys.has(mark.key)) fade(a, mark, fadeOut);
-    for (const mark of to) if (!fromByKey.has(mark.key)) fade(b, mark, fadeIn);
+    for (const mark of from) if (!toKeys.has(mark.key)) fade(a, mark, scaleA, fadeOut);
+    for (const mark of to) if (!fromByKey.has(mark.key)) fade(b, mark, scaleB, fadeIn);
 
     // Labels match by key and role. A pair moves from one place to the other and swaps its text half
     // way; a label with no partner fades, as a mark does.
@@ -502,7 +623,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
 
     return {
       pairs,
-      surface: surfaceFor(paints),
+      surface: surfaceFor(paints, extras),
       scene: {
         draw: (s) => {
           for (const draw of drawings) draw(s);
@@ -516,12 +637,23 @@ export function chartSwitch<T extends ChartSwitchViews>(
     };
   }
 
-  /** A mark with no partner, drawn as its outline in the colour named `color`. */
-  function fadeMark(mark: MarkGeometry, color: string, opacity: (s: number) => number): (s: number) => void {
+  /** A mark with no partner, drawn as its outline in its view's colour, with its own ring and end dot, scaled as its view's <svg> is into the overlay. */
+  function fadeMark(mark: MarkGeometry, paint: ChartSwitchPaint, scale: number, opacity: (s: number) => number): (s: number) => void {
     const group = svgElement("g", { class: "ec-switch-fade", "data-key": mark.key }, fadesLayer);
-    setStyles(group, markColorStyles(seriesColors(colors.slot(color))));
-    svgLayer(group).path(mark.outline.d, mark.outline.closed ? { fill: "mark" } : { stroke: "mark", width: mark.thickness });
+    setStyles(group, markColorStyles(seriesColors(colors.slot(paint.color))));
+    const ring = ringOf(paint, scale);
+    svgLayer(group).path(mark.outline.d, mark.outline.closed ? { fill: "mark", ...(ring > 0 ? { stroke: "surface", width: ring } : {}) } : { stroke: "mark", width: mark.thickness });
+    const end = endOf(paint, mark, scale);
+    if (end) placeDot(group.appendChild(endDot()), end);
     return (s) => setAttributes(group, { opacity: opacity(s) });
+  }
+
+  /** A line's end dot, filled in the colour of the group it goes in, its ring in the surface's. */
+  function endDot(): SVGCircleElement {
+    const element = doc.createElementNS(SVG_NS, "circle");
+    element.setAttribute("class", "ec-switch-end");
+    setStyles(element, { fill: cssColor("mark"), stroke: cssColor("surface") });
+    return element;
   }
 
   /** A copy of the label's <text> in the overlay, with its classes, and where it sits there. */
@@ -740,7 +872,22 @@ function dot(mark: MarkGeometry): MarkGeometry {
   return describePoint({ key: mark.key, ...(mark.series === undefined ? {} : { series: mark.series }), x: mark.center.x, y: mark.center.y, r: 0 });
 }
 
+/** The width of the ring round the mark's filled shape, in overlay px: 0 for one drawn without, or not drawn, or with an end dot, which has the ring. */
+const ringOf = (paint: ChartSwitchPaint, scale: number): number => (paint.drawn && paint.end === undefined ? (paint.ring ?? 0) * scale : 0);
+
+/** The dot at the end of the mark's walk, already in overlay px, as its chart draws it, if it does. */
+function endOf(paint: ChartSwitchPaint, mark: MarkGeometry, scale: number): EndDot | undefined {
+  return paint.drawn && paint.end !== undefined ? { at: mark.end, r: paint.end * scale, ring: (paint.ring ?? 0) * scale } : undefined;
+}
+
+function placeDot(element: SVGCircleElement, end: EndDot): void {
+  setAttributes(element, { cx: end.at.x, cy: end.at.y, r: end.r, "stroke-width": end.ring });
+}
+
 const isIdentity = (m: Matrix): boolean => m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
+
+/** How much a transform that keeps angles scales every length. */
+const scaleOf = (m: Matrix): number => Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
 
 /**
  * The mark in another coordinate space: a view's <svg> units to the overlay's px. A switch maps by
@@ -751,7 +898,7 @@ function mapMark(mark: MarkGeometry, m: Matrix): MarkGeometry {
   if (isIdentity(m)) return mark;
   const point = (p: Point): Point => matrix.apply(m, p);
   const path = (d: string): string => formatPath(transformPath(parsePath(d), m));
-  const scale = Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
+  const scale = scaleOf(m);
   const { outline } = mark;
   return {
     key: mark.key,

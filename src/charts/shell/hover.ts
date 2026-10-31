@@ -100,6 +100,8 @@ export interface ChartHover {
   retarget(to: (key: string) => string | undefined): void;
   /** Moves focus to the live target `key` as a key press would: the ring shows and its hover plays. Does nothing for a key that isn't live. */
   focus(key: string): void;
+  /** Moves the tab stop to the live target `key` without focus: no ring, no hover. Returns whether it did: not for a key that isn't live, or while a target has focus. */
+  moveTabStop(key: string): boolean;
   /**
    * Ends the hover, the pointer's or focus's, as the viewer moving away would: the emphasis, the
    * dimming, the tooltip and the hover runs end, with their leave events. Focus stays where it is,
@@ -352,6 +354,7 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     focus(key) {
       if (options.live(key)) keyboard.focus(key);
     },
+    moveTabStop: (key) => options.live(key) && keyboard.moveTabStop(key),
     leave,
     destroy() {
       destroyed = true;

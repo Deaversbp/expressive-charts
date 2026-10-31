@@ -25,6 +25,21 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`end` and `ring` on `ChartSwitchPaint`,** both optional. `end` is the radius of the dot a view's chart draws at the end of a mark's walk, and `ring` the width of the ring in `--ec-surface` it draws round the mark, or round that dot. The line chart's handle gives a line's end dot (4.5) and its ring, and a point drawn at rest its ring (2). A view whose paints have neither draws as before.
+- **`moveTabStop(key)` on `ChartSwitchView`,** optional: it moves a chart's tab stop to the stop `focus(key)` would focus, without focus, so no ring shows and nothing hovers, and says whether it did. The bar, donut and line charts' handles have it. A view without it keeps its own tab stop after a switch, as before.
+
+### Changed
+
+### Fixed
+
+- **A chart switch draws a line's end dot.** It went on the first frame of a switch to or from a line view, and came back as it landed. Now it moves with its line from one end to the other between two line charts, and fades with its line into the columns.
+- **A chart switch draws a point's ring,** the 2 px in the surface's colour round a value alone between gaps and round an end dot. It keeps it into another line chart, and loses it as the point grows into its column.
+- **Tab after a toggle lands on the same week.** With focus outside a switch, on the toggle that started it, Tab went to the new view's own tab stop. Now the switch reads the old view's tab stop before anything hides, and moves the new view's to the first of the keys it stood for, as focus follows when it's in the view.
+
 ## 0.6.0 (30 October 2026)
 
 Line charts in a chart switch, their points growing into columns, change text that keeps clear of other effects' text, with room for it on the line chart, and `morph` keeping a line's gaps and a shape's holes. `expressive()` reads more marks by tag (a turned `<rect>`, a pie's slices and a non-scaling stroke), and the hover on one point reaches a point drawn on another. In the effect-author API, the one change is `texts` on `EffectContext`, with its type, `TextSpace`, an addition. The other changes are outside the promise, and each says what to write instead, if anything.

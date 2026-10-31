@@ -46,7 +46,7 @@ import {
   type MarkGeometry,
   type Rect
 } from "./index";
-import { drawnInGaps, flush, type TestContext } from "./core/testing";
+import { drawnInGaps, flush, measurePath, type TestContext } from "./core/testing";
 import { cleat, soccerBall } from "./icons/sport";
 import { checkEffect, checkTransition, testContext, type CheckEffectOptions } from "./testing";
 
@@ -1079,7 +1079,7 @@ function ringPairs(): Record<string, readonly [MarkGeometry, MarkGeometry]> {
 
 /**
  * Pairs of lines with gaps, for morph: real lines missing weeks, with each other, with the full
- * season, and drawn smaller.
+ * season, and drawn smaller. Each runs left to right, so they pair by x.
  */
 function gapPairs(): Record<string, readonly [MarkGeometry, MarkGeometry]> {
   const [goals, xg] = lineGappedMarks() as [MarkGeometry, MarkGeometry];
@@ -1095,14 +1095,16 @@ function gapPairs(): Record<string, readonly [MarkGeometry, MarkGeometry]> {
   };
 }
 
-/** Where both marks have a gap, as [from, to] values of t. */
-const sharedGaps = (a: MarkGeometry, b: MarkGeometry): [number, number][] =>
-  (a.gaps ?? []).flatMap(([a0, a1]) => (b.gaps ?? []).flatMap(([b0, b1]): [number, number][] => (Math.min(a1, b1) > Math.max(a0, b0) ? [[Math.max(a0, b0), Math.min(a1, b1)]] : [])));
+/** Where both lines have a gap, as shares of the way across their x spans, from each walk's start to its end. */
+function bothMiss(a: MarkGeometry, b: MarkGeometry): [number, number][] {
+  const shares = (mark: MarkGeometry): [number, number][] => (mark.gaps ?? []).map(([t0, t1]) => [t0, t1].map((t) => (mark.path(t).x - mark.start.x) / (mark.end.x - mark.start.x)) as [number, number]);
+  return shares(a).flatMap(([a0, a1]) => shares(b).flatMap(([b0, b1]): [number, number][] => (Math.min(a1, b1) > Math.max(a0, b0) ? [[Math.max(a0, b0), Math.min(a1, b1)]] : [])));
+}
 
 /**
- * What morph draws inside a gap both lines have, on every frame of a run: at each end, inside the
- * line's own gaps; part way, inside the gaps both have on the line part way, each t's point moved
- * from `from`'s toward `to`'s by the eased progress. Both walks run straight across those gaps.
+ * What morph draws where both lines miss, on every frame of a run: any line of a path across the x's
+ * inside a gap both have. The pairs' lines each run left to right, so they pair by x (M12 step 2),
+ * and at each eased progress each share's x is moved from `from`'s toward `to`'s.
  */
 async function morphInGaps(from: MarkGeometry, to: MarkGeometry): Promise<string[]> {
   const ctx = { ...testContext(), start: 0 };
@@ -1112,9 +1114,18 @@ async function morphInGaps(from: MarkGeometry, to: MarkGeometry): Promise<string
     .then(() => (settled = true));
   const problems: string[] = [];
   const look = (p: number): void => {
-    const mid = { key: from.key, gaps: sharedGaps(from, to), path: (t: number) => ({ x: from.path(t).x * (1 - p) + to.path(t).x * p, y: from.path(t).y * (1 - p) + to.path(t).y * p }) };
-    const mark = p <= 0 ? from : p >= 1 ? to : (mid as unknown as MarkGeometry);
-    for (const problem of drawnInGaps(mark, ctx.layer.drawn)) problems.push(`at ${p}, ${problem}`);
+    const x = (s: number): number => (from.start.x + s * (from.end.x - from.start.x)) * (1 - p) + (to.start.x + s * (to.end.x - to.start.x)) * p;
+    for (const [s0, s1] of bothMiss(from, to)) {
+      const [lo, hi] = [x(s0), x(s1)].sort((m, n) => m - n) as [number, number];
+      for (const item of ctx.layer.drawn) {
+        let pen: { x: number; y: number } | undefined;
+        for (const { op, args } of item.kind === "path" ? measurePath(item.d).commands : []) {
+          const point = { x: args[args.length - 2]!, y: args[args.length - 1]! };
+          if (op === "L" && pen && Math.max(pen.x, point.x) > lo + 0.01 && Math.min(pen.x, point.x) < hi - 0.01) problems.push(`at ${p}, a line from ${pen.x},${pen.y} to ${point.x},${point.y} crosses x ${lo} to ${hi}`);
+          pen = point;
+        }
+      }
+    }
   };
   await flush();
   for (let ms = 0; !settled; ms += 16) {

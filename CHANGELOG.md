@@ -25,6 +25,18 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+### Changed
+
+- **`morph` pairs two lines by x.** Two lines whose vertices' x each go one way, the same way for both, as a line chart's do, morph by x: the point a share of the way across one line's x span moves to the point that share across the other's, so between two line charts of the same weeks each week moves straight up or down, whatever the plots' widths. They're sampled at `points` shares evenly across and at every vertex of both, up to 1,000 of each line's; of a denser line, the first, last, highest and lowest in each of 250 columns. Their middle frames change. Any other two lines, closed outlines and crossfades morph as before, byte for byte. Nothing to write instead.
+
+### Fixed
+
+- **`morph` keeps a line's corners, and matches its gaps by x.** Between two lines that each run one way, the stroke next to the first and last frames is each line's own polyline: on the morph page's season card, with 160 points, goals' corners were cut by up to 10.9 px. And where both lines miss the same weeks, nothing is drawn on any frame: faint strokes reached up to 54 px across them, since gaps met by how far along each line they were. A page that gives `morph({ points })` more points for its corners can drop them.
+
 ## 0.6.0 (30 October 2026)
 
 Line charts in a chart switch, their points growing into columns, change text that keeps clear of other effects' text, with room for it on the line chart, and `morph` keeping a line's gaps and a shape's holes. `expressive()` reads more marks by tag (a turned `<rect>`, a pie's slices and a non-scaling stroke), and the hover on one point reaches a point drawn on another. In the effect-author API, the one change is `texts` on `EffectContext`, with its type, `TextSpace`, an addition. The other changes are outside the promise, and each says what to write instead, if anything.

@@ -1423,7 +1423,7 @@ interface ThresholdOptions
 morph(options?: MorphOptions): TransitionEffect
 ```
 
-A transition effect that turns one mark's shape into another's: the default transition of a [`chartSwitch`](#chartswitch) ([architecture.md](architecture.md#morph)). Two closed outlines (bars, slices, points) are sampled at `points`, and each point moves in a straight line to its partner, as one filled path in the mark's colour, and their holes pair by area and morph too; two lines morph along their strokes, their width too, and keep their `gaps`, the stroke inside one line's gap fading in or out; an area and a line crossfade. It takes 950 ms base with `"transition"` timing, eased in and out, and a run from `ctx.start` takes the rest of a full run's time, so a switch back retraces. Its end state is the target's own outline.
+A transition effect that turns one mark's shape into another's: the default transition of a [`chartSwitch`](#chartswitch) ([architecture.md](architecture.md#morph)). Two closed outlines (bars, slices, points) are sampled at `points`, and each point moves in a straight line to its partner, as one filled path in the mark's colour, and their holes pair by area and morph too; two lines that each run one way across x pair by x, through every vertex of both, so their corners and their gaps hold, and any other two morph along their strokes; either way their width moves too, and they keep their `gaps`, the stroke inside one line's gap fading in or out; an area and a line crossfade. It takes 950 ms base with `"transition"` timing, eased in and out, and a run from `ctx.start` takes the rest of a full run's time, so a switch back retraces. Its end state is the target's own outline.
 
 #### `MorphOptions`
 
@@ -1434,7 +1434,7 @@ interface MorphOptions {
 }
 ```
 
-- `points`: default 160 (40 a side). A whole multiple of 4.
+- `points`: default 160 (40 a side). A whole multiple of 4. Two lines that pair by x are sampled at this many shares evenly across, and at each vertex, up to 1,000 of each line's.
 - `align`: default `"unroll"`. How two closed outlines' sides are matched ([`MorphAlign`](#morphalign)).
 
 #### `MorphAlign`

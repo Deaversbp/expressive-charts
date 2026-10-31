@@ -1,8 +1,9 @@
 // morph: the transition effect that turns one mark's shape into another's, as the lab's donut turns
 // into columns. Both outlines are sampled at the same number of points and each point moves in a
-// straight line to its partner. It reads only the two geometries, so it morphs any mark into any
-// other: bars, slices and points (closed outlines) and lines (open ones). A line's gaps and a shape's
-// holes come through: gaps from the marks' `gaps`, holes from their outlines' path data.
+// straight line to its partner; two lines that each run one way across x pair by x instead. It reads
+// only the two geometries, so it morphs any mark into any other: bars, slices and points (closed
+// outlines) and lines (open ones). A line's gaps and a shape's holes come through: gaps from the
+// marks' `gaps`, holes from their outlines' path data.
 
 import { easeInOutCubic, linear } from "../core";
 import type { Layer, MarkGeometry, Outline, Paint, PathHandle, Point, Rect, TransitionEffect, Tween } from "../core";
@@ -17,7 +18,11 @@ import { goesRound } from "../core/geometry/ring";
 export type MorphAlign = "unroll" | "drop";
 
 export interface MorphOptions {
-  /** Points sampled on each outline, a whole multiple of 4 (a quarter on each side of a closed one). Default 160, the lab's 40 a side. */
+  /**
+   * Points sampled on each outline, a whole multiple of 4 (a quarter on each side of a closed one).
+   * Default 160, the lab's 40 a side. Two lines that pair by x are sampled at this many shares
+   * evenly across, and at each vertex.
+   */
   readonly points?: number;
   /**
    * How two closed outlines' sides are matched:
@@ -37,6 +42,17 @@ const POINTS = 160;
 const ALIGNS: readonly string[] = ["unroll", "drop"];
 /** Two values of t closer than this are one stop on a line. */
 const SAME_T = 1e-9;
+/**
+ * Two stops of lines that pair by x closer than this, in px across the wider line, are one. Path data
+ * is written to 0.001 px, so two lines over the same x's in plots of two widths have their vertices,
+ * and their gaps' ends, about that far apart as shares.
+ */
+const SAME_X = 0.01;
+/**
+ * The most vertices of a line that pairs by x taken as stops, so that a frame of two ten-year daily
+ * lines takes well under a millisecond more than with 160 points (measured for M12 step 2).
+ */
+const VERTICES = 1000;
 /** Points across and down the bounds where a hole with no partner may land, when its own place won't do. */
 const GRID = 9;
 /** Times on a hole's way to closing, or from opening, at which it's checked to be inside the shape. */
@@ -61,11 +77,17 @@ type Draw = (p: number) => void;
  *   where that place is outside it or near its edge. Where it would leave the shape on the way, it
  *   closes sooner, as soon as a sixteenth of the way. Each is written the other way round from the
  *   outside, so it stays a hole under either fill rule.
- * - **Two open outlines** (lines): both strokes are sampled along their length, and the stroke's
- *   width moves from one thickness to the other. Where either line has `gaps`, the stroke inside a
- *   gap of the old line fades in and inside a gap of the new line fades out, each piece at an
- *   opacity of 1 − ((1 − p) · a + p · b), with p the eased progress and a and b 1 inside the old and
- *   the new line's gap: so nothing is drawn inside a gap both have.
+ * - **Two lines that each run one way across x** (every vertex's x more than the one before, or
+ *   every one less, the same way for both) pair by x: the point a share of the way across one
+ *   line's x span moves to the point that share across the other's. They're sampled at `points`
+ *   shares evenly across, and at each vertex of either line, which is where each gap begins and
+ *   ends: so the first and last frames are the lines' own polylines, corners and all, and two lines
+ *   missing the same x's have their gaps in the same place.
+ * - **Any other two open outlines** (lines): both strokes are sampled along their length.
+ * - Either way, the stroke's width moves from one thickness to the other. Where either line has
+ *   `gaps`, the stroke inside a gap of the old line fades in and inside a gap of the new line fades
+ *   out, each piece at an opacity of 1 − ((1 − p) · a + p · b), with p the eased progress and a and
+ *   b 1 inside the old and the new line's gap: so nothing is drawn inside a gap both have.
  * - **A closed and an open outline** crossfade: the first fades out as the second fades in.
  *
  * A run from `ctx.start` begins with the shapes there, in their eased progress, and takes the rest
@@ -112,6 +134,8 @@ export function morph(options: MorphOptions = {}): TransitionEffect {
 function drawing(from: MarkGeometry, to: MarkGeometry, layer: Layer, points: number, align: MorphAlign): Draw {
   const closed = from.outline.closed;
   if (closed !== to.outline.closed) return crossfade(from, to, layer);
+  const across = closed ? undefined : acrossX(from, to, points);
+  if (across) return piecewise(from, to, layer, across.stops, across.kinds);
   const a = from.outline.sample(points);
   const b = to.outline.sample(points);
   if (!closed) return from.gaps?.length || to.gaps?.length ? gapped(from, to, layer, a, b) : stroke(from, to, layer, a, b);
@@ -139,7 +163,7 @@ function stroke(from: MarkGeometry, to: MarkGeometry, layer: Layer, a: readonly 
 /** Where a line's stroke is drawn between two stops: [first stop, last stop]. */
 type Run = [first: number, last: number];
 
-/** A point on both lines at one t: the samples', and where a gap begins or ends. */
+/** A point on both lines at one t, or one share across: the samples', and where a gap begins or ends. */
 interface Stop {
   readonly t: number;
   readonly from: Point;
@@ -148,11 +172,7 @@ interface Stop {
 
 /**
  * Two lines, one with gaps at least: sampled as `stroke` samples them, with a stop where a gap of
- * either begins or ends. The stretch between two stops is inside the old line's gap, the new
- * line's, both or neither, and each of the first three is drawn as one path: fading in, fading out,
- * or at full strength. The stretch inside both isn't drawn. The paths go in the order their first
- * stretches come along the walk, which is the same whichever line is `from`, so a run back from
- * 1 - p draws what the run forward drew at p.
+ * either begins or ends, and drawn in pieces between the stops.
  */
 function gapped(from: MarkGeometry, to: MarkGeometry, layer: Layer, a: readonly Point[], b: readonly Point[]): Draw {
   const n = a.length;
@@ -163,17 +183,30 @@ function gapped(from: MarkGeometry, to: MarkGeometry, layer: Layer, a: readonly 
     }
   }
   stops.sort((x, y) => x.t - y.t);
-  // By kind: 0 inside neither gap, 1 inside the old line's, 2 inside the new line's. Inside both isn't drawn.
+  const kinds = stops.slice(1).map((stop, k) => {
+    const t = (stops[k]!.t + stop.t) / 2;
+    return (inGap(from, t) ? 1 : 0) + (inGap(to, t) ? 2 : 0);
+  });
+  return piecewise(from, to, layer, stops, kinds);
+}
+
+/**
+ * Two lines drawn between stops. The stretch from stop k to the next is of kind k: 0 inside neither
+ * line's gap, 1 inside the old line's, 2 inside the new line's, 3 inside both. Each of the first
+ * three is drawn as one path: at full strength, fading in or fading out. The stretch inside both
+ * isn't drawn. The paths go in the order their first stretches come along the walk, which is the
+ * same whichever line is `from`, so a run back from 1 - p draws what the run forward drew at p.
+ */
+function piecewise(from: MarkGeometry, to: MarkGeometry, layer: Layer, stops: readonly Stop[], kinds: readonly number[]): Draw {
   const runs: Run[][] = [[], [], []];
-  for (let k = 0; k + 1 < stops.length; k++) {
-    const t = (stops[k]!.t + stops[k + 1]!.t) / 2;
-    const kind = (inGap(from, t) ? 1 : 0) + (inGap(to, t) ? 2 : 0);
+  for (let k = 0; k < kinds.length; k++) {
+    const kind = kinds[k]!;
     if (kind === 3) continue;
     const last = runs[kind]![runs[kind]!.length - 1];
     if (last && last[1] === k) last[1] = k + 1;
     else runs[kind]!.push([k, k + 1]);
   }
-  const kinds = [0, 1, 2].filter((kind) => runs[kind]!.length > 0).sort((x, y) => runs[x]![0]![0] - runs[y]![0]![0]);
+  const order = [0, 1, 2].filter((kind) => runs[kind]!.length > 0).sort((x, y) => runs[x]![0]![0] - runs[y]![0]![0]);
   const paths: PathHandle[] = [];
   return (p) => {
     const width = p <= 0 ? from.thickness : p >= 1 ? to.thickness : mix(from.thickness, to.thickness, p);
@@ -181,7 +214,7 @@ function gapped(from: MarkGeometry, to: MarkGeometry, layer: Layer, a: readonly 
     const pieces: [string, number | undefined][] =
       p <= 0 || p >= 1
         ? [[p <= 0 ? from.outline.d : to.outline.d, undefined]]
-        : kinds.map((kind) => [runs[kind]!.map((run) => along(stops, run, p)).join(""), opacities[kind]]);
+        : order.map((kind) => [runs[kind]!.map((run) => along(stops, run, p)).join(""), opacities[kind]]);
     pieces.forEach(([d, opacity], i) => {
       if (paths[i]) paths[i]!.update(d, { width, opacity });
       else paths[i] = layer.path(d, { stroke: "mark", width, ...(opacity === undefined ? {} : { opacity }) });
@@ -198,6 +231,148 @@ function along(stops: readonly Stop[], [first, last]: Run, p: number): string {
   let d = "";
   for (let k = first; k <= last; k++) d += `${k === first ? "M" : "L"}${at(stops[k]!.from, stops[k]!.to, p)}`;
   return d;
+}
+
+/** Stretches of a line as shares of the way across its x span: [from, to]. */
+type Shares = readonly (readonly [from: number, to: number])[];
+
+/**
+ * A line that runs one way across x: its vertices in the order its walk goes through them, each
+ * one's share of the way from the first's x to the last's, its gaps as shares, its span, and which
+ * way it runs, 1 to the right or -1 to the left.
+ */
+interface Course {
+  readonly points: readonly Point[];
+  readonly shares: readonly number[];
+  readonly gaps: Shares;
+  /** px from the first vertex's x to the last's. */
+  readonly span: number;
+  readonly way: number;
+}
+
+/**
+ * Two lines that each run one way across x, the same way, paired by x: stops at `points` shares
+ * evenly across, and at each vertex of either line, every gap's ends among them. Each stop's points
+ * are each line's at that share of its own span, so the ends pair with the ends, and two lines over
+ * the same x's pair each x with the same x. Shares within `SAME_X` of a stop's first are that stop,
+ * at each line's own vertex where it has one there, so a vertex of each in the same place, as path
+ * data has it, pair exactly. Each stretch between two stops is of the kind its middles are, inside
+ * either line's gaps or not. Undefined for any other two lines.
+ */
+function acrossX(from: MarkGeometry, to: MarkGeometry, points: number): { stops: Stop[]; kinds: number[] } | undefined {
+  const a = courseOf(from);
+  const b = a && courseOf(to);
+  if (!a || !b || a.way !== b.way) return undefined;
+  // Each share, and whose it is: 0 an even share, 1 the old line's vertex, 2 the new line's.
+  const all: [share: number, whose: number][] = [
+    ...Array.from({ length: points }, (_, i): [number, number] => [i / (points - 1), 0]),
+    ...corners(a).map((s): [number, number] => [s, 1]),
+    ...corners(b).map((s): [number, number] => [s, 2])
+  ].sort((x, y) => x[0] - y[0]);
+  const same = SAME_X / Math.max(Math.abs(a.span), Math.abs(b.span));
+  // Each stop's first share, and the old and the new line's own vertex's, where it has one.
+  const merged: [first: number, a?: number, b?: number][] = [];
+  for (const [s, whose] of all) {
+    let stop = merged[merged.length - 1];
+    if (!stop || s - stop[0] > same) merged.push((stop = [s]));
+    if (whose === 1) stop[1] ??= s;
+    if (whose === 2) stop[2] ??= s;
+  }
+  const last = merged.length - 1;
+  if (last < 1) return undefined;
+  // Each line's share at each stop, the ends at its own ends.
+  const shareOn = (whose: 1 | 2): number[] => merged.map((stop, k) => (k === 0 ? 0 : k === last ? 1 : (stop[whose] ?? stop[0])));
+  const [onA, onB] = [shareOn(1), shareOn(2)];
+  const [pointsA, pointsB] = [placed(a, onA), placed(b, onB)];
+  const stops = merged.map(([t], k): Stop => ({ t, from: pointsA[k]!, to: pointsB[k]! }));
+  const [inA, inB] = [inside(a.gaps), inside(b.gaps)];
+  const kinds = stops.slice(1).map((_, k) => (inA((onA[k]! + onA[k + 1]!) / 2) ? 1 : 0) + (inB((onB[k]! + onB[k + 1]!) / 2) ? 2 : 0));
+  return { stops, kinds };
+}
+
+/**
+ * The line as it runs across x, when every vertex's x is more than the one before, or every one
+ * less: its outline's vertices, and each value alone between two gaps, which the outline doesn't
+ * draw, from its walk. Each stretch with data that has length is the outline's next subpath.
+ * Undefined for any other line, a line with an arc, or one of a single point.
+ */
+function courseOf(mark: MarkGeometry): Course | undefined {
+  const subpaths = flattenPath(parsePath(mark.outline.d));
+  const points: Point[] = [];
+  /** Where each gap starts: it runs from that vertex to the next. */
+  const before: number[] = [];
+  let next = 0;
+  let from = 0;
+  const stretch = (to: number): boolean => {
+    if (!(to > from)) {
+      points.push(mark.path(from));
+      return true;
+    }
+    const subpath = subpaths[next++];
+    if (!subpath) return false;
+    points.push(subpath.start);
+    for (const segment of subpath.segments) {
+      if (segment.kind !== "line") return false;
+      points.push(segment.to);
+    }
+    return true;
+  };
+  for (const [start, end] of mark.gaps ?? []) {
+    if (!stretch(start)) return undefined;
+    before.push(points.length - 1);
+    from = end;
+  }
+  if (!stretch(1) || next < subpaths.length || points.length < 2) return undefined;
+  const x0 = points[0]!.x;
+  const span = points[points.length - 1]!.x - x0;
+  const way = Math.sign(span);
+  for (let i = 1; i < points.length; i++) if (!((points[i]!.x - points[i - 1]!.x) * way > 0)) return undefined;
+  const shares = points.map((point) => (point.x - x0) / span);
+  return { points, shares, gaps: before.map((i) => [shares[i]!, shares[i + 1]!] as const), span, way };
+}
+
+/**
+ * The shares of the line's vertices that are stops: all of them, up to `VERTICES`. A line with more,
+ * a dense one, keeps the first, last, highest and lowest in each of `VERTICES / 4` columns across
+ * its span, so its peaks and dips stay where they are, and every gap's ends.
+ */
+function corners(course: Course): readonly number[] {
+  const { points, shares, gaps } = course;
+  if (points.length <= VERTICES) return shares;
+  const columns = VERTICES / 4;
+  const column = (k: number): number => Math.min(columns - 1, Math.floor(shares[k]! * columns));
+  const kept: number[] = gaps.flat();
+  for (let first = 0, i = 1; i <= points.length; i++) {
+    if (i < points.length && column(i) === column(first)) continue;
+    let [low, high] = [first, first];
+    for (let k = first; k < i; k++) {
+      if (points[k]!.y < points[low]!.y) low = k;
+      if (points[k]!.y > points[high]!.y) high = k;
+    }
+    kept.push(shares[first]!, shares[low]!, shares[high]!, shares[i - 1]!);
+    first = i;
+  }
+  return kept;
+}
+
+/** The line's points at each share, in order: on the straight piece between the vertices either side. */
+function placed(course: Course, shares: readonly number[]): Point[] {
+  const { points, shares: at } = course;
+  let i = 0;
+  return shares.map((s) => {
+    while (i + 2 < points.length && at[i + 1]! <= s) i++;
+    const width = at[i + 1]! - at[i]!;
+    return mixed(points[i]!, points[i + 1]!, width > 0 ? Math.min(1, Math.max(0, (s - at[i]!) / width)) : 0);
+  });
+}
+
+/** Whether a share is inside one of the stretches, asked of shares in order. */
+function inside(gaps: Shares): (s: number) => boolean {
+  let k = 0;
+  return (s) => {
+    while (k < gaps.length && gaps[k]![1] <= s) k++;
+    return k < gaps.length && gaps[k]![0] < s;
+  };
 }
 
 /** A hole sampled clockwise from its upper left, then written the other way round. */

@@ -1,4 +1,5 @@
 import { matrix, type Icon, type IconShape, type MarkHandle } from "../../core";
+import { svgLayer } from "./layer";
 import { svgSurface } from "./surface";
 import { svgElement, transformAttribute } from "./svg";
 import { seriesColors } from "./theme";
@@ -334,5 +335,82 @@ describe("svgLayer paths and text", () => {
     expect(element.getAttribute("opacity")).toBe("0.4");
     expect(element.getAttribute("x")).toBe("30");
     expect(element.style.getPropertyValue("fill")).toBe("var(--ec-text-muted, #75736d)");
+  });
+});
+
+describe("svgLayer paths naming a part", () => {
+  /** A mark "a" in slot 2, its goals in slot 2 and its assists in slot 3. */
+  function partSetup() {
+    const svg = svgElement("svg", {}, document.body);
+    const overlay = svgElement("g", { class: "ec-overlay" }, svg);
+    const parts = new Map([
+      ["a/goals", 2],
+      ["a/assists", 3]
+    ]);
+    const surface = svgSurface({
+      overlay,
+      mark: () => ({ set() {}, reset() {} }),
+      colors: (key, part) => (key !== "a" ? undefined : part === undefined ? seriesColors(2) : parts.has(part) ? seriesColors(parts.get(part)!) : undefined)
+    });
+    return { overlay, surface, parts };
+  }
+  const mark = (element: Element | null | undefined): string => (element as SVGElement).style.getPropertyValue("--ec-mark");
+
+  it("draws a path naming a segment in that segment's colours, over its group's", () => {
+    const { overlay, surface } = partSetup();
+    surface.group("a", "enter", 1).path("M0,10L150,10", { stroke: "mark", width: 20, linecap: "butt", part: "a/assists" });
+    const element = overlay.querySelector("path")!;
+    expect(element.getAttribute("data-part")).toBe("a/assists");
+    expect(mark(element)).toBe("var(--ec-series-3, #02a471)");
+    expect(element.style.getPropertyValue("--ec-mark-strong")).toBe("var(--ec-series-3-strong, #07835a)");
+    // The token reads the path's own --ec-mark, so the stroke is the segment's colour.
+    expect(element.style.getPropertyValue("stroke")).toBe("var(--ec-mark, var(--ec-series-1, #2a78d6))");
+    expect(mark(overlay.firstElementChild)).toBe("var(--ec-series-2, #eb6834)");
+  });
+
+  it("leaves a path without a part, or naming a key the mark hasn't, to the mark's own colours, as before", () => {
+    const { overlay, surface } = partSetup();
+    const group = surface.group("a", "enter", 1);
+    group.path("M0,0L10,0", { stroke: "mark", width: 2 });
+    group.path("M0,0L10,0", { stroke: "mark", width: 2, part: "a/xg" });
+    const [plain, unknown] = Array.from(overlay.querySelectorAll("path"));
+    expect(plain!.outerHTML).toBe(
+      '<path class="ec-path" d="M0,0L10,0" stroke-width="2" stroke-linejoin="round" style="fill: none; stroke: var(--ec-mark, var(--ec-series-1, #2a78d6));"></path>'
+    );
+    expect(unknown!.getAttribute("data-part")).toBe("a/xg");
+    expect(unknown!.getAttribute("style")).toBe(plain!.getAttribute("style"));
+  });
+
+  it("puts a part on and takes it off on update", () => {
+    const { overlay, surface } = partSetup();
+    const path = surface.group("a", "enter", 1).path("M0,0L10,0", { fill: "mark" });
+    const element = overlay.querySelector("path")!;
+    path.update("M0,0L20,0", { part: "a/goals" });
+    expect([element.getAttribute("data-part"), mark(element), element.style.getPropertyValue("fill")]).toEqual(["a/goals", "var(--ec-series-2, #eb6834)", "var(--ec-mark, var(--ec-series-1, #2a78d6))"]);
+    path.update("M0,0L20,0", { part: "a/assists" });
+    expect(mark(element)).toBe("var(--ec-series-3, #02a471)");
+    path.update("M0,0L30,0", { part: undefined });
+    expect(element.hasAttribute("data-part")).toBe(false);
+    expect(mark(element)).toBe("");
+    expect(element.getAttribute("style")).toBe("fill: var(--ec-mark, var(--ec-series-1, #2a78d6));");
+  });
+
+  it("recolours a part's path with its segment's colours, and a part the mark no longer has with the mark's own", () => {
+    const { overlay, surface, parts } = partSetup();
+    const group = surface.group("a", "enter", 1);
+    group.path("M0,0L10,0", { stroke: "mark", part: "a/goals" });
+    group.path("M0,0L10,0", { stroke: "mark", part: "a/assists" });
+    parts.set("a/goals", 5);
+    parts.delete("a/assists");
+    surface.recolor("a");
+    expect(Array.from(overlay.querySelectorAll("path"), mark)).toEqual(["var(--ec-series-5, #8966da)", ""]);
+  });
+
+  it("gives a part nothing of its own in a layer without part colours, as the switch draws", () => {
+    const group = svgElement("g", {}, svgElement("svg", {}, document.body));
+    svgLayer(group).path("M0,0L10,0", { stroke: "mark", part: "a/goals" });
+    const element = group.querySelector("path")!;
+    expect(element.getAttribute("data-part")).toBe("a/goals");
+    expect(mark(element)).toBe("");
   });
 });

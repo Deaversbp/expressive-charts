@@ -25,6 +25,17 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`part` on `Paint`**, under the 0.x promise: the key of one of the mark's segments (`segment.key`). In that paint, `"mark"` and `"mark-strong"` are that segment's colours, so an effect can draw a stack part by part, each in its own colour. Unset, or a key the mark hasn't, they're the mark's own, its first segment's for a stack, as before. Our charts give each segment's colours: the bar chart's by series, and `expressive()`'s from each part's own fill or stroke. The testing entry's recording layer keeps it with the paint. It's an optional field, an addition: a paint without it draws as before.
+- **`drawIn()`**, with `DrawInOptions`: a mark draws itself in along its walk as it enters (`on: { enter: drawIn() }`). Its body goes faint (`faint`, default 0.3), and the overlay draws it from its start to its end at its own width and colour over `duration` (750 ms base, effect timing). A line draws along its stroke, its gaps left out; a bar from its baseline to its tip; a slice round its ring; and a stack each segment in turn, in its own colour, each over its share of the time by its length. A point or a closed shape shows at once. It follows the mark as it grows or moves, and its end state is the mark as it is, so reduced motion shows it at once. Its labels stay as they are. It's for `enter`, not `hover`, where it would make the mark being read faint, and it isn't a preset.
+
+### Changed
+
+### Fixed
+
 ## 0.6.0 (30 October 2026)
 
 Line charts in a chart switch, their points growing into columns, change text that keeps clear of other effects' text, with room for it on the line chart, and `morph` keeping a line's gaps and a shape's holes. `expressive()` reads more marks by tag (a turned `<rect>`, a pie's slices and a non-scaling stroke), and the hover on one point reaches a point drawn on another. In the effect-author API, the one change is `texts` on `EffectContext`, with its type, `TextSpace`, an addition. The other changes are outside the promise, and each says what to write instead, if anything.

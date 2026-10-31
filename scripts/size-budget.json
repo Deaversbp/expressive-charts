@@ -12,7 +12,7 @@
   "importSets": {
     "motion, animated": 2,
     "describe, matrix": 7.5,
-    "expressive, travel": 34,
+    "expressive, travel": 37.5,
     "barChart": 34,
     "lineChart, threshold, playback, playButton": 45.5,
     "chartSwitch, donutChart, barChart": 45,

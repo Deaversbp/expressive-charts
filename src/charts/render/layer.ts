@@ -3,10 +3,13 @@
 import { matrix, type Icon, type IconHandle, type IconShape, type Layer, type Matrix, type Paint, type PathHandle, type TextHandle, type TextStyle } from "../../core";
 import { mergeFields } from "../../core/merge";
 import { setAttributes, setStyles, svgElement, transformAttribute } from "./svg";
-import { cssColor } from "./theme";
+import { cssColor, markColorStyles, type SeriesColors } from "./theme";
 
 /** The class of the groups that hold a run's paths and icons when they follow their mark. */
 export const FOLLOW = "ec-follow";
+
+/** The colours "mark" means in a paint naming one of the mark's segments, by its key: undefined for a key the mark hasn't. */
+export type PartColors = (part: string) => SeriesColors | undefined;
 
 let clipIds = 0;
 
@@ -16,8 +19,12 @@ let clipIds = 0;
  * With `follow`, the mark's transform now, paths and icons go in a `FOLLOW` group that takes it, so
  * they move (and dim) with the mark's body, while text stays put, as the mark's labels do. Text drawn
  * between them starts another group, so everything stays in the order it was drawn.
+ *
+ * With `parts`, a path whose paint names a segment (`part`) has that segment's colours as its own
+ * --ec-mark and --ec-mark-strong, and `data-part` with its key. Without them, or for a key the mark
+ * hasn't, it takes the mark's own from its group.
  */
-export function svgLayer(group: SVGGElement, follow?: () => Matrix | undefined): Layer {
+export function svgLayer(group: SVGGElement, follow?: () => Matrix | undefined, parts?: PartColors): Layer {
   const into = (): SVGGElement => {
     if (!follow) return group;
     const last = group.lastElementChild;
@@ -47,13 +54,13 @@ export function svgLayer(group: SVGGElement, follow?: () => Matrix | undefined):
     path(d, paint) {
       const element = svgElement("path", { class: "ec-path", d }, into());
       let current: Paint = { ...paint };
-      paintPath(element, current);
+      paintPath(element, current, parts);
       const handle: PathHandle = {
         update(next, nextPaint) {
           element.setAttribute("d", next);
           if (nextPaint) {
             current = mergeFields(current, nextPaint);
-            paintPath(element, current);
+            paintPath(element, current, parts);
           }
         },
         remove: () => element.remove()
@@ -113,15 +120,18 @@ function drawShape(shape: IconShape, parent: SVGGElement): void {
   });
 }
 
-/** Overlay paths are unfilled unless a fill is given. */
-function paintPath(element: SVGPathElement, paint: Paint): void {
+/** Overlay paths are unfilled unless a fill is given. A segment's colours, where the paint names one, are set on the path, over its group's. */
+function paintPath(element: SVGPathElement, paint: Paint, parts: PartColors | undefined): void {
+  const { part } = paint;
   setAttributes(element, {
     "stroke-width": paint.stroke === undefined ? undefined : (paint.width ?? 1),
     opacity: paint.opacity,
     "stroke-linecap": paint.linecap,
-    "stroke-linejoin": "round"
+    "stroke-linejoin": "round",
+    "data-part": part
   });
   setStyles(element, {
+    ...markColorStyles(part === undefined ? undefined : parts?.(part)),
     fill: paint.fill === undefined ? "none" : cssColor(paint.fill),
     stroke: paint.stroke === undefined ? undefined : cssColor(paint.stroke)
   });

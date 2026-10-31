@@ -16,14 +16,17 @@ export interface SvgSurfaceOptions {
   readonly overlay: SVGGElement;
   /** The mark's own style handle. */
   mark(key: string): MarkHandle;
-  /** The colours the "mark" token means in this mark's groups. */
-  colors(key: string): SeriesColors | undefined;
+  /**
+   * The colours the "mark" token means in this mark's groups, or with `part`, in a paint naming that
+   * segment: undefined for a key the mark hasn't, which then means the mark's own.
+   */
+  colors(key: string, part?: string): SeriesColors | undefined;
   /** Measures runs' text: the chart's own measure, so a font load clears both. Default: one measuring in the overlay. */
   readonly measure?: TextMeasure;
 }
 
 export interface SvgSurface extends RunnerSurface {
-  /** Sets the "mark" colours again on the key's live groups, after the mark's colours changed (a new palette, a different first series). */
+  /** Sets the "mark" colours again on the key's live groups and their parts' paths, after the mark's colours changed (a new palette, a different first series). */
   recolor(key: string): void;
   /** Hides the key's groups, and any it gets later, or shows them again: a line chart's points past its reveal. */
   hide(key: string, hidden: boolean): void;
@@ -64,7 +67,7 @@ export function svgSurface(options: SvgSurfaceOptions): SvgSurface {
       live.add(group);
       const owner = live;
       return {
-        ...svgLayer(group, () => transforms.get(key)),
+        ...svgLayer(group, () => transforms.get(key), (part) => options.colors(key, part)),
         clear() {
           group.remove();
           owner.delete(group);
@@ -90,7 +93,10 @@ export function svgSurface(options: SvgSurfaceOptions): SvgSurface {
       const live = groups.get(key);
       if (!live) return;
       const styles = markColorStyles(options.colors(key));
-      for (const group of live) setStyles(group, styles);
+      for (const group of live) {
+        setStyles(group, styles);
+        for (const path of group.querySelectorAll<SVGElement>("[data-part]")) setStyles(path, markColorStyles(options.colors(key, path.getAttribute("data-part")!)));
+      }
     },
     hide(key, hide) {
       if (hide) hidden.add(key);

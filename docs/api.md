@@ -141,7 +141,7 @@ What a duration is for, which decides how each mode scales it ([`defaultScaling`
 | --- | --- | --- | --- | --- |
 | `feedback` | hover colour and dimming | base | base | 0 |
 | `transition` | data changes (the default) | base | base × 0.35, at most 200 ms | 0 |
-| `effect` | `travel`, `wiggle`, `flash`, `pulse`, `trace` | base | base × 0.35, from 140 to 300 ms | 0 |
+| `effect` | `travel`, `wiggle`, `flash`, `pulse`, `trace`, `drawIn` | base | base × 0.35, from 140 to 300 ms | 0 |
 | `playback` | a play, such as a season's | base | base × 0.3 | 0 |
 | `stagger` | the wait before each mark of a `stagger` | base | 0 | 0 |
 
@@ -793,10 +793,13 @@ interface Paint {
   readonly width?: number;
   readonly opacity?: number;
   readonly linecap?: "butt" | "round";
+  readonly part?: string;
 }
 ```
 
 How a layer's path is drawn.
+
+- `part`: the key of one of the mark's segments (`segment.key`, such as `"Okafor/assists"`). In this paint, `"mark"` and `"mark-strong"` are that segment's colours, so an effect can draw a stack part by part, each in its own colour, as [`drawIn`](#drawin) does. Unset, or a key the mark hasn't, they're the mark's own, its first segment's for a stack, as without it. Our charts give each segment's colours: a bar's by its series, and `expressive()`'s from each part's own fill or stroke. A mark with one part, a line or a slice, has its own.
 
 #### `TextStyle`
 
@@ -821,7 +824,7 @@ interface TextStyle {
 type Color = string
 ```
 
-A theme token or any CSS colour. The tokens are `"text"`, `"text-muted"`, `"surface"`, `"grid"`, `"axis"`, `"focus"`, `"negative"`, `"series-1"` to `"series-8"` and their `-strong` variants, and `"mark"` and `"mark-strong"`, the colours of the mark a run belongs to. Tokens follow the light and dark themes ([`style.css`](#expressive-chartsstylecss)).
+A theme token or any CSS colour. The tokens are `"text"`, `"text-muted"`, `"surface"`, `"grid"`, `"axis"`, `"focus"`, `"negative"`, `"series-1"` to `"series-8"` and their `-strong` variants, and `"mark"` and `"mark-strong"`, the colours of the mark a run belongs to (in a [`Paint`](#paint) with `part`, that segment's). Tokens follow the light and dark themes ([`style.css`](#expressive-chartsstylecss)).
 
 #### `IconHandle`
 
@@ -1337,6 +1340,38 @@ interface TraceOptions
 - `width`: `number`. Default 3. The stroke's width in px; 0 or more.
 - `opacity`: `number`. Default 0.5. From 0 to 1.
 - `duration`: `number`. Default 500. Base ms to draw the stroke, before the motion mode scales it; 0 or more.
+
+#### `drawIn()`
+
+```ts
+drawIn(options?: DrawInOptions): GeometryEffect
+```
+
+The mark draws itself in along its walk, for `enter` ([architecture.md](architecture.md#drawin)). Its body goes faint, and the overlay draws it from its start to its end, at its own width and colour, eased in and out over 750 ms base with `"effect"` timing. Then the mark is back at full strength, with nothing drawn. Its labels stay as they are throughout.
+
+- **Any mark with a walk:** a line along its stroke, its gaps left out; a bar from its baseline to its tip, at its width; a slice round its mid-radius arc, at its ring's width. A point or a closed shape, whose walk is under 0.5 px, shows at once.
+- **A stack** draws each segment in turn, each in its own colour ([`Paint.part`](#paint)), each over its share of the time, its share of the length.
+- **It follows the mark,** drawing again at the same progress when it grows or moves, as on a chart's own enter, a resize or a host's transition.
+- **Its end state** is the mark as it is, so reduced motion and Off show it at once.
+
+It's for `enter`, not `hover`: in the hover slot it would make the mark being read faint, so use [`trace()`](#trace) to highlight one. It isn't a preset, so a chart's bundle carries it only when the page imports it.
+
+```ts
+import { barChart, drawIn } from "expressive-charts";
+
+barChart("#goals", { label: "Goals and assists", data: players, y: "name", stack: ["goals", "assists"], on: { enter: drawIn() } });
+```
+
+#### `DrawInOptions`
+
+```ts
+interface DrawInOptions
+```
+
+- `duration`: `number`. Default 750. Base ms to draw the whole walk, before the motion mode scales it; 0 or more.
+- `faint`: `number`. Default 0.3, as hover dims the other marks. The mark's opacity while it draws in, from 0 to 1.
+
+Anything else throws a `RangeError`.
 
 #### `delta()`
 

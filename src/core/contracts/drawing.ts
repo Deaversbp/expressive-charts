@@ -7,7 +7,8 @@ import type { Icon } from "./icon";
 /**
  * A theme token or any CSS colour. Tokens: "text", "text-muted", "surface", "grid", "axis", "focus",
  * "negative", "series-N" and "series-N-strong" (palette slots 1–8), and "mark" / "mark-strong", the
- * colours of the mark a run belongs to (its first segment's, for a stack).
+ * colours of the mark a run belongs to (its first segment's, for a stack, or in a paint with `part`,
+ * that segment's).
  */
 export type Color = string;
 
@@ -23,6 +24,11 @@ export interface Paint {
   readonly width?: number;
   readonly opacity?: number;
   readonly linecap?: "butt" | "round";
+  /**
+   * The key of one of the mark's segments (`segment.key`). In this paint, "mark" and "mark-strong"
+   * are that segment's colours. Unset, or a key the mark hasn't, they're the mark's own, as without it.
+   */
+  readonly part?: string;
 }
 
 export interface MarkStyle {

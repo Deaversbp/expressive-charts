@@ -489,7 +489,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       set: (style) => find(key)?.handle.set(style),
       reset: () => find(key)?.handle.reset()
     }),
-    colors: (key) => find(key)?.mark.parts[0]?.colors
+    colors: (key, part) => partOf(find(key)?.mark, part)?.colors
   });
   const runner = createRunner<D>({ effects, motion, icons: env.icons, clock, surface });
   const input = (record: MarkRecord<D>): RunInput<D> => ({ mark: record.mark.geometry, data: record.mark.data });
@@ -1111,6 +1111,17 @@ function checkOptions<D>(options: ExpressiveOptions<D>): void {
   if (options.baseline !== undefined && options.baseline !== "auto" && !isBaseline(options.baseline)) {
     throw new RangeError(`expressive: baseline must be "left", "right", "top", "bottom" or "auto", got ${String(options.baseline)}.`);
   }
+}
+
+/**
+ * The part a paint names by its segment's key (`Paint.part`), through the segment's series, since
+ * parts read with `geometry` keep their source order. The first part without a key; none for a key
+ * the mark hasn't.
+ */
+function partOf<D>(mark: ReadMark<D> | undefined, key: string | undefined): Part<D> | undefined {
+  if (key === undefined) return mark?.parts[0];
+  const segment = mark?.geometry.segments?.find((s) => s.key === key);
+  return segment && mark!.parts.find((p) => p.series === segment.series);
 }
 
 /** The series a mark has of its own: its segments' and its parts'. */

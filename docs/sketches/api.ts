@@ -19,6 +19,8 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // NEW in M11 step 3: EffectContext has an optional `texts`, a TextSpace (box, held, hold): where
 // effects' text sits on the same chart, one space a runner, so an effect's text keeps clear of other
 // effects' text (M11 decision 12). testContext gives one too, with `held` in its options.
+// NEW in M12 step 3: Paint has an optional `part`, a segment's key, so "mark" and "mark-strong" are
+// that segment's colours in the path, and a stack can be drawn part by part (M12 decision 12).
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -32,7 +34,9 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // threshold (with ThresholdOptions) is built too, as sketched (M4 decision 11). So is morph (with
 // MorphOptions and MorphAlign, M5 step 1). Changed from the sketch: it takes `align`, "unroll" or
 // "drop" (M5 decision 1), and a transition's run and end take a TransitionContext, an EffectContext
-// with `start`, so a switch back mid-way retraces (decision 6).
+// with `start`, so a switch back mid-way retraces (decision 6). NEW in M12 step 3: drawIn (with
+// DrawInOptions), for enter: the mark faint, then drawn in along its walk, a stack part by part in its
+// colours (M12 decision 12). Not a preset.
 
 // NEW: helpers for effect authors. Built in M3 (src/effects/define.ts) and public, with
 // GeometryEffectSpec and DataEffectSpec<D>, as are matrix (translate, rotate, scale, multiply, apply)

@@ -24,6 +24,7 @@ import {
   delta,
   describe as build,
   donutChart,
+  drawIn,
   easeInOutCubic,
   expressive,
   flash,
@@ -46,7 +47,7 @@ import {
   type MarkGeometry,
   type Rect
 } from "./index";
-import { drawnInGaps, flush, measurePath, type TestContext } from "./core/testing";
+import { drawnInGaps, flush, measurePath, play, type TestContext } from "./core/testing";
 import { cleat, soccerBall } from "./icons/sport";
 import { checkEffect, checkTransition, testContext, type CheckEffectOptions } from "./testing";
 
@@ -603,6 +604,7 @@ const effects: Record<string, AnyMarkEffect> = {
   "staggered flash, third of five": stagger(flash()),
   trace: trace(),
   "trace while the ball rolls": parallel(trace(), travel(soccerBall)),
+  "draw in": drawIn(),
   // checkEffect's default data runs from 0 to 1 along each walk, so this colours the last 40%.
   "threshold past a target": threshold({ compareTo: 0.6, when: "above" }),
   "delta with a flash": parallel(flash(), delta()),
@@ -1184,6 +1186,23 @@ describe.each(Object.entries(sources))("effects on marks from %s", (_source, mar
       const ctx = testContext();
       trace().end(mark, ctx);
       expect(ctx.layer.drawn.map((drawn) => (drawn.kind === "path" ? drawn.d : drawn.kind)), mark.key).toEqual(mark.length >= 0.5 ? [mark.slice(0, 1)] : []);
+    }
+  });
+
+  it("drawIn draws each part of every mark with a walk at its width, over the mark made faint, and finishes at once on a point", async () => {
+    for (const mark of marksOf()) {
+      const ctx = testContext();
+      const running = drawIn().run(mark, ctx);
+      const parts = mark.segments ?? [mark];
+      if (parts.reduce((sum, part) => sum + part.length, 0) >= 0.5) {
+        expect(ctx.layer.drawn.map((drawn) => (drawn.kind === "path" ? [drawn.d, drawn.paint.width, drawn.paint.part] : drawn.kind)), mark.key).toEqual(
+          parts.map((part) => [part.slice(0, 0), part.thickness, mark.segments && part.key])
+        );
+        expect(ctx.mark.style, mark.key).toEqual({ opacity: 0.3 });
+      } else expect(ctx.clock.idle, mark.key).toBe(true);
+      await play(ctx.clock, running, { frame: 750 });
+      expect(ctx.layer.drawn, mark.key).toEqual([]);
+      expect(ctx.mark.style, mark.key).toEqual({});
     }
   });
 

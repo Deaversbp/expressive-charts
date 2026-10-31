@@ -157,7 +157,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
         hover.restyled(key);
       }
     }),
-    colors: (key) => find(key)?.parts[0]?.colors
+    // A segment's by its key: the parts are in the segments' order.
+    colors: (key, part) => find(key)?.parts[part === undefined ? 0 : (find(key)?.shown.geometry.segments ?? []).findIndex((segment) => segment.key === part)]?.colors
   });
   const runner = createRunner<D>({ effects, motion, icons: env.icons, clock, surface });
   const tooltip = chartTooltip<D>(svg, { motion, option: () => current.tooltip, description: () => current.markDescription });

@@ -34,11 +34,14 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Changed
 
+- **`morph` pairs two lines by x.** Two lines whose vertices' x each go one way, the same way for both, as a line chart's do, morph by x: the point a share of the way across one line's x span moves to the point that share across the other's, so between two line charts of the same weeks each week moves straight up or down, whatever the plots' widths. They're sampled at `points` shares evenly across and at every vertex of both, up to 1,000 of each line's; of a denser line, the first, last, highest and lowest in each of 250 columns. Their middle frames change. Any other two lines, closed outlines and crossfades morph as before, byte for byte. Nothing to write instead.
+
 ### Fixed
 
 - **A chart switch draws a line's end dot.** It went on the first frame of a switch to or from a line view, and came back as it landed. Now it moves with its line from one end to the other between two line charts, and fades with its line into the columns.
 - **A chart switch draws a point's ring,** the 2 px in the surface's colour round a value alone between gaps and round an end dot. It keeps it into another line chart, and loses it as the point grows into its column.
 - **Tab after a toggle lands on the same week.** With focus outside a switch, on the toggle that started it, Tab went to the new view's own tab stop. Now the switch reads the old view's tab stop before anything hides, and moves the new view's to the first of the keys it stood for, as focus follows when it's in the view.
+- **`morph` keeps a line's corners, and matches its gaps by x.** Between two lines that each run one way, the stroke next to the first and last frames is each line's own polyline: on the morph page's season card, with 160 points, goals' corners were cut by up to 10.9 px. And where both lines miss the same weeks, nothing is drawn on any frame: faint strokes reached up to 54 px across them, since gaps met by how far along each line they were. A page that gives `morph({ points })` more points for its corners can drop them.
 
 ## 0.6.0 (30 October 2026)
 

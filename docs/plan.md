@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M11 are complete (§9). M11 built a line chart as a chart switch's view, change text that keeps clear of other effects' text, more host marks read by tag, a tidier hover on one point, `morph` that keeps a line's gaps and a shape's holes, and a toolchain tidy. **0.6.0 is on npm**, published from CI through npm's trusted publishing with provenance on 30 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.6.0)), after 0.5.0 on 29 October, 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M11 are complete (§9). M11 built a line chart as a chart switch's view, change text that keeps clear of other effects' text, more host marks read by tag, a tidier hover on one point, `morph` that keeps a line's gaps and a shape's holes, and a toolchain tidy. **0.6.0 is on npm**, published from CI through npm's trusted publishing with provenance on 30 October 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.6.0)), after 0.5.0 on 29 October, 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. M12, for 0.7.0, is planned in §9: a switch that draws a line's end dot and keeps its tab stop on the week, `morph` pairing two lines by x, a new effect, `drawIn`, room above a line chart's plot, and a toolchain and test tidy. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -3650,6 +3650,223 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **0.6.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M11 is done.
 
 **Status: complete (30 October 2026).** Every item on the list holds. Steps 1 to 7 built and checked the first eight, and 0.6.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 8).
+
+### M12: Lines that keep their shape in a switch, and marks that draw themselves in (0.7.0)
+
+A switch that draws a line's end dot and a point's ring, and keeps its tab stop on the week; `morph` pairing two lines by x, so their corners and gaps hold; `drawIn`, a new effect that draws a mark in along its walk, a stack part by part; room above a line chart's plot; a toolchain and test tidy; and last, 0.7.0 on npm.
+
+**Demo:** the bars page's stacked bars, ours and the hand-written chart's, draw themselves in as the page loads, each part in its own colour. On the morph page, the season card's lines keep their end dots, corners and gaps through every switch, with `morph()`'s default points, and Tab after a toggle lands on the same week. The season page keeps room above its line chart's plot, in place of the space under its legend.
+
+**Where M12 starts** (checked against main at `5d9109b` while planning, 30 October 2026):
+
+- **Already built.**
+  - **0.6.0** is npm's `latest`, published through trusted publishing with provenance. npm lists `0.0.0-stage` and `0.1.0` to `0.6.0`. GitHub has no open issues or pull requests. Main is 0.6.0's code, with this plan's last edits.
+  - **The switch** draws each pair, and each mark that fades, from its outline, filled or stroked, in its view's colour (`prepare` and `fadeMark` in `src/charts/switch.ts`).
+    - A line's end dot (`.ec-end`, `line.ts:438`) isn't in its outline, so it goes on the first frame of every switch to or from a line view, and comes back as it lands (M11 step 7, left as it was).
+    - The 2 px ring in `--ec-surface` round a point and an end dot (`.ec-dot` and `.ec-end` in `render/theme.ts`) isn't drawn either.
+    - Focus follows the x only when it's in the view leaving (`readFocus`). After a toggle press, with focus on the toggle, Tab goes to the new view's own tab stop, not the week (M11 step 7).
+  - **`morph`** samples two lines at `points` (160) evenly along their length, point i to point i (`drawing` in `src/effects/morph.ts`). At 0 and 1 it draws each line's own `d`, but every frame between is the sampled polyline, so a jagged line's corners are cut from the first frame to the last. On the morph page's season card, out of Per match, goals' points moved up to 10.9 px on the first frame, so the page uses `morph({ points: 640 })` (2.5 px). Gaps meet by `t`, so between a jagged line per match and a smooth one to date, the stroke in one line's gap crosses weeks both lines miss, part way: up to 54 px of goals' at an opacity of 0.79 falling to 0.03 (M11 step 7).
+  - **Effects.** `trace` draws a highlighter along a mark's walk in its colour, a stack's first segment's. No built-in effect draws a mark itself in: M7 decision 5 left it for the backlog, since in the hover slot it would hide data, and a stack would draw in one colour. `Paint` can't name a segment's colour: `"mark"` is a stack's first segment's (`src/core/contracts/drawing.ts`). Overlay paths have round joins (`render/layer.ts`). A chart's first draw starts `decorate`, then `enter`, and no demo page uses `enter`. The built-in presets are exactly `flash`, `wiggle` and `pulse` (`src/registries.ts`).
+  - **Room.** `lineChart`'s `room` is px to the right of the end labels (`line-layout.ts`), and the plot starts 12 px below the chart's top (`TOP`). A line that ends near the top heading up puts its change up to 35 px above the plot at 320 px, and 32 at 1,000. So the season page keeps 40 px under its legend on a page 480 px wide or less (M11 step 7).
+  - **The build.** tsdown 0.23.4, pinned, with rolldown-plugin-dts 0.28.8 and rolldown 1.2.15, one copy that tsdown and vite share; vite 8.3.4; jsdom 29.1.1; vitest 5.0.5; Playwright 1.64.1. TypeScript 7.0.2 runs `typecheck` (2.1 s), and 6.0.3, as `typescript-6`, the API docs test. This machine has Node 24.12.0 and npm 11.7.0.
+  - **npm on 30 October.** rolldown 1.2.16 (29 October), which tsdown's `~1.2.15` and vite's `~1.2.14` allow. vite 8.3.5. jsdom 30.1.3, which needs Node `^22.22.2 || ^24.15.0 || >=26.0.0`. tsdown 0.23.4 still asks for rolldown-plugin-dts `^0.28.8` (0.29.0 came out on 29 October), and both pin `get-tsconfig 5.0.0-beta.6` (its latest is 4.14.3). TypeScript 7.1 is still in beta (7.1.0-beta, and nightly 7.1.0-dev builds).
+  - **Testing.** 2,860 unit tests in 111 files pass (34 s here). The visual suite ran 726 tests, with 60 skipped, at M11 step 7 (262 in each browser).
+    - Under load, the stress spec's reduced-motion and Off tests took 47 and 56 s of their 90 (M11 step 6), and WebKit's "the tooltip never covers the focus ring" on the line page went past its 30 s once, passing alone in 13.5 s (M11 step 5).
+    - `a11y.spec.ts`'s text spacing on `stress.html` fails in Chromium on Windows, and passes in Docker (M11 step 7).
+    - `line.spec.ts`'s "goes from every point straight onto its tooltip" skips a point whose other line's point is within 1.5 px, though since M11 step 5 the pointer can hover it just off its centre.
+  - **Sizes** (gzip, against their budgets, on 0.6.0's code): everything 84.6 KB of 86 (86,656 bytes: 1,408 left), `expressive` and `travel` 33.9 of 34 (34,729 bytes: 87 left), the switch's set 44.6 of 45 (45,654 bytes: 426 left), `dist/index.js` 121.8 of 123.5 (124,725 bytes: 1,739 left), `dist/index.cjs` 119.8 of 124, the script-tag bundle 84.3 of 88, `dist/testing.js` 23.5 of 24.5, `dist/testing.cjs` 17.3 of 19, the line page's set 41.3 of 45.5, `barChart` 31.2 of 34, `describe` and `matrix` 6.6 of 7.5, `motion` and `animated` 1.7 of 2, and the stylesheet 2.4 of 2.5.
+- **Gaps.**
+  - A switch to or from a line view loses its end dots and a lone point's ring, and Tab after a toggle doesn't follow the week.
+  - `morph` cuts a jagged line's corners between its first and last frames, and matches two lines' gaps by length, not by x.
+  - No effect draws a mark itself in, and an effect can't name a segment's colour.
+  - A line chart keeps no room above its plot.
+- **Out of date** (each fixed by the step named):
+  - rolldown 1.2.16 and vite 8.3.5 are out (step 5).
+  - architecture.md's morph says two lines are sampled along their length, and their gaps meet by `t` (step 2).
+  - The morph page's season card uses `morph({ points: 640 })`, and its design notes say a line's end dot goes for the switch, and gaps are matched by how far along the line they fall (step 6).
+
+**What M12 takes from the backlog and the notes, and what stays:**
+
+| Item | Goes to |
+| --- | --- |
+| A line's end dot and a lone point's ring in a switch (M11 step 1's notes, and step 7's first finding) | Decisions 1 and 10, step 1 |
+| A tab stop that follows the week after a toggle press (M11 step 7's notes) | Decisions 2 and 14, step 1 |
+| A jagged line's corners, and two lines' gaps paired by length (M11 step 7's other findings, and step 2's notes) | Decisions 1, 4 and 11, step 2 |
+| Drawing a mark itself in (M7 decision 5) | Decisions 1, 5, 7 and 12, step 3 |
+| A line's change rising above the plot (M11 steps 3 and 7) | Decisions 2, 6 and 13, step 4 |
+| rolldown 1.2.16, vite 8.3.5, the visual tests near their timeouts, the text spacing on Windows, and `line.spec.ts`'s 1.5 px skip (M11 steps 5 to 7's notes) | Decisions 2 and 15, step 5 |
+| jsdom 30, rolldown-plugin-dts 0.29.0, a stable `get-tsconfig`, and `api-docs.test.ts` on TypeScript 7's API | Stay: jsdom 30 needs Node 24.15 or newer (this machine has 24.12), tsdown asks for 0.28.8, and `get-tsconfig` 5 and TypeScript 7.1 are betas |
+| `mapMark` dropping `labelBounds` and `nearbyLabels`, a hole wound the same way as its outside, a ring-level rule for padded donuts, and a slice of no angle (M11 steps 1 to 4's notes) | Stay: in the notes. No transition effect reads the labels, and no shape in the tests or demos winds a hole that way |
+| Recolouring at once on `update({ colors })`, decorations below a line chart's points, switching between host charts, time zones by name, a transition effect reporting its progress, `threshold` exact on curved Vega lines, a lighter path than `refresh()` for Vega, a bar's per-frame cost, VoiceOver + Safari, a written audit table for `stress.html`, square caps and bevel joins, a curved line's fade beside a row coming or going, a mark's `opacity` reaching its decorations, and M8's notes | Stay: in the backlog, or in the notes |
+| Deprecating `0.0.0-stage` on npm | Stays optional, for you |
+
+When step 3 lands, it marks the backlog's drawing a mark itself in as built in M12. The other items come from the notes.
+
+**Decided while planning M12 (30 October 2026):** decisions 1–8 are yours, and 9–16 follow from them and the code.
+
+1. **M12 builds two things:** switch and morph polish (a line's end dot and a point's ring through a switch, and `morph` keeping a line's corners and matching its gaps by week), and a new effect that draws a mark itself in.
+2. **Three smaller items join them:** room above a line chart's plot; the tab stop following the week through a switch; and a toolchain and test tidy.
+3. **One release, 0.7.0, when M12 is done.**
+4. **Two lines pair by x.** Two lines that each run left to right pair by x across their span, not by length along them. So each week moves straight up or down, gaps meet by week, and both lines' corners are exact on the first and last frames. A line that turns back on itself pairs by length, as now. Not "length, plus corners", which would keep the faint strokes across weeks both lines miss.
+5. **`drawIn` draws every mark with a walk,** and a stack each part in its own colour, one after another, with the mark faint underneath. A mark with no walk shows at once. So the drawing API gets a way to name a segment's colour. Not stacks at once, and not lines only.
+6. **`room` takes sides.** A number is px to the right, as now, and `{ right, top }` keeps px above the plot too. Not text turning aside to stay inside the chart, which would move it away from where its line heads.
+7. **The name is `drawIn`.** Not `draw()` or `sketch()`.
+8. **The demos:** the bars page's stacked bars, ours and the hand-written chart's, draw in as it loads; the morph page and the season page show the polish and the room above.
+9. **What's an addition and what isn't** (the 0.x promise). 0.7.0 is a minor release. In the effect-author API, `part` on `Paint` is an addition; nothing in it changes or goes.
+
+   | Change | Under the promise? | Kind |
+   | --- | --- | --- |
+   | `part` on `Paint` | Yes | An optional field: an addition. A paint without it draws as before |
+   | `drawIn` and `DrawInOptions` | No: the built-in effects | Additions |
+   | `morph` pairing two lines by x | No: the built-in effects | A change and a fix: two lines that each run one way morph by x, so their middle frames change, and their corners and gaps hold. Every other pair morphs as before, byte for byte. Listed under Changed and Fixed |
+   | A line's end dot and a point's ring in a switch, through `end` and `ring` on `ChartSwitchPaint` | No: the charts | Additions: optional fields, which the line chart's handle gives. A view without them draws as before. The dots and rings drawn are listed under Fixed |
+   | The tab stop following through a switch, with an optional method on `ChartSwitchView` | No: the charts | An addition, and a fix: Tab after a toggle lands on the same week. Listed under Fixed |
+   | `room` taking sides on `lineChart` | No: the charts | An addition: a number lays out as before |
+   | rolldown 1.2.16 and vite 8.3.5 | The published types | Nothing changes while every exported name has the same type, which the comparison checks. A difference stops the step |
+   | The visual tests' timeouts, the text-spacing test and the 1.5 px skip | No: the repository | Tests only |
+
+10. **The switch draws what the chart draws** (decision 1).
+    - **`ChartSwitchPaint` gets two optional fields,** which the line chart's handle gives: `end`, the radius of the dot its chart draws at a line's end (4.5 px), and `ring`, the width of the ring in `--ec-surface` it draws round a mark, or round that dot, at rest (2 px round a point and an end dot). The step may name them otherwise.
+    - **An end dot** is drawn at its line's walk's `end`. In a pair whose two sides both have one, it moves in a straight line from the old end to the new one by the shapes' eased progress, as `morph` moves a line's ends, its radius mixed between the two. A line with no partner fades with its dot, and a dot whose partner has none fades as an unmatched mark does. It's in its line's colour.
+    - **A ring** is drawn round a pair's shape as the chart draws it, its width mixed between the two sides', 0 for a side without one; a mark that fades keeps its own. So a value alone between gaps keeps its ring, and loses it as it grows into a column.
+    - **A view without them,** or a key its chart gives neither for, draws as now: the morph page's donut and columns, byte for byte.
+    - api.md's `ChartSwitchPaint` and architecture.md's switch say so.
+11. **`morph` pairs two lines by x** (decision 4).
+    - **Which lines.** Two open outlines whose vertices' x each go one way, every one more than the one before (or every one less), the same way for both. Any other pair of open outlines pairs by length, as now. Closed outlines, and a closed with an open one, morph as now, byte for byte.
+    - **By x across their span.** A point a share s of the way across one line's x span pairs with the point s of the way across the other's. So the ends pair with the ends, as now, and where two lines span the same x's, as a season per match and to date do, each x pairs with the same x, whatever the two plots' widths. Each point moves in a straight line to its partner.
+    - **Where they're sampled.** At `points` shares evenly across the span, at each vertex of either line (from its outline's `d`), and at each end of either line's gaps. So near 0 the stroke is the old line's own polyline, corners and all, and near 1 the new line's, and the first and last frames don't jump from the lines' own `d`. A pair with many vertices takes as many stops: the step measures a switch between two ten-year daily lines, and caps the vertices if a frame takes a ms more than with 160 samples, saying so here.
+    - **Gaps** are found at the stops by x, so two lines missing the same x's have their gaps at the same place, and nothing is drawn there on any frame. A piece inside one line's gap fades, as now (M11 decision 11).
+    - The width moves between the two lines' thicknesses, as now. A run back from 1 − p draws the picture the run forward drew at p.
+    - `points` keeps its meaning, the even spacing, and its check. The contract doesn't change: `morph` reads the outlines' `d`, the walks and `gaps`.
+12. **`drawIn`** (decisions 1, 5 and 7).
+    - **`drawIn(options?)`** is a geometry effect, for `enter`. It sets the mark's body to `faint`, then draws the mark along its walk in the overlay, at its own width and colour, eased in and out over `duration`. Once the walk is drawn, the mark is back at full strength and nothing is drawn. Its labels stay as they are throughout.
+    - **On each mark,** as its walk and thickness give it, with no branch on its kind: a line along its stroke, its gaps left out, as `slice()` leaves them; a bar or a column from its baseline to its tip, a rectangle at its width, its rounded tip showing as it lands; a slice round its mid-radius arc, at its ring's width. A walk under 0.5 px (a point, a closed shape) finishes at once, as `trace`'s does.
+    - **A stack** draws each segment in turn along the whole walk, each in its own colour (`part`, below), its share of the time its share of the walk's length.
+    - **It follows the mark.** `onChange` draws it again at the same progress, so it keeps to a mark that grows or moves while it plays: a chart's own enter, a resize, a host's transition with `watch`.
+    - **End state:** the mark as it is, with nothing drawn, so reduced motion and Off show it at once.
+    - **Options:** `duration`, base ms with effect timing (default 750), and `faint`, the mark's opacity while it draws in, from 0 to 1 (default 0.3, as hover dims the other marks). Anything else throws a `RangeError`, as `trace`'s options do.
+    - **Not for hover.** In the hover slot it would make the hovered mark faint while it's read, so its doc and api.md say it's for `enter`, and `trace` stays the highlighter. It isn't a preset: the built-in presets stay exactly `flash`, `wiggle` and `pulse`, so no chart's bundle carries it unless the page imports it.
+    - **`part` on `Paint`:** the key of one of the mark's segments (`segment.key`). In that paint, `"mark"` and `"mark-strong"` are that segment's colours. Unset, or a key the mark hasn't, they're the mark's own, its first segment's, as now. The surfaces give each part's colours: a bar's segments by series, `expressive()`'s parts from each one's own fill, and a mark of one part its own. The testing entry's recording layer records it. It's under the promise, as an addition.
+    - The conformance sweep runs it on every source, and `checkEffect` passes it.
+13. **`room` takes sides** (decision 6).
+    - **`room?: number | { readonly right?: number; readonly top?: number }`** on `LineChartOptions`. A number is px to the right, as now. `top` is px the layout keeps clear above the plot, below the chart's top, for text an effect draws above it. A side that isn't given is 0. A number, `{}` and `{ right }` lay out as now, byte for byte.
+    - **Checked** as now: anything but a number of px, 0 or more, or an object whose `right` and `top` are each one or unset, throws the `RangeError`. `update({ room })` lays the chart out again.
+    - **`barChart`'s `room`** stays a number: it's past its labels, in the bars' direction.
+14. **The tab stop follows the week** (decision 2).
+    - **When focus is outside the view leaving,** on a toggle, say, the switch reads that view's tab stop instead, before anything hides: the key of its stop with `tabindex="0"`, and what it stands for (`standsFor`), as it reads focus now.
+    - **On landing,** the new view's tab stop moves to the first of those keys it takes, through a third optional method on `ChartSwitchView`, which moves a chart's tab stop without focus and without a hover, so nothing fires. The bar, donut and line charts' handles have it, through `keyboard.ts`. So Tab from the toggle lands on the same week in the new view. A view without it keeps its own tab stop, as now.
+    - **With focus in the view leaving,** focus follows as now, and the tab stop with it.
+    - api.md's `ChartSwitchView` and architecture.md's switch say so.
+15. **The toolchain and the tests** (decision 2).
+    - **rolldown 1.2.16** comes in through the lockfile: tsdown's `~1.2.15` and vite's `~1.2.14` allow it, and one copy builds the package and bundles the size check's sets. M10 step 5's comparison runs again, before anything else changes: the files byte for byte, and, where any differ, each entry's names as an ES module and as CommonJS, each exported name's type read with TypeScript 6's API, and the sizes. A published type or name that differs, or a size that grows by more than 1 KB, stops the step to ask you.
+    - **vite 8.3.5,** as `^8.3.5`, for the size check and the demo site. The sizes are compared with main's, as above.
+    - **jsdom 30 waits.** It needs Node 24.15 or newer, or 22.22.2, and this machine has 24.12.0. With Node updated here, it can come in a later milestone.
+    - **rolldown-plugin-dts 0.29.0** waits for a tsdown that asks for it, `get-tsconfig` for a stable 5, and `api-docs.test.ts` and `typescript-6` for TypeScript 7.1.
+    - **Timeouts.** The stress spec's reduced-motion and Off tests get 120 s, from 90, as its date line's tests have. WebKit's "the tooltip never covers the focus ring" on the line page gets 60 s, from 30.
+    - **The text spacing on Windows.** The step finds which text `a11y.spec.ts` sees overlap on `stress.html` in Chromium on Windows. It fixes the page if the page is at fault, or the test if the check is. If it's this machine's fonts alone, CONTRIBUTING says so, beside the note that the visual suite's baselines are Docker's.
+    - **Points drawn on each other** in `line.spec.ts`: "goes from every point straight onto its tooltip" hovers a point whose other line's point is within 1.5 px from just off its centre, along its own line, as M11 step 5 lets the pointer do, rather than skipping it.
+16. **The rest.**
+    - **Accessibility.** A new script, M, for NVDA + Chrome. It covers the morph page's season card: after a toggle press, Tab landing on the same week in the new view, read with its values, and V as before. It covers the bars page: nothing announced as the bars draw in, each bar's name and the table as before, and focus on a bar part way through. And the season page's changes with the room above, with the announcement as now. You run it.
+    - **Docs.** Each step adds its exports to api.md (`src/api-docs.test.ts` fails otherwise), its sections to architecture.md, and its entries to CHANGELOG, under a new `## Unreleased` above 0.6.0 with Added, Changed and Fixed lists. The effects guide says how `part` names a segment's colour.
+    - **Sizes.**
+      - Everything has 1,408 bytes of room, `dist/index.js` 1,739, the switch's set 426, `expressive` and `travel` 87, `dist/testing.js` 1.0 KB, `barChart` 2.8 KB and the line page's set 4.2 KB.
+      - Steps 1 and 2 add to the switch's set, so it can expect to go past its budget: whichever lands second raises it, if the first hasn't. Step 1 adds to the line page's set and `barChart` too (the handles), and step 4 to the line page's set.
+      - Step 3's `part` is in every chart's layer and every surface, so it adds to every chart's set, the testing entry, and `expressive` and `travel`'s, which it will take past its budget.
+      - Every step but 5 adds to everything, `dist/index.js`, `dist/index.cjs` and the script-tag bundle, so the second or third step to land can expect to take everything and `dist/index.js` past theirs. Step 5's toolchain may move every size a little; its comparison says by how much.
+      - A step that takes a size past its budget raises it in the same PR, to its size plus 10% rounded up to 0.5 KB, says why (CONTRIBUTING's Bundle size), and adds a sentence to architecture.md's Bundle size. A step that lands later merges main first and keeps the raised budget, and raises it again only if its own bytes take it past.
+    - **Visual checks.** A step that changes what a page draws runs that page's visual spec in Docker before its PR, since unit tests miss what a page shows: M11 step 3's PR passed its own, and main's visual check then failed on the season page ([#127](https://github.com/Deaversbp/expressive-charts/pull/127) fixed it). Steps 1 and 2 change what the morph page's season card draws part way between its line views, and step 1 may move where Tab lands after a toggle. Each runs `morph.spec.ts` and `a11y.spec.ts`'s morph tests in Docker, and makes again only the baselines its change moves, shown to you before they're committed. The second to land merges main and makes them again.
+    - **Byte-for-byte tests** round their numbers first, as M11 step 2's digests do: Node 22 and 24 differ in the last bits of `Math.pow` and `Math.cbrt`.
+    - **A step the demos find.** If step 6's pages or audit find a problem in the library, it stops and shows you, and you choose whether it's fixed before 0.7.0. If it is, it's a step of its own, in a session step 6 starts, and the planning session places it in this plan before the release, as M10's step 7 was.
+    - **Dates** are the local day, Pacific time, as CHANGELOG has them.
+    - **The release** goes as CONTRIBUTING's Releasing says, through trusted publishing. Nothing is published, tagged or released without your go-ahead in that session.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `package.json`, `src/index.ts`, `src/core/index.ts`, `src/charts/index.ts`, `src/effects/index.ts`, `src/charts/types.ts`, `src/charts/bar.ts`, `src/charts/donut.ts`, `src/charts/line.ts`, `src/charts/adapter/expressive.ts`, `src/conformance.test.ts`, `src/line-switch.test.ts`, the morph page's baselines, `scripts/size-budget.json`, `src/core/README.md`, `src/charts/README.md`, `src/effects/README.md`, `docs/architecture.md`, `docs/api.md`, `docs/effects-guide.md`, `docs/sketches/api.ts`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md` and this plan.
+
+- **`line.ts`** has two owners. Step 1 owns what its handle gives the switch (`end` and `ring` from `paintOf`, and the tab-stop method). Step 4 owns `room`: read and checked in `layout()`. Step 3 changes one line, its surface's colours.
+- **`bar.ts` and `donut.ts`:** step 1 owns their handles' tab-stop method, and step 3 their surfaces' colours.
+- **`expressive.ts`:** step 3 alone, its surface's part colours.
+- **`src/line-switch.test.ts`** is step 1's. Step 2 adds one describe there: the season's two line charts through the real switch and `morph()`. Whichever of them lands second adds the check that each end dot sits on its drawn line's end on every frame.
+- **`src/conformance.test.ts`:** step 2 owns `morph`'s sources, and step 3 `drawIn`'s rows.
+- **Step 1 alone** changes `switch.ts` and `keyboard.ts`; step 2 alone `morph.ts`; step 3 alone the contracts, `render/layer.ts` and `render/surface.ts`; step 4 alone `line-layout.ts`.
+- `typecheck` requires an explicit type on every new export. The first step to land adds CHANGELOG's Unreleased.
+
+Each step's session reads the hand-over notes in its notes folder first, `plan-0-7.md` from planning among them, and writes its own there: commits, files, decisions beyond the brief, where the plan and the code differ, and follow-ups.
+
+**Wave 1** (parallel):
+
+1. **The switch draws what the chart draws, and its tab stop follows** (decisions 10 and 14). Owns `src/charts/switch.ts` (the end dots, the rings and the tab stop across a switch), `end` and `ring` on `ChartSwitchPaint`, the third optional method on `ChartSwitchView`, what the charts' handles give the switch (small edits in `bar.ts`, `donut.ts` and `line.ts`), moving a tab stop without focus in `src/charts/keyboard.ts`, `src/charts/switch.test.ts`, and `src/line-switch.test.ts`.
+   - Tests:
+     - A line chart to columns keyed as its points, and back: each end dot fading with its line, in its colour, with its ring; a value alone between gaps keeping its ring, which goes as it grows into its column.
+     - Two line charts, with `morph()`: each end dot on its drawn line's end on every frame, with its ring, and no jump on a switch back.
+     - A view without `end` or `ring`: as on main, and the morph page's donut and columns byte for byte.
+     - The tab stop: with focus on a button outside the switch, the new view's tab stop on the first key the old one stood for, with nothing focused, no ring and no hover events, and Tab landing there; from an x to its column and back; the new view's own stop when it takes none of the keys; with focus in the old view, as now; motion off; a third view.
+     - Each chart's tab-stop method: the stop moved, nothing fired, no ring.
+   - **Done when** every existing test passes unchanged, but any that pinned what the overlay draws for a line view, or where the tab stop lands after a switch, each named in the PR; and `morph.spec.ts` and `a11y.spec.ts`'s morph tests pass in Docker.
+   - Docs: architecture.md (Switching between charts: end dots, rings and the tab stop), api.md (`ChartSwitchPaint`, `ChartSwitchView`), CHANGELOG (the fields and the method under Added; the dots, the rings and the tab stop under Fixed).
+   - Budgets it may raise: the switch's set (426 bytes of room: likely), the line page's set and `barChart`, and everything and `dist/index.js` if they go past.
+2. **`morph` pairs two lines by x** (decision 11). Owns `src/effects/morph.ts`, `src/effects/morph.test.ts`, `morph`'s sources in `src/conformance.test.ts`, and a describe in `src/line-switch.test.ts`.
+   - Tests:
+     - Two lines that run left to right, over the same x's and over different spans, and two that run right to left: each stop's partner at the same share across; near each end (p = 0.0001 and 0.9999), the stroke through every vertex of that end's line, within 0.01 px; no jump from the lines' own `d` at either end; and `checkTransition`.
+     - Gaps: two lines missing the same x's, one jagged and one smooth, with nothing drawn there on any frame; a gap only one line has, fading; and a line with gaps to one without.
+     - Lines that turn back (a spiral, a scatter trail), two that run opposite ways, closed outlines and crossfades: byte for byte as on main.
+     - A reverse from part way.
+     - Through the real switch (`src/line-switch.test.ts`): the season's per match and to date, with `morph()`'s default points, nothing drawn in the weeks both miss on any 16 ms frame, and each line's vertices on the stroke near each end, within 0.01 px.
+     - A switch between two ten-year daily lines: its frame time against 160 samples.
+   - **Done when** every existing test passes unchanged, but the digests of line pairs that run one way (`fixturePairs`' two lines among them) and any test that pinned a line morph's middle frames, each named in the PR; and `morph.spec.ts` passes in Docker.
+   - Docs: architecture.md (morph: two open outlines, and lines with gaps), api.md (`morph`), CHANGELOG (the pairing under Changed; the corners and the gaps under Fixed).
+   - Budgets it may raise: the switch's set, which carries `morph`, and everything and `dist/index.js`.
+3. **`drawIn`, and a segment's colour** (decision 12). Owns `src/effects/draw-in.ts` (new) and `draw-in.test.ts`, `part` on `Paint` (`src/core/contracts/drawing.ts`), the SVG layer and surface reading it (`src/charts/render/layer.ts` and `surface.ts`), the surfaces' part colours (a line each in `bar.ts`, `donut.ts`, `line.ts` and `expressive.ts`), the testing entry's recording layer, `drawIn`'s rows in the conformance sweep, and the backlog's line.
+   - Tests:
+     - On a line, a line with gaps, a curve, a bar, a column, a negative bar, a slice, a stack of three, a point and a closed shape: the body at `faint` through the run; the mark drawn along its walk at its width; a stack's parts in turn, each in its colour, their times in proportion to their lengths; a point and a shape at once; and at the end the mark at full strength, with nothing drawn.
+     - A mark that grows or moves part way (`onChange`): the drawn part on it, at the same progress.
+     - Motion off and reduced motion: `end()` leaves the mark as it is. Analysis's cap. An abort and a clear give the mark back its style.
+     - The options' `RangeError`s.
+     - `part`: a path named for a segment drawn in its colours, on our bar chart's stack and on `expressive()`'s stacked rects; unset, or a key the mark hasn't, as now; and the recording layer keeping it.
+     - The sweep: `drawIn` on every source, through `checkEffect`.
+   - **Done when** every existing test passes unchanged.
+   - Docs: architecture.md (a `drawIn` section, and `part` in the drawing API), api.md (`drawIn`, `DrawInOptions`, `Paint`), the effects guide (`part`), README's Effects line, the sketch, the backlog's drawing a mark itself in, and CHANGELOG (`part` first under Added, as the item under the promise, then `drawIn`).
+   - Budgets it may raise: `expressive` and `travel`'s set (87 bytes of room: certain), `dist/testing.js`, every chart's set, and everything, `dist/index.js`, `dist/index.cjs` and the script-tag bundle if they go past.
+4. **Room above a line chart** (decision 13). Owns `room`'s type in `src/charts/types.ts`, its check in `line.ts`'s `layout()`, the plot's top in `src/charts/line-layout.ts`, and their tests.
+   - Tests: `{ top }` lowering the plot by it, with the end labels and the value ticks; `{ right }` laying out as the same number; a number, `{}` and 0 byte for byte as on main; `update({ room })` both ways; the `RangeError`s; and the season page's two changes, with room above, inside the chart at 320 and 1,000 px at every matchweek (`captions.test.ts`).
+   - **Done when** every existing test passes unchanged.
+   - Docs: architecture.md (Line chart: Room), api.md (`room`), CHANGELOG (Added).
+   - Budgets it may raise: the line page's set, and everything if it goes past.
+5. **The toolchain and the tests** (decision 15). Owns vite's range in `package.json`, the lockfile, the timeouts in `tests/visual/stress.spec.ts` and `tests/visual/line.spec.ts`, `line.spec.ts`'s points drawn on each other, `a11y.spec.ts`'s text spacing, and CONTRIBUTING's toolchain lines.
+   - Checks: the comparison of the build on rolldown 1.2.16 with main's; the size check with rolldown 1.2.16 and vite 8.3.5, against main's; `npm ls`; `typecheck`; the suite; `pack-check` on 5.4, 6 and 7; `build:site`; the stress, line and a11y specs in Docker with 4 workers; the text-spacing test in Chromium on Windows; and CI on Node 22 and 24.
+   - **Done when** `npm run typecheck && npm test && npm run build`, `npm run size` and `npm run pack-check` pass, the published files and types are the same (or you've accepted each difference), and the three specs pass in Docker.
+   - Docs: CONTRIBUTING (rolldown and vite, and why jsdom 30 waits), architecture.md's Build outputs only if a version it names changes, and CHANGELOG only if what's published changes.
+
+**Wave 2** (after steps 1 to 5 land):
+
+6. **The demos, their screenshots, the audit and script M.** Owns `demo/bars.*` and `demo/host-chart.ts`, `demo/morph.*`, `demo/season.*`, their visual specs and baselines, README's GIFs if they differ, `docs/a11y-audit.md`, and section M of `docs/a11y-check.md`.
+   - **The bars page:** `enter: drawIn()` on the bar chart, and on the hand-written chart through `expressive()`, so both draw in as the page loads, each part of a stack in its own colour. A design note says why it's for enter only, and that reduced motion shows the bars at once. Nothing moves 5 s after load (2.2.2).
+   - **The morph page:** the season card's switch is `morph()` with its default points. Its design notes, "Points into columns" and "Line into line", say the end dots move with their lines and gaps match by week. `morph.spec.ts` checks the weeks both lines miss on every frame, not only the first and last, and Tab after a toggle landing on the same week.
+   - **The season page:** the line chart's `room` keeps space above the plot, and the 40 px under the legend goes. Its changes stay clear of each other, every label, the legend and the heading, inside the chart, at 1,000 and 320 px.
+   - **README's GIFs** are compared with their pages (`ball-and-boot.gif` is the bars page's), and made again only on your word.
+   - **Screenshots,** made in Docker: the bars page part way through its draw-in and at rest; the season card half way between its lines; the season page at 1,000 and 320 px; and every page whose picture changed. Reduced motion and Off are checked in the DOM.
+   - **Script M,** for NVDA + Chrome (decision 16). You run it.
+   - **The walk:** you look at the pages in the browser, at 320 px too.
+   - In two PRs, as M11 step 7: the pages, their tests and baselines, the audit and script M first; then script M's results and the walk.
+   - Docs: a11y-audit.md (the bars page's draw-in, the morph page's tab stop, the season page's room, the Browsers count), a11y-check.md (section M and its results), CONTRIBUTING's visual tests.
+
+**Wave 3:**
+
+7. **Publish 0.7.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.7.0 entry, README's status, its script tag (`@0.7`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.7.0's code, and this plan's status line and M12's ✅.
+   - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you, compared with 0.6.0's, from an LF copy as CI builds it) and `npm publish --dry-run`. The PR has their results.
+   - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com.
+   - **Then, on your go-ahead in that session:** the `v0.7.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
+   - **After:** check npm (the version, README, provenance), install 0.7.0 in a fresh project and load each entry as an ES module and as CommonJS, and check jsDelivr's `@0.7`.
+   - **The date** is the release's local day, Pacific time.
+
+**Done when:**
+- **The switch** draws a line's end dot and a point's ring through every switch, and its tab stop follows the week when focus is outside it.
+- **`morph`** pairs two lines that each run one way by x: their corners are their own on the first and last frames, and nothing is drawn where both lines miss, on any frame.
+- **`drawIn`** draws any mark with a walk in along it, a stack part by part in its colours, with the mark faint underneath, and its end state is the mark itself. `Paint.part` names a segment's colour.
+- **`lineChart`'s `room`** takes sides, and a line's change stays inside the chart above the plot.
+- **The build** takes rolldown 1.2.16 and vite 8.3.5 with the same published types, and the visual tests hold up under load and on Windows.
+- **The demos** show all of it, with their screenshots and the audit, and script M passed with NVDA + Chrome.
+- **Docs.** api.md, architecture.md, the effects guide, README and CHANGELOG cover every addition and change. The promise changes only by `part`, an addition.
+- **0.7.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M12 is done.
 
 ### Backlog (after 0.1)
 

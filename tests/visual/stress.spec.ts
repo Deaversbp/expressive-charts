@@ -33,7 +33,7 @@ const PLAY = 8000;
 /**
  * How long a case's readout is waited for. The date line's play is the slowest: in WebKit in Docker, under 4
  * workers, its readout once took more than 30 s. So it's waited for up to 60 s, and a test that plays it has 30 s
- * more than the others ({@link LINE_TEST}).
+ * more than the others ({@link LINE_TEST}), as have the tests that run every case with reduced motion and Off.
  */
 const wait = (name: Case): number => (name === "line" ? 60_000 : 30_000);
 const LINE_TEST = 120_000;
@@ -230,6 +230,8 @@ const where = (page: Page, name: Case): Promise<string[]> =>
 
 for (const how of ["reduced motion", "Off"] as const) {
   test(`with ${how}, every case jumps to its end`, async ({ page }) => {
+    // Four cases one after another: in WebKit in Docker, under 4 workers, they once took 56 s of 90.
+    test.setTimeout(LINE_TEST);
     if (how === "reduced motion") await page.emulateMedia({ reducedMotion: "reduce" });
     await openDemo(page, stressDemo);
     if (how === "Off") await pickMode(page, "Off");

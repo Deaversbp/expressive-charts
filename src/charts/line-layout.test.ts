@@ -151,6 +151,53 @@ describe("layoutLines", () => {
     expect(layout<Week>(options, { room: 0 })).toEqual(layout<Week>(options));
   });
 
+  it("keeps `room`'s top clear above the plot: the plot's top lower by it, and the value ticks and the end labels with it", () => {
+    const options = { data: weeks, x: "week", series: ["goals", "xg"] } as const;
+    const label = (series: string, value: number) => `${value} ${series}`;
+    const labelled = layout<Week>(options, { label });
+    const roomy = layout<Week>(options, { label, room: { top: 30 } });
+    // The plot's top is 30 px lower; its bottom, its sides and its values are where they were.
+    expect(roomy.frame.box).toEqual({ ...labelled.frame.box, top: 42 });
+    expect(roomy.frame.scale).toEqual(labelled.frame.scale);
+    // Each value's gridline and label on the plot as it is: the top one 30 px lower, the bottom one where it was.
+    const at = positions(roomy.frame);
+    expect(roomy.yTicks.map((tick) => tick.value)).toEqual(labelled.yTicks.map((tick) => tick.value));
+    roomy.yTicks.forEach((tick, i) => {
+      expect(tick.line.y1).toBeCloseTo(at.y(tick.value), 9);
+      expect(tick.label.y - tick.line.y1).toBeCloseTo(labelled.yTicks[i]!.label.y - labelled.yTicks[i]!.line.y1, 9);
+    });
+    expect(roomy.yTicks[roomy.yTicks.length - 1]!.line.y1).toBe(labelled.yTicks[labelled.yTicks.length - 1]!.line.y1 + 30);
+    expect(roomy.yTicks[0]!.line.y1).toBe(labelled.yTicks[0]!.line.y1);
+    expect(roomy.xTicks).toEqual(labelled.xTicks);
+    // Each line's end on the plot as it is, and its end label beside it.
+    const ends = { text: label, measure };
+    const rows = states(weeks.map((w) => ({ key: String(w.week), datum: w, x: w.week, values: [{ series: "goals", value: w.goals }, { series: "xg", value: w.xg }] })));
+    const lines = placeLines(roomy.frame, rows, roomy.series, Infinity, false, ends);
+    const before = placeLines(labelled.frame, rows, labelled.series, Infinity, false, ends);
+    lines.forEach((line, i) => {
+      expect(line.end.y).toBeCloseTo(at.y(line.end.value), 9);
+      expect(line.end.y).toBeGreaterThan(before[i]!.end.y);
+      expect(line.label!.x).toBe(before[i]!.label!.x);
+      expect(line.label!.y - line.end.y).toBeCloseTo(before[i]!.label!.y - before[i]!.end.y, 9);
+    });
+    // With a side to the right too, the plot is narrower as well.
+    expect(layout<Week>(options, { label, room: { right: 30, top: 30 } }).frame.box).toEqual({ ...labelled.frame.box, top: 42, right: labelled.frame.box.right - 30 });
+    // A top past the chart's height leaves the plot no height, as a right past its width leaves it no width.
+    expect(layout<Week>(options, { room: { top: 400 } }).frame.box).toMatchObject({ top: 412, bottom: 412 });
+  });
+
+  it("lays out { right } as the same number, and {} and sides of 0 as before", () => {
+    const options = { data: weeks, x: "week", series: ["goals", "xg"] } as const;
+    const label = (series: string, value: number) => `${value} ${series}`;
+    const labelled = layout<Week>(options, { label });
+    expect(layout<Week>(options, { label, room: { right: 30 } })).toEqual(layout<Week>(options, { label, room: 30 }));
+    expect(layout<Week>(options, { room: { right: 30 } })).toEqual(layout<Week>(options, { room: 30 }));
+    for (const room of [{}, { right: 0 }, { top: 0 }, { right: 0, top: 0 }]) {
+      expect(layout<Week>(options, { label, room })).toEqual(labelled);
+      expect(layout<Week>(options, { room })).toEqual(layout<Week>(options));
+    }
+  });
+
   it("gives each series the decimals its values have", () => {
     expect(layout<Week>({ data: weeks, x: "week", series: ["goals", "xg"] }).decimals).toEqual({ goals: 0, xg: 1 });
   });

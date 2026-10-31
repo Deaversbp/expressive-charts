@@ -6,6 +6,7 @@ export { flash, type FlashOptions } from "./flash";
 export { wiggle, type WiggleOptions } from "./wiggle";
 export { pulse, type PulseOptions } from "./pulse";
 export { trace, type TraceOptions } from "./trace";
+export { drawIn, type DrawInOptions } from "./draw-in";
 export { delta, type DeltaOptions } from "./delta";
 export { label, type LabelOptions } from "./label";
 export { threshold, type ThresholdOptions } from "./threshold";

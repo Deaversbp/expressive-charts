@@ -19,6 +19,8 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // NEW in M11 step 3: EffectContext has an optional `texts`, a TextSpace (box, held, hold): where
 // effects' text sits on the same chart, one space a runner, so an effect's text keeps clear of other
 // effects' text (M11 decision 12). testContext gives one too, with `held` in its options.
+// NEW in M12 step 3: Paint has an optional `part`, a segment's key, so "mark" and "mark-strong" are
+// that segment's colours in the path, and a stack can be drawn part by part (M12 decision 12).
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -32,7 +34,9 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // threshold (with ThresholdOptions) is built too, as sketched (M4 decision 11). So is morph (with
 // MorphOptions and MorphAlign, M5 step 1). Changed from the sketch: it takes `align`, "unroll" or
 // "drop" (M5 decision 1), and a transition's run and end take a TransitionContext, an EffectContext
-// with `start`, so a switch back mid-way retraces (decision 6).
+// with `start`, so a switch back mid-way retraces (decision 6). NEW in M12 step 3: drawIn (with
+// DrawInOptions), for enter: the mark faint, then drawn in along its walk, a stack part by part in its
+// colours (M12 decision 12). Not a preset.
 
 // NEW: helpers for effect authors. Built in M3 (src/effects/define.ts) and public, with
 // GeometryEffectSpec and DataEffectSpec<D>, as are matrix (translate, rotate, scale, multiply, apply)
@@ -113,7 +117,7 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // decision 9), and `labels` words its end labels. NEW in M5: barChart's `colorBy: "category"` colours
 // each bar by its key, so a ColorAssignment shared with a donut keeps each category's colour (M5
 // decision 8). NEW in M11 step 3: lineChart's `room`, px kept clear to the right of its end labels,
-// as barChart's is past its labels.
+// as barChart's is past its labels; since M12 step 4, `{ right, top }` keeps px above the plot too.
 
 /** NEW NoInfer on `on` (built): without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
 export interface ChartOptions<D> extends BuiltChartOptions<D> {}
@@ -128,6 +132,9 @@ export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 // NEW in M11 step 1: ChartSwitchView has optional paintOf(key) (ChartSwitchPaint: the name a mark's
 // colour comes from, and whether it's drawn at rest) and standsFor(key) (the keys a focus stop stands
 // for), which the charts' handles have, so a line chart is a view: its points grow into columns.
+// NEW in M12 step 1: ChartSwitchPaint has optional end and ring (a line's end dot and a point's ring,
+// which the switch draws), and ChartSwitchView optional moveTabStop(key), so Tab after a toggle lands
+// on the same week.
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 

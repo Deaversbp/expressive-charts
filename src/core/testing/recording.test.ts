@@ -1,5 +1,5 @@
 import type { Icon } from "../contracts/icon";
-import { recordingLayer, recordingMark } from "./recording";
+import { recordingLayer, recordingMark, type DrawnPath } from "./recording";
 
 const dot: Icon = {
   name: "dot",
@@ -29,6 +29,20 @@ describe("recordingLayer", () => {
     expect(layer.drawn).toEqual([{ kind: "path", id: 1, d: "M0,0L10,0", paint: { stroke: "mark", width: 3, opacity: 1 } }]);
     path.update("M0,0L20,0", { width: undefined });
     expect(layer.drawn[0]).toEqual({ kind: "path", id: 1, d: "M0,0L20,0", paint: { stroke: "mark", opacity: 1 } });
+  });
+
+  it("keeps a paint's part in its calls, what's drawn and its picture, and an update to undefined takes it off", () => {
+    const layer = recordingLayer();
+    const paint = { stroke: "mark", width: 20, linecap: "butt", part: "Okafor/assists" } as const;
+    const path = layer.path("M0,0", paint);
+    expect(layer.calls).toEqual([{ op: "path", id: 1, d: "M0,0", paint }]);
+    path.update("M0,0L10,0");
+    expect(layer.picture()).toEqual([{ kind: "path", d: "M0,0L10,0", paint }]);
+    path.update("M0,0L20,0", { part: undefined });
+    expect(layer.calls[2]).toEqual({ op: "update-path", id: 1, d: "M0,0L20,0", paint: { part: undefined } });
+    const { part, ...rest } = paint;
+    expect(part).toBe("Okafor/assists");
+    expect(Object.keys((layer.drawn[0] as DrawnPath).paint)).toEqual(Object.keys(rest));
   });
 
   it("records text and merges style on update", () => {

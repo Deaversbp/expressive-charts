@@ -59,6 +59,12 @@ export interface KeyboardFocus {
    * hovers. Gives the key with focus now, if a mark has it.
    */
   retarget(to: (key: string) => string | undefined): string | undefined;
+  /**
+   * Moves the tab stop to a mark without focus, so `focus` isn't told and nothing hovers: Tab lands
+   * on it next. Returns whether it did: not for a key that isn't in the order, or while a mark has
+   * focus, which keeps the tab stop with it.
+   */
+  moveTabStop(key: string): boolean;
   destroy(): void;
 }
 
@@ -283,6 +289,14 @@ export function keyboardFocus(svg: () => SVGSVGElement | undefined, options: Key
       for (const key of last) if (!live.has(key)) setTabIndex(key, undefined);
       last = keys;
       return had === undefined ? undefined : current;
+    },
+    moveTabStop(key) {
+      listen();
+      const keys = options.order();
+      if (!keys.includes(key) || options.find(on?.scope.activeElement ?? null) !== undefined) return false;
+      tabStop = key;
+      applyTabIndex(keys);
+      return true;
     },
     destroy() {
       current = undefined;

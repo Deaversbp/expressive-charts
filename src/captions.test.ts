@@ -389,10 +389,50 @@ describe("delta and label clear of other effects' text (texts)", () => {
     // The matchweeks where both change: on main their changes met in 5 of them at 1,000 px and 8 at 320 (M10 step 6).
     expect(both).toBe(9);
     // Where a line ends at the top of the plot heading up, its text rises past the end labels above the chart's top, into the
-    // page above it: room keeps space only to the right. On main the goals line's change alone rose 11.7 px at 320 and 5.4 at
-    // 1,000; xG's, past it, rises further.
+    // page above it: a number of room keeps space only to the right (the next test keeps it above too). On main the goals line's
+    // change alone rose 11.7 px at 320 and 5.4 at 1,000; xG's, past it, rises further.
     expect(above).toBeGreaterThan(0);
     expect(above).toBeLessThan(rise);
+  });
+
+  it.each([
+    [320, 40],
+    [320, 60],
+    [1000, 60]
+  ])("keeps the season page's goals and xG changes inside the chart at every matchweek at %i px, with room: { right: %i, top: 40 }", async (width, right) => {
+    const weeks = season();
+    const height = 270;
+    const top = 40;
+    const chart = lineChart(container(), {
+      label: "Goals vs expected goals, season to date",
+      data: weeks.slice(0, 24),
+      x: "week",
+      series: ["totalGoals", "totalXg"],
+      labels: (value, series) => (series === "totalXg" ? `${value.toFixed(1)} xG` : `${Math.round(value)} goals`),
+      width,
+      height,
+      room: { right, top },
+      motion: "off",
+      on: { update: only(lineOnly, delta()) }
+    });
+    let both = 0;
+    let highest = Infinity;
+    for (let now = 25; now <= 38; now++) {
+      await chart.update({ data: weeks.slice(0, now) });
+      const changes = [...drawn(chart.element, "totalGoals"), ...drawn(chart.element, "totalXg")];
+      if (changes.length === 2) {
+        both++;
+        expect(overlaps(changes[0]!.box, changes[1]!.box), `matchweek ${now}`).toBe(false);
+      }
+      for (const { box, text } of changes) {
+        expect(box.x >= 0 && box.x + box.width <= width && box.y >= 0 && box.y + box.height <= height, `matchweek ${now} "${text}"`).toBe(true);
+        highest = Math.min(highest, box.y);
+      }
+      clearOfLabels(chart.element, chart.marks());
+    }
+    expect(both).toBe(9);
+    // The text still rises above the plot, whose top is 12 + 40 px down: into the room kept for it, not past the chart's top.
+    expect(highest).toBeLessThan(12 + top);
   });
 
   describe("a slice whose label is dropped, on 1,500 random donuts", () => {

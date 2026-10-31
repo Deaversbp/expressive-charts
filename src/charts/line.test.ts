@@ -23,6 +23,23 @@ function quietMotion(mode: MotionMode = "presentation") {
   return createMotion({ mode, reducedMotion: { matches: false, subscribe: () => () => {} } });
 }
 
+/** A 64-bit hash of the text (cyrb53's mixing, both halves kept), as 16 hex digits: enough to tell two drawings apart. */
+function hash(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
+
+/** What main (3547035) drew, as this file's "lays out a number, {}, { right } and sides of 0 as main does" hashes it there: no `room`, and `room: 40`. */
+const MAIN = { unset: "8c166ec47a984d1e", right: "0965a2f279c4c45c" } as const;
+
 function setup(options: Partial<LineChartOptions<Week>> = {}, more: Partial<ChartEnv> = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -252,6 +269,72 @@ describe("lineChart: drawing", () => {
       await expect(chart.update({ room })).rejects.toThrow(/room must be a number of px/);
     }
     expect(ends()).toEqual(before.ends);
+  });
+
+  it("keeps `room`'s top clear above the plot, its value ticks and end labels lower with it, and lays out again on update({ room }) both ways", async () => {
+    const { chart, svg, settle } = setup({ motion: "off" });
+    const lines = () => chart.marks().filter((mark) => mark.key === mark.series);
+    const gridlines = () => Array.from(svg.querySelectorAll(".ec-grid line"), (line) => Number(line.getAttribute("y1")));
+    const valueTicks = () => Array.from(svg.querySelectorAll('.ec-axis .ec-tick[text-anchor="end"]'), (tick) => Number(tick.getAttribute("y")));
+    const before = { lines: lines(), labels: chart.labels(), gridlines: gridlines(), valueTicks: valueTicks(), html: svg.outerHTML };
+    await settle(chart.update({ room: { top: 30 } }));
+    // From the bottom: the top gridline, at the plot's top, 30 px lower, the bottom one where it was, and each between in step.
+    const [bottom, top] = [before.gridlines[0]!, before.gridlines[before.gridlines.length - 1]!];
+    expect(top).toBe(12);
+    expect(gridlines()).toHaveLength(before.gridlines.length);
+    gridlines().forEach((y, i) => expect(y).toBeCloseTo(bottom - ((bottom - before.gridlines[i]!) * (bottom - top - 30)) / (bottom - top), 2));
+    expect(gridlines()[gridlines().length - 1]).toBe(42);
+    valueTicks().forEach((y, i) => expect(y - gridlines()[i]!).toBeCloseTo(before.valueTicks[i]! - before.gridlines[i]!, 2));
+    // Each line ends lower, as far as its value is up the plot, at the same x, and its end label stays beside its end.
+    lines().forEach((mark, i) => {
+      expect(mark.end.x).toBeCloseTo(before.lines[i]!.end.x, 6);
+      expect(mark.end.y).toBeGreaterThan(before.lines[i]!.end.y);
+      expect(chart.labels()[i]!.x).toBeCloseTo(before.labels[i]!.x, 6);
+      expect(chart.labels()[i]!.y - mark.end.y).toBeCloseTo(before.labels[i]!.y - before.lines[i]!.end.y, 6);
+    });
+    // With room to the right as well, the plot is narrower too.
+    await settle(chart.update({ room: { right: 40, top: 30 } }));
+    lines().forEach((mark, i) => expect(mark.end.x).toBeCloseTo(before.lines[i]!.end.x - 40, 6));
+    expect(gridlines()[gridlines().length - 1]).toBe(42);
+    // And back: the same chart as before.
+    await settle(chart.update({ room: {} }));
+    expect(svg.outerHTML).toBe(before.html);
+  });
+
+  it("lays out a number, {}, { right } and sides of 0 as main does, byte for byte", () => {
+    // Ids aside, and numbers rounded to 1e-6, as Node 22 and 24 can differ in their last bits.
+    const drawn = (room?: LineChartOptions<Week>["room"]) =>
+      hash(
+        setup(room === undefined ? {} : { room })
+          .chart.element.outerHTML.replace(/ec-\w+-\d+/g, "")
+          .replace(/-?\d+\.\d+(e-?\d+)?/g, (n) => String(Math.round(Number(n) * 1e6) / 1e6))
+      );
+    for (const room of [undefined, 0, {}, { right: 0 }, { top: 0 }, { right: 0, top: 0 }]) expect(drawn(room), JSON.stringify(room)).toBe(MAIN.unset);
+    for (const room of [40, { right: 40 }, { right: 40, top: 0 }]) expect(drawn(room), JSON.stringify(room)).toBe(MAIN.right);
+  });
+
+  it("checks `room`'s sides, and leaves the chart as it was", async () => {
+    const { chart, settle } = setup({ motion: "off", room: { right: 20, top: 30 } });
+    const html = chart.element.outerHTML;
+    for (const side of ["right", "top"] as const) {
+      for (const px of [-1, Number.NaN, Infinity, "28" as never]) {
+        const room = { [side]: px };
+        expect(() => setup({ room })).toThrow(new RangeError(`lineChart: room.${side} must be a number of px, 0 or more, got ${String(px)}.`));
+        await expect(chart.update({ room })).rejects.toThrow(new RangeError(`lineChart: room.${side} must be a number of px, 0 or more, got ${String(px)}.`));
+      }
+    }
+    for (const [room, shown] of [
+      [null, "null"],
+      [[30], "[30]"],
+      [true, "true"]
+    ] as const) {
+      expect(() => setup({ room: room as never })).toThrow(new RangeError(`lineChart: room must be a number of px, 0 or more, got ${shown}.`));
+      await expect(chart.update({ room: room as never })).rejects.toThrow(new RangeError(`lineChart: room must be a number of px, 0 or more, got ${shown}.`));
+    }
+    expect(chart.element.outerHTML).toBe(html);
+    // A good one after them lays out.
+    await settle(chart.update({ room: 0 }));
+    expect(chart.element.outerHTML).not.toBe(html);
   });
 
   it("throws on a row key that's also a line's or a point's, so focus(key) can't mean two things", async () => {

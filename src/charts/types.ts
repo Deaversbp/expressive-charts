@@ -306,10 +306,13 @@ export interface LineChartOptions<D> extends ChartOptions<D> {
   /**
    * Px the layout keeps clear to the right of the end labels, or of the lines' ends with `labels:
    * false`, for text an effect draws past them: a `delta` past a line's end label. The plot is that
-   * much narrower, and the end labels stay beside it. Default 0. Anything but a number of px, 0 or
-   * more, throws a RangeError, and update({ room }) lays the chart out again.
+   * much narrower, and the end labels stay beside it. Default 0. `{ right, top }` keeps `top` px
+   * clear above the plot too, below the chart's top, for text an effect draws above it: a `delta`
+   * past a line that ends near the top heading up. The plot is that much shorter. A side that isn't
+   * given is 0, so a number is `{ right }`. Anything but a number of px, 0 or more, or an object of
+   * them by side, throws a RangeError, and update({ room }) lays the chart out again.
    */
-  readonly room?: number;
+  readonly room?: number | { readonly right?: number; readonly top?: number };
 }
 
 export interface LineChart<D> extends Chart<D, LineChartOptions<D>> {

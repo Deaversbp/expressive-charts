@@ -117,7 +117,7 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // decision 9), and `labels` words its end labels. NEW in M5: barChart's `colorBy: "category"` colours
 // each bar by its key, so a ColorAssignment shared with a donut keeps each category's colour (M5
 // decision 8). NEW in M11 step 3: lineChart's `room`, px kept clear to the right of its end labels,
-// as barChart's is past its labels.
+// as barChart's is past its labels; since M12 step 4, `{ right, top }` keeps px above the plot too.
 
 /** NEW NoInfer on `on` (built): without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */
 export interface ChartOptions<D> extends BuiltChartOptions<D> {}

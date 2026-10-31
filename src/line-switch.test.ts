@@ -5,8 +5,8 @@
 
 import { createMotion, describe as geometry, easeInOutCubic, manualClock, type MarkGeometry, type Point } from "./core";
 import { createRegistry, type PresetFactory } from "./core/registry";
-import { drawnInGaps, flush } from "./core/testing";
-import { barChart, chartSwitch, colorAssignment, lineChart, type ChartEnv } from "./charts";
+import { flush, measurePath } from "./core/testing";
+import { barChart, chartSwitch, colorAssignment, donutChart, lineChart, type ChartEnv } from "./charts";
 import { seriesColors } from "./charts/render/theme";
 import { morph } from "./effects";
 
@@ -101,17 +101,6 @@ const mix = (a: Point, b: Point, p: number): Point => ({ x: a.x * (1 - p) + b.x 
 const near = (a: Point, b: Point): boolean => Math.abs(a.x - b.x) <= 0.0011 && Math.abs(a.y - b.y) <= 0.0011;
 const markColor = (element: Element): string => (element as SVGElement).style.getPropertyValue("--ec-mark");
 
-/** Where both marks have a gap, as [from, to] values of t. */
-const sharedGaps = (a: MarkGeometry, b: MarkGeometry): [number, number][] =>
-  (a.gaps ?? []).flatMap(([a0, a1]) => (b.gaps ?? []).flatMap(([b0, b1]): [number, number][] => (Math.min(a1, b1) > Math.max(a0, b0) ? [[Math.max(a0, b0), Math.min(a1, b1)]] : [])));
-
-/**
- * The line part way, as far as drawnInGaps reads it: each t's point moved from `from`'s toward
- * `to`'s by p, with the gaps both have. Both walks run straight across those, so it does too.
- */
-const partWay = (from: MarkGeometry, to: MarkGeometry, p: number): MarkGeometry =>
-  ({ key: from.key, gaps: sharedGaps(from, to), path: (t: number) => mix(from.path(t), to.path(t), p) }) as unknown as MarkGeometry;
-
 afterEach(() => {
   document.body.textContent = "";
 });
@@ -205,9 +194,12 @@ describe("chartSwitch with morph(): two line charts", () => {
       expect(path.getAttribute("d")).toBe(from.get(key)!.outline.d);
       const series = key.split("@")[0]!;
       expect(markColor(path.parentElement!)).toBe(seriesColors(colors.slot(series)).color);
-      // A line is a stroke, a point a fill.
-      const [paint, other] = key.includes("@") ? [path.style.fill, path.style.stroke] : [path.style.stroke, path.style.fill];
-      expect([paint.startsWith("var(--ec-mark,"), other || "none"]).toEqual([true, "none"]);
+      // A line is a stroke; a point a fill, with its ring in the surface's colour (M12 step 1).
+      if (key.includes("@")) {
+        expect([path.style.fill.startsWith("var(--ec-mark,"), path.style.stroke.startsWith("var(--ec-surface,"), path.getAttribute("stroke-width")]).toEqual([true, true, "2"]);
+      } else {
+        expect([path.style.stroke.startsWith("var(--ec-mark,"), path.style.fill]).toEqual([true, "none"]);
+      }
     }
     clock.advance(475);
     for (const key of ["goals@4", "goals@6"]) {
@@ -227,36 +219,296 @@ describe("chartSwitch with morph(): two line charts", () => {
   });
 });
 
-describe("chartSwitch with morph(): two line charts with missing weeks (M11 step 2)", () => {
-  it("draws nothing inside a gap both lines have, on any frame, both ways, and fades the rest of each line's gaps", async () => {
-    const { switcher, overlay, line, season, clock, land } = setup();
+describe("chartSwitch with morph(): the morph page's season, per match and to date, paired by x (M12 step 2)", () => {
+  /** The morph page's season (demo/morph.ts): seed 42, 38 matchweeks, cumulative goals and xG. */
+  function season(): { week: number; goals: number; xg: number }[] {
+    let seed = 42;
+    const random = (): number => {
+      seed = (seed * 48271) % 2147483647;
+      return seed / 2147483647;
+    };
+    const poisson = (lambda: number): number => {
+      const limit = Math.exp(-lambda);
+      let k = 0;
+      let p = 1;
+      do {
+        k++;
+        p *= random();
+      } while (p > limit);
+      return k - 1;
+    };
+    const weeks: { week: number; goals: number; xg: number }[] = [];
+    let [goals, xg] = [0, 0];
+    for (let i = 0; i < 38; i++) {
+      const chance = 0.6 + random() * 1.9;
+      xg += chance;
+      goals += poisson(chance * (i < 12 ? 0.72 : i < 26 ? 1.32 : 0.7));
+      weeks.push({ week: i + 1, goals, xg: Math.round(xg * 10) / 10 });
+    }
+    return weeks;
+  }
+  // As on the morph page: no values for weeks 9 and 10, and no xG for weeks 4 and 5.
+  const full = season();
+  const gone = (week: number, xg: boolean): boolean => [9, 10].includes(week) || (xg && [4, 5].includes(week));
+  const toDateSeason: Week[] = full.map((w) => ({ week: w.week, goals: gone(w.week, false) ? null : w.goals, xg: gone(w.week, true) ? null : w.xg }));
+  const perMatchSeason: Week[] = full.map((w, i) => {
+    const before = full[i - 1] ?? { goals: 0, xg: 0 };
+    return { week: w.week, goals: gone(w.week, false) ? null : w.goals - before.goals, xg: gone(w.week, true) ? null : Math.round((w.xg - before.xg) * 10) / 10 };
+  });
+
+  function seasonSwitch() {
+    const clock = manualClock();
+    const motion = createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion, clock };
+    const target = document.body.appendChild(document.createElement("div"));
+    const switcher = chartSwitch(
+      target,
+      {
+        views: {
+          perMatch: (el, shared) => lineChart<Week>(el, { label: "Per match", data: perMatchSeason, x: "week", series: ["goals", "xg"], colors: shared, width: 600, height: 300 }, env),
+          toDate: (el, shared) => lineChart<Week>(el, { label: "Season to date", data: toDateSeason, x: "week", series: ["goals", "xg"], colors: shared, width: 600, height: 300 }, env)
+        },
+        initial: "perMatch",
+        // morph()'s default points.
+        transition: morph(),
+        colors: colorAssignment()
+      },
+      env
+    );
+    const overlay = target.querySelector(".ec-switch-overlay") as SVGSVGElement;
+    return { switcher, overlay, clock, perMatch: switcher.chart("perMatch"), toDate: switcher.chart("toDate") };
+  }
+
+  /** The x's of a line's walk across the weeks both lines miss, at eased progress p: each share of the way across moved from one line's x toward the other's. */
+  function bothMiss(a: MarkGeometry, b: MarkGeometry, p: number): [number, number][] {
+    const shares = (mark: MarkGeometry): [number, number][] => (mark.gaps ?? []).map(([t0, t1]) => [t0, t1].map((t) => (mark.path(t).x - mark.start.x) / (mark.end.x - mark.start.x)) as [number, number]);
+    const x = (s: number): number => (a.start.x + s * (a.end.x - a.start.x)) * (1 - p) + (b.start.x + s * (b.end.x - b.start.x)) * p;
+    return shares(a).flatMap(([a0, a1]) => shares(b).flatMap(([b0, b1]): [number, number][] => (Math.min(a1, b1) > Math.max(a0, b0) ? [[x(Math.max(a0, b0)), x(Math.min(a1, b1))]] : [])));
+  }
+
+  /** The lines of path data, as [from, to]. */
+  const linesOf = (d: string): [Point, Point][] => {
+    const out: [Point, Point][] = [];
+    let pen: Point | undefined;
+    for (const { op, args } of measurePath(d).commands) {
+      const point = { x: args[args.length - 2]!, y: args[args.length - 1]! };
+      if (op === "L" && pen) out.push([pen, point]);
+      pen = point;
+    }
+    return out;
+  };
+
+  /** How far a point is from the nearest of the lines. */
+  const offLines = (point: Point, lines: readonly [Point, Point][]): number =>
+    Math.min(
+      ...lines.map(([a, b]) => {
+        const [dx, dy] = [b.x - a.x, b.y - a.y];
+        const u = dx === 0 && dy === 0 ? 0 : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy)));
+        return Math.hypot(point.x - a.x - u * dx, point.y - a.y - u * dy);
+      })
+    );
+
+  it("draws nothing in the weeks both lines miss on any 16 ms frame, both ways, fades nothing, keeps each end dot on its line's end, and draws each line's own polyline next to each end, through every vertex within 0.01 px", async () => {
+    const { switcher, overlay, clock, perMatch, toDate } = seasonSwitch();
     for (const [view, fromChart, toChart] of [
-      ["toDate", line, season],
-      ["perMatch", season, line]
+      ["toDate", perMatch, toDate],
+      ["perMatch", toDate, perMatch]
     ] as const) {
       const from = byKey(fromChart.marks());
       const to = byKey(toChart.marks());
       void switcher.show(view);
-      let fading = 0;
       for (let ms = 0; ms < 950; ms += 16) {
         const p = easeInOutCubic(ms / 950);
         for (const key of ["goals", "xg"]) {
           const [a, b] = [from.get(key)!, to.get(key)!];
-          // Both miss the same weeks, at about the same t, so their gaps overlap.
-          expect(sharedGaps(a, b).length, key).toBeGreaterThan(0);
+          // By t, the lines' gaps don't meet: one line per match is longer than the same to date.
+          expect(a.gaps).not.toEqual(b.gaps);
           const paths = Array.from(overlay.querySelectorAll(`.ec-switch-runs > .ec-run[data-key="${key}"] path`));
-          expect(paths.length, key).toBeGreaterThan(0);
-          const mark = p <= 0 ? a : partWay(a, b, p);
-          const drawn = paths.map((path, id) => ({ kind: "path" as const, id, d: path.getAttribute("d")!, paint: {} }));
-          expect(drawnInGaps(mark, drawn), `${key} to ${view} at ${p}`).toEqual([]);
-          fading += paths.filter((path) => path.hasAttribute("opacity")).length;
+          // One path at full strength: the two miss the same weeks, so no part of either's gaps fades.
+          expect(paths.map((path) => path.getAttribute("opacity")), `${key} at ${p}`).toEqual([null]);
+          const drawn = linesOf(paths[0]!.getAttribute("d")!);
+          const missed = bothMiss(a, b, p);
+          expect(missed.length, key).toBe(key === "goals" ? 1 : 2);
+          for (const [x0, x1] of missed) {
+            const [lo, hi] = [Math.min(x0, x1), Math.max(x0, x1)];
+            const across = drawn.filter(([m, n]) => Math.max(m.x, n.x) > lo + 0.01 && Math.min(m.x, n.x) < hi - 0.01);
+            expect(across, `${key} to ${view} at ${p}`).toEqual([]);
+          }
+          // Its end dot sits on the drawn line's end: both lines' ends are a stop, at a share of 1 on each.
+          expect(near(endDotIn(lineRun(overlay, key)), drawn[drawn.length - 1]![1]), `${key}'s end dot to ${view} at ${p}`).toBe(true);
+          // Next to each end, the stroke runs through every vertex of that end's line.
+          const end = ms === 16 ? a : ms === 944 ? b : undefined;
+          for (const vertex of end ? measurePath(end.outline.d).points : []) expect(offLines(vertex, drawn), `${key} to ${view} at ${p}: ${vertex.x},${vertex.y}`).toBeLessThan(0.01);
         }
         clock.advance(16);
       }
-      // The parts of a gap that only one line has fade in or out.
-      expect(fading).toBeGreaterThan(0);
-      await land();
+      clock.advance(950);
+      await flush();
       for (const layer of Array.from(overlay.children)) expect(layer.children).toHaveLength(0);
     }
+  });
+});
+
+// ── End dots and rings (M12 step 1) ──────────────────────────────────────────
+
+/** Every point a group's paths draw, from their path data. */
+const drawnPoints = (group: Element): Point[] => Array.from(group.querySelectorAll("path"), (path) => points(path.getAttribute("d")!)).flat();
+/** The end dot drawn in a group: where, its radius and its ring. */
+function endDotIn(group: Element): { readonly x: number; readonly y: number; readonly r: number; readonly ring: number } {
+  const circle = group.querySelector(":scope > circle.ec-switch-end")!;
+  const read = (name: string): number => Number(circle.getAttribute(name));
+  return { x: read("cx"), y: read("cy"), r: read("r"), ring: read("stroke-width") };
+}
+/** The lines run left to right, so the end of the stroke a line's paths draw is the point furthest right. */
+const strokeEnd = (group: Element): Point => drawnPoints(group).reduce((best, p) => (p.x >= best.x ? p : best));
+/** The centre of a point's dot part way: the mean of the polygon morph draws, sampled evenly round both dots. */
+function dotCentre(path: Element): Point {
+  const at = points(path.getAttribute("d")!);
+  return { x: at.reduce((sum, p) => sum + p.x, 0) / at.length, y: at.reduce((sum, p) => sum + p.y, 0) / at.length };
+}
+const lineRun = (overlay: SVGSVGElement, key: string): Element => overlay.querySelector(`.ec-switch-runs > .ec-run[data-key="${key}"]`)!;
+
+describe("chartSwitch with morph(): a line's end dot and a point's ring (M12 step 1)", () => {
+  it("keeps each end dot on its drawn line's end, with its ring, on every frame, both ways, and doesn't jump on a switch back mid-way", async () => {
+    const { switcher, overlay, line, season, clock, land } = setup();
+    for (const [view, fromChart] of [
+      ["toDate", line],
+      ["perMatch", season]
+    ] as const) {
+      void switcher.show(view);
+      const from = byKey(fromChart.marks());
+      // Where each line ends as drawn: xG's last week is joined to the one before, so its stroke ends
+      // there; goals' is alone between gaps, so the line ends on that point's dot, which plays too.
+      const ends: Readonly<Record<string, (ms: number) => Point>> = {
+        goals: (ms) => (ms === 0 ? from.get("goals@6")!.center : dotCentre(shapes(overlay).get("goals@6")!)),
+        xg: () => strokeEnd(lineRun(overlay, "xg"))
+      };
+      for (let ms = 0; ms < 950; ms += 16) {
+        for (const key of ["goals", "xg"]) {
+          const group = lineRun(overlay, key);
+          const dot = endDotIn(group);
+          expect(near(dot, ends[key]!(ms)), `${key} to ${view} at ${ms} ms`).toBe(true);
+          expect([dot.r, dot.ring]).toEqual([4.5, 2]);
+          // Above its line.
+          expect(group.lastElementChild?.tagName).toBe("circle");
+          if (ms === 0) expect(near(dot, from.get(key)!.end)).toBe(true);
+        }
+        // The points alone between gaps keep their rings.
+        for (const key of ALONE) expect(shapes(overlay).get(key)!.getAttribute("stroke-width")).toBe("2");
+        clock.advance(16);
+      }
+      await land();
+    }
+    const dots = () => ["goals", "xg"].map((key) => endDotIn(lineRun(overlay, key)));
+    void switcher.show("toDate");
+    clock.advance(400);
+    const before = dots();
+    void switcher.show("perMatch");
+    expect(dots()).toEqual(before);
+    clock.advance(200);
+    const back = dots();
+    void switcher.show("toDate");
+    expect(dots()).toEqual(back);
+  });
+
+  it("fades each line's end dot with its line, where it ends, and the points alone lose their rings as they grow into their columns", async () => {
+    const { switcher, overlay, line, clock } = setup();
+    void switcher.show("columns");
+    const ring = (key: string): number => Number(shapes(overlay).get(key)!.getAttribute("stroke-width"));
+    for (let ms = 0; ms < 950; ms += 16) {
+      for (const fade of Array.from(overlay.querySelectorAll(".ec-switch-fades > .ec-switch-fade"))) {
+        const key = fade.getAttribute("data-key")!;
+        const dot = endDotIn(fade);
+        expect(near(dot, byKey(line.marks()).get(key)!.end)).toBe(true);
+        if (key === "xg") expect(near(dot, strokeEnd(fade))).toBe(true);
+      }
+      const p = easeInOutCubic(ms / 950);
+      for (const key of ALONE) expect(Math.abs(ring(key) - 2 * (1 - p))).toBeLessThanOrEqual(0.0006);
+      clock.advance(16);
+    }
+  });
+});
+
+// ── Views without end dots or rings, byte for byte (M12 step 1) ──────────────
+
+/** The lab's card 3, as the morph page draws its first card. */
+const outcomes = [
+  { outcome: "Goal", shots: 58 },
+  { outcome: "Saved", shots: 112 },
+  { outcome: "Off target", shots: 149 },
+  { outcome: "Blocked", shots: 87 }
+];
+
+/** A 64-bit hash of the text (cyrb53's mixing, both halves kept), as 16 hex digits, as src/effects/morph.test.ts has it. */
+function hash(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * The overlay's markup on every 16 ms frame of the morph page's donut and columns, with each align:
+ * to the columns, back part way, and on again. A digest an align. Its numbers are rounded to 1e-9,
+ * as morph.test.ts's digests round theirs: they're the 0.001s the overlay writes, so it changes none.
+ */
+async function overlayDigests(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const align of ["unroll", "drop"] as const) {
+    const clock = manualClock();
+    const motion = createMotion({ mode: "presentation", reducedMotion: { matches: false, subscribe: () => () => {} } });
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion, clock };
+    const target = document.body.appendChild(document.createElement("div"));
+    const switcher = chartSwitch(
+      target,
+      {
+        views: {
+          donut: (el, colors) => donutChart(el, { label: "Shot outcomes, share of total", data: outcomes, category: "outcome", value: "shots", colors, width: 600 }, env),
+          columns: (el, colors) => barChart(el, { label: "Shot outcomes, counts", data: outcomes, x: "outcome", y: "shots", orientation: "vertical", colorBy: "category", colors, width: 600 }, env)
+        },
+        initial: "donut",
+        transition: morph({ align }),
+        colors: colorAssignment({ Goal: 1, Saved: 2, "Off target": 3, Blocked: 4 })
+      },
+      env
+    );
+    const overlay = target.querySelector(".ec-switch-overlay") as SVGSVGElement;
+    let log = "";
+    const frames = (ms: number): void => {
+      for (let t = 0; t < ms; t += 16) {
+        log += overlay.innerHTML.replace(/-?\d+\.\d+/g, (n) => String(Math.round(Number(n) * 1e9) / 1e9));
+        clock.advance(16);
+      }
+    };
+    for (const [view, ms] of [
+      ["columns", 960],
+      ["donut", 400],
+      ["columns", 960]
+    ] as const) {
+      void switcher.show(view);
+      frames(ms);
+      await flush();
+    }
+    out[align] = hash(log);
+    switcher.destroy();
+  }
+  return out;
+}
+
+/** The digests main (3547035) gave, with this file's overlayDigests() run there, before the switch drew end dots and rings. */
+const MAIN_OVERLAY: Readonly<Record<string, string>> = {
+  unroll: "c04c52f338c664bc",
+  drop: "941f7237123e78c6"
+};
+
+describe("chartSwitch with morph(): views without end dots or rings (M12 step 1)", () => {
+  it("draws the morph page's donut and columns as on main, byte for byte: every frame, with each align, there, back part way and on again", async () => {
+    expect(await overlayDigests()).toEqual(MAIN_OVERLAY);
   });
 });

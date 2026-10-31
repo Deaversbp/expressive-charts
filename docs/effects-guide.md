@@ -1,6 +1,6 @@
 # Writing effects
 
-An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `trace`, `threshold`, `delta`, `label`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: the library's bar, donut and line charts, SVG charts drawn by D3 or Observable Plot through `expressive()`, and Vega or Vega-Lite charts rendered as SVG, through `fromVegaView()`.
+An effect is a small piece of motion that runs on one mark: a ball rolling out a bar, a halo that blinks, a label that rises into place. The library's own effects (`travel`, `flash`, `wiggle`, `pulse`, `trace`, `drawIn`, `threshold`, `delta`, `label`) are written against the same API this guide describes, and so can yours. An effect written this way runs on every chart: the library's bar, donut and line charts, SVG charts drawn by D3 or Observable Plot through `expressive()`, and Vega or Vega-Lite charts rendered as SVG, through `fromVegaView()`.
 
 This guide covers the contract an effect reads, the drawing API it writes through, how it keeps time, the rules that keep charts readable, data effects, composing, testing with `checkEffect`, and transition effects, which play between two views of a mark, with `checkTransition`. It ends with two worked examples and a review checklist.
 
@@ -147,7 +147,7 @@ Each run gets its own context. Everything an effect touches goes through it.
 
 **The overlay** (`ctx.layer`):
 
-- `layer.path(d, paint)` draws a path, unfilled unless `paint.fill` is given. `paint` is `{ fill, stroke, width, opacity, linecap }`. The handle's `update(d, paint?)` replaces the path and merges the paint fields given.
+- `layer.path(d, paint)` draws a path, unfilled unless `paint.fill` is given. `paint` is `{ fill, stroke, width, opacity, linecap, part }`. The handle's `update(d, paint?)` replaces the path and merges the paint fields given.
 - `layer.text(content, { at, anchor, color, opacity })` draws text with `at` on its baseline, in the theme's text colour by default. `update(style, content?)` merges the style fields given.
 - `layer.icon(icon, { size })` draws an icon, hidden until its first `place(transform)`. The icon is scaled by `size / icon.size` about its anchor before `place()`, so build the transform as if the icon were its natural size.
 - Every handle has `remove()`.
@@ -158,6 +158,15 @@ Each run gets its own context. Everything an effect touches goes through it.
 - `transform` and `opacity` apply to the mark's body; its labels and pointer target stay put. The paths and icons you draw in the overlay take the mark's `transform` too, so they stay on a mark that another effect turns. Your text stays put, as the mark's labels do. `emphasis` (0–1) mixes toward the series' strong colour. `halo: { width, opacity, color? }` strokes the outline behind the mark, half of `width` showing outside.
 
 **Colours** are theme tokens or any CSS colour: `"text"`, `"text-muted"`, `"surface"`, `"negative"`, `"series-3"`, `"series-3-strong"`, and `"mark"` / `"mark-strong"` for this mark's own colours. Text uses text colours, never series colours.
+
+**A segment's colour.** A stack's `"mark"` is its first segment's. To draw one segment in its own colours, name it in the paint with `part`, its key (`segment.key`, such as `"Okafor/assists"`): in that paint, `"mark"` and `"mark-strong"` are that segment's. Unset, or a key the mark hasn't, they're the mark's own, so a line or a slice, which has no segments, draws in its colour either way. The built-in [`drawIn`](api.md#drawin) draws a stack part by part this way:
+
+```ts
+// Each part along its walk, at its width, in its own colour.
+for (const part of mark.segments ?? [mark]) {
+  ctx.layer.path(part.slice(0, 1), { stroke: "mark", width: part.thickness, ...(mark.segments && { part: part.key }) });
+}
+```
 
 **Geometry helpers.**
 

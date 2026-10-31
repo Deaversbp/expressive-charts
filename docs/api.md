@@ -1458,7 +1458,7 @@ interface ThresholdOptions
 morph(options?: MorphOptions): TransitionEffect
 ```
 
-A transition effect that turns one mark's shape into another's: the default transition of a [`chartSwitch`](#chartswitch) ([architecture.md](architecture.md#morph)). Two closed outlines (bars, slices, points) are sampled at `points`, and each point moves in a straight line to its partner, as one filled path in the mark's colour, and their holes pair by area and morph too; two lines morph along their strokes, their width too, and keep their `gaps`, the stroke inside one line's gap fading in or out; an area and a line crossfade. It takes 950 ms base with `"transition"` timing, eased in and out, and a run from `ctx.start` takes the rest of a full run's time, so a switch back retraces. Its end state is the target's own outline.
+A transition effect that turns one mark's shape into another's: the default transition of a [`chartSwitch`](#chartswitch) ([architecture.md](architecture.md#morph)). Two closed outlines (bars, slices, points) are sampled at `points`, and each point moves in a straight line to its partner, as one filled path in the mark's colour, and their holes pair by area and morph too; two lines that each run one way across x pair by x, through every vertex of both, so their corners and their gaps hold, and any other two morph along their strokes; either way their width moves too, and they keep their `gaps`, the stroke inside one line's gap fading in or out; an area and a line crossfade. It takes 950 ms base with `"transition"` timing, eased in and out, and a run from `ctx.start` takes the rest of a full run's time, so a switch back retraces. Its end state is the target's own outline.
 
 #### `MorphOptions`
 
@@ -1469,7 +1469,7 @@ interface MorphOptions {
 }
 ```
 
-- `points`: default 160 (40 a side). A whole multiple of 4.
+- `points`: default 160 (40 a side). A whole multiple of 4. Two lines that pair by x are sampled at this many shares evenly across, and at each vertex, up to 1,000 of each line's.
 - `align`: default `"unroll"`. How two closed outlines' sides are matched ([`MorphAlign`](#morphalign)).
 
 #### `MorphAlign`
@@ -2198,7 +2198,7 @@ interface ColorAssignment {
 chartSwitch<T extends ChartSwitchViews>(target: string | Element, options: ChartSwitchOptions<T>): ChartSwitch<T>
 ```
 
-Views of the same data in one place, one shown at a time, which turns each mark into the mark with its key in the next view: a donut turning into columns, or a line chart's points into columns keyed as they are ([architecture.md](architecture.md#switching-between-charts)). Each view is a function that draws its chart in the container it's given. Each mark is drawn in its view's colour. Labels move with their shapes and swap their text half way, a key in only one view fades, and the old view's axes, legend and table fade out as the new one's fade in. Only the view shown can be seen, reached or read; focus on a mark moves to its key in the new view, and focus on a line chart's x to its first series' point there; and a switch back mid-way reverses from where the shapes are. A switch takes 950 ms in Presentation and 200 ms in Analysis, and jumps with motion off. Options that aren't a switch's throw a `TypeError`. Returns [`ChartSwitch<T>`](#chartswitcht).
+Views of the same data in one place, one shown at a time, which turns each mark into the mark with its key in the next view: a donut turning into columns, or a line chart's points into columns keyed as they are ([architecture.md](architecture.md#switching-between-charts)). Each view is a function that draws its chart in the container it's given. Each mark is drawn in its view's colour, a line with its end dot and a point with its ring. Labels move with their shapes and swap their text half way, a key in only one view fades, and the old view's axes, legend and table fade out as the new one's fade in. Only the view shown can be seen, reached or read; focus on a mark moves to its key in the new view, and focus on a line chart's x to its first series' point there. With focus outside the switch, on a toggle, the new view's tab stop moves to the same key, so Tab lands there. A switch back mid-way reverses from where the shapes are. A switch takes 950 ms in Presentation and 200 ms in Analysis, and jumps with motion off. Options that aren't a switch's throw a `TypeError`. Returns [`ChartSwitch<T>`](#chartswitcht).
 
 ```ts
 import { barChart, chartSwitch, donutChart, link } from "expressive-charts";
@@ -2268,13 +2268,19 @@ interface ChartSwitchOptions<T extends ChartSwitchViews>
 interface ChartSwitchPaint {
   readonly color: string;
   readonly drawn: boolean;
+  readonly end?: number;
+  readonly ring?: number;
 }
 ```
 
 How a view's chart paints one of its marks, as its `paintOf(key)` gives it.
 
 - `color`: the name its colour comes from in the switch's assignment, as `colors.slot(color)`. A bar's is its key with `colorBy: "category"`, and otherwise its first part's series; a slice's is its key; a line's and its points' are their series.
-- `drawn`: whether the chart draws it at rest. A line chart's points aren't, but for a value alone between gaps.
+- `drawn`: whether the chart draws it at rest. A line chart's points aren't, but for a value alone between gaps. A mark that isn't has no end dot or ring.
+- `end`: optional. The radius of the dot the chart draws at the end of the mark's walk, in its `<svg>`'s units: 4.5 for a line chart's line, unless it has no values. The switch draws it there, filled in the mark's colour. Between two lines that both have one, it moves straight from one end to the other as the shapes move, its radius mixed; a dot whose partner has none fades where it stands, and a line with no partner fades with its dot. Unset: no dot.
+- `ring`: optional. The width of the ring in `--ec-surface` the chart draws round the mark's filled shape at rest, or round its end dot when it has `end`: 2 round a line chart's end dot and a point drawn at rest. In a pair, the ring's width is mixed from one side's to the other's, 0 for a side without one, so a value alone between gaps keeps its ring into another line chart and loses it as it grows into its column. Unset: none.
+
+A view whose paints have neither draws as before.
 
 #### `ChartSwitchView`
 
@@ -2288,6 +2294,7 @@ interface ChartSwitchView {
   destroy(): void;
   paintOf?(key: string): ChartSwitchPaint | undefined;
   standsFor?(key: string): readonly string[];
+  moveTabStop?(key: string): boolean;
 }
 ```
 
@@ -2295,6 +2302,7 @@ What a switch uses of each view's chart. The bar, donut and line charts' handles
 
 - `paintOf(key)`: optional. How the chart paints the mark `key` ([`ChartSwitchPaint`](#chartswitchpaint)). The switch draws each pair in its new view's colour, and each mark that fades in its own view's. A mark that isn't drawn at rest starts or ends as a dot of no size at its centre, so a column grows out of its point, and a pair that neither view draws isn't played. Without it, or for a key it doesn't know, the mark is drawn in its key's colour, drawn at rest.
 - `standsFor(key)`: optional. The keys the focus stop `key` stands for, in the order the next view's `focus(key)` is tried with them. A line chart's x stands for each series' point key there, in series order, then itself; anything else stands for its own key. Focus lands on the first the next view takes, or else on its first mark.
+- `moveTabStop(key)`: optional. Moves the chart's tab stop to the stop `focus(key)` would focus, without focus, so no ring shows and nothing hovers: Tab lands there next. Returns whether it did: not for a key the chart doesn't take, or while one of its marks has focus. When focus isn't in the old view as a switch starts (it's on a toggle, say), the switch reads that view's tab stop and the keys it stands for, and on landing moves the new view's tab stop to the first of them it takes, so Tab from the toggle lands on the same week. A line chart's takes an x's key or a point's, as its `focus(key)` does. Without it, or when the new view takes none of the keys, a view keeps its own tab stop.
 
 #### `ChartSwitchViewFactory`
 

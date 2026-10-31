@@ -733,6 +733,9 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       return record && { color: byCategory(current) ? key : (first?.series ?? first?.key ?? key), drawn: true };
     },
 
+    // For a chart switch: Tab from outside lands on the bar with this key.
+    moveTabStop: (key: string): boolean => !destroyed && hover.moveTabStop(key),
+
     destroy() {
       if (destroyed) return;
       destroyed = true;

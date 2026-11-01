@@ -31,6 +31,8 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 - **`timeZone` on `lineChart` takes a zone's name** as `Intl` knows it, such as `"Europe/London"`, beside `"UTC"` and `"local"`. Ticks fall on the zone's own midnights, months, years, hours and minutes through summer time, so a day can be 23 or 25 hours, and a midnight the clocks skip is the first time after it, as in local time. Page Up and Page Down go a calendar month in the zone. Names, the tooltip, the table and the announcements say times in it with no zone's name. The zone is read through `Intl.DateTimeFormat`, so no zone data ships. A name it won't take throws a `TypeError`, whose message now says a zone's name is allowed, and `update()` rejects it. `"UTC"` and `"local"` draw as before.
 
+### Changed
+
 ### Fixed
 
 - **A time that comes twice where the clocks go back reads differently each time.** In local time, and in a zone by its name, each of the two says the zone's short name, as `Intl` words it in the page's locale ("Nov 1, 2026, 1:00 AM EDT" and "Nov 1, 2026, 1:00 AM EST" in `en-US`, "25 Oct 2026, 01:00 BST" and "25 Oct 2026, 01:00 GMT" in `en-GB`), in their names, the tooltip, the table and the announcements. Before, the two read the same. A name that says no time, and the ticks, still name no zone.

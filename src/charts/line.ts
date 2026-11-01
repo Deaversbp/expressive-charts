@@ -218,12 +218,13 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   const crosshair = svgElement("line", { class: "ec-crosshair", "aria-hidden": "true", visibility: "hidden" }, svg);
   // Behind the marks, so it can't cover them; the gap keeps it apart from a point in the same colour.
   const ring = svgElement("g", { class: "ec-focus", "aria-hidden": "true", visibility: "hidden" }, svg);
-  const marksLayer = svgElement("g", { class: "ec-marks", "aria-hidden": "true" }, svg);
-  const linesLayer = svgElement("g", { class: "ec-lines" }, marksLayer);
-  const pointsLayer = svgElement("g", { class: "ec-points" }, marksLayer);
+  // Runs draw above the lines, their end dots and labels, and below the points, so a decoration never
+  // covers a point being read. The points are marks of their own, so `.ec-morphing` hides them too.
+  const linesLayer = svgElement("g", { class: "ec-lines" }, svgElement("g", { class: "ec-marks", "aria-hidden": "true" }, svg));
+  const overlay = svgElement("g", { class: "ec-overlay", "aria-hidden": "true" }, svg);
+  const pointsLayer = svgElement("g", { class: "ec-points" }, svgElement("g", { class: "ec-marks", "aria-hidden": "true" }, svg));
   // Above the marks: the pointer's targets and the focus stops.
   const columnsLayer = svgElement("g", { class: "ec-columns" }, svg);
-  const overlay = svgElement("g", { class: "ec-overlay", "aria-hidden": "true" }, svg);
   const measure = textMeasure(svg);
 
   /** Live rows, in ascending x. */
@@ -941,7 +942,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     if (hoverKind !== "point") return;
     if (!stopsLayer) {
       stopsLayer = svgElement("g", { class: "ec-stops" }, svg);
-      svg.insertBefore(stopsLayer, overlay);
+      svg.insertBefore(stopsLayer, columnsLayer.nextSibling);
       plotHit = svgElement("rect", { class: "ec-hit" }, stopsLayer);
       // A click or tap on the plot takes focus to the point it hovers, as one on an x's column does.
       stopsLayer.addEventListener("click", (event) => {

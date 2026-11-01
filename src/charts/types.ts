@@ -249,11 +249,14 @@ export interface LineChartOptions<D> extends ChartOptions<D> {
    */
   readonly x: Accessor<D, number | Date>;
   /**
-   * A time axis's zone: "UTC" (the default) or "local", the viewer's clock. Ticks fall on day, month
-   * and year boundaries in it, and the names, the tooltip and the table say times in it. A date-only
-   * value such as new Date("2026-01-05") is UTC midnight, so in UTC it's 5 January on every machine.
+   * A time axis's zone: "UTC" (the default), "local", the viewer's clock, or a zone's name as Intl
+   * knows it, such as "Europe/London". Ticks fall on its midnights, months, years, hours and minutes,
+   * through summer time, and the names, the tooltip and the table say times in it with no zone's name,
+   * but for a time that comes twice where the clocks go back, which adds its short name ("1:30 AM
+   * GMT+1", "01:30 BST" in en-GB). A date-only value such as new Date("2026-01-05") is UTC midnight,
+   * so in UTC it's 5 January on every machine. A name Intl doesn't know throws a TypeError.
    */
-  readonly timeZone?: "UTC" | "local";
+  readonly timeZone?: "UTC" | "local" | (string & {});
   /**
    * Words an x for people instead of the default: in each x's name, the tooltip's title, the table's
    * row headers and the announcements, and as `markLabel`'s `category`. Given the x as the data has it,

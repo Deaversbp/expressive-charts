@@ -207,10 +207,127 @@ describe("lineChart on a time axis: words for people", () => {
     const { chart, keys } = setup();
     const before = keys();
     await expect(chart.update({ xFormat: fails })).rejects.toThrow(/no words/);
-    await expect(chart.update({ timeZone: "Europe/London" as "UTC" })).rejects.toThrow(/timeZone must be "UTC" or "local"/);
+    await expect(chart.update({ timeZone: "Mars/Olympus_Mons" })).rejects.toThrow(/timeZone must be "UTC", "local" or the name of a zone Intl knows/);
     expect(keys()).toEqual(before);
   });
 });
+
+const HOUR = 3_600_000;
+
+/**
+ * Ticket sales by the hour from midnight on Saturday 24 October 2026 in London (11 PM on the 23rd in
+ * UTC) to midnight on Monday the 26th: 50 x's, since the clocks go back at 2 AM on Sunday and 1 AM
+ * comes twice, at midnight and 1 AM in UTC.
+ */
+const weekend: Day[] = Array.from({ length: 50 }, (_, i) => ({ date: new Date(Date.UTC(2026, 9, 23, 23 + i)), goals: (i * 7) % 11, xg: ((i * 3) % 5) + 0.5 }));
+const at = (t: string): string => new Date(t).toISOString();
+
+const ZONE_ERROR = (got: string) => new TypeError(`lineChart: timeZone must be "UTC", "local" or the name of a zone Intl knows, such as "Europe/London", got ${got}.`);
+
+/** Each column's name before its values: how the chart says its x. */
+const said = (svg: SVGSVGElement): string[] => Array.from(svg.querySelectorAll(".ec-column"), (column) => plain(column.getAttribute("aria-label")).split(": ")[0]!);
+
+/** The chart's markup and its table, ids aside and numbers rounded to 1e-6, as Node 22 and 24 can differ in their last bits. */
+function drawing(container: HTMLElement, svg: SVGSVGElement): string {
+  const table = container.querySelector(".ec-table")?.outerHTML ?? "";
+  return (svg.outerHTML + table).replace(/ec-\w+-\d+/g, "").replace(/-?\d+\.\d+(e-?\d+)?/g, (n) => String(Math.round(Number(n) * 1e6) / 1e6));
+}
+
+/** Presses each key on whatever has focus: "<key> <the focused x's key>". */
+function walk(keys: readonly string[]): string[] {
+  return keys.map((key) => {
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    return `${key} ${document.activeElement?.getAttribute("data-key")}`;
+  });
+}
+
+describe("lineChart on a time axis: a zone by its name", () => {
+  it("puts its ticks on London's midnights and says each hour in London, the hour that comes twice with BST and GMT", async () => {
+    useLocale("en-GB");
+    const { svg, column, tooltip, tableRows, region, xTicks, chart, settle } = setup({ data: weekend, timeZone: "Europe/London", announce: true });
+    expect(xTicks()).toEqual(["24 Oct", "25 Oct", "26 Oct"]);
+    const names = said(svg);
+    expect(names.slice(23, 29)).toEqual(["24 Oct 2026, 23:00", "25 Oct 2026, 00:00", "25 Oct 2026, 01:00 BST", "25 Oct 2026, 01:00 GMT", "25 Oct 2026, 02:00", "25 Oct 2026, 03:00"]);
+    // Sunday has 25 hours, and no two x's are said alike.
+    expect(names.filter((name) => name.startsWith("25 Oct"))).toHaveLength(25);
+    expect(new Set(names).size).toBe(50);
+    expect(plain(column(at("2026-10-25T01:00:00Z")).getAttribute("aria-label"))).toBe("25 Oct 2026, 01:00 GMT: 6 goals, 3.5 xg");
+    pointer("pointerover", column(at("2026-10-25T01:00:00Z")));
+    expect(tooltip()).toEqual(["25 Oct 2026, 01:00 GMT", "6 goals · 3.5 xg"]);
+    expect(tableRows().slice(25, 27)).toEqual([
+      ["25 Oct 2026, 01:00 BST", "10", "0.5"],
+      ["25 Oct 2026, 01:00 GMT", "6", "3.5"]
+    ]);
+    // The first 1 AM changes, and 1 AM on Monday comes.
+    const next = [...weekend.map((d, i) => (i === 25 ? { ...d, goals: 12 } : d)), { date: new Date("2026-10-26T01:00:00Z"), goals: 3, xg: 2 }];
+    await settle(chart.update({ data: next }));
+    expect(region()).toBe("25 Oct 2026, 01:00 BST changed. Added 26 Oct 2026, 01:00");
+  });
+
+  it("goes between UTC and a zone on update({ timeZone }), and back to the same drawing", async () => {
+    useLocale("en-GB");
+    const { container, svg, chart, xTicks, tableRows, settle } = setup({ data: weekend });
+    const utc = drawing(container, svg);
+    expect(xTicks()).toEqual(["23 Oct, 23:00", "25 Oct", "26 Oct"]);
+    expect(tableRows()[25]![0]).toBe("25 Oct 2026, 00:00");
+    await settle(chart.update({ timeZone: "Europe/London" }));
+    expect(xTicks()).toEqual(["24 Oct", "25 Oct", "26 Oct"]);
+    expect(tableRows()[25]![0]).toBe("25 Oct 2026, 01:00 BST");
+    await settle(chart.update({ timeZone: "UTC" }));
+    expect(drawing(container, svg)).toBe(utc);
+  });
+
+  it("draws Etc/UTC as UTC", () => {
+    const utc = setup({ data: weekend });
+    const etc = setup({ data: weekend, timeZone: "Etc/UTC" });
+    expect(drawing(etc.container, etc.svg)).toBe(drawing(utc.container, utc.svg));
+  });
+
+  it("throws a TypeError on a name Intl doesn't know, and update() rejects, leaving the chart as it was", async () => {
+    expect(() => setup({ timeZone: "Mars/Olympus_Mons" })).toThrow(ZONE_ERROR('"Mars/Olympus_Mons"'));
+    expect(() => setup({ timeZone: 0 as unknown as "UTC" })).toThrow(ZONE_ERROR("0"));
+    const { container, svg, chart, xTicks, settle } = setup({ data: weekend, timeZone: "Europe/London" });
+    const before = drawing(container, svg);
+    await expect(chart.update({ timeZone: "Europe/Londres" })).rejects.toThrow(ZONE_ERROR('"Europe/Londres"'));
+    await expect(chart.update({ timeZone: "" })).rejects.toThrow(ZONE_ERROR('""'));
+    expect(drawing(container, svg)).toBe(before);
+    // And it still takes a zone.
+    await settle(chart.update({ timeZone: "Asia/Kolkata" }));
+    expect(xTicks()[0]).toBe("Oct 24, 4:30 AM");
+  });
+
+  it("goes a calendar month on and back in the zone with Page Down and Page Up", () => {
+    // Noon each day in London, from January to May: 12:00 in UTC in winter, 11:00 in summer.
+    const noons: Day[] = [];
+    for (let t = Date.UTC(2026, 0, 1, 12); t < Date.UTC(2026, 5, 1); t += 24 * HOUR) noons.push({ date: new Date(t >= Date.UTC(2026, 2, 29, 1) ? t - HOUR : t), goals: noons.length % 5, xg: 1 });
+    const london = setup({ data: noons, timeZone: "Europe/London" });
+    london.chart.focus(at("2026-03-15T12:00:00Z"));
+    // Noon on 15 April in London is 11:00 in UTC; a month back is noon again.
+    expect(walk(["PageDown", "PageUp", "PageUp"])).toEqual([`PageDown ${at("2026-04-15T11:00:00Z")}`, `PageUp ${at("2026-03-15T12:00:00Z")}`, `PageUp ${at("2026-02-15T12:00:00Z")}`]);
+    london.chart.destroy();
+    // In UTC, a month on from noon is noon on 15 April, after London's noon, so it's the 16th's.
+    const utc = setup({ data: noons });
+    utc.chart.focus(at("2026-03-15T12:00:00Z"));
+    expect(walk(["PageDown"])).toEqual([`PageDown ${at("2026-04-16T11:00:00Z")}`]);
+  });
+});
+
+/** A 64-bit hash of the text (cyrb53's mixing, both halves kept), as 16 hex digits, as line.test.ts has it. */
+function hash(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
+
+/** What main (2d84d47) drew, as "draws UTC and local time byte for byte as main does" hashes it there. */
+const MAIN = { utc: "fd3ae5b08340a7bd", local: "47d3de8bfee740c3" } as const;
 
 describe("lineChart on a time axis: zones", () => {
   const before = env.TZ;
@@ -244,6 +361,33 @@ describe("lineChart on a time axis: zones", () => {
     expect(xTicks()).toEqual(["Oct 30", "Oct 31", "Nov", "Nov 2"]);
     // Midnight on 2 November is 5 AM in UTC, a day of 25 hours after midnight on 1 November at 4 AM.
     expect(keys().slice(-4)).toEqual(["goals@2026-11-01T04:00:00.000Z", "xg@2026-11-01T04:00:00.000Z", "goals@2026-11-02T05:00:00.000Z", "xg@2026-11-02T05:00:00.000Z"]);
+  });
+
+  it("names the hour that comes twice by its zone in local time: the names, the tooltip and the table", () => {
+    // Midnight to 3 AM on 1 November in New York: 1 AM twice.
+    const night = [4, 5, 6, 7, 8].map((hour, i) => ({ date: new Date(Date.UTC(2026, 10, 1, hour)), goals: i, xg: i }));
+    const { svg, column, tooltip, tableRows } = setup({ data: night, timeZone: "local" });
+    expect(said(svg)).toEqual(["Nov 1, 2026, 12:00 AM", "Nov 1, 2026, 1:00 AM EDT", "Nov 1, 2026, 1:00 AM EST", "Nov 1, 2026, 2:00 AM", "Nov 1, 2026, 3:00 AM"]);
+    pointer("pointerover", column(at("2026-11-01T06:00:00Z")));
+    expect(tooltip()[0]).toBe("Nov 1, 2026, 1:00 AM EST");
+    expect(tableRows().map((row) => row[0])).toEqual(said(svg));
+  });
+
+  it("draws UTC and local time byte for byte as main does, away from a time that comes twice", () => {
+    // Four days, hours as the clocks go forward on 8 March, and days as they go back on 1 November.
+    const spring = Array.from({ length: 12 }, (_, i) => ({ date: new Date(Date.UTC(2026, 2, 8, 3 + i)), goals: i % 4, xg: i / 2 }));
+    const autumn = [30, 31, 32, 33].map((d, i) => ({ date: new Date(2026, 9, d), goals: i, xg: i }));
+    const drawn = (timeZone: "UTC" | "local") =>
+      hash(
+        [days, spring, autumn]
+          .map((data) => {
+            const { container, svg } = setup({ data, timeZone });
+            return drawing(container, svg);
+          })
+          .join("\n")
+      );
+    expect(drawn("UTC")).toBe(MAIN.utc);
+    expect(drawn("local")).toBe(MAIN.local);
   });
 });
 

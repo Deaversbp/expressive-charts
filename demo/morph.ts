@@ -292,9 +292,9 @@ const seasonOrder: readonly SeasonView[] = ["perMatch", "toDate", "columns"];
 const seasonSwitch = chartSwitch("#season", {
   views: seasonViews,
   initial: "perMatch",
-  // Four times morph()'s 160 points, so a jagged line per match keeps its corners within 2.5 px as a
-  // switch to the other line starts and lands, rather than 11.
-  transition: morph({ points: 640 }),
+  // morph() pairs the two charts' lines by week, so each week moves straight up or down, the corners
+  // are each line's own as a switch starts and lands, and nothing is drawn in the weeks both miss.
+  transition: morph(),
   colors: colorAssignment({ goals: 1, xg: 2 }),
   announce: true
 });
@@ -311,7 +311,7 @@ pickSeason(seasonSwitch.current);
 
 // With a week or a column focused, V goes to the next view, and focus follows the week: from a week on
 // a line to its goals' column, and back. The toggles can't do that: focus that has left the switch
-// stays put.
+// stays put, though the new view's tab stop goes to the same week, so Tab from them lands there.
 document.querySelector("#season")?.addEventListener("keydown", (event) => {
   const { key, altKey, ctrlKey, metaKey, target } = event as KeyboardEvent;
   if ((key !== "v" && key !== "V") || altKey || ctrlKey || metaKey) return;

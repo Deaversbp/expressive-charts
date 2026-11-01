@@ -1,10 +1,12 @@
-// Screenshots of demo/bars.html on a stopped clock: the theme, the ball-and-cleat story mid-travel and
-// at rest, each motion mode, keyboard focus, the tooltip and legend, and a staged metric switch.
-// Baselines are Linux-only (CONTRIBUTING.md says how to update them).
+// Screenshots of demo/bars.html on a stopped clock: the theme, both charts drawing themselves in as the
+// page loads, the ball-and-cleat story mid-travel and at rest, each motion mode, keyboard focus, the
+// tooltip and legend, and a staged metric switch. Baselines are Linux-only (CONTRIBUTING.md says how to
+// update them).
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   bar,
+  barsDemo,
   chart,
   FRAME,
   hostBar,
@@ -29,6 +31,104 @@ test.describe("theme", () => {
       await expect(page).toHaveScreenshot(`page-${colorScheme}.png`, { fullPage: true });
     });
   }
+});
+
+/**
+ * Loads the page again, with time stopped: the clock reads openDemo's START as the charts draw, so their
+ * draw-in starts then, and its frames fall at the same times on every run.
+ */
+async function openLoading(page: Page): Promise<void> {
+  await openDemo(page);
+  await page.reload();
+  await barsDemo.ready(page);
+}
+
+/**
+ * The draw-in's paths in a chart's overlay, each with its stroke and length, and the fill of the
+ * segment it's drawn for: the bar chart's segment, or the hand-written chart's rect.
+ */
+async function drawing(container: Locator): Promise<{ part: string; stroke: string; fill: string; length: number }[]> {
+  return container.evaluate((root) => {
+    const rects = [...root.querySelectorAll<SVGRectElement>(":scope > g > g > rect")];
+    return [...root.querySelectorAll<SVGPathElement>(".ec-overlay path[data-part]")].map((path) => {
+      const part = path.getAttribute("data-part")!;
+      const [key, series] = part.split("/");
+      const segment =
+        root.querySelector(`.ec-mark[data-key="${key}"] .ec-segment`) ??
+        rects.find((rect) => (rect as unknown as { __data__: { row: { name: string }; series: string } }).__data__.row.name === key && rect.closest(`.host-${series}`));
+      return { part, stroke: getComputedStyle(path).stroke, fill: segment ? getComputedStyle(segment).fill : "", length: path.getTotalLength() };
+    });
+  });
+}
+
+/** Each bar's body on the bar chart, and each rect on the hand-written one, with the opacity it's drawn at now. */
+async function strengths(page: Page): Promise<number[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll("#chart .ec-body, #host-chart .host-goals rect")].map((element) => Number((element as SVGElement).style.opacity || element.getAttribute("opacity") || 1))
+  );
+}
+
+test.describe("draw-in", () => {
+  test("both charts draw their bars in as the page loads, each in its part's colour over its faint self, then rest", async ({ page }) => {
+    await openLoading(page);
+    // As the page loads: every bar faint, and a path for each in its overlay, in its segment's colour.
+    expect(await strengths(page)).toEqual(Array<number>(16).fill(0.3));
+    for (const container of [chart(page), hostChart(page)]) {
+      const paths = await drawing(container);
+      expect(paths).toHaveLength(8);
+      for (const path of paths) {
+        expect(path.part).toMatch(/\/goals$/);
+        expect(path.stroke).toBe(path.fill);
+        expect(path.length).toBe(0);
+      }
+    }
+
+    // Part way: each bar drawn some of the way along.
+    await page.clock.runFor(400);
+    for (const container of [chart(page), hostChart(page)]) {
+      expect((await drawing(container)).every(({ length }) => length > 0)).toBe(true);
+    }
+    expect(await strengths(page)).toEqual(Array<number>(16).fill(0.3));
+    await expect(page).toHaveScreenshot("drawin-part-way.png", { fullPage: true });
+
+    // 750 ms: drawn, the bars at full strength with nothing over them, as the page at rest. Nothing was announced.
+    await page.clock.runFor(350 + FRAME);
+    for (const container of [chart(page), hostChart(page)]) expect(await drawing(container)).toEqual([]);
+    expect(await strengths(page)).toEqual(Array<number>(16).fill(1));
+    await expect(chart(page).getByRole("status")).toHaveText("");
+    await expect(page).toHaveScreenshot("page-light.png", { fullPage: true });
+  });
+
+  test("focus on a bar part way: the draw-in goes on, and the bar keeps its focus and its story", async ({ page }) => {
+    await openLoading(page);
+    await page.clock.runFor(200);
+    await tabInto(page, chart(page));
+    await expect(bar(page, "Okafor")).toBeFocused();
+    expect(await drawing(chart(page))).toHaveLength(8);
+    await page.clock.runFor(REST);
+    expect(await drawing(chart(page))).toEqual([]);
+    await expect(bar(page, "Okafor")).toBeFocused();
+    await expect(chart(page).locator(".ec-focus")).not.toHaveAttribute("visibility", "hidden");
+    expect(await iconTransforms(chart(page))).toHaveLength(1);
+  });
+
+  test("reduced motion: the bars are there at once", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openLoading(page);
+    // No time passes.
+    for (const container of [chart(page), hostChart(page)]) expect(await drawing(container)).toEqual([]);
+    expect(await strengths(page)).toEqual(Array<number>(16).fill(1));
+  });
+
+  test("Off, picked part way: the draw-in ends at once", async ({ page }) => {
+    await openLoading(page);
+    await page.clock.runFor(300);
+    expect(await drawing(chart(page))).toHaveLength(8);
+    await pickMode(page, "Off");
+    // No time passes.
+    for (const container of [chart(page), hostChart(page)]) expect(await drawing(container)).toEqual([]);
+    expect(await strengths(page)).toEqual(Array<number>(16).fill(1));
+  });
 });
 
 test.describe("ball and cleat", () => {

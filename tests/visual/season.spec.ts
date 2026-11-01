@@ -2,9 +2,9 @@
 // hover, the players' bars and both lines' changes after a matchweek, and the slope chart mid-trace.
 // Beside them, DOM checks: what a linked chart shows and doesn't (no tooltip, crosshair, focus or
 // announcement), Emphasis only, the keyboard, each matchweek's changes in the overlay, clear of each
-// other and of every text, at 1,000 and 320 px, the table and the announcement, reduced motion and Off,
-// and the room for the changes at 320 px. Names start with "season-", since screenshot names are shared
-// across files.
+// other and of every text and inside the line chart, at 1,000, 480 and 320 px, the table and the
+// announcement, reduced motion and Off, and the room for the changes at 320 px. Names start with
+// "season-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, hoverShape, iconTransforms, openDemo, pickMode, REST, seasonDemo, tabInto } from "./demo";
@@ -90,6 +90,22 @@ async function headingsMet(page: Page): Promise<string[]> {
     return [...document.querySelectorAll("#line .ec-overlay text")].flatMap((text) => {
       const a = core(text.getBoundingClientRect());
       return above.filter((b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1).map((b) => `"${text.textContent}" on "${b.text}"`);
+    });
+  });
+}
+
+/**
+ * Each change on the line that goes past the edge of its chart, the `<svg>`: above it, where the chart
+ * keeps room over its plot, below it, or past either side.
+ */
+async function outsideChart(page: Page): Promise<string[]> {
+  return line(page).evaluate((root) => {
+    const chart = root.querySelector("svg.ec-chart")!.getBoundingClientRect();
+    return [...root.querySelectorAll(".ec-overlay text")].flatMap((text) => {
+      const box = text.getBoundingClientRect();
+      return box.top < chart.top || box.bottom > chart.bottom || box.left < chart.left || box.right > chart.right
+        ? [`"${text.textContent}" at ${box.left.toFixed(1)}–${box.right.toFixed(1)} × ${box.top.toFixed(1)}–${box.bottom.toFixed(1)}, the chart ${chart.left.toFixed(1)}–${chart.right.toFixed(1)} × ${chart.top.toFixed(1)}–${chart.bottom.toFixed(1)}`]
+        : [];
     });
   });
 }
@@ -345,15 +361,18 @@ test.describe("Play next matchweek", () => {
     expect(await captions(line(page))).toEqual(["totalXg +1.1"]);
   });
 
-  for (const width of [1000, 320]) {
-    test(`at ${width.toLocaleString("en-GB")} px, every matchweek's changes keep clear of each other, every label, the legend and the heading, inside the card`, async ({ page }) => {
+  // 480 px is the widest page with the narrower room to the right.
+  for (const width of [1000, 480, 320]) {
+    test(`at ${width.toLocaleString("en-GB")} px, every matchweek's changes keep clear of each other, every label, the legend and the heading, inside the chart`, async ({ page }) => {
       await page.setViewportSize({ width, height: 6000 });
       await openAtRest(page);
       const met: string[] = [];
       for (let week = 25; week <= 38; week++) {
         await nextButton(page).click();
         await page.clock.runFor(REST);
-        for (const meeting of [...(await textsMet(line(page))), ...(await headingsMet(page)), ...(await outsideCards(page))]) met.push(`matchweek ${week}: ${meeting}`);
+        for (const meeting of [...(await textsMet(line(page))), ...(await headingsMet(page)), ...(await outsideChart(page)), ...(await outsideCards(page))]) met.push(`matchweek ${week}: ${meeting}`);
+        // Matchweek 35's xG change rises highest, into the room above the plot.
+        if (week === 35 && width !== 480) await expect(page.locator(".linked > .line")).toHaveScreenshot(`season-line-room-${width}.png`);
       }
       expect(met).toEqual([]);
     });
@@ -427,11 +446,12 @@ test("at 320 px, the changes fit beside their bars, with no sideways scroll", as
   await nextButton(page).click();
   await page.clock.runFor(REST);
   expect(await captions(players(page))).toEqual(["Okafor +1", "Lindqvist +1"]);
-  // Both lines' changes, clear of each other, the end labels and the legend, though the plot is narrow
-  // and the lines end close together.
+  // Both lines' changes, clear of each other, the end labels and the legend, and inside the chart,
+  // though the plot is narrow and the lines end close together.
   expect(await captions(line(page))).toEqual(["totalGoals +2", "totalXg +1.8"]);
   expect(await textsMet(line(page))).toEqual([]);
   expect(await headingsMet(page)).toEqual([]);
+  expect(await outsideChart(page)).toEqual([]);
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth

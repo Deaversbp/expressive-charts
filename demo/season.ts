@@ -169,11 +169,16 @@ const lineChanges = parallel(
 
 /**
  * On a phone the line chart is narrow, and the two changes rise past the end labels as much as they go
- * right: it keeps less room for them there, and the page's CSS keeps space above the plot as well.
+ * right: it keeps less room for them there.
  */
 const phone = matchMedia("(max-width: 480px)");
 /** Px the line chart keeps past its end labels for the two changes side by side. */
 const roomFor = (): number => (phone.matches ? 40 : 60);
+/**
+ * Px it keeps above its plot, at any width: where a line ends steeply, its change rises past both end
+ * labels. The chart is that much taller, so the plot keeps its height.
+ */
+const ROOM_ABOVE = 40;
 
 // The season to date, as on line.html: each week's points pulse when it's hovered, or linked, and each
 // matchweek's change shows past each line's end.
@@ -191,13 +196,14 @@ const line = lineChart<Week>("#line", {
   markLabel: (d) => `Matchweek ${d.week}: ${goals(d.totalGoals)}, ${d.totalXg.toFixed(1)} xG`,
   markDescription: (d) => `${tenths(d.totalGoals - d.totalXg)} vs expected`,
   table: { category: "Matchweek" },
-  height: 270,
-  // The two changes sit side by side past the end labels: the chart keeps room for them inside itself.
-  room: roomFor(),
+  height: 270 + ROOM_ABOVE,
+  // The two changes sit side by side past the end labels, or rise above them: the chart keeps room for
+  // them inside itself, to the right and above.
+  room: { right: roomFor(), top: ROOM_ABOVE },
   on: { hover: "pulse", update: lineChanges }
 });
 // A phone turned on its side, or a window narrowed past it, lays the chart out again with its room.
-phone.addEventListener("change", () => void line.update({ room: roomFor() }));
+phone.addEventListener("change", () => void line.update({ room: { right: roomFor(), top: ROOM_ABOVE } }));
 
 // The D3 columns draw themselves; expressive() reads each rect as a column, keyed by its week as the
 // others are, so the link needs no `by`.

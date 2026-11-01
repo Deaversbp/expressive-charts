@@ -25,6 +25,16 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
+- **A chart measures its text again when the text changes size.** The bar, donut and line charts measured each text once, as they drew, and again only once web fonts loaded. So spacing a viewer adds after load (WCAG 1.4.12's), or a font or size set on the page, widened the text without a new layout: on Windows, a bar chart's names ran together. Now each chart keeps a hidden line of text, with no class, watched with a `ResizeObserver`. When its width changes, the chart measures again and lays out at once, as when fonts load: a bar chart thins its names again, and its margins fit its text. Until text changes size, every chart draws as before.
+
 ## 0.7.0 (1 November 2026)
 
 A new effect, `drawIn`, that draws a mark in along its walk as it enters, a stack part by part, each in its own colour; `morph` pairing two lines by x, so their corners and gaps hold on every frame; a chart switch that draws a line's end dot and a point's ring, and keeps its tab stop on the week; and room above a line chart's plot. In the effect-author API, the one change is `part` on `Paint`, an addition. The other changes are outside the promise, and none needs anything written instead.

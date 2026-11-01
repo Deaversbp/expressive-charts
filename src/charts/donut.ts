@@ -37,7 +37,7 @@ import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
-import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
+import { watchFonts, watchHoverDuration, watchText, watchWidth } from "./shell/watch";
 import type { ChartSwitchPaint } from "./switch";
 import { chartTable, tableModel, type TableModel } from "./table";
 import { chartTooltip } from "./tooltip";
@@ -650,7 +650,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
 
   const unwatchHoverDuration = watchHoverDuration(svg, motion);
 
-  /** Re-lays out without animating: a resize or fonts loading. A transition in flight lands at once. Effects follow through change(). */
+  /** Re-lays out without animating: a resize, fonts loading or the text changing size. A transition in flight lands at once. Effects follow through change(). */
   function relayout(): void {
     if (destroyed) return;
     const next = layout(current);
@@ -660,17 +660,21 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
     void transitionTo(next, true);
   }
 
+  // Labels' room is measured; measure again when the text changes size, such as spacing added after
+  // the chart drew, and once web fonts arrive.
+  const remeasure = (): void => {
+    measure.clear();
+    relayout();
+  };
+  const unwatchText = watchText(svg, clock, remeasure);
+
   const unwatchWidth = watchWidth(container, clock, measuredWidth, (width) => {
     measuredWidth = width;
     // A fixed `width` ignores the container.
     if (current.width === undefined) relayout();
   });
 
-  // Labels' room is measured; measure again once web fonts arrive.
-  const unwatchFonts = watchFonts(doc, () => {
-    measure.clear();
-    relayout();
-  });
+  const unwatchFonts = watchFonts(doc, remeasure);
 
   // ── First render ───────────────────────────────────────────────────────────
 
@@ -793,6 +797,7 @@ export function donutChart<D>(target: string | Element, options: DonutChartOptio
       table.destroy();
       announcer?.destroy();
       unwatchHoverDuration();
+      unwatchText();
       unwatchWidth();
       unwatchFonts();
       for (const record of [...order, ...leaving.values()]) {

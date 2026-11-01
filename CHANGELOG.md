@@ -25,7 +25,9 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
-## Unreleased
+## 0.7.0 (1 November 2026)
+
+A new effect, `drawIn`, that draws a mark in along its walk as it enters, a stack part by part, each in its own colour; `morph` pairing two lines by x, so their corners and gaps hold on every frame; a chart switch that draws a line's end dot and a point's ring, and keeps its tab stop on the week; and room above a line chart's plot. In the effect-author API, the one change is `part` on `Paint`, an addition. The other changes are outside the promise, and none needs anything written instead.
 
 ### Added
 

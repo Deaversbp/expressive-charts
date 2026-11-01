@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M12 are complete (§9). M12 built a chart switch that draws a line's end dot and a point's ring and keeps its tab stop on the week, `morph` pairing two lines by x, a new effect, `drawIn`, with `Paint.part` for a segment's colour, room above a line chart's plot, and a toolchain and test tidy. **0.7.0 is on npm**, published from CI through npm's trusted publishing with provenance on 1 November 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.7.0)), after 0.6.0 on 30 October, 0.5.0 on 29 October, 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M12 are complete (§9). M12 built a chart switch that draws a line's end dot and a point's ring and keeps its tab stop on the week, `morph` pairing two lines by x, a new effect, `drawIn`, with `Paint.part` for a segment's colour, room above a line chart's plot, and a toolchain and test tidy. **0.7.0 is on npm**, published from CI through npm's trusted publishing with provenance on 1 November 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.7.0)), after 0.6.0 on 30 October, 0.5.0 on 29 October, 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. M13, for 0.8.0, is planned in §9: charts that measure their text again when it changes size, every bar recoloured at once and a line chart's decorations below its points, time zones by name, M8's small notes, and a toolchain and test tidy. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -4006,6 +4006,243 @@ Each step's session reads the hand-over notes in its notes folder first, `plan-0
 - **0.7.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M12 is done.
 
 **Status: complete (1 November 2026).** Every item on the list holds but two parts, each your choice in its step. Decision 8's stacks drawing in each part in its own colour don't show as a page loads: the bars page loads in Goals, as you chose in step 6, where each bar is one part, so both charts draw in one colour, and the parts' colours show in Goals + assists, which `drawIn`, for enter only, doesn't play into. `src/draw-in.test.ts` pins them, and step 6 checked them in Chromium. And `a11y.spec.ts`'s text spacing on `stress.html` still fails in Chromium on Windows: step 5 found it's the charts measuring their text once, as they draw, not the page or the test, and on your word CONTRIBUTING says so and the fix is in the backlog. Docker's run, the one that counts, passes. Steps 1 to 6 built and checked the first seven items, and 0.7.0 is on npm through trusted publishing with provenance, with its release on GitHub (step 7).
+
+### M13: Text that keeps up with a viewer's spacing, decorations below a line's points, and dates in any time zone (0.8.0)
+
+Charts that measure their text again when its size changes after they draw; every bar recoloured at once on `update({ colors })`, and a line chart's decorations below its points; time zones by name on a date axis; M8's small notes (a word for a missing value, linking an x with every value missing, labels that fade as they thin, and the room hidden value labels leave); a toolchain and test tidy; and last, 0.8.0 on npm.
+
+**Demo:** a new card on the line page, a club's ticket sales by the hour over the weekend the clocks went back in London, in `timeZone: "Europe/London"`, with a toggle for London and UTC: in London its ticks fall on London's midnights, and Sunday has 25 hours. On the line page, week 12's hovered goals point shows above the red run. On the stress page, text spacing added after load thins the bar names again, the bar charts take their hidden value labels' room, and "Change every bar" fades the labels as they thin.
+
+**Where M13 starts** (checked against main at `254fa81` while planning, 1 November 2026):
+
+- **Already built.**
+  - **0.7.0** is npm's `latest`, published through trusted publishing with provenance. npm lists `0.0.0-stage` and `0.1.0` to `0.7.0`. GitHub has no open issues or pull requests, and origin has 62 branches, the merged steps' among them. Main is 0.7.0's code, with this plan's last edits.
+  - **Text.** A chart measures each text's width once, as it draws, and keeps it by class, size and text (`textMeasure`, `src/charts/render/text.ts:43`). Only web fonts loading clear it (`watchFonts`, `shell/watch.ts:37`; `bar.ts:626`, `donut.ts:670` and `line.ts:1432`), then `relayout()` lays the chart out again at once. A resize lays out again with the widths kept (`watchWidth`, `shell/watch.ts:11`). `expressive()`'s overlay measures its text with a measure of its own, which nothing clears (`adapter/expressive.ts:485`). jsdom has no layout, so tests get the estimate, 0.6 em a character, which isn't kept.
+  - **Colours.** The donut and line charts redraw every mark on an update's first frame (`donut.ts:510`, `line.ts:1304`), so `update({ colors })` recolours them at once. The bar chart draws only the bars that move each frame (`bar.ts:404–409`), so a bar a change leaves in place keeps its old colour until the change lands (`bar.ts:431`). With `colors` alone nothing moves, so it lands at once. `colorBy` already marks every bar to be drawn (`bar.ts:706`). `surface.recolor(key)` is called when a mark's first part changes colour (`bar.ts:269`, `expressive.ts:536`), so a stack's overlay paths drawn for a later part, `drawIn`'s, keep their old colour. The legend follows at once (`legend.ts:66`); the tooltip and the table have no colours.
+  - **Layering.** A line chart's `<svg>` is its grid, axis, crosshair, focus ring, marks (`.ec-lines`, then `.ec-points`), columns, the stops with `hover: "point"`, and last the overlay (`line.ts:215–226`, `944`). A line's end dot and end label are in its group in `.ec-lines` (`line.ts:432`). The overlay holds every run's drawing: `threshold`'s runs at the line's width, `travel`'s icon, `trace`'s and `drawIn`'s strokes, and `delta`'s and `label`'s text. Points show only when hovered or alone between gaps (`render/theme.ts:176–177`). So at week 12 on the line page, where goals (18) are below xG (19), the red run crosses the hovered goals dot (M4 step 7's note). Six baselines show it: `line-tooltip`, `line-focus-chart-light` and `-dark`, `line-point-hover`, and `line-point-focus-light` and `-dark`.
+  - **Time zones.** `timeZone` is `"UTC"`, the default, or `"local"` (`types.ts:251–256`, checked at `line-layout.ts:213`). `partsOf` and `midnight` (`time.ts:237` and `249`) read and set a Date's UTC or local fields, and names and ticks are worded through Intl in UTC or the viewer's zone (`zoneOption`, `time.ts:221`). Page Up and Page Down go a month in the zone (`monthsOn`, `line.ts:1092`). The tests of `"local"` set `process.env.TZ` (`time.test.ts:16`). Only the stress page has a time axis, in UTC.
+  - **M8's notes.**
+    - "missing" is English only: the tooltip and the names say `${label} missing` (`said`, `line.ts:1726`), and the table's cell says `MISSING` (`table.ts:109`). `TableOptions` has `total` and `series` (`types.ts:120–139`), and nothing words a missing value.
+    - A bar chart thins its labels on its frame (`thinLabels`, `bar-layout.ts:248`), and an undrawn label's text is empty (`bar-layout.ts:333`). A change takes the labels its target draws on its first frame (`bar.ts:375`, `465`).
+    - The frame keeps room for every label, so thinning moves nothing (`bar-layout.ts:8–9`): past a horizontal bar's tip, `valueWidth + PAD + 4`, about 30 px at 320 px (`bar-layout.ts:468`), and above a column (`484`).
+    - An x with every value missing has no mark (`line.ts:1273`), so its hover tells its link nothing (`shell/hover.ts:183`), and linked charts end their hover (`link.ts:157`).
+  - **The build.** tsdown 0.23.4, pinned, with rolldown-plugin-dts 0.28.8 and rolldown 1.2.16; vite 8.3.5; jsdom 29.1.1; vitest 5.0.5; Playwright 1.64.1. TypeScript 7.0.2 runs `typecheck` (2.4 s), and 6.0.3, as `typescript-6`, the API docs test. This machine has Node 24.12.0 and npm 11.7.0.
+  - **npm on 1 November,** as on 30 October. jsdom 30.1.3 needs Node `^22.22.2 || ^24.15.0 || >=26.0.0`, and CI's `setup-node` gets 22.23.4 and 24.22.2. tsdown 0.23.4 still asks for rolldown-plugin-dts `^0.28.8` (0.29.0 is out), and both pin `get-tsconfig 5.0.0-beta.6` (its latest is 4.14.3). TypeScript 7.1 is still a beta (7.1.0-beta, and nightly 7.1.0-dev builds). vitest 5.0.5 takes any jsdom. Every other dev dependency is at its latest.
+  - **Testing.** 2,998 unit tests in 113 files pass (45 s here). The visual suite ran 744 tests, with 60 skipped, at M12 step 6 (268 in each browser).
+    - Under heavy Docker load, WebKit's two Play season tests on the line page and `a11y.spec.ts`'s hover and pause tests on the stress page went past the default 30 s (M12 step 5). With less load they pass.
+    - `a11y.spec.ts`'s text spacing on `stress.html` fails in Chromium on Windows, as CONTRIBUTING says (M12 step 5).
+  - **Sizes** (gzip, against their budgets, on 0.7.0's code): `dist/index.cjs` 122.9 KB of 124 (125,869 bytes: 1,107 left), the script-tag bundle 86.4 of 88 (88,454 bytes: 1,658 left), `dist/testing.js` 23.5 of 24.5 (1,025 left), the stylesheet 2.4 of 2.5 (2,491 bytes: 69 left), everything 86.8 of 95, `dist/index.js` 124.9 of 137, `expressive` and `travel` 34.1 of 37.5, the switch's set 46.2 of 50, the line page's set 41.5 of 45.5, `barChart` 31.3 of 34, `dist/testing.cjs` 17.3 of 19, `describe` and `matrix` 6.6 of 7.5, and `motion` and `animated` 1.7 of 2. M12 raised everything, `dist/index.js`, the switch's set, and `expressive` and `travel`, but not `dist/index.cjs` or the script-tag bundle.
+- **Gaps.**
+  - Text spacing added after a chart draws runs a bar chart's names together on Windows, and a resize keeps the old widths.
+  - A bar a change leaves in place keeps its old colour until the change lands, and a stack's later parts' overlay paths keep theirs.
+  - A line chart's decorations draw over its points.
+  - A date axis is in UTC or the viewer's zone only.
+  - "missing" can't be worded, an x with every value missing can't be linked, a thinned label switches on a change's first frame, and hidden value labels keep their room.
+- **Out of date** (each fixed by the step named):
+  - CONTRIBUTING's paragraph on text spacing on Windows (step 1), and a11y-audit.md's spacing line (step 7).
+  - jsdom 30 is out (step 6).
+  - api.md's and architecture.md's `room` quote jsdom's estimate of the season page's room, not Chromium's measure, and `src/captions.test.ts` models the page's line chart at 270 px, where it's 310 (step 6).
+
+**What M13 takes from the backlog and the notes, and what stays:**
+
+| Item | Goes to |
+| --- | --- |
+| Text spacing added after a chart draws (the backlog, M12 step 5) | Decisions 1, 4 and 12, step 1 |
+| Recolouring at once when `update()` changes `colors` (the backlog, M5 step 2) | Decisions 1 and 13, step 2 |
+| Decorations drawing below a line chart's points (the backlog, M4 step 7) | Decisions 1, 5 and 14, step 2 |
+| Time zones by name on a date axis (the backlog, M6 decision 1) | Decisions 2, 6 and 15, step 3 |
+| A word for a missing value, and linking an x with every value missing (M8's notes) | Decisions 2, 7, 16 and 17, step 4 |
+| A fade when a change thins labels, and the hidden value labels' room (M8's notes) | Decisions 2, 8, 18 and 19, step 5 |
+| jsdom 30, WebKit's default 30 s under load, and Chromium's measure of the season page's room (M12 steps 5 to 7's notes) | Decisions 2, 9 and 20, step 6 |
+| rolldown-plugin-dts 0.29.0, a stable `get-tsconfig`, and `api-docs.test.ts` on TypeScript 7's API | Stay: tsdown asks for 0.28.8, and `get-tsconfig` 5 and TypeScript 7.1 are betas |
+| A palette check against `--ec-negative` (the backlog, beside the decorations) | Stays: it changes the palette |
+| `drawIn`'s stack colours on a page at load, and its square tip over a bar's rounded one on the last frames (M12 steps 3 and 6) | Stay: in the notes |
+| A faster vertex reader for `morph`, a line chart mid-change pairing by length, a hole wound the same way as its outside, `mapMark` dropping `labelBounds` and `nearbyLabels`, a ring-level rule for padded donuts, and a slice of no angle | Stay: in the notes |
+| Switching between host charts, a transition effect reporting its progress, `threshold` exact on curved Vega lines, a lighter path than `refresh()` for Vega, a bar's per-frame cost, VoiceOver + Safari, a written audit table for `stress.html`, square caps and bevel joins, a curved line's fade beside a row coming or going, and a mark's `opacity` reaching its decorations | Stay: in the backlog, or in the notes |
+| Deprecating `0.0.0-stage` on npm, and deleting the merged step branches on origin | Stay: yours |
+
+When steps 1 to 3 land, each marks its backlog item as built: step 1 text spacing, step 2 recolouring and the decorations below the points (the palette check stays), and step 3 time zones by name. M8's items come from the notes.
+
+**Decided while planning M13 (1 November 2026):** decisions 1–10 are yours, and 11–21 follow from them and the code.
+
+1. **M13 builds two things:** a chart that measures its text again when it changes size after the chart draws, and colours and layering (every bar recoloured at once on `update({ colors })`, and a line chart's decorations below its points).
+2. **Three smaller items join them:** time zones by name on a date axis; M8's small notes (a word for a missing value, linking an x with every value missing, labels that fade as they thin, and the room hidden value labels leave); and a test and toolchain tidy.
+3. **One release, 0.8.0, when M13 is done.**
+4. **A hidden probe.** Each chart keeps hidden text styled as its own and watches its size: when it changes, the chart forgets its measured widths and lays out again. Not a watch on the page's styles, which misses a font size set in the browser, and not a method the page calls, which a viewer's bookmarklet never calls.
+5. **Decorations draw above a line chart's lines and below its points,** so nothing an effect draws covers a point being read. Not paths below and icons and text above, where the riding icon could cover the hovered point, and not only the hovered point lifted, where a value alone between gaps would stay under a red run.
+6. **Times in a named zone read as UTC's do,** with no zone name. A page names the zone in its label or description, or through `xFormat`. Not the zone's short name on every time.
+7. **`missing` on `lineChart`** words a missing value everywhere the chart says one. Not `table.missing`, which would leave the tooltip and the names in English, and not a function.
+8. **The bars take the hidden value labels' room.** Not keeping it, as M8 did so that thinning moved nothing.
+9. **You update Node here** to 24.15 or newer, and jsdom 30 comes in with the tidy.
+10. **The demo:** a new card on the line page, a club's ticket sales by the hour over the weekend the clocks went back in London, with a toggle for London and UTC. The line page's hover and the stress page show the rest.
+11. **What's an addition and what isn't** (the 0.x promise). 0.8.0 is a minor release. Nothing in the effect-author API changes, is added or goes.
+
+    | Change | Under the promise? | Kind |
+    | --- | --- | --- |
+    | A chart measuring its text again | No: the charts | A fix: until text changes size, every chart draws as before. Listed under Fixed |
+    | `update({ colors })` recolouring every bar at once, and a stack's later parts' overlays | No: the charts | A fix. Listed under Fixed |
+    | A line chart's decorations below its points | No: the charts | A change: a decoration no longer covers a point. Effects draw as before. Listed under Changed |
+    | `timeZone` taking a zone's name | No: the charts | An addition: `"UTC"` and `"local"` draw as before. A time that comes twice where the clocks go back gains its zone's short name, in `"local"` too, listed under Fixed |
+    | `missing` on `lineChart` | No: the charts | An addition: unset, a missing value reads "missing", as now |
+    | Linking an x with every value missing | No: the charts | A fix. Listed under Fixed |
+    | Labels fading as they thin, and bars taking the hidden value labels' room | No: the charts | Changes: a chart whose value labels are all hidden lays its bars out longer. Listed under Changed |
+    | jsdom 30, the timeouts, and the docs' measure | No: the repository | Tests and docs only: the published files are the same |
+
+12. **A chart measures its text again** (decision 4).
+    - **The probe.** The bar, donut and line charts each keep one hidden line of text for each class they measure text in (names, values, ticks, end labels, and the overlay's `ec-text`), styled as that text is, and watch it with a ResizeObserver, from `shell/watch.ts`, beside `watchWidth` and `watchFonts`. The step uses HTML or SVG text, by what Chromium, Firefox and WebKit report through ResizeObserver, and says which. It's `aria-hidden`, takes no focus or pointer, and changes neither the container's size nor the page's scroll width.
+    - **A change.** When a probe's width changes by half a px or more, heard once a frame at most, as `watchWidth` hears a resize, the chart clears its measure and lays out again at once, as it does when web fonts load (`relayout()`): a transition in flight lands, and effects follow through `change()`. A probe with no width (a chart in `display: none`) is ignored. Until text changes size, every chart draws byte for byte as now.
+    - **Spacing added after load,** as WCAG 1.4.12's bookmarklet adds it, then lays a chart out as the same spacing does before it draws: a bar chart thins its names again, and its margins fit its text. So `a11y.spec.ts`'s text spacing passes on `stress.html` in Chromium on Windows, and CONTRIBUTING's paragraph about it goes.
+    - **Without ResizeObserver,** in jsdom, there's no watch, as `watchWidth` has none.
+    - **`expressive()`** keeps its measure as now: the host's text is the host's, and its overlay measures change text as a run draws. The step adds a backlog line for it beside text spacing's.
+    - **The stylesheet** has 69 bytes of room, so the probe is hidden through its attributes, or the stylesheet's budget is raised (decision 21).
+13. **Every bar recolours at once** (decision 1).
+    - **`update({ colors })`** marks every bar to be drawn on the change's first frame, as `colorBy` does (`bar.ts:706`), so a bar the change leaves in place takes its new colour then, not as the change lands. With motion off, and with `colors` alone, it's at once, as now.
+    - **Overlays follow every part.** `surface.recolor(key)` is called when any of a mark's parts changes colour, not only its first (`bar.ts:269`, and `expressive.ts:536` on a read), so a stack's paths drawn for a later part, as `drawIn` draws them, follow.
+    - **The donut and line charts** already recolour every mark on an update's first frame; tests pin it, mid-change too. The legend follows at once, as now.
+14. **Decorations below a line chart's points** (decision 5).
+    - **The overlay** goes above the lines and below the points: a line chart's `<svg>` is its grid, axis, crosshair and focus ring, then its lines, the overlay and its points, then the columns and the stops. So every run's drawing is above every line, end dot and end label, and below every point: `threshold`'s runs, `travel`'s icon, `trace`'s and `drawIn`'s strokes, and `delta`'s and `label`'s text.
+    - **What reaches them stays as it is:** a switch still hides the overlay while it switches, and `.ec-morphing` hides the marks; the overlay takes no pointer; `hover: "point"`'s stops stay above the marks. The step picks the groups (the points in a group of their own after the overlay, say) and says so.
+    - **An end dot** is part of its line, so a decoration still draws over it, as now.
+    - **Effects don't change,** and no other overlay moves: bars, donuts, host charts and the switch's own overlay draw as now.
+    - **Baselines.** The line page's six pictures of a hovered or focused point at week 12 change, where the red run crossed the goals dot: `line-tooltip`, `line-focus-chart-light` and `-dark`, `line-point-hover`, and `line-point-focus-light` and `-dark`; and the stress page's `stress-line-tooltip` if its dot meets a run. A picture at rest stays as it is: points show only on hover, and a value alone between gaps has no run.
+15. **Time zones by name** (decisions 2 and 6).
+    - **`timeZone?: "UTC" | "local" | (string & {})`:** a zone's name as Intl knows it, such as `"Europe/London"`, beside `"UTC"` and `"local"`. Checked at setup and on `update()`: a name Intl's `DateTimeFormat` won't take as its `timeZone` throws the TypeError, whose message says a zone's name is allowed too. `"UTC"` and `"local"` draw byte for byte as now, but for a time that comes twice (below).
+    - **Ticks** fall on the zone's own boundaries (midnights, months and years, hours and minutes) through summer time: a day can be 23 or 25 hours, and a midnight the clocks skip is the first time after it, as with `"local"`. Page Up and Page Down go a calendar month in the zone.
+    - **Names, the tooltip, the table and the announcements** say times in the zone with no zone name (decision 6), except where the clocks go back: there a time that comes twice adds the zone's short name ("01:30 BST", "01:30 GMT"), so two x's never read the same. That holds for `"local"` too, which reads both the same now.
+    - **In `time.ts`,** with the check and the type: a named zone's parts and midnights come from a cached `Intl.DateTimeFormat` (`partsOf` and `midnight`), so no zone data ships, and a named zone's tests need no `TZ`.
+    - **Its cost** is measured on the stress page's ten-year date line in a named zone against UTC: the first draw and a reveal's frame. If a named zone takes 10% more, the step caches what it reads, and says so here.
+16. **`missing`** (decision 7).
+    - **`missing?: string` on `LineChartOptions`:** the word for a missing value, in the table's cell (`table.ts:109`), and after the series' name in the tooltip, the names and the announcements (`said`, `line.ts:1726`). The default is `"missing"`, so nothing changes until a page sets it, and `update({ missing })` words them again.
+    - **Checked:** a string that isn't empty, or a TypeError, as the table's options are checked. The bar and donut charts have no missing values, so they don't take it.
+17. **An x with every value missing links** (decision 2).
+    - **Its hover** gives its link a stand-in for the x, with its row and its x, as a point there would have, so the default linking value (the x) and a `by` that reads the row both find it. Linked charts hover their marks at that x. No effect runs on the stand-in, and no hover event fires on the line chart for it, as now.
+    - **The other way,** a linked chart's hover at that x shows the line chart's crosshair and tooltip there, as focus on it does.
+    - The public types don't change. The step finds the smallest way through `shell/hover.ts`, `link.ts` and the line chart.
+18. **Labels fade as they thin** (decision 2).
+    - **On a bar chart's change,** a category or value label that thinning hides fades out over the change's first half, and one it shows fades in over its second half, as a switch's unmatched marks do. So labels no longer switch on the first frame and stand on each other while bars pass. A label that stays drawn is as now.
+    - **With motion off, and on a jump** (a resize, fonts loading, text changing size), they switch at once.
+19. **The bars take the hidden value labels' room** (decision 8).
+    - **When thinning hides every value label,** the layout makes its frame again without their room: past a horizontal bar's tip (`bar-layout.ts:468`), and on its left with negative bars (`465`), above a column (`484`), and below a negative column (`485`). `room` and the ticks' half widths stay. The category labels are thinned again on the new frame, and the value labels stay hidden, so a layout is made at most twice.
+    - **A chart whose value labels show** lays out byte for byte as now. A change between shown and hidden moves the frame as any change does.
+    - architecture.md's rule that the frame keeps room for every label, so thinning moves nothing, says the new one.
+    - **Baselines:** the stress page's bar charts of 100, at load, and any other picture whose value labels are all hidden.
+20. **The toolchain and the tests** (decisions 2 and 9).
+    - **jsdom 30.1.3,** as `^30.1.3`, once Node here is 24.15 or newer: the step checks `node --version` first, and stops to ask you if it's older. CI's Node 22 and 24 are 22.23.4 and 24.22.2 today, which jsdom 30 takes. The whole unit suite is its check: a test that fails is looked at, and fixed in the test if jsdom changed, or shown to you if the library is at fault. CONTRIBUTING's Node line says what working on the library needs (22.22.2 or newer on 22, and 24.15 or newer on 24), and `engines` stays `>=22`, since jsdom is a dev dependency. The build doesn't use jsdom, so the published files are the same, byte for byte.
+    - **rolldown-plugin-dts 0.29.0** waits for a tsdown that asks for it, `get-tsconfig` for a stable 5, and `api-docs.test.ts` and `typescript-6` for TypeScript 7.1.
+    - **Timeouts.** The line page's two Play season tests, and `a11y.spec.ts`'s hover and pause tests on the stress page that still run on the default 30 s, get 60 s, as M12 gave the focus-ring test. The step names each.
+    - **The season page's room.** api.md's and architecture.md's `room` give Chromium's measure on the page beside jsdom's estimate: with its 310 px chart and `top: 40`, the highest change is 5.0 px inside the chart at 320 px and 7.7 at 1,000 (M12 step 6). `src/captions.test.ts` models the page's line chart at 310 px, as the page has it.
+21. **The rest.**
+    - **Accessibility.** A new script, N, for NVDA + Chrome. It covers the line page's zone card: each hour read in London time, the hour the clocks went back read twice with BST and GMT, Page Up and Page Down, and the table, then the same in UTC after the toggle. It covers week 12's goals point focused, read as before. And the stress page: with text spacing added after load, the bar names and the table read as before, and after "Change every bar" nothing is announced about the labels. You run it.
+    - **Docs.** Each step adds its options and exports to api.md (`src/api-docs.test.ts` fails otherwise), its sections to architecture.md, and its entries to CHANGELOG, under a new `## Unreleased` above 0.7.0 with Added, Changed and Fixed lists. The first step to land adds Unreleased.
+    - **Sizes.**
+      - On 0.7.0, `dist/index.cjs` has 1,107 bytes of room, the script-tag bundle 1,658, `dist/testing.js` 1,025, the stylesheet 69, `motion` and `animated` 339, `describe` and `matrix` 945, `barChart` 2.7 KB, `expressive` and `travel` 3.4 KB, the switch's set 3.8 KB, the line page's set 4.0 KB, everything 8.2 KB and `dist/index.js` 12.1 KB.
+      - Steps 1 to 5 each add to `dist/index.cjs`, the script-tag bundle, everything and `dist/index.js`. So the first step to land can expect to take `dist/index.cjs` past its budget, and the first or second the script-tag bundle. A step that lands later merges main first, keeps the raised budget, and raises it again only if its own bytes take it past.
+      - Step 1 adds to every chart's set: `barChart`, the line page's and the switch's. Step 2 adds to the same three, and to `expressive` and `travel`'s through `expressive.ts`. Step 3 adds to the line page's set. Step 4 adds to the line page's set, and through `table.ts` and `shell/hover.ts` to every chart's. Step 5 adds to `barChart` and the switch's set.
+      - A step that adds to the stylesheet takes it past its 2.5 KB. No step should add to the testing entries, to `motion` and `animated`, or to `describe` and `matrix`; a step that does says why.
+      - A step that takes a size past its budget raises it in the same PR, to its size plus 10% rounded up to 0.5 KB, says why (CONTRIBUTING's Bundle size), and adds a sentence to architecture.md's Bundle size.
+    - **Visual checks.** A step that changes what a page draws runs that page's specs in Docker before its PR, and makes again only the baselines its change moves. **It shows you each one, main's beside the new, before it commits them** (M12 step 2 committed first and showed after). If two steps move the same picture, the second to land merges main and makes it again.
+      - Step 2 runs `line.spec.ts`, `stress.spec.ts` and `a11y.spec.ts`'s line and stress tests, for the hovered points' pictures.
+      - Step 5 runs `stress.spec.ts` and `a11y.spec.ts`'s stress tests, for the bar charts whose value labels are hidden, and any other spec with such a picture.
+      - Step 1 runs `a11y.spec.ts`'s text spacing on every page in Docker and in Chromium on Windows, and moves no picture.
+      - Steps 3 and 4 move nothing a page draws (no page uses a zone's name or `missing`, or links an x with every value missing), so they run no visual spec. Step 6 runs the specs whose timeouts it changes, in Docker with 4 workers.
+    - **Byte-for-byte tests** round their numbers first, as M11 step 2's digests do: Node 22 and 24 differ in the last bits of `Math.pow` and `Math.cbrt`.
+    - **A step the demos find.** If step 7's pages or audit find a problem in the library, it stops and shows you, and you choose whether it's fixed before 0.8.0. If it is, it's a step of its own, in a session step 7 starts, and the planning session places it in this plan before the release.
+    - **Notes.** Each step's session reads the hand-over notes first, `plan-0-8.md` from planning, beside `plan-0-7.md`, and its siblings' notes, and writes its own: commits, files, decisions beyond the brief, where the plan and the code differ, and follow-ups. The app gives a step the notes folder of the session that started it, so each brief names that folder and planning's.
+    - **Check GitHub, not the word.** Before a wave starts, the session starting it checks on GitHub that the PRs it waits for are merged.
+    - **Dates** are the local day, Pacific time, as CHANGELOG has them, checked when CHANGELOG's heading is written and again just before the release.
+    - **The release** goes as CONTRIBUTING's Releasing says, through trusted publishing. Nothing is published, tagged or released without your go-ahead in that session.
+
+Each step names the files it owns, so steps in the same wave can run in parallel sessions. Files shared by several steps get small edits only, and whichever step lands second merges main first: `package.json`, `src/index.ts`, `src/charts/index.ts`, `src/charts/types.ts`, `src/charts/bar.ts`, `src/charts/donut.ts`, `src/charts/line.ts`, `src/charts/adapter/expressive.ts`, `scripts/size-budget.json`, `src/charts/README.md`, `docs/architecture.md`, `docs/api.md`, `docs/sketches/api.ts`, `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md` and this plan.
+
+- **`bar.ts`** has three owners. Step 1 owns its text watch, beside `watchFonts` (`bar.ts:626`). Step 2 owns `update({ colors })` and its recolouring (`bar.ts:241–269` and `661`). Step 5 owns its labels' fade (`currentRow`, `bar.ts:375`, and the labels' opacity in `drawMark`).
+- **`line.ts`** has three. Step 1 owns its text watch (`line.ts:1432`). Step 2 owns its groups' order (`line.ts:215–226` and `944`). Step 4 owns `missing` in `said` (`line.ts:1726`) and the stand-in for an x with every value missing.
+- **`types.ts`:** step 3 owns `timeZone`, and step 4 `missing`.
+- **`donut.ts`** is step 1's alone, and `expressive.ts` step 2's.
+- **Step 1 alone** changes `render/text.ts` and `shell/watch.ts`; step 2 alone `render/surface.ts`, if it needs to; step 3 alone `time.ts` and `line-layout.ts`'s check; step 4 alone `table.ts`, `shell/hover.ts` and `link.ts`; step 5 alone `bar-layout.ts`; step 6 alone the lockfile and the visual specs' timeouts.
+- **CONTRIBUTING:** step 1 owns its paragraph on text spacing on Windows, and step 6 its Node and jsdom lines.
+- `typecheck` requires an explicit type on every new export.
+
+**Wave 1** (parallel):
+
+1. **A chart measures its text again** (decision 12). Owns the probe and its watch (`src/charts/shell/watch.ts`), clearing the measure (`src/charts/render/text.ts`), a few lines in `bar.ts`, `donut.ts` and `line.ts` beside each `watchFonts`, their tests, CONTRIBUTING's paragraph on text spacing on Windows, and the backlog's text spacing.
+   - Tests:
+     - With a stubbed ResizeObserver, as `bar.test.ts` stubs it, and widths that change (a stubbed `getComputedTextLength`): a probe's change of half a px or more clearing the measure and laying each chart out again at once, its names thinned again and its margins fitting the new widths; a change of less, nothing; two in a frame, one layout; a probe with no width, nothing; a transition in flight landing; a hover held through it.
+     - Each chart without a change, byte for byte as on main; without ResizeObserver, no watch; `destroy()` stopping it.
+     - The probe: `aria-hidden`, no tab stop, and the container's size as before.
+   - **Done when** every existing test passes unchanged, and `a11y.spec.ts`'s text spacing passes on every page in Docker and in Chromium on Windows.
+   - Docs: architecture.md (Reference charts' watch list, and each chart's layout line on measuring), api.md (`width`'s line, if it says what's followed), CONTRIBUTING (the Windows paragraph goes), the backlog's text spacing marked built, with a line for `expressive()`, and CHANGELOG (Fixed).
+   - Budgets it may raise: `dist/index.cjs` (1,107 bytes of room: likely), the script-tag bundle, `barChart`, the line page's and the switch's sets, everything and `dist/index.js`, and the stylesheet if the probe is styled there.
+2. **Colours and layering** (decisions 13 and 14). Owns `update({ colors })`'s recolouring in `bar.ts`, the `surface.recolor` calls in `bar.ts` and `expressive.ts`, `render/surface.ts` if it needs to change, the line chart's groups' order, their tests, and the hovered points' baselines.
+   - Tests:
+     - A bar chart's `update({ colors })` mid-change, with a staged change and bars that don't move: every segment in its new colour on the first frame; with `colorBy`, a stack, motion off and `colors` alone.
+     - A stack drawing in with `drawIn`, its second part's colour changed: its path in the new colour; and `expressive()` read again with a later part's colour changed.
+     - The donut and line charts' `update({ colors })` mid-change: every mark in its new colour on the first frame.
+     - The line chart's groups in their new order, with `hover: "point"` too; a run's drawing between the lines and the points; the hovered point above a `threshold` run; the switch and `.ec-morphing` hiding what they hid; the overlay taking no pointer.
+   - **Done when** every existing test passes unchanged, but those that pinned the line chart's groups' order (`line.test.ts:143`, `line-hover.test.ts:645` and `890`), each named in the PR; and the line, stress and a11y specs pass in Docker, with only the baselines decision 14 names made again, shown to you before they're committed.
+   - Docs: architecture.md (Bar chart's colours, Line chart's layers, and the drawing API's layer order), api.md (`update`'s `colors`, if it says when), the backlog's recolouring and decorations marked built, and CHANGELOG (the layering under Changed, the recolouring under Fixed).
+   - Budgets it may raise: `dist/index.cjs`, the script-tag bundle, `barChart`, the line page's and the switch's sets, `expressive` and `travel`, everything and `dist/index.js`.
+3. **Time zones by name** (decision 15). Owns `src/charts/time.ts`, `timeZone`'s check in `src/charts/line-layout.ts` and its type in `types.ts`, and their tests.
+   - Tests:
+     - Ticks, names and Page Up and Page Down in Europe/London across 29 March and 25 October 2026, America/New_York, Australia/Lord_Howe (half an hour of summer time), Asia/Kolkata (+5:30), Pacific/Chatham (+12:45) and America/Santiago (where midnight is skipped), at the steps from minutes to years; with `process.env.TZ` set to two other zones, the same.
+     - The hour the clocks go back, hour by hour and in minutes: no two x's named the same, in a named zone and in `"local"`.
+     - `"UTC"` and `"local"` byte for byte as on main, but the time that comes twice; `"Etc/UTC"` as `"UTC"`; the TypeError for a name Intl doesn't know, at setup and on `update()`, leaving the chart as it was; `update({ timeZone })` both ways.
+     - The tooltip, the table and the announcements in the zone.
+   - **Done when** every existing test passes unchanged, but any that pinned `"local"`'s names in the hour the clocks go back, or the TypeError's message (`line-layout.test.ts:411`, `line-time.test.ts:210`), each named in the PR.
+   - Docs: architecture.md (Line chart: The zone, and the ticks), api.md (`timeZone`), `src/charts/README.md`, the sketch, the backlog's time zones marked built, and CHANGELOG (the names under Added, the time that comes twice under Fixed).
+   - Budgets it may raise: the line page's set, `dist/index.cjs`, the script-tag bundle, everything and `dist/index.js`.
+4. **`missing`, and an x with every value missing linked** (decisions 16 and 17). Owns `missing` in `types.ts`, `said` in `line.ts`, the table's word in `src/charts/table.ts`, the stand-in in `line.ts`, `src/charts/shell/hover.ts` and `src/charts/link.ts`, and their tests.
+   - Tests:
+     - `missing: "no data"` in the table's cells, the tooltip, the names and the announcements; `update({ missing })`; the default byte for byte as on main; the TypeErrors.
+     - A line chart with an x where every value is missing, linked to columns by x: hovering and focusing that x hovering its column, and back, the column's hover showing the line chart's crosshair and tooltip; a `by` that reads the row; no hover event or effect on the line chart for it; with `effects: false`; and an x with some values, as now.
+   - **Done when** every existing test passes unchanged.
+   - Docs: api.md (`missing`, and `link()`'s line on an x with every value missing), architecture.md (Gaps, and Linked hover), the sketch, and CHANGELOG (`missing` under Added, the link under Fixed).
+   - Budgets it may raise: the line page's set, `barChart` and the switch's set (through `table.ts` and `shell/hover.ts`), `dist/index.cjs`, the script-tag bundle, everything and `dist/index.js`.
+5. **Labels that fade as they thin, and the room they leave** (decisions 18 and 19). Owns the labels' fade in `bar.ts`, the frame made again in `src/charts/bar-layout.ts`, their tests, and the baselines of bar charts whose value labels are hidden.
+   - Tests:
+     - A change that thins otherwise: each label going fading out over the first half, each coming in over the second; the value labels, all or none, the same; a label that stays as now; motion off, Analysis, a resize and fonts loading, at once.
+     - The room: horizontal and vertical charts, with negative values and with `room`, whose value labels are all hidden, laid out without their room and thinned again; the value labels staying hidden; a chart whose value labels show byte for byte as on main; a change from shown to hidden and back.
+   - **Done when** every existing test passes unchanged, but those that pinned the room kept (`bar-layout.test.ts:218–234`) or a label switching on a change's first frame (`long-axes.test.ts:100–124`), each named in the PR; and the stress and a11y specs pass in Docker, with only the baselines decision 19 names made again, shown to you before they're committed.
+   - Docs: architecture.md (Bar chart: Layout and thinning), api.md (thinning, if it says so), and CHANGELOG (both under Changed).
+   - Budgets it may raise: `barChart`, the switch's set, `dist/index.cjs`, the script-tag bundle, everything and `dist/index.js`.
+6. **The toolchain and the tests** (decision 20). Owns jsdom's range in `package.json`, the lockfile, the timeouts in `tests/visual/line.spec.ts` and `tests/visual/a11y.spec.ts`, CONTRIBUTING's Node and jsdom lines, `room`'s measure in api.md and architecture.md, and the height in `src/captions.test.ts`.
+   - Checks: `node --version` first; `npm ls`; `typecheck`; the suite; the build, byte for byte as main's; the size check; `pack-check` on 5.4, 6 and 7; `build:site`; the line and a11y specs in Docker with 4 workers; and CI on Node 22 and 24.
+   - **Done when** `npm run typecheck && npm test && npm run build`, `npm run size` and `npm run pack-check` pass on jsdom 30, the published files are the same, and the two specs pass in Docker.
+   - Docs: CONTRIBUTING (jsdom 30 and the Node it needs), api.md and architecture.md (`room`), and CHANGELOG only if what's published changes.
+   - Budgets: none. jsdom doesn't reach the build, so every size is main's.
+
+**Wave 2** (after steps 1 to 6 land):
+
+7. **The demos, their screenshots, the audit and script N.** Owns `demo/line.*`, `demo/stress.*`, their visual specs and baselines, README's GIFs if they differ, `docs/a11y-audit.md`, and section N of `docs/a11y-check.md`.
+   - **The line page:** a new card, a club's ticket sales by the hour from midnight on Saturday 24 October to midnight on Monday 26 October 2026 in London, on `lineChart({ timeZone: "Europe/London" })`, with a toggle for London and UTC (`update({ timeZone })`). In London its ticks fall on London's midnights, and Sunday has 25 hours, 01:00 coming twice, as BST and GMT. A design note says why the chart's label names the zone. Week 12's hovered goals point shows above the red run.
+   - **The stress page:** a thing to try, adding text spacing with a bookmarklet, so the names thin again. Its bar charts take their value labels' room, and "Change every bar" fades the labels as they thin.
+   - Nothing moves 5 s after load (2.2.2).
+   - **README's GIFs** are compared with their pages (`threshold-line.gif` is the line page's), and made again only on your word.
+   - **Screenshots,** made in Docker: the zone card in London and in UTC, light and dark, its tooltip on the hour that comes twice, at 1,000 and 320 px; and every page whose picture changed. Reduced motion and Off are checked in the DOM.
+   - **Script N,** for NVDA + Chrome (decision 21). You run it.
+   - **The walk:** you look at the pages in the browser, at 320 px too.
+   - In two PRs, as M12 step 6: the pages, their tests and baselines, the audit and script N first; then script N's results and the walk.
+   - Docs: a11y-audit.md (the line page's zone card, the stress page's spacing line, as it passes on Windows, and the Browsers count), a11y-check.md (section N and its results), and CONTRIBUTING's visual tests.
+
+**Wave 3:**
+
+8. **Publish 0.8.0** (decision 3). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.8.0 entry, README's status, its script tag (`@0.8`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.8.0's code, and this plan's status line and M13's ✅.
+   - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check`, `npm pack` (its list and sizes shown to you, compared with 0.7.0's, from an LF copy as CI builds it) and `npm publish --dry-run`. The PR has their results.
+   - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com.
+   - **Then, on your go-ahead in that session:** the `v0.8.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
+   - **After:** check npm (the version, README, provenance), install 0.8.0 in a fresh project and load each entry as an ES module and as CommonJS, and check jsDelivr's `@0.8`.
+   - **The date** is the release's local day, Pacific time.
+
+**Done when:**
+- **Text** spacing added after a chart draws lays it out again, and `a11y.spec.ts`'s text spacing passes on `stress.html` in Chromium on Windows.
+- **`update({ colors })`** recolours every bar, and a stack's later parts' overlays, on the change's first frame.
+- **A line chart's decorations** draw above its lines and below its points, so none covers a point being read.
+- **`timeZone`** takes a zone's name, with ticks on its boundaries through summer time, and no two x's read the same where the clocks go back.
+- **`missing`** words a missing value, and an x with every value missing links.
+- **A bar chart's labels** fade as they thin, and its bars take the room of value labels it hides.
+- **The tests** run on jsdom 30, and the visual tests hold up under load.
+- **The demos** show all of it, with their screenshots and the audit, and script N passed with NVDA + Chrome.
+- **Docs.** api.md, architecture.md, README and CHANGELOG cover every addition and change. The promise doesn't change.
+- **0.8.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M13 is done.
 
 ### Backlog (after 0.1)
 

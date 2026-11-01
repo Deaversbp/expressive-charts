@@ -25,6 +25,18 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`missing` on `lineChart`:** the word for a missing value, in the table's cell, and after the series' label in the x's name, the tooltip and `markLabel`'s default text ("3: goals no data, 3.6 xg"). Default `"missing"`, so a chart without it reads as before, byte for byte. A string that's empty or only spaces, or anything that isn't a string, throws a `TypeError`, and `update()` rejects it. `update({ missing })` words them again. The bar and donut charts have no missing values, so they don't take it.
+
+### Changed
+
+### Fixed
+
+- **`link()` links a line chart's x with every value missing.** It has no point, so its hover told its link nothing, and linked charts ended theirs. Now the link reads a stand-in for a point there: keyed by the x, with the x's row and a sample at the x, whose `value` is `NaN`. So the default linking value and a `by` that reads the row both find it. Hovering or focusing the x hovers the linked charts' marks there, and their hover shows the line chart's crosshair and tooltip at that x, as focus on it does. No effect runs and no event fires on the line chart for it, as before, and an x with some values links by its points, as before.
+
 ## 0.7.0 (1 November 2026)
 
 A new effect, `drawIn`, that draws a mark in along its walk as it enters, a stack part by part, each in its own colour; `morph` pairing two lines by x, so their corners and gaps hold on every frame; a chart switch that draws a line's end dot and a point's ring, and keeps its tab stop on the week; and room above a line chart's plot. In the effect-author API, the one change is `part` on `Paint`, an addition. The other changes are outside the promise, and none needs anything written instead.

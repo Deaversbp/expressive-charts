@@ -91,6 +91,16 @@ describe("tableModel", () => {
     expect(model.rows[0]!.cells.map((cell) => cell.text)).toEqual(["A", "3", "0", "3"]);
   });
 
+  it("says a missing value's word in its cell, right-aligned: the input's `missing`, or \"missing\"", () => {
+    const rows = [{ key: "A", category: "A", datum: players[0]!, index: 0, values: [{ series: "goals", value: 3 }], missing: new Set(["assists"]), total: 3 }];
+    expect(tableModel(input({ rows, total: false }))!.rows[0]!.cells).toEqual([
+      { text: "A", numeric: false },
+      { text: "3", numeric: true },
+      { text: "missing", numeric: true }
+    ]);
+    expect(tableModel(input({ rows, total: false, missing: "no data" }))!.rows[0]!.cells[2]).toEqual({ text: "no data", numeric: true });
+  });
+
   it("adds a donut's Share column and total row, in <tfoot>", () => {
     const model = tableModel(input({ series: ["goals"], rows: input().rows.map((row) => ({ ...row, values: [row.values[0]!], total: row.values[0]!.value })), shares: true }))!;
     expect(model.headers.map((cell) => cell.text)).toEqual(["name", "goals", "Share"]);

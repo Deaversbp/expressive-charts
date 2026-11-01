@@ -12,10 +12,10 @@ import { expressive, fromVegaView } from "./adapter";
 import { barChart } from "./bar";
 import { donutChart } from "./donut";
 import { lineChart } from "./line";
-import { link } from "./link";
+import { link, type LinkOptions } from "./link";
 import type { ChartEnv } from "./shell/setup";
 import { chartSwitch } from "./switch";
-import type { Chart, MarkEvents } from "./types";
+import type { Chart, LineChartOptions, MarkEvent, MarkEvents } from "./types";
 
 interface Week {
   week: number;
@@ -60,7 +60,7 @@ function recorder() {
 }
 
 /** Records hover and leave as "hover goals@2 linked 1/2" and "leave goals@2". */
-function listen(source: { on<K extends keyof MarkEvents<Week>>(type: K, listener: (event: MarkEvents<Week>[K]) => void): () => void }): string[] {
+function listen<D = Week>(source: { on<K extends keyof MarkEvents<D>>(type: K, listener: (event: MarkEvents<D>[K]) => void): () => void }): string[] {
   const events: string[] = [];
   source.on("hover", (e) => events.push(`hover ${e.mark.key} ${e.source} ${e.batch.index + 1}/${e.batch.count}`));
   source.on("leave", (e) => events.push(`leave ${e.mark.key}`));
@@ -463,6 +463,200 @@ describe("link: charts", () => {
     pointer("pointerover", bar("4").querySelector(".ec-segment")!);
     expect(hot(slices as unknown as Chart<Week, unknown>)).toEqual(["4"]);
     expect(slices.element.classList.contains("ec-hovering")).toBe(true);
+  });
+});
+
+interface Counted {
+  week: number;
+  goals: number | null;
+  xg: number | null;
+  shots: number;
+}
+
+/** The season with nothing counted in week 3: no goals or xG, though the shots were. */
+const counted: Counted[] = weeks.map((w) => (w.week === 3 ? { ...w, goals: null, xg: null } : w));
+
+/**
+ * Shots per matchweek as columns, keyed by matchweek, and the goals vs xG line with nothing counted in
+ * week 3, linked by matchweek or by `link`'s options. Each logs its hover effect's runs.
+ */
+function blankWeek(more: { data?: readonly Counted[]; line?: Partial<LineChartOptions<Counted>>; link?: LinkOptions<Counted> } = {}) {
+  const env = environment();
+  const barHover = recorder();
+  const lineHover = recorder();
+  const lineHost = container();
+  const data = more.data ?? counted;
+  const bars = barChart<Counted>(container(), { label: "Shots per matchweek", data, x: (d) => String(d.week), y: "shots", orientation: "vertical", width: 400, on: { hover: barHover.effect } }, env);
+  const line = lineChart<Counted>(lineHost, { label: "Goals vs xG", data, x: "week", series: ["goals", "xg"], width: 400, on: { hover: lineHover.effect }, ...more.line }, env);
+  link([bars, line], more.link);
+  const bar = (key: string) => bars.element.querySelector(`.ec-mark[data-key="${key}"]`) as SVGGElement;
+  const column = (key: string) => line.element.querySelector(`.ec-column[data-key="${key}"]`) as SVGGElement;
+  const hot = (chart: { readonly element: SVGSVGElement }) => Array.from(chart.element.querySelectorAll(".ec-hot"), (element) => element.getAttribute("data-key"));
+  const crosshair = () => line.element.querySelector(".ec-crosshair")!;
+  /** The line's tooltip, line by line, while it shows. */
+  const tip = (): (string | null)[] | undefined => {
+    const box = lineHost.querySelector(".ec-tooltip");
+    return box?.classList.contains("ec-tooltip-shown") ? Array.from(box.children, (part) => part.textContent) : undefined;
+  };
+  return { env, bars, line, bar, column, hot, crosshair, tip, barHover, lineHover };
+}
+
+describe("link: an x with every value missing", () => {
+  const blank = ["3", "goals missing · xg missing"];
+
+  it("hovers its column, and the column's hover shows the line's crosshair and tooltip there, with no effect or event on the line", () => {
+    const { bars, line, bar, column, hot, crosshair, tip, barHover, lineHover } = blankWeek();
+    const barEvents = listen<Counted>(bars);
+    const lineEvents = listen<Counted>(line);
+    pointer("pointerover", column("3").querySelector(".ec-hit")!);
+    expect(barEvents).toEqual(["hover 3 linked 1/1"]);
+    expect(hot(bars)).toEqual(["3"]);
+    expect(bars.element.classList.contains("ec-hovering")).toBe(true);
+    expect(barHover.log).toEqual(["run 3"]);
+    expect(tip()).toEqual(blank);
+    const own = crosshair().getAttribute("x1");
+    pointer("pointerleave", line.element);
+    expect(barEvents.slice(1)).toEqual(["leave 3"]);
+    expect(hot(bars)).toEqual([]);
+
+    pointer("pointerover", bar("3").querySelector(".ec-segment")!);
+    // Nothing at week 3 to emphasise: the crosshair and tooltip show where it is, as focus on it does.
+    expect(crosshair().getAttribute("visibility")).toBeNull();
+    expect(crosshair().getAttribute("x1")).toBe(own);
+    expect(tip()).toEqual(blank);
+    expect(hot(line)).toEqual([]);
+    expect(line.element.classList.contains("ec-hovering")).toBe(false);
+    expect(line.element.querySelector(".ec-focus")!.getAttribute("visibility")).toBe("hidden");
+    expect(document.activeElement).toBe(document.body);
+    expect(lineEvents).toEqual([]);
+    expect(lineHover.log).toEqual([]);
+    pointer("pointerleave", bars.element);
+    expect(crosshair().getAttribute("visibility")).toBe("hidden");
+    expect(tip()).toBeUndefined();
+  });
+
+  it("follows focus onto that x and off it, both ways, and Escape ends the link's hover", () => {
+    const { bars, line, bar, column, hot, crosshair, tip } = blankWeek();
+    tabTo(column("2"));
+    expect(hot(bars)).toEqual(["2"]);
+    press(column("2"), "ArrowRight");
+    expect(hot(bars)).toEqual(["3"]);
+    press(column("3"), "ArrowRight");
+    expect(hot(bars)).toEqual(["4"]);
+    press(column("4"), "ArrowLeft");
+    expect(hot(bars)).toEqual(["3"]);
+    press(column("3"), "Escape");
+    expect(hot(bars)).toEqual([]);
+    column("3").blur();
+
+    tabTo(bar("2"));
+    expect(hot(line)).toEqual(["goals@2", "xg@2"]);
+    expect(tip()).toBeUndefined();
+    press(bar("2"), "ArrowRight");
+    expect(hot(line)).toEqual([]);
+    expect(tip()).toEqual(blank);
+    press(bar("3"), "ArrowRight");
+    expect(hot(line)).toEqual(["goals@4", "xg@4"]);
+    expect(tip()).toBeUndefined();
+    expect(crosshair().getAttribute("visibility")).toBe("hidden");
+    press(bar("4"), "ArrowLeft");
+    expect(tip()).toEqual(blank);
+    expect(press(bar("3"), "Escape").defaultPrevented).toBe(true);
+    expect(tip()).toBeUndefined();
+    expect(crosshair().getAttribute("visibility")).toBe("hidden");
+    expect(hot(bars)).toEqual([]);
+    expect(document.activeElement).toBe(bar("3"));
+    expect(line.element.querySelector(".ec-focus")!.getAttribute("visibility")).toBe("hidden");
+  });
+
+  it("links it by a `by` that reads the row: its stand-in is keyed by the x, with its row and a sample at its x of no value", () => {
+    const seen: Pick<MarkEvent<Counted>, "mark" | "data">[] = [];
+    const { bars, line, bar, column, hot, crosshair, tip } = blankWeek({
+      link: {
+        by: (event) => {
+          seen.push(event);
+          return `week ${event.data.datum.week}`;
+        }
+      }
+    });
+    pointer("pointerover", column("3").querySelector(".ec-hit")!);
+    expect(hot(bars)).toEqual(["3"]);
+    const standIn = seen[0]!;
+    expect(standIn.mark.key).toBe("3");
+    expect(standIn.mark.center.x).toBeCloseTo(Number(crosshair().getAttribute("x1")), 2);
+    expect(standIn.data.datum).toBe(counted[2]);
+    expect(standIn.data.samples).toEqual([{ t: 0, value: NaN, at: 3 }]);
+    expect(standIn.data.related("goals")).toBeUndefined();
+    pointer("pointerleave", line.element);
+    pointer("pointerover", bar("3").querySelector(".ec-segment")!);
+    expect(tip()).toEqual(blank);
+  });
+
+  it("links it on a time axis by the x's ISO string", () => {
+    const env = environment();
+    const dated = counted.map((row) => ({ ...row, date: new Date(Date.UTC(2026, 7, 7 * row.week)) }));
+    const bars = barChart(container(), { label: "Shots", data: dated, x: (d) => d.date.toISOString().slice(0, 10), key: (d) => d.date.toISOString(), y: "shots", orientation: "vertical", width: 400 }, env);
+    const line = lineChart(container(), { label: "Goals", data: dated, x: "date", series: ["goals", "xg"], width: 400 }, env);
+    link([bars, line]);
+    const key = dated[2]!.date.toISOString();
+    pointer("pointerover", line.element.querySelector(`.ec-column[data-key="${key}"] .ec-hit`)!);
+    expect(Array.from(bars.element.querySelectorAll(".ec-hot"), (element) => element.getAttribute("data-key"))).toEqual([key]);
+    pointer("pointerleave", line.element);
+    pointer("pointerover", bars.element.querySelector(`.ec-mark[data-key="${key}"] .ec-segment`)!);
+    expect(line.element.querySelector(".ec-crosshair")!.getAttribute("visibility")).toBeNull();
+  });
+
+  it("keeps the columns to emphasis and dimming with effects: false, and the line still shows its crosshair and tooltip", () => {
+    const { bars, line, bar, column, hot, tip, barHover, lineHover } = blankWeek({ link: { effects: false } });
+    const barEvents = listen<Counted>(bars);
+    const lineEvents = listen<Counted>(line);
+    pointer("pointerover", column("3").querySelector(".ec-hit")!);
+    expect(hot(bars)).toEqual(["3"]);
+    expect(bars.element.classList.contains("ec-hovering")).toBe(true);
+    expect(barEvents).toEqual(["hover 3 linked 1/1"]);
+    expect(barHover.log).toEqual([]);
+    pointer("pointerleave", line.element);
+    pointer("pointerover", bar("3").querySelector(".ec-segment")!);
+    expect(tip()).toEqual(blank);
+    expect(barHover.log).toEqual(["run 3"]);
+    expect(lineHover.log).toEqual([]);
+    expect(lineEvents).toEqual([]);
+  });
+
+  it("links an x with some values as before: by its points, with no crosshair or tooltip on the line", () => {
+    const { bars, line, bar, column, hot, crosshair, tip } = blankWeek({ data: counted.map((w) => (w.week === 2 ? { ...w, goals: null } : w)) });
+    const lineEvents = listen<Counted>(line);
+    pointer("pointerover", column("2").querySelector(".ec-hit")!);
+    expect(hot(bars)).toEqual(["2"]);
+    pointer("pointerleave", line.element);
+    lineEvents.length = 0;
+    pointer("pointerover", bar("2").querySelector(".ec-segment")!);
+    expect(hot(line)).toEqual(["xg@2"]);
+    expect(lineEvents).toEqual(["hover xg@2 linked 1/1"]);
+    expect(tip()).toBeUndefined();
+    expect(crosshair().getAttribute("visibility")).toBe("hidden");
+  });
+
+  it('shows nothing at that x with hover: "point", which has no stop there', () => {
+    const { line, bar, hot, crosshair, tip } = blankWeek({ line: { hover: "point" } });
+    pointer("pointerover", bar("3").querySelector(".ec-segment")!);
+    expect(hot(line)).toEqual([]);
+    expect(tip()).toBeUndefined();
+    expect(crosshair().getAttribute("visibility")).toBe("hidden");
+  });
+
+  it("follows a change: the line's tooltip goes when the x gains values, its points hovered instead, and comes back when they go", async () => {
+    const { env, line, bar, hot, crosshair, tip } = blankWeek();
+    pointer("pointerover", bar("3").querySelector(".ec-segment")!);
+    expect(tip()).toEqual(blank);
+    await play(env.clock, line.update({ data: weeks }));
+    expect(hot(line)).toEqual(["goals@3", "xg@3"]);
+    expect(tip()).toBeUndefined();
+    expect(crosshair().getAttribute("visibility")).toBe("hidden");
+    await play(env.clock, line.update({ data: counted }));
+    expect(hot(line)).toEqual([]);
+    expect(tip()).toEqual(blank);
+    expect(crosshair().getAttribute("visibility")).toBeNull();
   });
 });
 

@@ -4,8 +4,8 @@
 // announcement, the mapping control, only the view shown being readable, and the bars linked with the
 // switch, across a switch. Then the season's switch of two line charts and columns: its views, half way
 // from a line to its columns and between the two lines, and a column focused, with DOM checks for its
-// toggles, V and focus following the week, the weeks both lines miss through a switch, reduced motion
-// and Off, and what can be read. Names start with "morph-", since screenshot names are shared across files.
+// toggles, V and focus following the week, Tab after a toggle landing on the week, the weeks both lines
+// miss and the end dots on every frame of a switch, reduced motion and Off, and what can be read. Names start with "morph-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, hoverShape, morphDemo, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
@@ -511,26 +511,75 @@ test.describe("the season's switch", () => {
     await expectSeasonLanded(page, "toDate");
   });
 
-  test("a switch between the two lines draws nothing in the weeks both miss as it starts and lands, and part way only what fades", async ({ page }) => {
+  test("a switch between the two lines draws nothing in the weeks both miss, on any frame, and each line keeps its end dot", async ({ page }) => {
     await openDemo(page, morphDemo);
     for (const [to, view] of [["Season to date", "toDate"], ["Per match", "perMatch"]] as const) {
       await seasonButton(page, to).click();
       await pointerAway(page);
       const frames: number[] = [];
+      const dots: number[] = [];
       // 950 ms: the last frame drawn is 944 ms in, the 59th.
       for (let frame = 1; frame <= 59; frame++) {
         await page.clock.runFor(FRAME);
         frames.push(await inMissingWeeks(page));
+        dots.push(await season(page).locator(".ec-switch-overlay circle.ec-switch-end").count());
       }
-      expect(frames[0]).toBeLessThan(0.05);
-      expect(frames[58]).toBeLessThan(0.05);
-      // Gaps are matched by how far along the line they fall, not by week, so part way the stroke
-      // that's in one line's gap and not the other's crosses the weeks both miss: fading in or out,
-      // never at full strength.
-      expect(Math.max(...frames)).toBeLessThan(0.99);
+      // The two lines pair by week, so their gaps meet: nothing crosses the weeks both miss, not even fading.
+      expect(Math.max(...frames)).toBeLessThan(0.05);
+      // Each line's end dot moves with it.
+      expect(dots).toEqual(frames.map(() => 2));
       await page.clock.runFor(REST);
       await expectSeasonLanded(page, view);
     }
+  });
+
+  test("after a pick on the toggles, Tab lands on the same week in the new view, or its column", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    await tabInto(page, season(page));
+    for (let i = 1; i < 12; i++) await page.keyboard.press("ArrowRight");
+    await expect(weekStop(page, "perMatch", 12)).toBeFocused();
+
+    // Back to the toggles, Season to date, and Tab past Columns into the view: the same week, read with its values.
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(seasonButton(page, "Season to date")).toBeFocused();
+    await page.keyboard.press("Space");
+    await page.clock.runFor(REST);
+    await expectSeasonLanded(page, "toDate");
+    await expect(seasonButton(page, "Season to date")).toBeFocused();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await expect(weekStop(page, "toDate", 12)).toBeFocused();
+    await expect(weekStop(page, "toDate", 12)).toHaveAttribute("aria-label", "Matchweek 12: 18 goals, 19.0 xG");
+
+    // To the columns: its goals' column.
+    await page.keyboard.press("Shift+Tab");
+    await expect(seasonButton(page, "Columns")).toBeFocused();
+    await page.keyboard.press("Space");
+    await page.clock.runFor(REST);
+    await expectSeasonLanded(page, "columns");
+    await page.keyboard.press("Tab");
+    await expect(goalsColumn(page, 12)).toBeFocused();
+    await expect(goalsColumn(page, 12)).toHaveAttribute("aria-label", "Matchweek 12: 4 goals");
+    await expect(seasonView(page, "columns").locator(".ec-focus")).not.toHaveAttribute("visibility", "hidden");
+
+    // And back to Per match, from the column: its week.
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(seasonButton(page, "Per match")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await page.clock.runFor(REST);
+    await expectSeasonLanded(page, "perMatch");
+    for (let presses = 0; presses < 3; presses++) await page.keyboard.press("Tab");
+    await expect(weekStop(page, "perMatch", 12)).toBeFocused();
+    await expect(weekStop(page, "perMatch", 12)).toHaveAttribute("aria-label", "Matchweek 12: 4 goals, 2.4 xG");
+
+    // With motion off the stop moves at once.
+    await pickMode(page, "Off");
+    await seasonButton(page, "Season to date").click();
+    await expectSeasonLanded(page, "toDate");
+    await expect(weekStop(page, "toDate", 12)).toHaveAttribute("tabindex", "0");
   });
 
   test("V on a week or a column goes to the next view, and focus follows the week", async ({ page }) => {

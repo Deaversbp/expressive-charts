@@ -1,9 +1,10 @@
 // The ball-and-cleat story on barChart, and the same story on a hand-written SVG chart through
-// expressive(). "Play next matchweek" flashes the bars that changed, the motion switch is the
+// expressive(). Both draw themselves in as the page loads (drawIn, on enter: as a hover it would make
+// the bar being read faint). "Play next matchweek" flashes the bars that changed, the motion switch is the
 // library's own, and the chart has a data table with the players' positions and announces its updates
 // to screen readers, its bars' accessible names say "1 goal" (markLabel), and its series are "Goals"
 // and "Assists" (seriesLabels).
-import { barChart, expressive, motionSwitch, sequence, travel } from "../src/index";
+import { barChart, drawIn, expressive, motionSwitch, sequence, travel } from "../src/index";
 import { cleat, soccerBall } from "../src/icons/sport/index";
 import { amount, drawHostChart, type DrawOptions, type Segment, type Series } from "./host-chart";
 
@@ -68,7 +69,7 @@ const chart = barChart<Player>("#chart", {
   // The chart says what changed ("Sorted A to Z", "Okafor and Tanaka changed"); the page adds the matchweek.
   announce: (change) => (announcing ? `${announcing}: ${change.text || "no change"}` : change.text),
   // Only bars whose values changed flash: a re-sort or a new scale only moves them.
-  on: { hover: ballThenCleat, update: "flash" }
+  on: { enter: drawIn(), hover: ballThenCleat, update: "flash" }
 });
 
 // The hand-written chart redraws itself from scratch; refresh() tells the effects about the new marks.
@@ -85,7 +86,7 @@ const host = expressive<Segment>(drawHost(), {
   // each player is read as one item: the rect that takes focus names all their values, and the other is hidden.
   markLabel: (d, mark) => `${d.row.name}: ${mark.parts.map((part) => amount(part.datum.value, part.datum.series)).join(", ")}`,
   dim: true,
-  on: { hover: ballThenCleat, update: "flash" }
+  on: { enter: drawIn(), hover: ballThenCleat, update: "flash" }
 });
 function updateHost(next: Partial<DrawOptions>): void {
   hostState = { ...hostState, ...next };

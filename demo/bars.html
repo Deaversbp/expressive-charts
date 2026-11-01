@@ -81,12 +81,13 @@
   <section class="card" aria-labelledby="chart-title">
     <h2 id="chart-title">Harbor City FC: goals by player</h2>
     <p class="note">The library's own <code>barChart</code>. In Goals, a ball rolls the length of the bar. In Assists, a boot steps along it. In Goals + assists, the ball stops at the end of the goals and the boot carries on. Switching the metric or sort animates: in Presentation the values change first and then the rows move; in Analysis it's one quick step; Off jumps. <b>Play next matchweek</b> flashes the bars whose numbers changed (<code>on: { update: "flash" }</code>), as does a metric switch, which changes them all; a re-sort or a new scale only moves them.</p>
+    <p class="note">As the page loads, each bar draws itself in from its baseline over its faint self (<code>on: { enter: drawIn() }</code>), and a stack draws each part in turn, in its own colour. It's for enter only: as a hover it would make the bar you're reading faint. With reduced motion, or Off, the bars are there at once.</p>
     <div id="chart"></div>
   </section>
 
   <section class="card" aria-labelledby="host-title">
     <h2 id="host-title">The same story on someone else's chart</h2>
-    <p class="note">A plain SVG chart drawn by hand, the way D3 code would draw it. It knows nothing about the library and redraws from scratch on every change, with no animation of its own. <code>expressive()</code> adds the same hover story, keyboard focus (Tab, then the arrow keys) and dimming, and <code>refresh()</code> keeps the effects in step after each redraw. A <code>value</code> accessor tells it what each rect shows, so <code>update: "flash"</code> flashes the same bars as above: the ones whose numbers changed, not every bar when the axis grows or the window is resized. The chart names each rect for screen readers ("Okafor: 4 assists"), but focus moves by player, so <code>markLabel</code> names each player as one item ("Okafor: 16 goals, 4 assists").</p>
+    <p class="note">A plain SVG chart drawn by hand, the way D3 code would draw it. It knows nothing about the library and redraws from scratch on every change, with no animation of its own. <code>expressive()</code> adds the same draw-in at load, hover story, keyboard focus (Tab, then the arrow keys) and dimming, and <code>refresh()</code> keeps the effects in step after each redraw. A <code>value</code> accessor tells it what each rect shows, so <code>update: "flash"</code> flashes the same bars as above: the ones whose numbers changed, not every bar when the axis grows or the window is resized. The chart names each rect for screen readers ("Okafor: 4 assists"), but focus moves by player, so <code>markLabel</code> names each player as one item ("Okafor: 16 goals, 4 assists").</p>
     <!-- A group, not an image: screen readers skip what's inside an image, and its bars take focus. -->
     <svg id="host-chart" role="group" aria-label="Harbor City FC: goals by player"></svg>
   </section>
@@ -96,7 +97,7 @@
     <ul class="checklist">
       <li>Tab into a chart, then use the arrow keys, Home and End: keyboard focus plays the same stories as the pointer. Escape stops.</li>
       <li>Sort in Presentation: the values change first, then the rows move. Click again mid-change, and nothing jumps.</li>
-      <li>Pick Off, or turn on reduced motion: every change jumps to where it ends.</li>
+      <li>Pick Off, or turn on reduced motion: every change jumps to where it ends. Reload with reduced motion on, and the bars don't draw in.</li>
       <li>Open the bar chart's data table: it lists each player's position too, as the tooltip does.</li>
       <li>Switch your system between light and dark: the charts' colours come from the library's own theme, and text is never in a series colour.</li>
     </ul>

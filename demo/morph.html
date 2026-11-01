@@ -123,7 +123,7 @@
 
   <section class="card" aria-labelledby="season-title">
     <h2 id="season-title">Goals and xG, with missing weeks</h2>
-    <p class="note">The line page's season as a weekly feed recorded it, with no values for matchweeks 9 and 10 and no xG for matchweeks 4 and 5, in a second <code>chartSwitch</code>. Goals and xG per match and season to date are each a <code>lineChart</code>, and goals per match are columns on <code>barChart</code>, keyed as the lines' points are (<code>goals@12</code>). Each point grows into its column, and the two charts' lines morph into each other with their gaps kept. With a week or a column focused, <kbd>V</kbd> goes to the next view, and focus follows the week.</p>
+    <p class="note">The line page's season as a weekly feed recorded it, with no values for matchweeks 9 and 10 and no xG for matchweeks 4 and 5, in a second <code>chartSwitch</code>. Goals and xG per match and season to date are each a <code>lineChart</code>, and goals per match are columns on <code>barChart</code>, keyed as the lines' points are (<code>goals@12</code>). Each point grows into its column, and the two charts' lines morph into each other with their gaps kept. With a week or a column focused, <kbd>V</kbd> goes to the next view, and focus follows the week. Pick a view with the toggles, and Tab lands on the same week there.</p>
     <div class="toggles">
       <span class="pick">
         <span class="label" id="season-view-label">View</span>
@@ -143,7 +143,7 @@
       <h2 id="grow-title">Points into columns</h2>
       <ul class="checklist">
         <li>A line chart draws its points only when they're hovered, so each column grows out of its point's centre, from nothing, and shrinks back into it. You see which week's goals became which column. A crossfade would show none of that.</li>
-        <li>The lines have no partner among the columns, so they fade out over the first half of the switch, and back in over the second half on the way back. xG has no columns, and its points aren't drawn, so only its line fades.</li>
+        <li>The lines have no partner among the columns, so they fade out over the first half of the switch, each with its end dot, and back in over the second half on the way back. xG has no columns, and its points aren't drawn, so only its line fades.</li>
         <li>Each column is drawn in goals' colour all the way, as its point is: the three views share one <code>colorAssignment</code>, and the switch paints each mark as its own view does.</li>
         <li>The end labels fade out, and the columns' axis and value labels fade in.</li>
         <li>The columns leave out matchweeks 9 and 10: a column of no height would say no goals were scored. From either week on a line, focus goes to the first column.</li>
@@ -154,10 +154,10 @@
     <section class="card" aria-labelledby="lines-title">
       <h2 id="lines-title">Line into line</h2>
       <ul class="checklist">
-        <li>From Per match to Season to date, each line morphs into the other along its stroke, and keeps its gaps: nothing is drawn where both lines have one.</li>
-        <li>Gaps are matched by how far along the line they fall, not by week. A jagged line per match and a smooth one to date reach matchweek 9 at different points along them, so part way, the stroke where one line has a gap and the other doesn't fades in or out, and some of it crosses the weeks both miss.</li>
-        <li>The switch samples each line at 640 points, four times <code>morph()</code>'s default, so the jagged line keeps its corners within a few px as the morph starts and lands.</li>
-        <li>A line's end dot isn't part of its outline, so the switch doesn't draw it: the dots go as a switch starts and come back as it lands.</li>
+        <li>From Per match to Season to date, each line morphs into the other week by week: <code>morph()</code> pairs two lines that run left to right by x, so each week's point moves straight up or down.</li>
+        <li>Gaps match by week too, so nothing is drawn in the weeks both lines miss, 9 and 10, and xG's 4 and 5, at any point of the switch.</li>
+        <li>Each line's corners are its own as the switch starts and lands, with <code>morph()</code>'s default points: the jagged line per match doesn't jump.</li>
+        <li>Each line's end dot moves with its end, with its ring, as the chart draws it.</li>
       </ul>
     </section>
   </div>
@@ -171,6 +171,7 @@
       <li>Hover a bar beside the switch, then a slice: each lights up its partner. Switch to the columns and try again: the link follows the view on show.</li>
       <li>Pick <b>Columns</b> below, then <b>Per match</b>: the goals points grow into columns and shrink back, while the lines fade. Pick <b>Season to date</b> and watch the gaps at matchweeks 4, 5, 9 and 10.</li>
       <li>Tab into the line chart below, go to a week with the arrow keys, and press <kbd>V</kbd> three times: focus stays on that week through each view.</li>
+      <li>Go to a week, Shift+Tab back to the toggles and pick another view, then press Tab: you're on the same week, or its column.</li>
     </ul>
   </section>
 </main>

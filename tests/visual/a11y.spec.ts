@@ -703,9 +703,9 @@ test.describe("text spacing", () => {
 });
 
 test.describe("pause, stop, hide", () => {
-  // WCAG 2.2.2: what moves by itself for more than 5 s needs a pause. Only the line page and the
-  // shapes page play at load (each ball's first trip, about 1.4 s and 3 s), and Play season has Pause
-  // (line.spec.ts).
+  // WCAG 2.2.2: what moves by itself for more than 5 s needs a pause. Only the bars page, the line page
+  // and the shapes page play at load (the bars drawing in, about 750 ms, and each ball's first trip,
+  // about 1.4 s and 3 s), and Play season has Pause (line.spec.ts).
   for (const { name, demo } of demos) {
     test(`${name}.html: nothing moves by itself 5 s after load`, async ({ page }) => {
       await openDemo(page, demo);

@@ -261,6 +261,8 @@ test.describe("theme", () => {
 
 test.describe("Play season", () => {
   test("both charts mid-play at week 20: the red runs so far, and the ball at the tip", async ({ page }) => {
+    // The whole season, frame by frame: in WebKit in Docker, under 4 workers, it once took more than 30 s.
+    test.setTimeout(60_000);
     await openAtRest(page);
     await playButton(page).click();
     await expect(playButton(page)).toHaveText("Pause");
@@ -299,6 +301,9 @@ test.describe("Play season", () => {
     { mode: "Analysis", ms: SEASON * 0.3 }
   ] as const) {
     test(`takes about ${ms / 1000} s in ${mode}, and Pause stops it`, async ({ page }) => {
+      // The season played and half of it again, frame by frame: in WebKit in Docker, under 4 workers, Presentation's
+      // took more than 30 s.
+      test.setTimeout(60_000);
       await openAtRest(page);
       await pickMode(page, mode);
       await playButton(page).click();

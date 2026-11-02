@@ -32,7 +32,7 @@ One Rolldown, 1.2.16, builds the package and bundles the size check's import set
 
 `pack-check` (`scripts/pack-check.mjs`) packs the package, installs the tarball in a new project in the system's temporary folder, imports every entry in Node as ES modules and as CommonJS with no DOM, and typechecks a small consumer against it with each of the three TypeScripts, under `bundler`, `node16` (ES module) and `node16` (CommonJS) resolution. Each must read its own declarations: `.d.ts` for `import`, `.d.cts` for `require`, the stylesheet's included. CI runs it after the build. `-- --keep` keeps the temporary project.
 
-Working on the library needs Node.js 22.18 or newer, or 24.11 or newer on 24, as tsdown asks (CI tests 22 and 24). The package itself needs Node.js 22 or newer. The unit tests run in jsdom 29: jsdom 30 needs Node.js 22.22.2 or newer on 22, or 24.15 or newer on 24, so it waits until working on the library asks for that.
+Working on the library needs Node.js 22.22.2 or newer on 22, or 24.15 or newer on 24, as jsdom 30 asks: it runs the unit tests (CI tests 22 and 24). The package itself needs Node.js 22 or newer, since jsdom is only a dev dependency.
 
 ## Visual tests
 

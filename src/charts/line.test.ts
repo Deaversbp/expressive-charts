@@ -37,8 +37,12 @@ function hash(text: string): string {
   return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
 }
 
-/** What main (3547035) drew, as this file's "lays out a number, {}, { right } and sides of 0 as main does" hashes it there: no `room`, and `room: 40`. */
-const MAIN = { unset: "8c166ec47a984d1e", right: "0965a2f279c4c45c" } as const;
+/**
+ * What main (3547035) drew, as this file's "lays out a number, {}, { right } and sides of 0 as main does" hashes it there: no `room`, and `room: 40`.
+ * With the groups in M13's order (the overlay between the lines and the points); put back in main's order, they hash as main's did,
+ * 8c166ec47a984d1e and 0965a2f279c4c45c.
+ */
+const MAIN = { unset: "1b9657f3c885cce1", right: "6e0958a7cef31e6d" } as const;
 
 function setup(options: Partial<LineChartOptions<Week>> = {}, more: Partial<ChartEnv> = {}) {
   const container = document.createElement("div");
@@ -140,7 +144,9 @@ describe("lineChart: drawing", () => {
   it("draws a line per series from describe.line and a point per row and series, behind the x's columns", () => {
     const { svg, chart, line, point, keys } = setup();
     expect(svg.getAttribute("class")).toBe("ec-chart ec-line-chart");
-    expect(Array.from(svg.children, (child) => child.getAttribute("class"))).toEqual(["ec-grid", "ec-axis", "ec-crosshair", "ec-focus", "ec-marks", "ec-columns", "ec-overlay"]);
+    expect(Array.from(svg.children, (child) => child.getAttribute("class"))).toEqual(["ec-grid", "ec-axis", "ec-crosshair", "ec-focus", "ec-marks", "ec-overlay", "ec-marks", "ec-columns"]);
+    // The lines, then the overlay where runs draw, then the points, each marks group aria-hidden.
+    expect(Array.from(svg.querySelectorAll(":scope > .ec-marks"), (marks) => `${Array.from(marks.children, (child) => child.getAttribute("class"))} ${marks.getAttribute("aria-hidden")}`)).toEqual(["ec-lines true", "ec-points true"]);
     expect(keys()).toEqual(["goals", "xg", "goals@1", "xg@1", "goals@2", "xg@2", "goals@3", "xg@3", "goals@4", "xg@4"]);
     const [goals] = chart.marks();
     const stroke = line("goals").querySelector(".ec-body > .ec-stroke")!;

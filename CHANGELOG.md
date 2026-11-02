@@ -33,8 +33,13 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Changed
 
+- **A line chart's decorations draw below its points.** The overlay where runs draw is above the lines, their end dots and end labels, and below the points, so nothing an effect draws covers a point being read: on the line page, week 12's hovered goals point shows above the red run. An end dot is part of its line, so a decoration still draws over it. Effects draw as before, and no other chart's overlay moves. In the `<svg>`, the points are in a second `.ec-marks` after the overlay, and `hover: "point"`'s stops come after the x's.
+
 ### Fixed
 
+- **A chart measures its text again when the text changes size.** The bar, donut and line charts measured each text once, as they drew, and again only once web fonts loaded. So spacing a viewer adds after load (WCAG 1.4.12's), or a font or size set on the page, widened the text without a new layout: on Windows, a bar chart's names ran together. Now each chart keeps a hidden line of text, with no class, watched with a `ResizeObserver`. When its width changes, the chart measures again and lays out at once, as when fonts load: a bar chart thins its names again, and its margins fit its text. Until text changes size, every chart draws as before.
+- **`update({ colors })` recolours every bar on the change's first frame.** A bar the change left in place kept its old colour until the change landed. With motion off, and with `colors` alone, it's at once, as before.
+- **Overlays drawn in a stack's later part's colour follow it.** A path drawn in a part's colour (`Paint.part`), as `drawIn` draws a stack's, kept its old colour when a part other than the first changed colour: on our bar chart, and on `expressive()`'s marks when they're read again.
 - **A time that comes twice where the clocks go back reads differently each time.** In local time, and in a zone by its name, each of the two says the zone's short name, as `Intl` words it in the page's locale ("Nov 1, 2026, 1:00 AM EDT" and "Nov 1, 2026, 1:00 AM EST" in `en-US`, "25 Oct 2026, 01:00 BST" and "25 Oct 2026, 01:00 GMT" in `en-GB`), in their names, the tooltip, the table and the announcements. Before, the two read the same. A name that says no time, and the ticks, still name no zone.
 
 ## 0.7.0 (1 November 2026)

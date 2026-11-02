@@ -122,3 +122,43 @@ describe("drawIn on expressive()'s stacked rects", () => {
     fx.destroy();
   });
 });
+
+describe("drawIn with a part's colour changed while it draws", () => {
+  it("recolours a stack's second part's path on our bar chart, its first part's staying", () => {
+    const e = env();
+    const chart = barChart<Player>(
+      document.body.appendChild(document.createElement("div")),
+      { label: "Goals and assists", data: players, y: "name", stack: ["goals", "assists"], width: 600, on: { enter: drawIn() } },
+      e
+    );
+    const paths = drawnFor(chart.element, "Okafor");
+    e.clock.advance(300);
+    void chart.update({ colors: { goals: 1, assists: 4 } });
+    expect(paths.map((path) => path.isConnected)).toEqual([true, true]);
+    expect(paths.map((path) => path.style.getPropertyValue("--ec-mark"))).toEqual([seriesColors(1).color, seriesColors(4).color]);
+    expect(paths.map((path) => path.style.getPropertyValue("--ec-mark-strong"))).toEqual([seriesColors(1).strong, seriesColors(4).strong]);
+    chart.destroy();
+  });
+
+  it("recolours a host stack's second part's path when expressive() reads it again", () => {
+    const e = env();
+    const svg = el("svg", { width: 600, height: 120 }, document.body) as SVGSVGElement;
+    const groups = (["goals", "assists"] as const).map((series, s) => {
+      const group = el("g", { fill: s === 0 ? "#2a78d6" : "#eb6834" }, svg);
+      players.forEach((player, i) => {
+        const rect = el("rect", { x: (s === 0 ? 0 : player.goals) * 20, y: i * 34 + 7, width: player[series] * 20, height: 20 }, group);
+        (rect as unknown as { __data__: unknown }).__data__ = { row: player, series };
+      });
+      return group;
+    });
+    const fx = expressive<{ row: Player; series: string }>(Array.from(svg.querySelectorAll("rect")), { key: (d) => d.row.name, segment: (d) => d.series, on: { enter: drawIn() } }, e);
+    const paths = drawnFor(svg, "Tanaka");
+    e.clock.advance(300);
+    groups[1]!.setAttribute("fill", "#7a5af8");
+    fx.refresh();
+    expect(paths.map((path) => path.isConnected)).toEqual([true, true]);
+    expect(paths[0]!.style.getPropertyValue("--ec-mark")).toMatch(/^(#2a78d6|rgb\(42, 120, 214\))$/);
+    expect(paths[1]!.style.getPropertyValue("--ec-mark")).toMatch(/^(#7a5af8|rgb\(122, 90, 248\))$/);
+    fx.destroy();
+  });
+});

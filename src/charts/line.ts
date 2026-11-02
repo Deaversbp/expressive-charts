@@ -68,7 +68,7 @@ import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
-import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
+import { watchFonts, watchHoverDuration, watchText, watchWidth } from "./shell/watch";
 import type { ChartSwitchPaint } from "./switch";
 import { chartTable, tableModel, type TableModel } from "./table";
 import { monthsOn } from "./time";
@@ -218,12 +218,13 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   const crosshair = svgElement("line", { class: "ec-crosshair", "aria-hidden": "true", visibility: "hidden" }, svg);
   // Behind the marks, so it can't cover them; the gap keeps it apart from a point in the same colour.
   const ring = svgElement("g", { class: "ec-focus", "aria-hidden": "true", visibility: "hidden" }, svg);
-  const marksLayer = svgElement("g", { class: "ec-marks", "aria-hidden": "true" }, svg);
-  const linesLayer = svgElement("g", { class: "ec-lines" }, marksLayer);
-  const pointsLayer = svgElement("g", { class: "ec-points" }, marksLayer);
+  // Runs draw above the lines, their end dots and labels, and below the points, so a decoration never
+  // covers a point being read. The points are marks of their own, so `.ec-morphing` hides them too.
+  const linesLayer = svgElement("g", { class: "ec-lines" }, svgElement("g", { class: "ec-marks", "aria-hidden": "true" }, svg));
+  const overlay = svgElement("g", { class: "ec-overlay", "aria-hidden": "true" }, svg);
+  const pointsLayer = svgElement("g", { class: "ec-points" }, svgElement("g", { class: "ec-marks", "aria-hidden": "true" }, svg));
   // Above the marks: the pointer's targets and the focus stops.
   const columnsLayer = svgElement("g", { class: "ec-columns" }, svg);
-  const overlay = svgElement("g", { class: "ec-overlay", "aria-hidden": "true" }, svg);
   const measure = textMeasure(svg);
 
   /** Live rows, in ascending x. */
@@ -941,7 +942,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     if (hoverKind !== "point") return;
     if (!stopsLayer) {
       stopsLayer = svgElement("g", { class: "ec-stops" }, svg);
-      svg.insertBefore(stopsLayer, overlay);
+      svg.insertBefore(stopsLayer, columnsLayer.nextSibling);
       plotHit = svgElement("rect", { class: "ec-hit" }, stopsLayer);
       // A click or tap on the plot takes focus to the point it hovers, as one on an x's column does.
       stopsLayer.addEventListener("click", (event) => {
@@ -1409,7 +1410,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
   const unwatchHoverDuration = watchHoverDuration(svg, motion);
 
-  /** Re-lays out without animating: a resize or fonts loading. A change in flight lands at once. Effects follow through change(). */
+  /** Re-lays out without animating: a resize, fonts loading or the text changing size. A change in flight lands at once. Effects follow through change(). */
   function relayout(): void {
     if (destroyed) return;
     const next = layout(current);
@@ -1422,17 +1423,21 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     void transitionTo(next, true);
   }
 
+  // Margins are measured; measure again when the text changes size, such as spacing added after the
+  // chart drew, and once web fonts arrive.
+  const remeasure = (): void => {
+    measure.clear();
+    relayout();
+  };
+  const unwatchText = watchText(svg, clock, remeasure);
+
   const unwatchWidth = watchWidth(container, clock, measuredWidth, (width) => {
     measuredWidth = width;
     // A fixed `width` ignores the container.
     if (current.width === undefined) relayout();
   });
 
-  // Margins are measured; measure again once web fonts arrive.
-  const unwatchFonts = watchFonts(doc, () => {
-    measure.clear();
-    relayout();
-  });
+  const unwatchFonts = watchFonts(doc, remeasure);
 
   // ── First render ───────────────────────────────────────────────────────────
 
@@ -1610,6 +1615,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       table.destroy();
       announcer?.destroy();
       unwatchHoverDuration();
+      unwatchText();
       unwatchWidth();
       unwatchFonts();
       for (const record of [...rowOrder, ...leavingRows.values()]) for (const value of [record.x, record.values, record.presence]) value.stop();

@@ -642,7 +642,7 @@ describe('lineChart({ hover: "point" }): the keys', () => {
     expect(tabIndexes(svg)).toEqual(["a@1 0", ...["a@2", "a@3", "a@4", "a@5", "a@6", "b@1", "b@3", "b@4", "b@6", "c@1", "c@2", "c@3", "c@4", "c@5", "c@6"].map((key) => `${key} -1`)]);
     expect(svg.querySelector(".ec-columns")!.getAttribute("display")).toBe("none");
     expect(column("1").hasAttribute("tabindex")).toBe(false);
-    expect(Array.from(svg.children, (child) => child.getAttribute("class"))).toEqual(["ec-grid", "ec-axis", "ec-crosshair", "ec-focus", "ec-marks", "ec-columns", "ec-stops", "ec-overlay"]);
+    expect(Array.from(svg.children, (child) => child.getAttribute("class"))).toEqual(["ec-grid", "ec-axis", "ec-crosshair", "ec-focus", "ec-marks", "ec-overlay", "ec-marks", "ec-columns", "ec-stops"]);
   });
 
   it("goes along the line with Left and Right, passing over its missing values, and to its ends with Home and End", () => {
@@ -887,7 +887,7 @@ describe('lineChart: update({ hover })', () => {
     expect(rings(svg)).toEqual([outline(chart, "goals@2"), outline(chart, "xg@2")]);
     expect(svg.querySelector(".ec-stops")).toBeNull();
     expect(svg.querySelector(".ec-columns")!.hasAttribute("display")).toBe(false);
-    expect(Array.from(svg.children, (child) => child.getAttribute("class"))).toEqual(["ec-grid", "ec-axis", "ec-crosshair", "ec-focus", "ec-marks", "ec-columns", "ec-overlay"]);
+    expect(Array.from(svg.children, (child) => child.getAttribute("class"))).toEqual(["ec-grid", "ec-axis", "ec-crosshair", "ec-focus", "ec-marks", "ec-overlay", "ec-marks", "ec-columns"]);
     expect(column("2").getAttribute("tabindex")).toBe("0");
     press(document.activeElement!, "ArrowRight");
     expect(events.slice(2)).toEqual(["hover goals@3 keyboard 1/2", "hover xg@3 keyboard 2/2"]);

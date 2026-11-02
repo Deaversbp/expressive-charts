@@ -35,7 +35,7 @@ export function placeText(element: SVGTextElement, placement: TextPlacement): vo
 export interface TextMeasure {
   /** Width in px of `text` drawn with `className` at `size` px (the size is only used for estimates). */
   (text: string, className: string, size: number): number;
-  /** Forget measured widths, for example once web fonts have loaded. */
+  /** Forget measured widths: once web fonts have loaded, or when the text changes size (shell/watch.ts). */
   clear(): void;
 }
 

@@ -4,7 +4,9 @@
 // lineChart and on a D3 line drawn with .defined(). All five carry the same decoration: the goals line
 // red wherever it's below xG, and a ball riding its leading edge. One playback() drives the four that
 // play, with its playButton(), the page's scrubber and the motion switch. Two toggles curve the line
-// charts' lines, and the Vega-Lite line's, and hover their nearest point instead of the week.
+// charts' lines, and the Vega-Lite line's, and hover their nearest point instead of the week. Last, a
+// club's ticket sales by the hour over the weekend London's clocks went back, on lineChart in
+// "Europe/London", with a toggle for UTC.
 import {
   describe,
   expressive,
@@ -352,6 +354,76 @@ segmented("hover", (value) => {
   const hover = value as "x" | "point";
   void chart.update({ hover });
   void gapsChart.update({ hover });
+});
+
+// ── Ticket sales by the hour ─────────────────────────────────────────────────
+
+interface Hour {
+  readonly time: Date;
+  readonly tickets: number;
+}
+
+const HOUR = 3_600_000;
+/** Midnight on Saturday 24 October 2026 in London: 23:00 UTC the day before, since London is on BST, an hour ahead. */
+const SATURDAY = Date.UTC(2026, 9, 23, 23);
+/** Midnight on Sunday in London, still on BST. The clocks go back at 2 AM, to 1 AM GMT, so Sunday has 25 hours. */
+const SUNDAY = Date.UTC(2026, 9, 24, 23);
+/** Midnight on Monday 26 October in London, on GMT, which is UTC. */
+const MONDAY = Date.UTC(2026, 9, 26);
+/** Saturday's sales in each hour of London's day: a few overnight, most from late morning into the evening. */
+const BY_HOUR = [20, 10, 6, 5, 5, 8, 18, 40, 80, 130, 190, 240, 260, 250, 220, 200, 210, 240, 290, 300, 270, 200, 120, 60];
+/** The hour of London's day a time falls in. */
+const londonHour = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "numeric", hourCycle: "h23" });
+
+/** A club's ticket sales each hour of the weekend the clocks went back, seeded: Sunday and Monday's hours sell 70% of Saturday's. */
+function ticketSales(): Hour[] {
+  let seed = 11;
+  const random = (): number => {
+    seed = (seed * 48271) % 2147483647;
+    return seed / 2147483647;
+  };
+  const hours: Hour[] = [];
+  for (let t = SATURDAY; t <= MONDAY; t += HOUR) {
+    const day = t < SUNDAY ? 1 : 0.7;
+    hours.push({ time: new Date(t), tickets: Math.round(BY_HOUR[Number(londonHour.format(t))]! * day * (0.85 + random() * 0.3)) });
+  }
+  return hours;
+}
+
+/** The chart's name and description in each zone: they say the zone, since the times it reads say none. */
+const IN_ZONE = {
+  "Europe/London": {
+    label: "Tickets sold each hour, in London time",
+    description:
+      "A club's ticket sales each hour from midnight on Saturday 24 October to midnight on Monday 26 October 2026, in London time. The clocks went back an hour at 2 AM on Sunday, so Sunday has 25 hours, and 1 AM comes twice: in British Summer Time, then in Greenwich Mean Time."
+  },
+  UTC: {
+    label: "Tickets sold each hour, in UTC",
+    description:
+      "The same hours in UTC, from 11 PM on Friday 23 October to midnight on Monday 26 October 2026. UTC's clocks don't change, so every day has 24 hours. London's went back at 1 AM UTC on Sunday."
+  }
+} as const;
+type Zone = keyof typeof IN_ZONE;
+
+let zone: Zone = "Europe/London";
+const tickets = lineChart<Hour>("#tickets", {
+  ...IN_ZONE[zone],
+  data: ticketSales(),
+  x: "time",
+  timeZone: zone,
+  series: ["tickets"],
+  seriesLabels: { tickets: "tickets" },
+  // One line: nothing to tell apart, and its last hour's sales sum nothing up, so the plot takes the end label's room.
+  legend: false,
+  labels: false,
+  table: { category: "Hour", series: { tickets: "Tickets sold" } }
+});
+
+// London or UTC: the same hours, with the ticks on the zone's midnights and the names in its time.
+segmented("zone", (value) => {
+  if (value === zone) return;
+  zone = value as Zone;
+  void tickets.update({ ...IN_ZONE[zone], timeZone: zone });
 });
 
 // The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.

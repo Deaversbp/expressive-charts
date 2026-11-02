@@ -56,7 +56,7 @@
   /* The page's own controls only: the charts draw their own focus rings. */
   button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
-  #line, #gaps, .d3-box { min-width: 0; }
+  #line, #gaps, #tickets, .d3-box { min-width: 0; }
   .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
   a { color: var(--link); }
   /* The motion switch sits on the page, darker than the charts' surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
@@ -188,7 +188,7 @@
       <ul class="checklist">
         <li>The ball is drawn at 11 px, smaller than the icon's own 17 px, so it doesn't hide the last weeks.</li>
         <li>xG is a dashed grey line rather than a second colour: a colour such as orange sits too close to the red below xG, and the dash tells the lines apart whatever the viewer's colour vision. The legends draw each entry as a short line, so xG's shows its dash.</li>
-        <li>The goals line's end dot and hover dot keep their series colour, since <code>threshold</code> draws nothing on a dot. The tooltip's "vs expected" line and the table's Difference column still say when goals are below xG.</li>
+        <li>The goals line's end dot and hover dot keep their series colour, since <code>threshold</code> draws nothing on a dot. The red is drawn above the lines and below their points, so a hovered point shows whole over it, as goals' does at matchweek 12. The tooltip's "vs expected" line and the table's Difference column still say when goals are below xG.</li>
         <li>"Goals below xG" comes after the series in the legend, since a page's entries follow the chart's own.</li>
         <li>The table's headers are the series' names, "Goals scored" and "Expected goals (xG)", and its values share the chart's one format, so an xG of 20.0 reads "20".</li>
         <li>A missing week is <code>null</code>, never 0: a zero would pull the season-to-date line down to the axis and back. The names, the tooltip and the table say "missing", since "no goals" reads as none scored.</li>
@@ -197,9 +197,25 @@
         <li>On a curve, the red still starts and ends where the drawn lines cross, since the chart samples each bend. The Vega-Lite line is sampled at its weeks, so its red can start a few px from the crossing between them.</li>
         <li>Nearest point hovers one point, not a week, with no crosshair. Its line, the red and the ball stay at full strength, and the other line, its points and its decorations dim. Text doesn't dim: the end labels, the axes and the tooltip keep their contrast. The tooltip and each point's name give its one value.</li>
         <li>The toggles drive both <code>lineChart</code>s. With missing weeks, each run between gaps curves on its own, and with Nearest point, Left and Right pass over a missing week to the line's next point, and Up and Down do nothing where the other line is missing.</li>
+        <li>The ticket sales chart's name and description say its zone, "in London time" or "in UTC". A time in a named zone reads as a time in UTC does, with no zone's name, so the names, the tooltip and the table don't say it. Only an hour that comes twice adds the zone's short name, so its two hours never read the same.</li>
       </ul>
     </section>
   </div>
+
+  <section class="card" aria-labelledby="tickets-title">
+    <h2 id="tickets-title">Ticket sales the weekend the clocks went back</h2>
+    <p class="note">A club's ticket sales by the hour, from midnight on Saturday 24 October to midnight on Monday 26 October 2026, on <code>lineChart</code> with <code>timeZone: "Europe/London"</code>. Its ticks fall on London's midnights. The clocks went back an hour at 2 AM on Sunday, so Sunday has 25 hours, and 1 AM comes twice, named with the zone's short name in the browser's language: BST, then GMT, in British English, and GMT+1, then GMT or GMT+0, in American English. UTC shows the same hours with <code>update({ timeZone: "UTC" })</code>: they start at 11 PM on Friday, the ticks after it fall on UTC's midnights, and every day has 24 hours.</p>
+    <div class="toggles">
+      <span class="pick">
+        <span class="label" id="zone-label">Time zone</span>
+        <span class="seg" id="zone" role="group" aria-labelledby="zone-label">
+          <button type="button" data-value="Europe/London" aria-pressed="true">London</button>
+          <button type="button" data-value="UTC" aria-pressed="false">UTC</button>
+        </span>
+      </span>
+    </div>
+    <div id="tickets"></div>
+  </section>
 
   <section class="card" aria-labelledby="try-title">
     <h2 id="try-title">Things to try</h2>
@@ -207,11 +223,13 @@
       <li>Press <b>Play season</b>: the goals line turns red wherever it falls below xG as it's drawn, and the ball rides its leading edge. Pause, or drag the scrubber to any week.</li>
       <li>Play in each mode: the season takes about 6.5 s in Presentation and 2 s in Analysis, and Off goes straight to the end, with the red still showing.</li>
       <li>Tab into the line chart, then use the arrow keys to read both lines and the gap week by week.</li>
+      <li>Hover matchweek 12 on the first chart: goals are below xG there, and the hovered goals point shows above the red.</li>
       <li>Pick <b>Curved</b>: the first chart's lines ease into curves through every week's value, the red follows where they cross, and the Vega-Lite line curves too. Focus stays on the toggle.</li>
       <li>Pick <b>Nearest point</b>, then hover near a line: the nearest point is hovered and the other line dims. Tab in, and Left and Right go along the line, Up and Down to the other line at that week, and Escape ends the hover. On the chart with missing weeks, Right from matchweek 8 goes to 11.</li>
       <li>Open the line chart's data table: its Difference column says how far goals are above or below xG each week.</li>
       <li>Play the season and watch the charts with missing weeks: the ball waits at matchweek 8 while 9 and 10 are revealed, then jumps across the gap.</li>
       <li>Hover matchweek 9 on the chart with missing weeks, or reach it with the arrow keys: the crosshair stops there, and the tooltip and the week's name say both values are missing.</li>
+      <li>On the ticket sales chart, hover Sunday's 1 AM, or Tab in and reach it with the arrow keys: it comes twice, as 1 AM BST and 1 AM GMT (GMT+1, then GMT or GMT+0, in American English). Open the table, and the two rows say the same. Then pick <b>UTC</b>: the same two hours read 12 AM and 1 AM on 25 October, with no zone's name.</li>
     </ul>
   </section>
 </main>

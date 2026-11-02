@@ -326,8 +326,11 @@ function hash(text: string): string {
   return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
 }
 
-/** What main (2d84d47) drew, as "draws UTC and local time byte for byte as main does" hashes it there. */
-const MAIN = { utc: "fd3ae5b08340a7bd", local: "47d3de8bfee740c3" } as const;
+/**
+ * What main (8845582) drew, as "draws UTC and local time byte for byte as main does" hashes it there.
+ * On 2d84d47, before M13 step 2 put the points in a group above the overlay: fd3ae5b08340a7bd and 47d3de8bfee740c3.
+ */
+const MAIN = { utc: "183d0e5b4d7b262d", local: "1d56e53fb1f34f7f" } as const;
 
 describe("lineChart on a time axis: zones", () => {
   const before = env.TZ;

@@ -764,6 +764,13 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     tooltip.hide();
   }
 
+  /** For a link's hover on an x with every value missing, with no point to emphasise: its crosshair alone, or hidden. */
+  function stand(key: string | undefined): void {
+    const record = key === undefined ? undefined : rows.get(key);
+    if (!record || !revealed(record)) crosshair.setAttribute("visibility", "hidden");
+    else setAttributes(crosshair, { ...placeCrosshair(drawnFrame, record.px), visibility: undefined });
+  }
+
   /** The focus at an x with every value missing, in `ring` while it shows there. */
   let ringLine: SVGLineElement | undefined;
 
@@ -804,6 +811,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   /** The tooltip, crosshair and ring follow the hovered and focused x or point as it moves. */
   function followHover(): void {
     if (hover.key !== undefined) showHover(hover.key);
+    if (hover.standing !== undefined) stand(hover.standing);
     if (hover.ringKey !== undefined) drawRing(hover.ringKey);
   }
 
@@ -1136,6 +1144,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       return record && onScreen(record);
     },
     standIn,
+    stand,
     ring: drawRing,
     tooltip: { show: showHover, hide: hideHover, element: () => tooltip.element() }
   });

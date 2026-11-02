@@ -504,7 +504,7 @@ function blankWeek(more: { data?: readonly Counted[]; line?: Partial<LineChartOp
 describe("link: an x with every value missing", () => {
   const blank = ["3", "goals missing · xg missing"];
 
-  it("hovers its column, and the column's hover shows the line's crosshair and tooltip there, with no effect or event on the line", () => {
+  it("hovers its column, and the column's hover shows the line's crosshair there, with no tooltip, effect or event on the line", () => {
     const { bars, line, bar, column, hot, crosshair, tip, barHover, lineHover } = blankWeek();
     const barEvents = listen<Counted>(bars);
     const lineEvents = listen<Counted>(line);
@@ -520,10 +520,11 @@ describe("link: an x with every value missing", () => {
     expect(hot(bars)).toEqual([]);
 
     pointer("pointerover", bar("3").querySelector(".ec-segment")!);
-    // Nothing at week 3 to emphasise: the crosshair and tooltip show where it is, as focus on it does.
+    // Nothing at week 3 to emphasise: the crosshair shows where it is. No tooltip, as in every linked
+    // hover: the pointer couldn't reach one here without leaving the bar.
     expect(crosshair().getAttribute("visibility")).toBeNull();
     expect(crosshair().getAttribute("x1")).toBe(own);
-    expect(tip()).toEqual(blank);
+    expect(tip()).toBeUndefined();
     expect(hot(line)).toEqual([]);
     expect(line.element.classList.contains("ec-hovering")).toBe(false);
     expect(line.element.querySelector(".ec-focus")!.getAttribute("visibility")).toBe("hidden");
@@ -554,15 +555,15 @@ describe("link: an x with every value missing", () => {
     expect(tip()).toBeUndefined();
     press(bar("2"), "ArrowRight");
     expect(hot(line)).toEqual([]);
-    expect(tip()).toEqual(blank);
+    expect(crosshair().getAttribute("visibility")).toBeNull();
+    expect(tip()).toBeUndefined();
     press(bar("3"), "ArrowRight");
     expect(hot(line)).toEqual(["goals@4", "xg@4"]);
     expect(tip()).toBeUndefined();
     expect(crosshair().getAttribute("visibility")).toBe("hidden");
     press(bar("4"), "ArrowLeft");
-    expect(tip()).toEqual(blank);
+    expect(crosshair().getAttribute("visibility")).toBeNull();
     expect(press(bar("3"), "Escape").defaultPrevented).toBe(true);
-    expect(tip()).toBeUndefined();
     expect(crosshair().getAttribute("visibility")).toBe("hidden");
     expect(hot(bars)).toEqual([]);
     expect(document.activeElement).toBe(bar("3"));
@@ -589,7 +590,8 @@ describe("link: an x with every value missing", () => {
     expect(standIn.data.related("goals")).toBeUndefined();
     pointer("pointerleave", line.element);
     pointer("pointerover", bar("3").querySelector(".ec-segment")!);
-    expect(tip()).toEqual(blank);
+    expect(crosshair().getAttribute("visibility")).toBeNull();
+    expect(tip()).toBeUndefined();
   });
 
   it("links it on a time axis by the x's ISO string", () => {
@@ -606,8 +608,8 @@ describe("link: an x with every value missing", () => {
     expect(line.element.querySelector(".ec-crosshair")!.getAttribute("visibility")).toBeNull();
   });
 
-  it("keeps the columns to emphasis and dimming with effects: false, and the line still shows its crosshair and tooltip", () => {
-    const { bars, line, bar, column, hot, tip, barHover, lineHover } = blankWeek({ link: { effects: false } });
+  it("keeps the columns to emphasis and dimming with effects: false, and the line still shows its crosshair", () => {
+    const { bars, line, bar, column, hot, crosshair, tip, barHover, lineHover } = blankWeek({ link: { effects: false } });
     const barEvents = listen<Counted>(bars);
     const lineEvents = listen<Counted>(line);
     pointer("pointerover", column("3").querySelector(".ec-hit")!);
@@ -617,7 +619,8 @@ describe("link: an x with every value missing", () => {
     expect(barHover.log).toEqual([]);
     pointer("pointerleave", line.element);
     pointer("pointerover", bar("3").querySelector(".ec-segment")!);
-    expect(tip()).toEqual(blank);
+    expect(crosshair().getAttribute("visibility")).toBeNull();
+    expect(tip()).toBeUndefined();
     expect(barHover.log).toEqual(["run 3"]);
     expect(lineHover.log).toEqual([]);
     expect(lineEvents).toEqual([]);
@@ -645,18 +648,23 @@ describe("link: an x with every value missing", () => {
     expect(crosshair().getAttribute("visibility")).toBe("hidden");
   });
 
-  it("follows a change: the line's tooltip goes when the x gains values, its points hovered instead, and comes back when they go", async () => {
+  it("follows a change: the line's crosshair moves with a resize, goes when the x gains values, its points hovered instead, and comes back when they go", async () => {
     const { env, line, bar, hot, crosshair, tip } = blankWeek();
     pointer("pointerover", bar("3").querySelector(".ec-segment")!);
-    expect(tip()).toEqual(blank);
+    const wide = crosshair().getAttribute("x1");
+    await play(env.clock, line.update({ width: 300 }));
+    expect(crosshair().getAttribute("visibility")).toBeNull();
+    expect(Number(crosshair().getAttribute("x1"))).toBeLessThan(Number(wide));
+    await play(env.clock, line.update({ width: 400 }));
+    expect(crosshair().getAttribute("x1")).toBe(wide);
     await play(env.clock, line.update({ data: weeks }));
     expect(hot(line)).toEqual(["goals@3", "xg@3"]);
     expect(tip()).toBeUndefined();
     expect(crosshair().getAttribute("visibility")).toBe("hidden");
     await play(env.clock, line.update({ data: counted }));
     expect(hot(line)).toEqual([]);
-    expect(tip()).toEqual(blank);
     expect(crosshair().getAttribute("visibility")).toBeNull();
+    expect(tip()).toBeUndefined();
   });
 });
 

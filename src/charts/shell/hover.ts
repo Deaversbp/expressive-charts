@@ -17,7 +17,8 @@
 // hover runs, with no tooltip, ring or focus. It hears the chart's own hovers, and Escape on a linked
 // hover ends the link's, where it started. A target with no marks, a line chart's x with every value
 // missing, gives the link a stand-in to read its linking value from instead, both ways, and a link's
-// hover on it shows its tooltip, there being nothing else to show.
+// hover on it shows where it is (`stand`: the line's crosshair), there being nothing to emphasise. Not
+// its tooltip: the pointer couldn't reach one in another chart without ending the hover it came from.
 
 import type { RunInput, Runner } from "../../core/runner";
 import { pointerHover, type HoverTarget } from "../interaction";
@@ -66,9 +67,14 @@ export interface ChartHoverOptions<D> {
    * What the live target `key` stands for in a link while it has no marks, as a mark there would be:
    * a line chart's x with every value missing gives a point at its x, with its row. The link reads its
    * linking value as a mark's, both ways. No effect runs on it, no event fires for it, and nothing
-   * takes emphasis: a link's hover on it shows its tooltip instead. Default: none, so it links nothing.
+   * takes emphasis: a link's hover on it shows `stand` instead. Default: none, so it links nothing.
    */
   standIn?(key: string): RunInput<D> | undefined;
+  /**
+   * Shows where the live target `key` is while a link's hover is on it standing in, with no marks to
+   * emphasise (a line chart's crosshair at its x), or moves it there; or, with undefined, hides it.
+   */
+  stand?(key: string | undefined): void;
   /** Draws the focus ring around the live target `key` as it is on screen, or hides it. */
   ring(key: string | undefined): void;
   readonly tooltip: {
@@ -81,11 +87,10 @@ export interface ChartHoverOptions<D> {
 }
 
 export interface ChartHover {
-  /**
-   * The target whose tooltip shows: the chart's own hover's. A link's shows none, but where its
-   * targets have no marks and stand in instead (`standIn`).
-   */
+  /** The hovered target's key, when the hover is the chart's own: a link's shows no tooltip. */
   readonly key: string | undefined;
+  /** The target a link's hover is on while it stands in with no marks, which `stand` shows. */
+  readonly standing: string | undefined;
   /** The target showing the focus ring: focused from the keyboard. */
   readonly ringKey: string | undefined;
   /** The chart's hover as a link drives it, for the chart to register with its handle. */
@@ -131,8 +136,8 @@ interface Hovered {
   readonly marks: readonly string[];
   /** Whether their hover runs play: a link with `effects: false` keeps its marks to emphasis and dimming. */
   readonly effects: boolean;
-  /** The target whose tooltip shows (`key`). */
-  readonly tip: string | undefined;
+  /** For a link's hover on targets with no marks, the one standing in that `stand` shows. */
+  readonly standing: string | undefined;
 }
 
 export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
@@ -164,9 +169,9 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       const input = options.standIn?.(key);
       return input ? [input] : [];
     });
-  /** The target whose tooltip shows: the chart's own hover's, or a link's whose targets have no marks but stand in. */
-  const tipFor = (keys: readonly string[], source: HoverSource, marks: readonly unknown[]): string | undefined =>
-    source !== "linked" ? keys[0] : marks.length > 0 ? undefined : keys.find((key) => options.standIn?.(key) !== undefined);
+  /** For a link's hover whose targets have no marks, the first that stands in. */
+  const standingFor = (keys: readonly string[], source: HoverSource, marks: readonly unknown[]): string | undefined =>
+    source === "linked" && marks.length === 0 ? keys.find((key) => options.standIn?.(key) !== undefined) : undefined;
 
   /** The marks' hover runs, in one batch, and an event for each with its place in it. */
   function hoverMarks(marks: ReturnType<typeof onScreen>, source: HoverSource, effects: boolean, segment?: string): void {
@@ -190,17 +195,20 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
   /**
    * Pointer, keyboard and link hover share this: the marks' emphasis, the others' dimming, the hover
    * runs and the events. The chart's own adds the tooltip and Escape, and tells its link: of its
-   * marks, or of its stand-in with none. A link's on targets with no marks shows the tooltip.
+   * marks, or of its stand-in with none. A link's on targets with no marks shows where one is instead.
    */
   function startHover(keys: readonly string[], source: HoverSource, segment?: string, effects = true): void {
     const marks = onScreen(marksFor(keys));
-    const tip = tipFor(keys, source, marks);
-    const started: Hovered = { keys, source, marks: marks.map((mark) => mark.key), effects, tip };
+    const standing = standingFor(keys, source, marks);
+    const started: Hovered = { keys, source, marks: marks.map((mark) => mark.key), effects, standing };
     hovered = started;
     for (const { key: mark } of marks) heat(mark, true);
     if (options.dim()) svg.classList.add("ec-hovering");
-    if (tip !== undefined) options.tooltip.show(tip);
-    if (source !== "linked") listenForEscape(true);
+    if (source !== "linked") {
+      options.tooltip.show(keys[0]!);
+      listenForEscape(true);
+    }
+    if (standing !== undefined) options.stand?.(standing);
     hoverMarks(marks, source, effects, segment);
     // A listener may have ended it (leave()) or started another, which told the link itself.
     if (source !== "linked" && hovered === started) linked?.hover(marks.length > 0 ? marks.map(({ input }) => input) : standIns(keys));
@@ -212,6 +220,7 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     listenForEscape(false);
     svg.classList.remove("ec-hovering");
     options.tooltip.hide();
+    if (ended?.standing !== undefined) options.stand?.(undefined);
     leaveMarks(ended?.marks ?? []);
     if (own(ended)) linked?.leave();
   }
@@ -322,7 +331,10 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
 
   return {
     get key() {
-      return hovered?.tip;
+      return own(hovered) ? hovered.keys[0] : undefined;
+    },
+    get standing() {
+      return hovered?.standing;
     },
     get ringKey() {
       return ringKey;
@@ -331,8 +343,8 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
     active: () => keyboard.active(),
     restyled(key) {
       if (ringKey !== undefined && within(ringKey, key)) options.ring(ringKey);
-      // A link's hover has no tooltip, but on a stand-in, which has no marks to restyle.
-      const target = hovered?.tip;
+      // A link's hover has no tooltip.
+      const target = own(hovered) ? hovered.keys[0]! : undefined;
       if (target !== undefined && (hovered?.marks.includes(key) || key === target) && options.live(target)) options.tooltip.show(target);
     },
     syncDim() {
@@ -349,13 +361,10 @@ export function chartHover<D>(options: ChartHoverOptions<D>): ChartHover {
       }
       const { source, marks: before, effects } = hovered;
       const now = onScreen(marksFor(keys));
-      // A link's tooltip shows while its targets stand in, and goes when they gain marks.
-      const tip = tipFor(keys, source, now);
-      if (tip !== hovered.tip) {
-        if (tip === undefined) options.tooltip.hide();
-        else options.tooltip.show(tip);
-      }
-      hovered = { ...hovered, keys, tip };
+      // A link's hover shows a target standing in while its targets have no marks, and stops when they gain some.
+      const standing = standingFor(keys, source, now);
+      if (standing !== hovered.standing) options.stand?.(standing);
+      hovered = { ...hovered, keys, standing };
       if (now.length === before.length && now.every((mark, i) => mark.key === before[i])) return;
       const had = new Set(before);
       const kept = new Set(now.map((mark) => mark.key));

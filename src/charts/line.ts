@@ -21,6 +21,7 @@
 import type { AnimateOptions, Animated, MarkData, MarkGeometry, Point, Sample, TweenResult } from "../core";
 import { animated, defaultClock, interpolateNumber, interpolateRecord, matrix } from "../core";
 import { invert } from "../core/geometry";
+import { describePoint } from "../core/geometry/describe/point";
 import { resolveEffects } from "../core/registry";
 import { report } from "../core/report";
 import { createRunner, type RunInput } from "../core/runner";
@@ -70,7 +71,7 @@ import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffec
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
 import { watchFonts, watchHoverDuration, watchText, watchWidth } from "./shell/watch";
 import type { ChartSwitchPaint } from "./switch";
-import { chartTable, tableModel, type TableModel } from "./table";
+import { chartTable, MISSING, tableModel, type TableModel } from "./table";
 import { monthsOn } from "./time";
 import { chartTooltip, summaryContent, type TooltipContent, type TooltipRow } from "./tooltip";
 import type { LineChart, LineChartOptions, MarkSummary } from "./types";
@@ -202,6 +203,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   const container = resolveTarget(target, "lineChart");
   checkChartOptions(options, "lineChart");
   let hoverKind = hoverOf(options);
+  missingOf(options);
   let current = options;
   const motion = chartMotion(options.motion, env.motion);
   let effects = resolveEffects(options.on, env.presets);
@@ -762,6 +764,13 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     tooltip.hide();
   }
 
+  /** For a link's hover on an x with every value missing, with no point to emphasise: its crosshair alone, or hidden. */
+  function stand(key: string | undefined): void {
+    const record = key === undefined ? undefined : rows.get(key);
+    if (!record || !revealed(record)) crosshair.setAttribute("visibility", "hidden");
+    else setAttributes(crosshair, { ...placeCrosshair(drawnFrame, record.px), visibility: undefined });
+  }
+
   /** The focus at an x with every value missing, in `ring` while it shows there. */
   let ringLine: SVGLineElement | undefined;
 
@@ -802,6 +811,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   /** The tooltip, crosshair and ring follow the hovered and focused x or point as it moves. */
   function followHover(): void {
     if (hover.key !== undefined) showHover(hover.key);
+    if (hover.standing !== undefined) stand(hover.standing);
     if (hover.ringKey !== undefined) drawRing(hover.ringKey);
   }
 
@@ -809,6 +819,22 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
   const input = (record: MarkRecord<D>): RunInput<D> => ({ mark: record.target.geometry, data: record.target.data });
   /** The mark as it is on screen: what hover, leave and exit report, so mid-change they match what's under the pointer or on its way out. */
   const onScreen = (record: MarkRecord<D>): RunInput<D> => ({ mark: record.shown.geometry, data: record.shown.data });
+
+  /**
+   * What a revealed x with no point, every value missing, stands for in a link: a point keyed by the
+   * x where the crosshair meets the plot's top, with its row and one sample, at its x as a point's
+   * is, and no value (NaN). So the default linking value and a `by` that reads the row find it. It's
+   * never drawn, and no effect or event hears of it.
+   */
+  function standIn(key: string): RunInput<D> | undefined {
+    const record = rows.get(key);
+    if (!record || !revealed(record)) return undefined;
+    const { row } = record;
+    return {
+      mark: describePoint({ key, x: record.px, y: drawnFrame.box.top, r: DOT_RADIUS }),
+      data: { datum: row.datum, samples: [{ t: 0, value: NaN, at: laidOut.time ? new Date(row.x) : row.x }], related: () => undefined }
+    };
+  }
 
   /** The row a column belongs to; leaving and hidden rows don't count. */
   function liveRowOf(eventTarget: EventTarget | null): RowRecord<D> | undefined {
@@ -1117,6 +1143,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       const record = findMark(key);
       return record && onScreen(record);
     },
+    standIn,
+    stand,
     ring: drawRing,
     tooltip: { show: showHover, hide: hideHover, element: () => tooltip.element() }
   });
@@ -1140,7 +1168,8 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       label: (series) => seriesLabel(opts.seriesLabels, series),
       rows: next.rows.map((row) => ({ key: row.key, category: row.label, datum: row.datum, index: row.index, values: present(row.values), missing: row.missing, total: total(row.values) })),
       format: format(opts),
-      total: false
+      total: false,
+      missing: missingOf(opts)
     });
   }
 
@@ -1490,6 +1519,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       const merged: LineChartOptions<D> = { ...current, ...next };
       checkChartOptions(merged, "lineChart");
       const kind = hoverOf(merged);
+      missingOf(merged);
       // Throws on an effect it can't resolve, data it can't draw, a table column it can't read, or a
       // `format` that throws, before anything changes.
       const swapped = "on" in next ? nextEffects(effects, current.on, merged.on, env.presets) : effects;
@@ -1728,12 +1758,13 @@ function labelled<D>(values: readonly LineValue[], options: LineChartOptions<D>)
   return present(values).map((v) => ({ series: v.series, label: seriesLabel(options.seriesLabels, v.series), value: v.value }));
 }
 
-/** Each series at the row, as the x's name and the tooltip say it: its value with its label ("15 goals"), or "xg missing". */
+/** Each series at the row, as the x's name and the tooltip say it: its value with its label ("15 goals"), or its label and `missing`'s word ("xg missing"). */
 function said<D>(values: readonly LineValue[], options: LineChartOptions<D>): string[] {
   const formatted = format(options);
+  const missing = missingOf(options);
   return values.map((v) => {
     const label = seriesLabel(options.seriesLabels, v.series);
-    return v.value === undefined ? `${label} missing` : `${formatted(v.value)} ${label}`;
+    return v.value === undefined ? `${label} ${missing}` : `${formatted(v.value)} ${label}`;
   });
 }
 
@@ -1797,4 +1828,13 @@ function hoverOf<D>(options: LineChartOptions<D>): HoverKind {
   const { hover = "x" } = options;
   if (hover !== "x" && hover !== "point") throw new TypeError(`lineChart: hover must be "x" or "point", got ${typeof hover === "string" ? JSON.stringify(hover) : String(hover)}.`);
   return hover;
+}
+
+/** The `missing` option: the word for a missing value, "missing" by default. Anything but a string with a word in it throws a TypeError. */
+function missingOf<D>(options: LineChartOptions<D>): string {
+  const { missing = MISSING } = options;
+  if (typeof missing !== "string" || missing.trim() === "") {
+    throw new TypeError(`lineChart: missing must be a word for a missing value, such as "no data", got ${typeof missing === "string" ? JSON.stringify(missing) : String(missing)}.`);
+  }
+  return missing;
 }

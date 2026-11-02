@@ -3,8 +3,8 @@
 // visually hidden but still read. Its rows are the chart's, in visual order, so it follows the sort;
 // its columns are the category (each row's header), any extra columns the page lists, each series,
 // and the total of a stack, in the chart's format, then any columns the page puts after the values.
-// A donut adds each row's share and a total row. A line's missing value says "missing". Text is only
-// ever set as text, never parsed as HTML.
+// A donut adds each row's share and a total row. A line's missing value says its word, "missing" by
+// default. Text is only ever set as text, never parsed as HTML.
 
 import { percent } from "./shell/format";
 import type { ChartOptions, TableColumn, TableOptions } from "./types";
@@ -20,7 +20,7 @@ export interface TableRow<D> {
   /** Its index in `data`. */
   readonly index: number;
   readonly values: readonly { readonly series: string; readonly value: number }[];
-  /** The series with no value in this row, a line chart's gaps: their cells say "missing". */
+  /** The series with no value in this row, a line chart's gaps: their cells say the input's `missing`. */
   readonly missing?: ReadonlySet<string>;
   readonly total: number;
 }
@@ -48,6 +48,8 @@ export interface TableInput<D> {
    * percent, and a total row in <tfoot>: "Total", the values added up, and 100%.
    */
   readonly shares?: boolean;
+  /** The word in a missing value's cell: a line chart's `missing`. Default "missing". */
+  readonly missing?: string;
 }
 
 export interface TableCell {
@@ -105,8 +107,8 @@ export function checkTableOption(option: unknown, chart: string): void {
   });
 }
 
-/** A missing value's cell: a word, so it's heard as missing, not as an empty cell. */
-const MISSING = "missing";
+/** A missing value's word by default: a word in its cell, so it's heard as missing, not as an empty cell. */
+export const MISSING = "missing";
 
 /** What the table shows, or undefined with `table: false`. Reads every cell, so a column that throws throws here. */
 export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
@@ -124,6 +126,7 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
   // Only the option's own keys count, so "constructor" is just a series.
   const own = (series: string): string | undefined => (options.series && Object.prototype.hasOwnProperty.call(options.series, series) ? options.series[series] : undefined);
   const blank = (): TableCell => ({ text: "", numeric: false });
+  const missing: TableCell = { text: input.missing ?? MISSING, numeric: true };
 
   const headers: TableCell[] = [
     { text: options.category ?? input.category ?? "Category", numeric: false },
@@ -140,7 +143,7 @@ export function tableModel<D>(input: TableInput<D>): TableModel | undefined {
       cells: [
         { text: row.category, numeric: false },
         ...first.map((column) => columnCell(column, row, format)),
-        ...input.series.map((series) => (row.missing?.has(series) ? { text: MISSING, numeric: true } : number(values.get(series) ?? 0))),
+        ...input.series.map((series) => (row.missing?.has(series) ? missing : number(values.get(series) ?? 0))),
         ...(totals ? [number(row.total)] : []),
         ...share(row.total),
         ...last.map((column) => columnCell(column, row, format))

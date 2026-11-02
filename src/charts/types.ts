@@ -273,6 +273,12 @@ export interface LineChartOptions<D> extends ChartOptions<D> {
    */
   readonly series: readonly KeyOfType<D, number | null | undefined>[];
   /**
+   * The word for a missing value: in the table's cell, and after the series' label in the x's name,
+   * the tooltip and `markLabel`'s default text ("goals missing"). Default "missing". Anything but a
+   * string with a word in it throws a TypeError, and update({ missing }) words them again.
+   */
+  readonly missing?: string;
+  /**
    * The label at each line's end, in the right margin: by default its value in `format` with its
    * series' label ("52 goals"), counting between values while a change or a reveal plays. `false`
    * turns them off. A function words them, given the value (rounded as it counts), the series and

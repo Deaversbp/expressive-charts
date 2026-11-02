@@ -30,6 +30,7 @@ Everything else can still change in a minor release while the library is 0.x: th
 ### Added
 
 - **`timeZone` on `lineChart` takes a zone's name** as `Intl` knows it, such as `"Europe/London"`, beside `"UTC"` and `"local"`. Ticks fall on the zone's own midnights, months, years, hours and minutes through summer time, so a day can be 23 or 25 hours, and a midnight the clocks skip is the first time after it, as in local time. Page Up and Page Down go a calendar month in the zone. Names, the tooltip, the table and the announcements say times in it with no zone's name. The zone is read through `Intl.DateTimeFormat`, so no zone data ships. A name it won't take throws a `TypeError`, whose message now says a zone's name is allowed, and `update()` rejects it. `"UTC"` and `"local"` draw as before.
+- **`missing` on `lineChart`:** the word for a missing value, in the table's cell, and after the series' label in the x's name, the tooltip and `markLabel`'s default text ("3: goals no data, 3.6 xg"). Default `"missing"`, so a chart without it reads as before, byte for byte. A string that's empty or only spaces, or anything that isn't a string, throws a `TypeError`, and `update()` rejects it. `update({ missing })` words them again. The bar and donut charts have no missing values, so they don't take it.
 
 ### Changed
 
@@ -41,6 +42,7 @@ Everything else can still change in a minor release while the library is 0.x: th
 - **`update({ colors })` recolours every bar on the change's first frame.** A bar the change left in place kept its old colour until the change landed. With motion off, and with `colors` alone, it's at once, as before.
 - **Overlays drawn in a stack's later part's colour follow it.** A path drawn in a part's colour (`Paint.part`), as `drawIn` draws a stack's, kept its old colour when a part other than the first changed colour: on our bar chart, and on `expressive()`'s marks when they're read again.
 - **A time that comes twice where the clocks go back reads differently each time.** In local time, and in a zone by its name, each of the two says the zone's short name, as `Intl` words it in the page's locale ("Nov 1, 2026, 1:00 AM EDT" and "Nov 1, 2026, 1:00 AM EST" in `en-US`, "25 Oct 2026, 01:00 BST" and "25 Oct 2026, 01:00 GMT" in `en-GB`), in their names, the tooltip, the table and the announcements. Before, the two read the same. A name that says no time, and the ticks, still name no zone.
+- **`link()` links a line chart's x with every value missing.** It has no point, so its hover told its link nothing, and linked charts ended theirs. Now the link reads a stand-in for a point there: keyed by the x, with the x's row and a sample at the x, whose `value` is `NaN`. So the default linking value and a `by` that reads the row both find it. Hovering or focusing the x hovers the linked charts' marks there, and their hover shows the line chart's crosshair at that x, with no tooltip, as no linked hover has one. No effect runs and no event fires on the line chart for it, as before, and an x with some values links by its points, as before.
 
 ## 0.7.0 (1 November 2026)
 

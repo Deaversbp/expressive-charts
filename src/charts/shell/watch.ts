@@ -50,7 +50,7 @@ const PROBE_TEXT = "Hamburgefonstiv 0123456789";
  * class finds it: it follows what reaches all of it, such as spacing, a font or a size set on the page
  * after the chart drew, or a browser's minimum font size. `changed` hears of a change of half a px or
  * more from the first width it has, at most once a frame. A width of 0 (a chart in `display: none`) is
- * ignored.
+ * ignored. Stopping takes the probe out, so an attachment leaves its host's `<svg>` as it found it.
  */
 export function watchText(svg: SVGSVGElement, clock: Clock, changed: () => void): () => void {
   if (typeof ResizeObserver !== "function") return () => {};
@@ -82,6 +82,7 @@ export function watchText(svg: SVGSVGElement, clock: Clock, changed: () => void)
   return () => {
     observer.disconnect();
     stopFrame?.();
+    probe.remove();
   };
 }
 

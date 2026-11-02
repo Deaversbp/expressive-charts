@@ -25,6 +25,14 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+### Fixed
+
+- **`expressive()` measures its effects' text again when the text changes size.** An attachment measured a `delta`'s or a `label`'s text once, as it drew, and never again, not even once web fonts loaded. So spacing a viewer adds after load (WCAG 1.4.12's), or a font or size set on the page, widened the text without placing it again, and the text after it could stand on it. Now an attachment keeps a hidden line of text, with no class, in its root `<svg>`, just before its overlay, watched with a `ResizeObserver`, and listens for web fonts loading, as the charts do. When its text changes size, it measures again and places its effects' text again, with no event. A new `<svg>` given to `refresh()` takes the line with it, and `destroy()` takes it out. Until text changes size, an attachment draws as before.
+
 ## 0.8.0 (2 November 2026)
 
 Time zones by name on a line chart's date axis, and a word for a missing value; charts that measure their text again when it changes size, so spacing a viewer adds after load lays them out again; every bar recoloured at once on `update({ colors })`, and a line chart's decorations drawn below its points; a bar chart's labels fading as they thin, and its bars taking the room of the value labels it hides; and `link()` linking an x with every value missing. Nothing in the effect-author API changes. Every change is outside the promise, and none needs anything written instead.

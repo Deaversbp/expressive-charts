@@ -9,8 +9,11 @@
 // either side, eased, the red and the ball following, and at once without motion), Nearest point (the
 // other line and its decorations dimmed, no text, the tooltip's point and words, the pointer onto the
 // tooltip from every point, the keys, Escape, and at once without motion), and the gaps: no red in
-// them, the ball waiting and jumping, and a gap staying a gap without motion. Names start with "line-",
-// since screenshot names are shared across files.
+// them, the ball waiting and jumping, and a gap staying a gap without motion. And the ticket sales by the
+// hour in London: its ticks on London's midnights, Sunday's 25 hours, 1 AM twice in the names, the tooltip
+// and the table, the keys, the toggle to UTC and back, at once without motion, and pictures of the card in
+// each zone, light and dark, at 1,000 and 320 px. Names start with "line-", since screenshot names are
+// shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, iconTransforms, lineDemo, openDemo, pickMode, REST, tabInto } from "./demo";
@@ -644,8 +647,8 @@ test.describe("Nearest point", () => {
     test(`at ${width} px, the pointer goes from every point straight onto its tooltip, above or below, keeping the hover`, async ({ page }) => {
       // 76 points, a px at a time: about 40 to 55 s in each browser.
       test.setTimeout(180_000);
-      // At 320 px the page is about 6,200 px tall.
-      if (width === 320) await page.setViewportSize({ width, height: 7000 });
+      // At 320 px the page is about 8,200 px tall.
+      if (width === 320) await page.setViewportSize({ width, height: 9000 });
       await openAtRest(page);
       await toggle(page, "Nearest point").click();
       // Every point that takes the hover, and the tooltip hiding, as the pointer moves.
@@ -1117,6 +1120,259 @@ test.describe("with missing weeks", () => {
         expect(redInGaps(drawn), chart).toEqual([]);
         expect(drawn.ball, chart).toBeGreaterThan(drawn.goals[0]![1]);
       }
+    });
+  }
+});
+
+/** The ticket sales chart, its card, and the card's toggle by its text. */
+const tickets = (page: Page): Locator => page.locator("#tickets");
+const ticketsCard = (page: Page): Locator => page.locator("section.card", { has: tickets(page) });
+const zoneButton = (page: Page, name: "London" | "UTC"): Locator => page.getByRole("group", { name: "Time zone" }).getByRole("button", { name, exact: true });
+/** An hour's focus stop on the ticket sales chart, by its time in UTC: "2026-10-25T00:00" is the first 1 AM in London. */
+const hour = (page: Page, utc: string): Locator => tickets(page).locator(`.ec-column[data-key="${utc}:00.000Z"]`);
+/** The ticket sales line, as drawn. */
+const ticketsLine = (page: Page): Locator => tickets(page).locator(".ec-line .ec-stroke");
+
+/** The hours from midnight on Saturday in London, 23:00 UTC on Friday, to midnight on Monday: 24 on Saturday, 25 on Sunday. */
+const HOURS = 50;
+
+/**
+ * London's short names at its two 1 AMs, as the chart words them: the browser's own, in the page's
+ * language. In en-US that's "GMT+1", then "GMT+0" in Chromium and "GMT" in Firefox and WebKit; in en-GB
+ * "BST" and "GMT". They're never the same, which is what matters.
+ */
+async function twice(page: Page): Promise<readonly [string, string]> {
+  const names = await page.evaluate(() =>
+    [Date.UTC(2026, 9, 25, 0), Date.UTC(2026, 9, 25, 1)].map(
+      (t) => new Intl.DateTimeFormat(undefined, { timeZone: "Europe/London", timeZoneName: "short" }).formatToParts(t).find((part) => part.type === "timeZoneName")?.value ?? ""
+    )
+  );
+  expect(names[0]).not.toBe(names[1]);
+  return names as [string, string];
+}
+/** A regular expression's text for `text` as it is. */
+const literally = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * The ticket sales chart's x axis: each tick's text, and the hour it's drawn at, counted from the first,
+ * by the line's vertex at its x (one a row, as the line is straight). -1 is a tick at no hour.
+ */
+async function hourTicks(page: Page): Promise<{ readonly text: string; readonly at: number }[]> {
+  return tickets(page).evaluate((root) => {
+    const d = root.querySelector(".ec-line .ec-stroke")?.getAttribute("d") ?? "";
+    const xs = (d.match(/-?\d*\.?\d+(?:e-?\d+)?/g) ?? []).map(Number).filter((_, i) => i % 2 === 0);
+    // The x axis's ticks are centred under their x; the value axis's end at the plot's left.
+    return [...root.querySelectorAll('.ec-axis .ec-tick[text-anchor="middle"]')].map((tick) => {
+      const x = Number(tick.getAttribute("x"));
+      return { text: tick.textContent ?? "", at: xs.findIndex((vertex) => Math.abs(vertex - x) < 0.01) };
+    });
+  });
+}
+
+/** In London the ticks are its midnights, Saturday's, Sunday's 24 hours later and Monday's 25 after that. */
+const LONDON_TICKS = [
+  { text: "Oct 24", at: 0 },
+  { text: "Oct 25", at: 24 },
+  { text: "Oct 26", at: 49 }
+];
+/**
+ * In UTC the hours start at 11 PM on Friday, the axis's first tick. Saturday's midnight, an hour on,
+ * would come within 8 px of it, so it has none; Sunday's and Monday's are 24 hours apart.
+ */
+const UTC_TICKS = [
+  { text: "Oct 23, 11:00 PM", at: 0 },
+  { text: "Oct 25", at: 25 },
+  { text: "Oct 26", at: 49 }
+];
+
+test.describe("ticket sales by the hour, in London", () => {
+  test("at load: the ticks on London's midnights, Sunday's 25 hours, and 1 AM twice, named with its zone, in the names and the table", async ({ page }) => {
+    await openDemo(page, lineDemo);
+    await expect(tickets(page).locator("svg.ec-chart")).toHaveAttribute("aria-label", "Tickets sold each hour, in London time");
+    expect(await tickets(page).locator("svg.ec-chart > desc").textContent()).toMatch(/ in London time\. The clocks went back an hour at 2 AM on Sunday, so Sunday has 25 hours, and 1 AM comes twice/);
+    await expect(zoneButton(page, "London")).toHaveAttribute("aria-pressed", "true");
+    await expect(zoneButton(page, "UTC")).toHaveAttribute("aria-pressed", "false");
+    await expect(tickets(page).locator(".ec-column")).toHaveCount(HOURS);
+    expect(await hourTicks(page)).toEqual(LONDON_TICKS);
+
+    // Each hour by London's clock, with no zone's name, but the hour that comes twice, with its short name
+    // each time.
+    const [bst, gmt] = await twice(page);
+    await expect(hour(page, "2026-10-23T23:00")).toHaveAttribute("aria-label", "Oct 24, 2026, 12:00 AM: 17 tickets");
+    await expect(hour(page, "2026-10-24T23:00")).toHaveAttribute("aria-label", "Oct 25, 2026, 12:00 AM: 16 tickets");
+    await expect(hour(page, "2026-10-25T00:00")).toHaveAttribute("aria-label", `Oct 25, 2026, 1:00 AM ${bst}: 7 tickets`);
+    await expect(hour(page, "2026-10-25T01:00")).toHaveAttribute("aria-label", `Oct 25, 2026, 1:00 AM ${gmt}: 8 tickets`);
+    await expect(hour(page, "2026-10-25T02:00")).toHaveAttribute("aria-label", "Oct 25, 2026, 2:00 AM: 4 tickets");
+    await expect(hour(page, "2026-10-26T00:00")).toHaveAttribute("aria-label", /^Oct 26, 2026, 12:00 AM: \d+ tickets$/);
+    // No legend: one line, which the chart's name says.
+    await expect(tickets(page).locator(".ec-legend-item")).toHaveCount(0);
+
+    const table = tickets(page).locator("table");
+    await expect(table.locator("caption")).toHaveText("Tickets sold each hour, in London time");
+    await expect(table.locator("thead th")).toHaveText(["Hour", "Tickets sold"]);
+    await expect(table.locator("tbody tr")).toHaveCount(HOURS);
+    await expect(table.locator("tbody tr").first().locator("th, td")).toHaveText(["Oct 24, 2026, 12:00 AM", "17"]);
+    await expect(table.locator("tbody tr").nth(25).locator("th, td")).toHaveText([`Oct 25, 2026, 1:00 AM ${bst}`, "7"]);
+    await expect(table.locator("tbody tr").nth(26).locator("th, td")).toHaveText([`Oct 25, 2026, 1:00 AM ${gmt}`, "8"]);
+    await expect(table.locator("tbody tr").last().locator("th")).toHaveText("Oct 26, 2026, 12:00 AM");
+  });
+
+  test("the tooltip at 1 AM, each time, with its zone's short name", async ({ page }) => {
+    await openAtRest(page);
+    const [bst, gmt] = await twice(page);
+    const tooltip = tickets(page).locator(".ec-tooltip");
+    await hour(page, "2026-10-25T00:00").locator(".ec-hit").hover();
+    await page.clock.runFor(REST);
+    await expect(tooltip).toHaveClass(/ec-tooltip-shown/);
+    await expect(tooltip).toHaveText(new RegExp(`^Oct 25, 2026, 1:00 AM ${literally(bst)}\\s*7 tickets$`));
+    await expect(tickets(page).locator(".ec-crosshair")).not.toHaveAttribute("visibility", "hidden");
+    await expect(tickets(page)).toHaveScreenshot("line-tickets-tooltip.png");
+
+    await hour(page, "2026-10-25T01:00").locator(".ec-hit").hover();
+    await page.clock.runFor(REST);
+    await expect(tooltip).toHaveText(new RegExp(`^Oct 25, 2026, 1:00 AM ${literally(gmt)}\\s*8 tickets$`));
+    // An hour on, the clock reads 2 AM once, with no zone's name.
+    await hour(page, "2026-10-25T02:00").locator(".ec-hit").hover();
+    await page.clock.runFor(REST);
+    await expect(tooltip).toHaveText(/^Oct 25, 2026, 2:00 AM\s*4 tickets$/);
+  });
+
+  test("by the keyboard: one tab stop, an hour at a time through both 1 AMs, and Page Down and Page Up to the ends", async ({ page }) => {
+    await openAtRest(page);
+    await tabInto(page, tickets(page));
+    await expect(hour(page, "2026-10-23T23:00")).toBeFocused();
+    await expect(tickets(page).locator('[tabindex="0"]')).toHaveCount(1);
+    // Sunday's midnight is 24 hours on, and its first 1 AM the next.
+    for (let i = 0; i < 25; i++) await page.keyboard.press("ArrowRight");
+    await expect(hour(page, "2026-10-25T00:00")).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(hour(page, "2026-10-25T01:00")).toBeFocused();
+    await page.clock.runFor(REST);
+    const [, gmt] = await twice(page);
+    await expect(tickets(page).locator(".ec-tooltip")).toHaveText(new RegExp(`^Oct 25, 2026, 1:00 AM ${literally(gmt)}\\s*8 tickets$`));
+    await expect(tickets(page).locator(".ec-focus")).not.toHaveAttribute("visibility", "hidden");
+    await page.keyboard.press("ArrowLeft");
+    await expect(hour(page, "2026-10-25T00:00")).toBeFocused();
+    // A page is a calendar month in London: a month on is past the last hour, so Page Down goes to it,
+    // and a month back is before the first, so Page Up goes there.
+    await page.keyboard.press("PageDown");
+    await expect(hour(page, "2026-10-26T00:00")).toBeFocused();
+    await page.keyboard.press("PageDown");
+    await expect(hour(page, "2026-10-26T00:00")).toBeFocused();
+    await page.keyboard.press("PageUp");
+    await expect(hour(page, "2026-10-23T23:00")).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(hour(page, "2026-10-26T00:00")).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(hour(page, "2026-10-23T23:00")).toBeFocused();
+  });
+
+  test("UTC and back: the ticks on UTC's midnights, the same hours without a zone's name, focus on the toggle and the chart's tab stop kept", async ({ page }) => {
+    await openAtRest(page);
+    const london = await ticketsLine(page).getAttribute("d");
+    // Focus on the second 1 AM, then back to the toggle with Shift+Tab: UTC, by the keyboard.
+    await tabInto(page, tickets(page));
+    for (let i = 0; i < 26; i++) await page.keyboard.press("ArrowRight");
+    await expect(hour(page, "2026-10-25T01:00")).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(zoneButton(page, "UTC")).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(zoneButton(page, "UTC")).toHaveAttribute("aria-pressed", "true");
+    await expect(zoneButton(page, "London")).toHaveAttribute("aria-pressed", "false");
+    // Part way, it's on its way: the first tick, 11 PM on Friday, is wider than Saturday's, so the plot narrows.
+    await page.clock.runFor(200);
+    const between = await ticketsLine(page).getAttribute("d");
+    expect(between).not.toBe(london);
+    await page.clock.runFor(REST);
+    await expect(zoneButton(page, "UTC")).toBeFocused();
+    expect(await ticketsLine(page).getAttribute("d")).not.toBe(between);
+
+    await expect(tickets(page).locator("svg.ec-chart")).toHaveAttribute("aria-label", "Tickets sold each hour, in UTC");
+    expect(await tickets(page).locator("svg.ec-chart > desc").textContent()).toMatch(/^The same hours in UTC, from 11 PM on Friday 23 October/);
+    expect(await hourTicks(page)).toEqual(UTC_TICKS);
+    await expect(hour(page, "2026-10-23T23:00")).toHaveAttribute("aria-label", "Oct 23, 2026, 11:00 PM: 17 tickets");
+    await expect(hour(page, "2026-10-24T23:00")).toHaveAttribute("aria-label", "Oct 24, 2026, 11:00 PM: 16 tickets");
+    await expect(hour(page, "2026-10-25T00:00")).toHaveAttribute("aria-label", "Oct 25, 2026, 12:00 AM: 7 tickets");
+    await expect(hour(page, "2026-10-25T01:00")).toHaveAttribute("aria-label", "Oct 25, 2026, 1:00 AM: 8 tickets");
+    const table = tickets(page).locator("table");
+    await expect(table.locator("caption")).toHaveText("Tickets sold each hour, in UTC");
+    await expect(table.locator("tbody tr").first().locator("th")).toHaveText("Oct 23, 2026, 11:00 PM");
+    await expect(table.locator("tbody tr").nth(25).locator("th, td")).toHaveText(["Oct 25, 2026, 12:00 AM", "7"]);
+    await expect(table.locator("tbody tr").nth(26).locator("th, td")).toHaveText(["Oct 25, 2026, 1:00 AM", "8"]);
+    // The chart is still one tab stop, at the hour focus left.
+    await expect(tickets(page).locator('[tabindex="0"]')).toHaveCount(1);
+    await page.keyboard.press("Tab");
+    await expect(hour(page, "2026-10-25T01:00")).toBeFocused();
+
+    // And back to London: the line it drew at load, exactly, and its ticks and names.
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(zoneButton(page, "London")).toBeFocused();
+    await page.keyboard.press("Space");
+    await page.clock.runFor(REST);
+    await expect(zoneButton(page, "London")).toHaveAttribute("aria-pressed", "true");
+    await expect(ticketsLine(page)).toHaveAttribute("d", london ?? "");
+    expect(await hourTicks(page)).toEqual(LONDON_TICKS);
+    await expect(tickets(page).locator("svg.ec-chart")).toHaveAttribute("aria-label", "Tickets sold each hour, in London time");
+    const [, gmt] = await twice(page);
+    await expect(hour(page, "2026-10-25T01:00")).toHaveAttribute("aria-label", `Oct 25, 2026, 1:00 AM ${gmt}: 8 tickets`);
+  });
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`the card in London and in UTC, ${colorScheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openAtRest(page);
+      await expect(ticketsCard(page)).toHaveScreenshot(`line-tickets-london-${colorScheme}.png`);
+      await zoneButton(page, "UTC").click();
+      await page.mouse.move(2, 2);
+      await page.clock.runFor(REST);
+      expect(await hourTicks(page)).toEqual(UTC_TICKS);
+      await expect(ticketsCard(page)).toHaveScreenshot(`line-tickets-utc-${colorScheme}.png`);
+    });
+  }
+
+  test("at 320 px: the card in London, its tooltip at the first 1 AM, and the card in UTC", async ({ page }) => {
+    // At 320 px the page is about 8,200 px tall.
+    await page.setViewportSize({ width: 320, height: 9000 });
+    await openAtRest(page);
+    expect(await hourTicks(page)).toEqual(LONDON_TICKS);
+    await expect(ticketsCard(page)).toHaveScreenshot("line-tickets-london-320.png");
+    await hour(page, "2026-10-25T00:00").locator(".ec-hit").hover();
+    await page.clock.runFor(REST);
+    const [bst] = await twice(page);
+    await expect(tickets(page).locator(".ec-tooltip")).toHaveText(new RegExp(`^Oct 25, 2026, 1:00 AM ${literally(bst)}\\s*7 tickets$`));
+    // Inside the card, as at 1,000 px.
+    const [tip, card] = await Promise.all([tickets(page).locator(".ec-tooltip").boundingBox(), ticketsCard(page).boundingBox()]);
+    expect(tip!.x).toBeGreaterThanOrEqual(card!.x);
+    expect(tip!.x + tip!.width).toBeLessThanOrEqual(card!.x + card!.width);
+    await expect(tickets(page)).toHaveScreenshot("line-tickets-tooltip-320.png");
+    await page.mouse.move(2, 2);
+    await zoneButton(page, "UTC").click();
+    await page.mouse.move(2, 2);
+    await page.clock.runFor(REST);
+    await expect(ticketsCard(page)).toHaveScreenshot("line-tickets-utc-320.png");
+  });
+
+  for (const how of ["reduced motion", "Off"] as const) {
+    test(`${how}: UTC and back at once`, async ({ page }) => {
+      if (how === "reduced motion") await page.emulateMedia({ reducedMotion: "reduce" });
+      await openDemo(page, lineDemo);
+      if (how === "Off") await pickMode(page, "Off");
+      await page.clock.runFor(FRAME);
+      const london = await ticketsLine(page).getAttribute("d");
+      await zoneButton(page, "UTC").focus();
+      await page.keyboard.press("Space");
+      // No time passes: the ticks and the line are where they end.
+      expect(await hourTicks(page)).toEqual(UTC_TICKS);
+      const utc = await ticketsLine(page).getAttribute("d");
+      expect(utc).not.toBe(london);
+      await expect(hour(page, "2026-10-25T00:00")).toHaveAttribute("aria-label", "Oct 25, 2026, 12:00 AM: 7 tickets");
+      await page.clock.runFor(REST);
+      await expect(ticketsLine(page)).toHaveAttribute("d", utc ?? "");
+      await zoneButton(page, "London").focus();
+      await page.keyboard.press("Space");
+      expect(await hourTicks(page)).toEqual(LONDON_TICKS);
+      await expect(ticketsLine(page)).toHaveAttribute("d", london ?? "");
     });
   }
 });

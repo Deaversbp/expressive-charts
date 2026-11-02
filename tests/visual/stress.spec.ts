@@ -2,9 +2,11 @@
 // and the date line at rest, part way through its play, and with its tooltip. Beside them, DOM checks:
 // nothing plays by itself; each start button runs its case and its readout reports the run; with
 // reduced motion, or Off picked, every case jumps to its end; the date line's names, arrow keys and
-// table, which listening script G hears; and Page Up and Page Down on the date line and the bars, with
-// the bars' names thinned, which script I hears. The readouts are masked in pictures, since they measure the
-// machine. Names start with "stress-", since screenshot names are shared across files.
+// table, which listening script G hears; Page Up and Page Down on the date line and the bars, with
+// the bars' names thinned, which script I hears; text spacing added after load laying the bar charts out
+// as it does from the start; and the names fading as they thin on "Change every bar", which script N
+// hears nothing of. The readouts are masked in pictures, since they measure the machine. Names start with
+// "stress-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, iconTransforms, modeButton, openDemo, pickMode, REST, stressDemo, tabInto } from "./demo";
@@ -220,6 +222,90 @@ test("on the bars, Page Up and Page Down go a tenth of the bars at a time, and e
   await expect(barMark(100)).toBeFocused();
   await page.keyboard.press("PageUp");
   await expect(barMark(90)).toBeFocused();
+});
+
+/** The bar charts: every case but the date line and the D3 columns. The switch has two views, one hidden. */
+const BAR_CHARTS = ["#update-chart", "#hover-chart", "#switch-chart", "#draw-chart"] as const;
+
+/** Each bar chart's names drawn under its bars, by the bars' keys: thinning leaves the others' text empty. */
+const drawnNames = (page: Page): Promise<Record<string, string[]>> =>
+  page.evaluate(
+    (charts) =>
+      Object.fromEntries(
+        charts.map((chart) => [
+          chart,
+          [...document.querySelectorAll(`${chart} .ec-mark`)].filter((mark) => /\S/.test(mark.querySelector(".ec-label")?.textContent ?? "")).map((mark) => mark.getAttribute("data-key") ?? "")
+        ])
+      ),
+    BAR_CHARTS
+  );
+
+/** WCAG 1.4.12's spacing, as a viewer's bookmarklet sets it: a11y.spec.ts's. */
+const SPACING = "* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; } p { margin-bottom: 2em !important; }";
+
+test("text spacing added after load lays the bar charts out as the spacing does from the start: where the names would touch, fewer are drawn", async ({ page }) => {
+  // The page with the spacing in its own stylesheet, so the charts draw with it from the start. It's
+  // taller with the spacing.
+  await page.route("**/stress.html?spaced", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: (await response.text()).replace("</head>", `<style>${SPACING}</style></head>`) });
+  });
+  await openDemo(page, { ...stressDemo, path: "/stress.html?spaced", height: 3000 });
+  await page.clock.runFor(REST);
+  const spaced = await drawnNames(page);
+
+  // The page as it is, and the spacing added once it's drawn: each chart measures its text again.
+  await page.goto(stressDemo.path);
+  await stressDemo.ready(page);
+  await page.clock.runFor(REST);
+  const before = await drawnNames(page);
+  await page.addStyleTag({ content: SPACING });
+  await page.clock.runFor(REST);
+  const after = await drawnNames(page);
+  expect(after).toEqual(spaced);
+  // Never more names with the spacing: on Windows, Segoe UI's 10 in 100 go to 5. Docker's wider font
+  // draws 5 either way, and WebKit's measure leaves the spacing out.
+  for (const chart of BAR_CHARTS) expect(after[chart]!.length, chart).toBeLessThanOrEqual(before[chart]!.length);
+  // And every bar keeps its name and its value in its accessible name.
+  await expect(page.locator('#hover-chart .ec-mark[data-key="Bar 37"]')).toHaveAttribute("aria-label", /^Bar 37: \d+ points$/);
+});
+
+test("Change every bar: the names the new order leaves out fade out over the change's first half, and the ones it draws fade in over its second", async ({ page }) => {
+  await openDemo(page, stressDemo);
+  await page.clock.runFor(REST);
+  /** Each drawn name's bar and the opacity its name is drawn at. */
+  const names = (): Promise<Record<string, number>> =>
+    page
+      .locator("#update-chart")
+      .evaluate((root) =>
+        Object.fromEntries(
+          [...root.querySelectorAll(".ec-mark")].flatMap((mark) => {
+            const label = mark.querySelector(".ec-label");
+            return /\S/.test(label?.textContent ?? "") ? [[mark.getAttribute("data-key") ?? "", Number(label!.getAttribute("opacity") ?? 1)]] : [];
+          })
+        )
+      );
+  const before = await names();
+  await start(page, "update").click();
+  // Half way through the first half, the values' stage: only the old names, the ones going part faded.
+  await page.clock.runFor(250);
+  const going = await names();
+  expect(Object.keys(going).sort()).toEqual(Object.keys(before).sort());
+  // Half way through the second, the order's stage: the new names, the ones coming part faded in.
+  await page.clock.runFor(500);
+  const coming = await names();
+  await page.clock.runFor(REST);
+  const after = await names();
+  expect(Object.keys(coming).sort()).toEqual(Object.keys(after).sort());
+  expect(Object.keys(after)).not.toEqual(Object.keys(before));
+  /** A name drawn on both sides stays at full strength; one on one side only is part way. */
+  const fading = (names: Record<string, number>, other: Record<string, number>, way: string): string[] =>
+    Object.entries(names).flatMap(([key, opacity]) => ((key in other ? opacity === 1 : opacity > 0 && opacity < 1) ? [] : [`${key} ${key in other ? "staying" : way} at ${opacity}`]));
+  expect(fading(going, after, "going")).toEqual([]);
+  expect(fading(coming, before, "coming")).toEqual([]);
+  expect(Object.keys(going).filter((key) => !(key in after)).length, "names going").toBeGreaterThan(0);
+  // At rest every drawn name is at full strength.
+  expect(Object.values(after).every((opacity) => opacity === 1)).toBe(true);
 });
 
 /** Attributes that say where every mark of a case is drawn, to compare a case's state at two times. */

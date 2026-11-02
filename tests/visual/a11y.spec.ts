@@ -51,12 +51,17 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
       ...["Play season", "Matchweek", "Straight", "Curved", "Each week", "Nearest point"],
       ...["Matchweek 1: 0 goals, 0.6 xG", "Data table", "Goals scored: 56 goals by matchweek 38"],
       ...["Matchweek 1: 0 goals, 0.6 xG", "Data table", "Goals scored: 56 goals by matchweek 38, matchweeks 9 and 10 missing"],
-      "Goals scored: 56 goals by matchweek 38"
+      "Goals scored: 56 goals by matchweek 38",
+      ...["London", "UTC", "Oct 24, 2026, 12:00 AM: 17 tickets", "Data table"]
     ],
     // Not #gaps, the same line chart with missing weeks: at a week with no values its focus is a line
     // where the crosshair is, and the tooltip at the crosshair's top covers the line's top, so the
-    // ring test would fail there. line.spec.ts checks that focus.
-    charts: [{ chart: "#line", shape: '.ec-column[data-key="12"] .ec-hit', other: '.ec-column[data-key="30"] .ec-hit' }]
+    // ring test would fail there. line.spec.ts checks that focus. The ticket sales from London's first
+    // 1 AM, the hour that comes twice, keyed by its time in UTC.
+    charts: [
+      { chart: "#line", shape: '.ec-column[data-key="12"] .ec-hit', other: '.ec-column[data-key="30"] .ec-hit' },
+      { chart: "#tickets", shape: '.ec-column[data-key="2026-10-25T00:00:00.000Z"] .ec-hit', other: '.ec-column[data-key="2026-10-24T11:00:00.000Z"] .ec-hit' }
+    ]
   },
   {
     name: "morph",
@@ -176,8 +181,8 @@ test.describe("axe", () => {
 
     test(`${name}.html at 320 px, with no sideways scroll`, async ({ page }) => {
       // Tall enough that openDemo's check passes: the page is several screens long at this width, the
-      // line page about 6,200 px.
-      await page.setViewportSize({ width: 320, height: 7000 });
+      // line page about 8,200 px.
+      await page.setViewportSize({ width: 320, height: 9000 });
       await openAtRest(page, demo);
       const { scrollWidth, clientWidth } = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,

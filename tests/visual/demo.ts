@@ -50,16 +50,21 @@ export const donutDemo: Demo = {
   }
 };
 
-/** demo/line.html: the library's line chart, the D3 line, both again with missing weeks, and the Vega-Lite line. */
+/**
+ * demo/line.html: the library's line chart, the D3 line, both again with missing weeks, the Vega-Lite
+ * line, and the ticket sales by the hour in London.
+ */
 export const lineDemo: Demo = {
   path: "/line.html",
-  // About 2,890 px at 1,000 px wide.
-  height: 3100,
+  // About 3,970 px at 1,000 px wide.
+  height: 4200,
   async ready(page) {
     await expect(page.locator("#line .ec-line")).toHaveCount(2);
     await expect(page.locator("#line .ec-column")).toHaveCount(38);
     await expect(page.locator("#gaps .ec-line")).toHaveCount(2);
     await expect(page.locator("#gaps .ec-column")).toHaveCount(38);
+    // The weekend's 50 hours, Sunday's 25 among them.
+    await expect(page.locator("#tickets .ec-column")).toHaveCount(50);
     // expressive() has named the D3 lines' paths, so it's attached to both.
     await expect(page.locator('#d3-line path.line[role="img"]')).toHaveCount(2);
     await expect(page.locator('#d3-gaps path.line[role="img"]')).toHaveCount(2);

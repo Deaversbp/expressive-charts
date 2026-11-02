@@ -1,7 +1,7 @@
 {
   "files": {
     "dist/expressive-charts.css": 2.5,
-    "dist/expressive-charts.global.js": 88,
+    "dist/expressive-charts.global.js": 97.5,
     "dist/icons/sport.cjs": 3.5,
     "dist/icons/sport.js": 4.5,
     "dist/index.cjs": 137,
@@ -16,6 +16,7 @@
     "barChart": 34,
     "lineChart, threshold, playback, playButton": 45.5,
     "chartSwitch, donutChart, barChart": 50,
+    "chartSwitch, expressive, hostView": 45.5,
     "everything": 95
   }
 }

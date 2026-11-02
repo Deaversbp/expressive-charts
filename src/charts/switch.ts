@@ -19,6 +19,7 @@ import { unease } from "../core/easing";
 import { describePoint } from "../core/geometry/describe/point";
 import { formatPath, parsePath, transformPath } from "../core/geometry/path";
 import { isTransitionEffect, playTransition, type Transition, type TransitionPair, type TransitionSurface } from "../core/transition";
+import { strongColors } from "./adapter/host-style";
 import { between, boxIn } from "./adapter/space";
 import { chartAnnouncer, type Announcer } from "./announce";
 import { toColorAssignment, type ColorAssignment } from "./colors";
@@ -35,7 +36,9 @@ import type { ChartLabel, MarkEvents } from "./types";
  * labels as drawn, focus by key, leave() to end its hover, and destroy(); how it paints each mark
  * (paintOf), a line chart's what its focus stops stand for (standsFor), and its tab stop moved
  * without focus (moveTabStop). A reference chart also has on(), which the switch's on() hears, and a
- * hover a link can drive; a view without them isn't heard and isn't linked.
+ * hover a link can drive; a view without them isn't heard and isn't linked. hostView() makes a view
+ * of an attachment, which hides its own marks (morphing), finds a mark's key from its elements
+ * (keyOf), paints each in the host's colour, and gives its marks in their common ancestor's space.
  */
 export interface ChartSwitchView {
   readonly element: SVGSVGElement;
@@ -62,12 +65,28 @@ export interface ChartSwitchView {
    * Without it, a view keeps its own tab stop.
    */
   moveTabStop?(key: string): boolean;
+  /**
+   * The key of the mark `element` belongs to, which the switch asks first when it remembers where
+   * focus was, before the element's closest `[data-key]`: a host chart's marks have none.
+   */
+  keyOf?(element: Element): string | undefined;
+  /**
+   * Hides (true) or shows again (false) the marks and labels the switch draws in its overlay, while
+   * a switch plays: called as `element` takes `ec-morphing`, and as it loses it or the switch is
+   * destroyed mid-way. A host chart's marks don't have the class that hides a chart's. Without it,
+   * the class hides them.
+   */
+  morphing?(on: boolean): void;
+  /** The element whose user space marks() and labels() are in, when it isn't `element`: an attachment's marks' common ancestor. */
+  readonly space?: Element;
 }
 
 /** How a view's chart paints one of its marks: what a switch draws it in. */
 export interface ChartSwitchPaint {
   /** The name its colour comes from in the switch's assignment (`colors.slot(color)`): a line's or a point's series, a bar's key or first series, a slice's key. */
   readonly color: string;
+  /** The colour itself, any CSS colour, drawn in place of `color`'s slot: a host chart's own. */
+  readonly cssColor?: string;
   /** Whether the chart draws it at rest. A line chart's points aren't, but for a value alone between gaps; a mark that isn't starts or ends a switch as a dot of no size at its centre, with no end dot or ring. */
   readonly drawn: boolean;
   /** The radius of the dot the chart draws at the end of the mark's walk, in its `<svg>`'s units: a line chart's line has one of 4.5. Unset: no dot. */
@@ -269,15 +288,19 @@ export function chartSwitch<T extends ChartSwitchViews>(
   // Made now: screen readers miss text in a region that appears with it.
   const announcer: Announcer | undefined = options.announce ? chartAnnouncer(overlay) : undefined;
 
+  /** A mark's colours: its own (`cssColor`), with a strong one as a host colour has, or else its name's slot's. */
+  const tokensOf = (paint: Pick<ChartSwitchPaint, "color" | "cssColor">): Record<string, string | undefined> =>
+    markColorStyles(paint.cssColor === undefined ? seriesColors(colors.slot(paint.color)) : strongColors(paint.cssColor));
+
   /**
-   * Each pair's run draws in a group of its own, in the colour named for its place (`paints`),
+   * Each pair's run draws in a group of its own, in the colours of its place's paint (`paints`),
    * stacked by that place, with its ring and end dot (`extras`) where it has them.
    */
   const orders = new WeakMap<Element, number>();
-  const surfaceFor = (paints: readonly string[], extras: readonly (Extras | undefined)[]): TransitionSurface => ({
+  const surfaceFor = (paints: readonly ChartSwitchPaint[], extras: readonly (Extras | undefined)[]): TransitionSurface => ({
     group(key, order) {
       const group = svgElement("g", { class: "ec-run", "data-key": key }, runsLayer);
-      setStyles(group, markColorStyles(seriesColors(colors.slot(paints[order] ?? key))));
+      setStyles(group, tokensOf(paints[order] ?? { color: key }));
       orders.set(group, order);
       const above = Array.from(runsLayer.children).find((child) => (orders.get(child) ?? -Infinity) > order);
       runsLayer.insertBefore(group, above ?? null);
@@ -292,7 +315,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
    * shapes' progress, its radius and ring mixed; with one on one side, that dot fading where it
    * stands, as a mark with no partner does, in its own view's colour (`dotColors`).
    */
-  function extrasFor(rings: readonly [number, number], ends: readonly [EndDot | undefined, EndDot | undefined], dotColors: readonly [string, string]): Extras | undefined {
+  function extrasFor(rings: readonly [number, number], ends: readonly [EndDot | undefined, EndDot | undefined], dotColors: readonly [ChartSwitchPaint, ChartSwitchPaint]): Extras | undefined {
     const [ringA, ringB] = rings;
     const [endA, endB] = ends;
     if (ringA === 0 && ringB === 0 && !endA && !endB) return undefined;
@@ -306,7 +329,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
       ([[endA, fadeOut, dotColors[0]], [endB, fadeIn, dotColors[1]]] as const).forEach(([end, opacity, color]) => {
         if (!end) return;
         const element = endDot();
-        setStyles(element, markColorStyles(seriesColors(colors.slot(color))));
+        setStyles(element, tokensOf(color));
         placeDot(element, end);
         dots.push({ element, draw: (s) => setAttributes(element, { opacity: opacity(s) }) });
       });
@@ -398,8 +421,9 @@ export function chartSwitch<T extends ChartSwitchViews>(
   function readFocus(from: View): FocusMemory | undefined {
     const element = focused();
     const inside = element !== null && from.container.contains(element);
-    const keyed = (inside ? element : from.chart.element.querySelector('[tabindex="0"]'))?.closest("[data-key]");
-    const key = keyed && from.chart.element.contains(keyed) ? keyed.getAttribute("data-key") : null;
+    const stop = inside ? element : from.chart.element.querySelector('[tabindex="0"]');
+    const keyed = stop?.closest("[data-key]");
+    const key = (stop && from.chart.keyOf?.(stop)) ?? (keyed && from.chart.element.contains(keyed) ? keyed.getAttribute("data-key") : null);
     if (!inside && key === null) return undefined;
     return { keys: key === null ? [] : (from.chart.standsFor?.(key) ?? [key]), focused: inside };
   }
@@ -467,6 +491,8 @@ export function chartSwitch<T extends ChartSwitchViews>(
       each.container.classList.remove("ec-switch-inactive");
       each.container.classList.add("ec-switching");
       each.container.setAttribute("inert", "");
+      // First, so a host view can give back the class attribute its <svg> had.
+      each.chart.morphing?.(true);
       each.chart.element.classList.add("ec-morphing");
     }
     const { pairs, surface, scene } = prepare(from, to);
@@ -543,6 +569,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
     const to = session.forward ? session.b : session.a;
     for (const each of [session.a, session.b]) {
       each.chart.element.classList.remove("ec-morphing");
+      each.chart.morphing?.(false);
       each.container.classList.remove("ec-switching");
       each.container.style.removeProperty("opacity");
     }
@@ -563,8 +590,8 @@ export function chartSwitch<T extends ChartSwitchViews>(
    * no partner that isn't drawn doesn't fade.
    */
   function prepare(a: View, b: View): { pairs: TransitionPair[]; surface: TransitionSurface; scene: Scene } {
-    const toA = between(overlay, a.chart.element, wrapper);
-    const toB = between(overlay, b.chart.element, wrapper);
+    const toA = between(overlay, a.chart.space ?? a.chart.element, wrapper);
+    const toB = between(overlay, b.chart.space ?? b.chart.element, wrapper);
     const scaleA = scaleOf(toA);
     const scaleB = scaleOf(toB);
     const from = a.chart.marks().map((mark) => mapMark(mark, toA));
@@ -572,7 +599,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
     const fromByKey = new Map(from.map((mark) => [mark.key, mark]));
     const toKeys = new Set(to.map((mark) => mark.key));
     const pairs: TransitionPair[] = [];
-    const paints: string[] = [];
+    const paints: ChartSwitchPaint[] = [];
     const extras: (Extras | undefined)[] = [];
     for (const mark of to) {
       const partner = fromByKey.get(mark.key);
@@ -581,8 +608,8 @@ export function chartSwitch<T extends ChartSwitchViews>(
       const will = paintOf(b, mark);
       if (!was.drawn && !will.drawn) continue;
       pairs.push({ from: was.drawn ? partner : dot(partner), to: will.drawn ? mark : dot(mark) });
-      paints.push(will.color);
-      extras.push(extrasFor([ringOf(was, scaleA), ringOf(will, scaleB)], [endOf(was, partner, scaleA), endOf(will, mark, scaleB)], [was.color, will.color]));
+      paints.push(will);
+      extras.push(extrasFor([ringOf(was, scaleA), ringOf(will, scaleB)], [endOf(was, partner, scaleA), endOf(will, mark, scaleB)], [was, will]));
     }
 
     const drawings: ((s: number) => void)[] = [];
@@ -640,7 +667,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
   /** A mark with no partner, drawn as its outline in its view's colour, with its own ring and end dot, scaled as its view's <svg> is into the overlay. */
   function fadeMark(mark: MarkGeometry, paint: ChartSwitchPaint, scale: number, opacity: (s: number) => number): (s: number) => void {
     const group = svgElement("g", { class: "ec-switch-fade", "data-key": mark.key }, fadesLayer);
-    setStyles(group, markColorStyles(seriesColors(colors.slot(paint.color))));
+    setStyles(group, tokensOf(paint));
     const ring = ringOf(paint, scale);
     svgLayer(group).path(mark.outline.d, mark.outline.closed ? { fill: "mark", ...(ring > 0 ? { stroke: "surface", width: ring } : {}) } : { stroke: "mark", width: mark.thickness });
     const end = endOf(paint, mark, scale);
@@ -718,6 +745,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
         session.driver?.cancel();
         session.transition?.clear();
         session.scene.clear();
+        for (const each of [session.a, session.b]) each.chart.morphing?.(false);
         session.settle();
       }
       stopMotion();

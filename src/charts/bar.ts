@@ -34,7 +34,7 @@ import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
-import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
+import { watchFonts, watchHoverDuration, watchText, watchWidth } from "./shell/watch";
 import type { ChartSwitchPaint } from "./switch";
 import { chartTable, tableModel, type TableModel } from "./table";
 import { chartTooltip, summaryContent } from "./tooltip";
@@ -229,7 +229,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   }
 
   function drawMark(record: MarkRecord<D>, row: BarRow<D>): void {
-    const before = record.parts[0]?.colors.color;
+    const before = record.parts;
     record.shown = row;
     setAttributes(record.hit, { ...row.hit });
     placeText(record.label, row.label);
@@ -265,8 +265,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const drawn = Array.from(record.body.children).filter((child) => child.classList.contains("ec-segment"));
     if (record.parts.some((part, i) => drawn[i] !== part.element)) for (const part of record.parts) record.body.appendChild(part.element);
     record.handle.repaint();
-    // A new palette or a different first series: overlays already drawn in "mark" follow.
-    if (record.parts[0]?.colors.color !== before) surface.recolor(record.key);
+    // A new palette, or a part in another colour: overlays already drawn in "mark" or in a part's colour follow.
+    if (record.parts.length !== before.length || record.parts.some((part, i) => part.colors.color !== before[i]!.colors.color)) surface.recolor(record.key);
     if (record.key === hover.ringKey) drawRing(record.key);
   }
 
@@ -606,7 +606,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
 
   const unwatchHoverDuration = watchHoverDuration(svg, motion);
 
-  /** Re-lays out without animating: a resize or fonts loading. A transition in flight lands at once. Effects follow through change(). */
+  /** Re-lays out without animating: a resize, fonts loading or the text changing size. A transition in flight lands at once. Effects follow through change(). */
   function relayout(): void {
     if (destroyed) return;
     const next = layout(current);
@@ -616,17 +616,21 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     void transitionTo(next, true);
   }
 
+  // Label margins are measured; measure again when the text changes size, such as spacing added after
+  // the chart drew, and once web fonts arrive.
+  const remeasure = (): void => {
+    measure.clear();
+    relayout();
+  };
+  const unwatchText = watchText(svg, clock, remeasure);
+
   const unwatchWidth = watchWidth(container, clock, measuredWidth, (width) => {
     measuredWidth = width;
     // A fixed `width` ignores the container.
     if (current.width === undefined) relayout();
   });
 
-  // Label margins are measured; measure again once web fonts arrive.
-  const unwatchFonts = watchFonts(doc, () => {
-    measure.clear();
-    relayout();
-  });
+  const unwatchFonts = watchFonts(doc, remeasure);
 
   // ── First render ───────────────────────────────────────────────────────────
 
@@ -702,8 +706,9 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
           if (announcing) announceChange(previous, diff);
         }
       );
-      // Coloured the other way now: every bar takes its new colour on the change's first frame.
-      if (byCategory(current) !== byCategory(previous)) for (const record of [...order, ...leaving.values()]) dirty.add(record);
+      // New colours, or coloured the other way now: every bar takes its new colour on the change's
+      // first frame, not only those the change moves.
+      if ("colors" in next || byCategory(current) !== byCategory(previous)) for (const record of [...order, ...leaving.values()]) dirty.add(record);
       const settled = transitionTo(nextLayout, motion.mode === "off" || nextLayout.orientation !== orientation);
       await transitions.wait(settled, leaves);
     },
@@ -748,6 +753,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       table.destroy();
       announcer?.destroy();
       unwatchHoverDuration();
+      unwatchText();
       unwatchWidth();
       unwatchFonts();
       for (const record of [...order, ...leaving.values()]) {

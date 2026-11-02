@@ -533,7 +533,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         else if (newRow || geometryChanged(from.geometry, mark.geometry) || samplesChanged(from.data.samples, mark.data.samples)) {
           diff.moved.push(record);
         }
-        if (from.parts[0]?.colors?.color !== mark.parts[0]?.colors?.color) recolor.push(mark.key);
+        // Any part in another colour: overlays drawn in "mark" or in a part's colour follow.
+        if (from.parts.length !== mark.parts.length || mark.parts.some((part, i) => part.colors?.color !== from.parts[i]!.colors?.color)) recolor.push(mark.key);
         record.mark = mark;
       } else {
         // A mark that comes back mid-exit keeps its record; the runner cancels its exit.

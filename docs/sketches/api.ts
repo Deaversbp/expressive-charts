@@ -118,6 +118,7 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 // each bar by its key, so a ColorAssignment shared with a donut keeps each category's colour (M5
 // decision 8). NEW in M11 step 3: lineChart's `room`, px kept clear to the right of its end labels,
 // as barChart's is past its labels; since M12 step 4, `{ right, top }` keeps px above the plot too.
+// NEW in M13 step 3: lineChart's `timeZone` takes a zone's name as Intl knows it ("Europe/London").
 // NEW in M13 step 4: lineChart's `missing`, the word for a missing value ("missing" by default).
 
 /** NEW NoInfer on `on` (built): without it, a data effect such as threshold() (D = unknown) widens D and switches off field checking. */

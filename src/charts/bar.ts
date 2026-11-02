@@ -229,7 +229,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
   }
 
   function drawMark(record: MarkRecord<D>, row: BarRow<D>): void {
-    const before = record.parts[0]?.colors.color;
+    const before = record.parts;
     record.shown = row;
     setAttributes(record.hit, { ...row.hit });
     placeText(record.label, row.label);
@@ -265,8 +265,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const drawn = Array.from(record.body.children).filter((child) => child.classList.contains("ec-segment"));
     if (record.parts.some((part, i) => drawn[i] !== part.element)) for (const part of record.parts) record.body.appendChild(part.element);
     record.handle.repaint();
-    // A new palette or a different first series: overlays already drawn in "mark" follow.
-    if (record.parts[0]?.colors.color !== before) surface.recolor(record.key);
+    // A new palette, or a part in another colour: overlays already drawn in "mark" or in a part's colour follow.
+    if (record.parts.length !== before.length || record.parts.some((part, i) => part.colors.color !== before[i]!.colors.color)) surface.recolor(record.key);
     if (record.key === hover.ringKey) drawRing(record.key);
   }
 
@@ -706,8 +706,9 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
           if (announcing) announceChange(previous, diff);
         }
       );
-      // Coloured the other way now: every bar takes its new colour on the change's first frame.
-      if (byCategory(current) !== byCategory(previous)) for (const record of [...order, ...leaving.values()]) dirty.add(record);
+      // New colours, or coloured the other way now: every bar takes its new colour on the change's
+      // first frame, not only those the change moves.
+      if ("colors" in next || byCategory(current) !== byCategory(previous)) for (const record of [...order, ...leaving.values()]) dirty.add(record);
       const settled = transitionTo(nextLayout, motion.mode === "off" || nextLayout.orientation !== orientation);
       await transitions.wait(settled, leaves);
     },

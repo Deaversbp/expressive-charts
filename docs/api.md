@@ -694,7 +694,7 @@ One run's context: the only way an effect touches the screen or the clock.
 - `motion`: `MotionView`.
 - `tween(options)`: `Tween`. A [`tween()`](#tween) bound to the run's clock, motion and signal.
 - `mark`: [`MarkHandle`](#markhandle). Restyles the mark itself.
-- `layer`: [`Layer`](#layer). The run's own overlay group, above the marks.
+- `layer`: [`Layer`](#layer). The run's own overlay group, above the marks. On a line chart it's above the lines, their end dots and end labels, and below the points, so nothing it draws covers a point being read.
 - `icons`: [`IconSource`](#iconsource). Finds icons by name.
 - `batch`: `{ index, count }`. The mark's place among the marks of its event, for staggering.
 - `onChange(listener)`: calls `listener(mark, data?)` when the mark's geometry moves (a transition's frames, a resize, a line's reveal), and when text held before this run's moved after it was placed (`texts`), until the run is cleared.
@@ -2003,7 +2003,7 @@ What every chart takes. The bar, donut and line charts add their own.
 - `motion`: `Motion | MotionMode`. Default: the page-wide `motion`. A mode is this chart's author default: the viewer's choice on the page-wide motion and the device's reduced-motion setting still win.
 - `on`: `EffectSlots<D>`. Effects or preset names by slot ([`EffectSlots`](#effectslotsd)).
 - `format`: `(value: number) => string`. Words values and the value axis's ticks. Default: the page's locale, to at most two decimals.
-- `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots (1 to 8) by series, pinned (`{ goals: 1, assists: 4 }`) or shared ([`colorAssignment()`](#colorassignment)). Colours follow the entity, never its rank. Default: slots in the order series are first seen.
+- `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots (1 to 8) by series, pinned (`{ goals: 1, assists: 4 }`) or shared ([`colorAssignment()`](#colorassignment)). Colours follow the entity, never its rank. Default: slots in the order series are first seen. On `update()`, every mark is in its new colours from the change's first frame, and so are the overlays effects drew in them.
 - `seriesLabels`: `Record<string, string>`. Names for people, by series: `{ xg: "Expected goals" }`, used as given wherever the chart names a series (the legend, the table's headers, the default tooltip and names, announcements). A series without one goes by its field's name, and a value read by a function is the series `"value"`.
 - `width`, `height`: `number`. Fixed size in px. Default: the container's width, followed as it changes, and each chart's own height. Either way, a chart lays out again at once when its text changes size after it draws, such as spacing a viewer's stylesheet adds.
 - `dim`: `boolean`. Default true. Dims the other marks' bodies while one is hovered (to `--ec-dim-opacity`), with the paths and icons their effects draw, not their labels or text effects draw, which keep their contrast. The hovered mark's emphasis stays either way.

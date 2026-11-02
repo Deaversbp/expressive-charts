@@ -353,12 +353,13 @@ describe("delta and label clear of other effects' text (texts)", () => {
 
   it.each([
     [320, 31],
-    [1000, 17]
+    [1000, 20]
   ])("keeps the season page's goals and xG changes inside the chart's width, clear of each other and of both end labels, with room: 60, at %i px", async (width, rise) => {
     const weeks = season();
     // The page's own example: "Season to date: 43 goals +2, 39.7 xG +1.8."
     expect(weeks[24]).toEqual({ week: 25, totalGoals: 43, totalXg: 39.7 });
-    const height = 270;
+    // As high as the page's chart, `270 + ROOM_ABOVE` in demo/season.ts.
+    const height = 310;
     const chart = lineChart(container(), {
       label: "Goals vs expected goals, season to date",
       data: weeks.slice(0, 24),
@@ -389,8 +390,9 @@ describe("delta and label clear of other effects' text (texts)", () => {
     // The matchweeks where both change: on main their changes met in 5 of them at 1,000 px and 8 at 320 (M10 step 6).
     expect(both).toBe(9);
     // Where a line ends at the top of the plot heading up, its text rises past the end labels above the chart's top, into the
-    // page above it: a number of room keeps space only to the right (the next test keeps it above too). On main the goals line's
-    // change alone rose 11.7 px at 320 and 5.4 at 1,000; xG's, past it, rises further.
+    // page above it: a number of room keeps space only to the right (the next test keeps it above too). Before M11, on a 270 px
+    // chart, the goals line's change alone rose 11.7 px at 320 and 5.4 at 1,000; xG's, past it, rises further: 30.1 px at 320
+    // and 19.3 at 1,000 on this 310 px chart (30.7 and 16.6 on a 270 px one).
     expect(above).toBeGreaterThan(0);
     expect(above).toBeLessThan(rise);
   });
@@ -401,7 +403,8 @@ describe("delta and label clear of other effects' text (texts)", () => {
     [1000, 60]
   ])("keeps the season page's goals and xG changes inside the chart at every matchweek at %i px, with room: { right: %i, top: 40 }", async (width, right) => {
     const weeks = season();
-    const height = 270;
+    // The page's chart: 270 px, and 40 more for the room above (`270 + ROOM_ABOVE` in demo/season.ts).
+    const height = 310;
     const top = 40;
     const chart = lineChart(container(), {
       label: "Goals vs expected goals, season to date",

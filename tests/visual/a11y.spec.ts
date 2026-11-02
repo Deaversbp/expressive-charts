@@ -381,6 +381,8 @@ const withTooltips = demos.filter(({ charts }) => charts.length > 0);
 test.describe("content on hover", () => {
   for (const { name, demo, charts } of withTooltips) {
     test(`${name}.html: the tooltip stays while the pointer does, and Escape hides it without the pointer moving`, async ({ page }) => {
+      // A large page: in WebKit in Docker, under 4 workers, it once took more than 30 s.
+      if (demo === stressDemo) test.setTimeout(60_000);
       await openAtRest(page, demo);
       for (const { chart, shape } of charts) {
         const tooltip = page.locator(`${chart} .ec-tooltip`);
@@ -708,6 +710,8 @@ test.describe("pause, stop, hide", () => {
   // about 1.4 s and 3 s), and Play season has Pause (line.spec.ts).
   for (const { name, demo } of demos) {
     test(`${name}.html: nothing moves by itself 5 s after load`, async ({ page }) => {
+      // A large page, read whole twice: in WebKit in Docker, under 4 workers, it once took more than 30 s.
+      if (demo === stressDemo) test.setTimeout(60_000);
       await openDemo(page, demo);
       await page.clock.runFor(4000);
       const at5 = await page.evaluate(() => document.body.innerHTML);

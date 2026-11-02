@@ -408,7 +408,11 @@ describe("a time axis", () => {
     const twice = () => layout<Day>({ data: [days[0]!, { ...days[0]!, date: new Date(days[0]!.date) }], x: "date", key: (_d, i) => i, series: ["goals"] });
     expect(twice).toThrow(/the rows "0" and "1" have the same x, 2026-01-07T00:00:00.000Z/);
     const options = { label: "", data: days, x: "date", series: ["goals"] } as const;
-    expect(() => lineEncoding<Day>({ ...options, timeZone: "Europe/London" as "UTC" })).toThrow(new TypeError('lineChart: timeZone must be "UTC" or "local", got "Europe/London".'));
+    expect(() => lineEncoding<Day>({ ...options, timeZone: "Mars/Olympus_Mons" })).toThrow(
+      new TypeError('lineChart: timeZone must be "UTC", "local" or the name of a zone Intl knows, such as "Europe/London", got "Mars/Olympus_Mons".')
+    );
+    expect(() => lineEncoding<Day>({ ...options, timeZone: 1 as unknown as "UTC" })).toThrow(/, got 1[.]$/);
+    expect(lineEncoding<Day>({ ...options, timeZone: "Europe/London" }).timeZone).toBe("Europe/London");
     expect(() => lineEncoding<Day>({ ...options, xFormat: "short" as unknown as () => string })).toThrow(/xFormat must be a function/);
     expect(lineEncoding<Day>(options).timeZone).toBe("UTC");
   });

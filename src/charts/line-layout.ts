@@ -17,7 +17,7 @@ import { clean, niceDomain, niceStep, type Tick } from "./bar-layout";
 import { CURVES, lineCurve, type Curve } from "./curve";
 import { textBox, type TextPlacement } from "./render/text";
 import { decimals } from "./shell/format";
-import { TIME_ZONES, timeName, timeTicks, type TimeZone } from "./time";
+import { isTimeZone, timeName, timeTicks, type TimeZone } from "./time";
 import type { Accessor, LineChartOptions } from "./types";
 
 export type { Tick } from "./bar-layout";
@@ -211,7 +211,7 @@ export function lineEncoding<D>(options: LineChartOptions<D>): LineEncoding<D> {
   const labels: unknown = options.labels;
   if (labels !== undefined && labels !== false && typeof labels !== "function") throw new TypeError("lineChart: labels must be false or a function that returns a line's end label.");
   const timeZone: unknown = options.timeZone ?? "UTC";
-  if (!TIME_ZONES.includes(timeZone as TimeZone)) throw new TypeError(`lineChart: timeZone must be "UTC" or "local", got ${show(timeZone)}.`);
+  if (!isTimeZone(timeZone)) throw new TypeError(`lineChart: timeZone must be "UTC", "local" or the name of a zone Intl knows, such as "Europe/London", got ${show(timeZone)}.`);
   const xFormat: unknown = options.xFormat;
   if (xFormat !== undefined && typeof xFormat !== "function") throw new TypeError("lineChart: xFormat must be a function that turns an x into text.");
   const curve: unknown = options.curve ?? "linear";
@@ -220,7 +220,7 @@ export function lineEncoding<D>(options: LineChartOptions<D>): LineEncoding<D> {
     x: accessor(x),
     key: key === undefined ? undefined : accessor(key),
     series: series.map((field) => ({ series: field, value: accessor<D, unknown>(field) })),
-    timeZone: timeZone as TimeZone,
+    timeZone,
     xFormat: options.xFormat,
     curve: curve as Curve
   };

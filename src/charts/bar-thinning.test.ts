@@ -326,7 +326,7 @@ async function frameDigests(): Promise<Record<string, string>> {
   return out;
 }
 
-/** The digests main (2d84d47) gave, with this file's frameDigests() run there, before labels faded as they thinned. */
+/** The digests main gave (2d84d47, and 2bab95f after M13 steps 1 to 4), with this file's frameDigests() run there, before labels faded as they thinned. */
 const MAIN: Readonly<Record<string, string>> = {
   "every label": "bee8bd60acdebab1",
   "every label, columns": "cf56f808a40051a7",

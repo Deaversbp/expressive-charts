@@ -359,7 +359,7 @@ function layoutDigests(): Record<string, string> {
   return out;
 }
 
-/** The digests main (2d84d47) gave, with this file's layoutDigests() run there, before the bars took hidden value labels' room. */
+/** The digests main gave (2d84d47, and 2bab95f after M13 steps 1 to 4), with this file's layoutDigests() run there, before the bars took hidden value labels' room. */
 const SHOWN: Readonly<Record<string, string>> = {
   bars: "a011ba0b886d5be4",
   columns: "4364478d2e42a7f3",

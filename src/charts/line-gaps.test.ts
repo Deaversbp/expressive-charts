@@ -4,10 +4,12 @@
 import { createMotion, manualClock, type DataEffect, type MarkData, type MarkGeometry } from "../core";
 import { createRegistry, type PresetFactory } from "../core/registry";
 import { measurePath, play } from "../core/testing";
+import { barChart } from "./bar";
+import { donutChart } from "./donut";
 import { lineChart } from "./line";
 import { themes } from "./render/theme";
 import type { ChartEnv } from "./shell/setup";
-import type { LineChart, LineChartOptions } from "./types";
+import type { LineChart, LineChartOptions, MarkSummary } from "./types";
 
 interface Week {
   week: number;
@@ -104,6 +106,74 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 const tableRows = (container: Element) => Array.from(container.querySelectorAll(".ec-table tbody tr"), (tr) => Array.from(tr.children, (cell) => cell.textContent));
+
+/** A 64-bit hash of the text (cyrb53's mixing, both halves kept), as 16 hex digits, as line-curve.test.ts has it. */
+function hash(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * What charts with missing values say, as digests, each given `more` options as well: every name,
+ * description, tooltip line, table cell and announcement in the container, at rest, with an x
+ * hovered, after an update that the live region announces, and with focus on an x with every value
+ * missing; and `markLabel`'s default text. Words alone, which are all `missing` changes, so other
+ * steps that move what the chart draws leave them be. They hold no px, so there's nothing to round.
+ */
+async function wording(more: Partial<LineChartOptions<Week>>): Promise<Record<string, string>> {
+  const markup = (container: Element): string =>
+    JSON.stringify({
+      names: Array.from(container.querySelectorAll("[aria-label]"), (element) => element.getAttribute("aria-label")),
+      descriptions: Array.from(container.querySelectorAll("desc"), (desc) => desc.textContent),
+      tooltip: Array.from(container.querySelector(".ec-tooltip")?.children ?? [], (line) => line.textContent),
+      table: Array.from(container.querySelectorAll(".ec-table summary, .ec-table caption, .ec-table tr"), (part) =>
+        part instanceof HTMLTableRowElement ? Array.from(part.cells, (cell) => cell.textContent) : part.textContent
+      ),
+      announced: container.querySelector(".ec-announcer")?.textContent ?? null
+    });
+  const out: Record<string, string> = {};
+  const patchy = setup({ seriesLabels: { xg: "xG" }, announce: true, tooltip: true, ...more });
+  out["at rest"] = hash(markup(patchy.container));
+  pointer("pointerover", patchy.column("3"));
+  out["week 3 hovered"] = hash(markup(patchy.container));
+  pointer("pointerover", patchy.column("5"));
+  out["week 5 hovered"] = hash(markup(patchy.container));
+  pointer("pointerleave", patchy.svg);
+  await patchy.settle(patchy.chart.update({ data: weeks.map((w) => (w.week === 4 ? { ...w, goals: null } : w)) }));
+  out["week 4 gone missing"] = hash(markup(patchy.container));
+  const blank = setup({ data: blankWeek3, ...more });
+  tabTo(blank.column("3"));
+  out["week 3 blank, focused"] = hash(markup(blank.container));
+  const texts: string[] = [];
+  setup({
+    data: blankWeek3,
+    markLabel: (_d, mark) => {
+      texts.push(mark.text);
+      return "";
+    },
+    ...more
+  });
+  out["markLabel's text"] = hash(texts.join("\n"));
+  return out;
+}
+
+/** The digests main (2d84d47) gave, with this file's wording() run there, before `missing` came in. */
+const MAIN_WORDING: Readonly<Record<string, string>> = {
+  "at rest": "11e06c969ae185ac",
+  "week 3 hovered": "15a35acd18f1f17f",
+  "week 5 hovered": "a1b533c76327127f",
+  "week 4 gone missing": "6430504914f55933",
+  "week 3 blank, focused": "f0c101c718c75a15",
+  "markLabel's text": "4ea4e8c03ceccde8"
+};
 
 afterEach(() => {
   document.body.textContent = "";
@@ -405,6 +475,88 @@ describe("lineChart with missing values: a missing x", () => {
   });
 });
 
+describe("lineChart with missing values: the word for one", () => {
+  /** The tooltip's lines in a chart's container. */
+  const tip = (container: Element) => Array.from(container.querySelector(".ec-tooltip")!.children, (line) => line.textContent);
+
+  it("says `missing` in the table's cells, and after the series' label in the names, the tooltip and markLabel's text", () => {
+    const summaries: MarkSummary[] = [];
+    const { column, container } = setup({
+      missing: "no data",
+      seriesLabels: { xg: "xG" },
+      markLabel: (_d, mark) => {
+        summaries.push(mark);
+        return "";
+      }
+    });
+    expect(column("3").getAttribute("aria-label")).toBe("3: goals no data, 3.6 xG");
+    expect(column("5").getAttribute("aria-label")).toBe("5: 6 goals, xG no data");
+    expect(summaries.map((mark) => mark.text)).toEqual(["1: 0 goals, 1.2 xG", "2: 2 goals, 2.1 xG", "3: goals no data, 3.6 xG", "4: 5 goals, 4.4 xG", "5: 6 goals, xG no data", "6: 8 goals, 6 xG"]);
+    pointer("pointerover", column("3"));
+    expect(tip(container)).toEqual(["3", "goals no data · 3.6 xG"]);
+    expect(tableRows(container)).toEqual([
+      ["1", "0", "1.2"],
+      ["2", "2", "2.1"],
+      ["3", "no data", "3.6"],
+      ["4", "5", "4.4"],
+      ["5", "6", "no data"],
+      ["6", "8", "6"]
+    ]);
+
+    const blank = setup({ data: blankWeek3, missing: "no data" });
+    expect(blank.column("3").getAttribute("aria-label")).toBe("3: goals no data, xg no data");
+    tabTo(blank.column("3"));
+    expect(tip(blank.container)).toEqual(["3", "goals no data · xg no data"]);
+    expect(tableRows(blank.container)[2]).toEqual(["3", "no data", "no data"]);
+  });
+
+  it("names in an announcement the x's an update changed, and says the word in their names, which a screen reader reads on focus", async () => {
+    const { chart, column, container, settle } = setup({ missing: "no data", announce: true });
+    await settle(chart.update({ data: weeks.map((w) => (w.week === 4 ? { ...w, goals: null } : w)) }));
+    expect(container.querySelector(".ec-announcer")!.textContent).toBe("4 changed");
+    expect(column("4").getAttribute("aria-label")).toBe("4: goals no data, 4.4 xg");
+  });
+
+  it("words them again on update({ missing }), the tooltip as it shows, and goes back to the default without one", async () => {
+    const { chart, column, container, settle } = setup();
+    const events = listen(chart);
+    pointer("pointerover", column("3"));
+    expect(tip(container)).toEqual(["3", "goals missing · 3.6 xg"]);
+    await settle(chart.update({ missing: "not counted" }));
+    expect(column("3").getAttribute("aria-label")).toBe("3: goals not counted, 3.6 xg");
+    expect(tip(container)).toEqual(["3", "goals not counted · 3.6 xg"]);
+    expect(tableRows(container)[4]).toEqual(["5", "6", "not counted"]);
+    // Words alone: nothing enters, updates or leaves.
+    expect(events).toEqual(["hover xg@3"]);
+    await settle(chart.update({ missing: undefined }));
+    expect(column("3").getAttribute("aria-label")).toBe("3: goals missing, 3.6 xg");
+    expect(tip(container)).toEqual(["3", "goals missing · 3.6 xg"]);
+    expect(tableRows(container)[4]).toEqual(["5", "6", "missing"]);
+  });
+
+  it("words them by default as main did, byte for byte, and the same with missing: \"missing\"", async () => {
+    expect(await wording({})).toEqual(MAIN_WORDING);
+    expect(await wording({ missing: "missing" })).toEqual(MAIN_WORDING);
+  });
+
+  it("throws a TypeError on a word that's empty or isn't a string, as the chart is made, and update() rejects it, changing nothing", async () => {
+    for (const [missing, got] of [
+      ["", '""'],
+      ["  ", '"  "'],
+      [0, "0"],
+      [null, "null"]
+    ] as const) {
+      expect(() => setup({ missing: missing as string })).toThrow(new TypeError(`lineChart: missing must be a word for a missing value, such as "no data", got ${got}.`));
+    }
+    expect(document.querySelectorAll("svg")).toHaveLength(0);
+    const { chart, column, container } = setup({ missing: "no data" });
+    await expect(chart.update({ missing: " " })).rejects.toThrow(TypeError);
+    await expect(chart.update({ missing: 7 as unknown as string })).rejects.toThrow(/got 7\./);
+    expect(column("3").getAttribute("aria-label")).toBe("3: goals no data, 3.6 xg");
+    expect(tableRows(container)[2]).toEqual(["3", "no data", "3.6"]);
+  });
+});
+
 describe("lineChart with missing values: types", () => {
   it("takes a field of number | null, or an optional number, as a series", () => {
     interface Day {
@@ -424,5 +576,38 @@ describe("lineChart with missing values: types", () => {
     expect(chart.marks()[0]!.gaps).toHaveLength(1);
     // @ts-expect-error A field of strings isn't a series.
     expect(() => lineChart<Day>(container, { label: "Visits", data: days, x: "day", series: ["note"], width: 600 }, env)).toThrow(RangeError);
+  });
+
+  it("takes `missing` on lineChart, but not on barChart or donutChart, which have no missing values", () => {
+    const container = document.body.appendChild(document.createElement("div"));
+    const env: ChartEnv = { presets: createRegistry<PresetFactory>({ kind: "preset" }), icons: { get: () => undefined }, motion: createMotion({ mode: "off" }), clock: manualClock() };
+    expect(lineChart<Week>(container, { label: "Goals", data: weeks, x: "week", series: ["goals"], missing: "no data" }, env).element.isConnected).toBe(true);
+    const bars = () =>
+      barChart<Week>(
+        container,
+        {
+          label: "Weeks",
+          data: weeks,
+          x: (d) => String(d.week),
+          y: "week",
+          // @ts-expect-error A bar chart has no missing values.
+          missing: "no data"
+        },
+        env
+      );
+    const slices = () =>
+      donutChart<Week>(
+        container,
+        {
+          label: "Weeks",
+          data: weeks,
+          category: (d) => String(d.week),
+          value: "week",
+          // @ts-expect-error Nor has a donut.
+          missing: "no data"
+        },
+        env
+      );
+    expect([bars, slices].every((make) => typeof make === "function")).toBe(true);
   });
 });

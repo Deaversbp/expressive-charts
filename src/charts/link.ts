@@ -24,7 +24,9 @@ export interface LinkOptions<D> {
    * A mark's linking value, given the mark and its data as a hover event has them. Default: its last
    * sample's `at` if it has one (a line point's x), else its key (a bar's or a slice's category).
    * Values are compared as strings, a Date by its ISO string, as keys are. Undefined or null links
-   * nothing, and so does a throw (reported).
+   * nothing, and so does a throw (reported). A line chart's x with every value missing has no point,
+   * so it's given a stand-in for one, keyed by the x, with the row and a sample at the x, whose value
+   * is NaN.
    */
   readonly by?: (event: Pick<MarkEvent<D>, "mark" | "data">) => unknown;
   /** Whether linked marks play their chart's hover effect. Default true; false keeps them to emphasis and dimming. */
@@ -38,7 +40,10 @@ export interface Link {
 
 /** A source's hover as a link drives it: what chartHover and expressive() register for their handle. */
 export interface LinkPort {
-  /** The live targets, in visual order, each with its marks as on screen: what their linking values are read from. */
+  /**
+   * The live targets, in visual order, each with its marks as on screen, or a stand-in for one with
+   * none (a line chart's x with every value missing): what their linking values are read from.
+   */
   targets(): readonly { readonly key: string; readonly marks: readonly RunInput[] }[];
   /**
    * Ends the hover there was, then hovers the live targets `keys` for a link: their marks' emphasis,
@@ -58,7 +63,7 @@ export interface LinkPort {
 
 /** What a source tells its link. */
 export interface LinkListener {
-  /** Its own hover started, from the pointer, touch or the keyboard, on these marks. */
+  /** Its own hover started, from the pointer, touch or the keyboard, on these marks, or on a target's stand-in where it has none. */
   hover(marks: readonly RunInput[]): void;
   /** Its own hover ended. */
   leave(): void;

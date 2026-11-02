@@ -137,7 +137,7 @@ Each run gets its own context. Everything an effect touches goes through it.
 | `signal` | aborted on leave, re-trigger, data update or destroy |
 | `tween(options)` | a tween with the clock, the motion mode and the signal already bound ([Timing](#timing)) |
 | `motion` | the motion view: `mode`, `staged`, `duration(base, timing)` |
-| `layer` | this run's own overlay group, above the marks |
+| `layer` | this run's own overlay group, above the marks (on a line chart, above its lines and below its points) |
 | `mark` | restyles the mark itself |
 | `icons` | looks icons up by name: `ctx.icons.get("dot")` |
 | `batch` | `{ index, count }`: this mark's place among the marks of one event, for `stagger` |

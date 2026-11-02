@@ -1,14 +1,13 @@
 // Time on the line chart's x: the steps between ticks, where ticks fall, and how a time is worded.
-// Pure, and with no dependency: boundaries are found with Date's own UTC or local getters and setters,
-// which handle daylight saving, and times are worded through Intl.DateTimeFormat in the page's locale.
-// A time is in ms, as Date.getTime() gives it.
+// Pure, and with no dependency: in UTC and local time, boundaries are found with Date's own UTC or
+// local getters and setters, which handle daylight saving; a zone's name is read through
+// Intl.DateTimeFormat, so no zone data ships. Times are worded through Intl.DateTimeFormat in the
+// page's locale. A time is in ms, as Date.getTime() gives it.
 
 import { niceStep } from "./bar-layout";
 
-/** The zone a time axis is in: UTC, or the viewer's clock. Named as Intl's option is, so IANA names can join it. */
-export type TimeZone = "UTC" | "local";
-
-export const TIME_ZONES: readonly TimeZone[] = ["UTC", "local"];
+/** The zone a time axis is in: UTC, the viewer's clock, or a zone's name as Intl knows it ("Europe/London"). Named as Intl's option is. */
+export type TimeZone = "UTC" | "local" | (string & {});
 
 /** How fine a time is: the coarsest boundary it falls on in its zone. Midnight on 1 January is a year. */
 export type TimeLevel = "year" | "month" | "day" | "hour" | "minute" | "second" | "millisecond";
@@ -70,6 +69,18 @@ const FIELDS: Readonly<Record<TimeLevel, Intl.DateTimeFormatOptions>> = {
   second: { hour: "numeric", minute: "2-digit", second: "2-digit" },
   millisecond: { hour: "numeric", minute: "2-digit", second: "2-digit", ...FRACTION }
 };
+
+/** Whether a time axis takes the zone: "UTC", "local", or a name Intl.DateTimeFormat takes as its timeZone. */
+export function isTimeZone(zone: unknown): zone is TimeZone {
+  if (zone === "UTC" || zone === "local") return true;
+  if (typeof zone !== "string") return false;
+  try {
+    clockOf(zone);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** The smallest step that can be `span` ms long, as the number axis rounds its step up. */
 export function timeStep(span: number): TimeStep {
@@ -161,15 +172,7 @@ export function monthsOn(t: number, months: number, zone: TimeZone): number {
   const last = new Date(0);
   last.setUTCFullYear(year, month + months + 1, 0);
   const day = Math.min(date, last.getUTCDate());
-  const d = new Date(0);
-  if (zone === "UTC") {
-    d.setUTCFullYear(year, month + months, day);
-    d.setUTCHours(hours, minutes, seconds, ms);
-  } else {
-    d.setFullYear(year, month + months, day);
-    d.setHours(hours, minutes, seconds, ms);
-  }
-  return d.getTime();
+  return timeAt(zone, year, month + months, day, hours, minutes, seconds, ms);
 }
 
 /** The coarsest boundary `t` falls on, in the zone. */
@@ -187,10 +190,13 @@ export function timeLevel(t: number, zone: TimeZone): TimeLevel {
  * How the chart says an x for people: a medium date in the page's locale ("Jan 5, 2026", or "5 Jan
  * 2026" in en-GB), with the time when any of `times` has one ("Jan 5, 2026, 3:00 PM"), its seconds
  * when any has those, and its milliseconds when any has those ("Jan 5, 2026, 3:00:00.100 PM"), so
- * every x is said differently.
+ * every x is said differently. Where the clocks go back, a time that comes twice adds the zone's
+ * short name ("Oct 25, 2026, 1:30 AM GMT+1", "25 Oct 2026, 01:30 BST" in en-GB), so the two differ too.
  */
 export function timeName(times: readonly number[], zone: TimeZone): (t: number) => string {
-  const finest = times.reduce((max, t) => Math.max(max, LEVELS.indexOf(timeLevel(t, zone))), 0);
+  const shown = clockReader(zone);
+  // The level of the time the clock shows, read in UTC, is the time's level in the zone.
+  const finest = times.reduce((max, t) => Math.max(max, LEVELS.indexOf(timeLevel(shown(t), "UTC"))), 0);
   const timeZone = zoneOption(zone);
   const timeStyle = finest >= LEVELS.indexOf("second") ? "medium" : finest >= LEVELS.indexOf("hour") ? "short" : undefined;
   // Intl's styles can't say a fraction of a second, so a time to the millisecond is said field by
@@ -200,7 +206,15 @@ export function timeName(times: readonly number[], zone: TimeZone): (t: number) 
       ? { year: "numeric", ...FIELDS.day, ...FIELDS.millisecond, timeZone }
       : { dateStyle: "medium", ...(timeStyle ? { timeStyle } : {}), timeZone };
   const format = new Intl.DateTimeFormat(undefined, options);
-  return (t) => format.format(t);
+  // No time comes twice in UTC, and a date alone needs no zone.
+  if (zone === "UTC" || !timeStyle) return (t) => format.format(t);
+  const named = new Intl.DateTimeFormat(undefined, { timeZone, timeZoneName: "short" });
+  return (t) => {
+    const text = format.format(t);
+    if (twinOf(t, shown) === undefined) return text;
+    const name = named.formatToParts(t).find((part) => part.type === "timeZoneName")?.value;
+    return name ? `${text} ${name}` : text;
+  };
 }
 
 /** Words a time for its own level, with every level up to `upTo` when it's finer than that ("millisecond" adds none). A formatter per set of fields, made when first needed. */
@@ -218,7 +232,7 @@ function tickWording(zone: TimeZone): (t: number, upTo: TimeLevel) => string {
 }
 
 /** Intl's timeZone for the zone: undefined is the viewer's own. */
-const zoneOption = (zone: TimeZone): string | undefined => (zone === "UTC" ? "UTC" : undefined);
+const zoneOption = (zone: TimeZone): string | undefined => (zone === "local" ? undefined : zone);
 
 interface Parts {
   readonly year: number;
@@ -234,26 +248,110 @@ interface Parts {
   readonly ms: number;
 }
 
+/** The fields of `t` in the zone: a named zone's are the UTC fields of what its clock shows. */
 function partsOf(t: number, zone: TimeZone): Parts {
-  const d = new Date(t);
-  return zone === "UTC"
-    ? { year: d.getUTCFullYear(), month: d.getUTCMonth(), date: d.getUTCDate(), weekday: d.getUTCDay(), hours: d.getUTCHours(), minutes: d.getUTCMinutes(), seconds: d.getUTCSeconds(), ms: d.getUTCMilliseconds() }
-    : { year: d.getFullYear(), month: d.getMonth(), date: d.getDate(), weekday: d.getDay(), hours: d.getHours(), minutes: d.getMinutes(), seconds: d.getSeconds(), ms: d.getMilliseconds() };
+  const d = new Date(zone === "UTC" || zone === "local" ? t : shownAt(t, zone));
+  return zone === "local"
+    ? { year: d.getFullYear(), month: d.getMonth(), date: d.getDate(), weekday: d.getDay(), hours: d.getHours(), minutes: d.getMinutes(), seconds: d.getSeconds(), ms: d.getMilliseconds() }
+    : { year: d.getUTCFullYear(), month: d.getUTCMonth(), date: d.getUTCDate(), weekday: d.getUTCDay(), hours: d.getUTCHours(), minutes: d.getUTCMinutes(), seconds: d.getUTCSeconds(), ms: d.getUTCMilliseconds() };
+}
+
+/** The start of a day in the zone: midnight, or the first time after it when the clocks skip it. The month and the day may run over, as in `utc`. */
+function midnight(zone: TimeZone, year: number, month: number, date: number): number {
+  return timeAt(zone, year, month, date);
 }
 
 /**
- * The start of a day in the zone: midnight, or the first time after it when the clocks skip it. The
- * month and the day may run over, as Date's setters allow (day 32 of January is 1 February). The
- * setters take any year, unlike Date.UTC, which reads 0 to 99 as 1900 to 1999.
+ * The time when the zone's clock shows these fields, as Date's setters find it in local time: the
+ * first of the two where the clocks go back, and where they skip the time, as far past the change as
+ * it is past the clock's last time before the change (2:30 when the clocks skip from 2 to 3 is 3:30).
+ * The month and the day may run over, as in `utc`. A named zone's offsets are read a day either side,
+ * since no zone changes its clocks twice in two days.
  */
-function midnight(zone: TimeZone, year: number, month: number, date: number): number {
-  const d = new Date(0);
-  if (zone === "UTC") {
-    d.setUTCFullYear(year, month, date);
-    d.setUTCHours(0, 0, 0, 0);
-  } else {
+function timeAt(zone: TimeZone, year: number, month: number, date: number, hours = 0, minutes = 0, seconds = 0, ms = 0): number {
+  if (zone === "local") {
+    const d = new Date(0);
     d.setFullYear(year, month, date);
-    d.setHours(0, 0, 0, 0);
+    d.setHours(hours, minutes, seconds, ms);
+    return d.getTime();
   }
+  const shown = utc(year, month, date, hours, minutes, seconds, ms);
+  if (zone === "UTC") return shown;
+  // The fields in the offset before any change near them, and in the one after.
+  const before = shown - (shownAt(shown - DAY, zone) - (shown - DAY));
+  const after = shown - (shownAt(shown + DAY, zone) - (shown + DAY));
+  if (before === after) return before;
+  const fits = [before, after].filter((t) => shownAt(t, zone) === shown);
+  return fits.length > 0 ? Math.min(...fits) : before;
+}
+
+/**
+ * The time whose UTC fields are these. The month and the day may run over, as Date's setters allow
+ * (day 32 of January is 1 February). The setters take any year, unlike Date.UTC, which reads 0 to 99
+ * as 1900 to 1999.
+ */
+function utc(year: number, month: number, date: number, hours = 0, minutes = 0, seconds = 0, ms = 0): number {
+  const d = new Date(0);
+  d.setUTCFullYear(year, month, date);
+  d.setUTCHours(hours, minutes, seconds, ms);
   return d.getTime();
+}
+
+/**
+ * What the zone's clock shows at `t`, as the time whose UTC fields are the clock's: in UTC, `t`
+ * itself. A named zone's clock is read to the second through Intl, which rounds down, and keeps `t`'s
+ * milliseconds, since zones are offset by whole seconds.
+ */
+function shownAt(t: number, zone: TimeZone): number {
+  if (zone === "UTC") return t;
+  if (zone === "local") {
+    const d = new Date(t);
+    return utc(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
+  }
+  const ms = ((t % SECOND) + SECOND) % SECOND;
+  const fields: Record<string, string> = {};
+  for (const part of clockOf(zone).formatToParts(t - ms)) fields[part.type] = part.value;
+  const year = Number(fields["year"]);
+  return utc(fields["era"] === "BC" ? 1 - year : year, Number(fields["month"]) - 1, Number(fields["day"]), Number(fields["hour"]) % 24, Number(fields["minute"]), Number(fields["second"]), ms);
+}
+
+/** Reads the zone's clock. A named zone's reads go through Intl, which takes longer than Date's getters, so the reader keeps each time's. */
+function clockReader(zone: TimeZone): (t: number) => number {
+  if (zone === "UTC" || zone === "local") return (t) => shownAt(t, zone);
+  const kept = new Map<number, number>();
+  return (t) => {
+    let shown = kept.get(t);
+    if (shown === undefined) kept.set(t, (shown = shownAt(t, zone)));
+    return shown;
+  };
+}
+
+/**
+ * Where the clocks go back, the other time the zone's clock shows what it shows at `t` (1:30 the
+ * second time for 1:30 the first, and back); otherwise undefined. `shown` reads the clock. The
+ * offsets are read a day either side, as in `timeAt`.
+ */
+function twinOf(t: number, shown: (t: number) => number): number | undefined {
+  const at = shown(t);
+  for (const near of [t - DAY, t + DAY]) {
+    const other = at - (shown(near) - near);
+    if (other !== t && shown(other) === at) return other;
+  }
+  return undefined;
+}
+
+/**
+ * A named zone's clock: Intl's fields for it in en-US, in 24 hours and with the era, so every year
+ * reads (1 BC is year 0). One for each name, made when the name is first checked and kept, so reading
+ * a time makes no formatter. Intl throws a RangeError on a name it doesn't know.
+ */
+const clocks = new Map<string, Intl.DateTimeFormat>();
+
+function clockOf(zone: string): Intl.DateTimeFormat {
+  let clock = clocks.get(zone);
+  if (!clock) {
+    clock = new Intl.DateTimeFormat("en-US", { timeZone: zone, hourCycle: "h23", era: "short", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" });
+    clocks.set(zone, clock);
+  }
+  return clock;
 }

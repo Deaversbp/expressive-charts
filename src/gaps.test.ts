@@ -158,7 +158,7 @@ describe("a season with missing weeks on lineChart", () => {
     expect(chart.element.querySelector('.ec-column[data-key="2026-01-03T00:00:00.000Z"]')!.getAttribute("aria-label")).toMatch(/: visits missing, 11 average$/);
   });
 
-  it("links a missing week with the bars: by the values the week has, and nothing where it has none", () => {
+  it("links a missing week with the bars: by the values the week has, and by its x where it has none", () => {
     const env = environment();
     const bars = barChart<Week>(document.body.appendChild(document.createElement("div")), { label: "xG per matchweek", data: weeks, x: (d) => String(d.week), y: (d) => d.xg ?? 0, orientation: "vertical", width: 400 }, env);
     const patchy = weeks.map((w) => (w.week === 6 ? { ...w, goals: null } : w));
@@ -175,9 +175,9 @@ describe("a season with missing weeks on lineChart", () => {
     pointer("pointerover", bars.element.querySelector('.ec-mark[data-key="3"] .ec-segment')!);
     expect(hot(line.element)).toEqual(["xg@3"]);
     pointer("pointerleave", bars.element);
-    // Week 6 has neither: the line's crosshair stops there, but it has no mark to link by.
+    // Week 6 has neither: the line's crosshair stops there, and it links by the week's x.
     pointer("pointerover", line.element.querySelector('.ec-column[data-key="6"]')!);
     expect(line.element.querySelector(".ec-crosshair")!.getAttribute("visibility")).toBeNull();
-    expect(hot(bars.element)).toEqual([]);
+    expect(hot(bars.element)).toEqual(["6"]);
   });
 });

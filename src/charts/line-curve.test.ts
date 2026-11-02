@@ -234,14 +234,17 @@ async function digests(more: Partial<LineChartOptions<Week>>): Promise<Record<st
   return out;
 }
 
-/** The digests main (819d714) gave, with this file's digests() run there, before `curve` came in. */
+/**
+ * The digests main (819d714) gave, with this file's digests() run there, before `curve` came in, with the <svg>'s groups
+ * in M13's order (the overlay between the lines and the points). Put back in main's order, every one is main's.
+ */
 const MAIN: Readonly<Record<string, string>> = {
-  season: "09226562e3206ceb",
-  "revealed to 12.4": "377d5f81cadf6617",
-  "revealed to 20": "aea0c2558267c007",
-  "missing weeks": "95b99a70c0750602",
-  "missing weeks, revealed to 5.5": "d51c66f904294911",
-  "a change, frame by frame": "144a9aeb7c35848d",
+  season: "043ff29e113ac010",
+  "revealed to 12.4": "55801a5f89d8c5b9",
+  "revealed to 20": "71c28c30c491bcd9",
+  "missing weeks": "9025b4c7a5652e7f",
+  "missing weeks, revealed to 5.5": "773fc4c28a81b3b0",
+  "a change, frame by frame": "913b2799161069b4",
   "a time axis laid out": "982a8378b8bdfac4"
 };
 

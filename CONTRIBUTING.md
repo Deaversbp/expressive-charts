@@ -62,7 +62,7 @@ Without Docker, run **Update visual baselines** from the repository's Actions ta
 
 `npm run test:visual` runs Playwright directly. On Windows and macOS it skips the screenshot comparisons and runs only the DOM checks; it needs the browsers once (`npx playwright install chromium firefox webkit`), or `-- --project=chromium` for Chromium alone. `test:visual:update` writes Chromium's baselines only, since they're the only ones.
 
-The DOM checks that measure text follow the fonts too, and Docker's run is the one that counts. On Windows, `a11y.spec.ts`'s text spacing fails on `stress.html` in Chromium. A chart measures each text once, when it draws, so the spacing the test adds after load widens the text without a new layout. Windows' Segoe UI fits every 10th of the 100 bar names, 5.7 px apart, and the spacing's 11 px runs them together; Docker's wider font fits every 20th, 43 px apart. The fix is in the plan's backlog.
+The DOM checks that measure text follow the fonts too, and Docker's run is the one that counts.
 
 The Docker image's tag follows `@playwright/test` in `package.json`. When you upgrade Playwright, pin the exact version, change the image tag in `.github/workflows/ci.yml` and `visual-baselines.yml` to match, and regenerate the baselines.
 

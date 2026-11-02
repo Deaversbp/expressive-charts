@@ -6,7 +6,8 @@
 // state in between the same way the layout draws its own.
 //
 // Labels that would overlap are thinned: every nth category label is drawn, and the value labels all
-// or none. The frame keeps room for every label, so thinning moves nothing.
+// or none. When none are, the frame is made again without their room and the category labels thinned
+// again on it, the value labels still hidden, so a layout is made at most twice.
 
 import type { MarkData, MarkGeometry, Rect } from "../core";
 import { describeBar } from "../core/geometry/describe/bar";
@@ -226,8 +227,12 @@ export function layoutBars<D>(input: BarLayoutInput<D>): BarLayout<D> {
   const domain = niceDomain(rows.map((row) => row.total));
   const texts = rows.map((row) => input.format(row.total));
   const ticks = domain.ticks.map(input.format);
-  const frame = (input.encoding.orientation === "horizontal" ? horizontalFrame : verticalFrame)(input, rows, domain, texts, ticks);
-  const labels = thinLabels(frame, rows, texts, input.measure);
+  const make = (values?: readonly string[]): BarFrame => (input.encoding.orientation === "horizontal" ? horizontalFrame : verticalFrame)(input, rows, domain, values, ticks);
+  let frame = make(texts);
+  let labels = thinLabels(frame, rows, texts, input.measure);
+  // No value label is drawn, so the bars take their room, and the names are thinned again on the new
+  // frame. The longer bars might part the value labels, but they stay hidden: a layout is made at most twice.
+  if (!labels.values) labels = thinLabels((frame = make()), rows, texts, input.measure, false);
   return {
     width: frame.bands.width,
     height: frame.bands.height,
@@ -242,13 +247,13 @@ export function layoutBars<D>(input: BarLayoutInput<D>): BarLayout<D> {
 /**
  * Which labels to draw so that no two overlap, by their boxes as `labelBounds` gives them: every nth
  * category label from the first, with n the smallest of 1, 2, 5, 10, 20, 50 and so on that leaves none
- * overlapping, and the value labels only if no two would overlap. A category label and a value label
- * aren't compared: within a row they sit apart.
+ * overlapping, and the value labels only if no two would overlap (and `values` lets them). A category
+ * label and a value label aren't compared: within a row they sit apart.
  */
-function thinLabels<D>(frame: BarFrame, rows: readonly Prepared<D>[], texts: readonly string[], measure: Measure): BarLabels {
+function thinLabels<D>(frame: BarFrame, rows: readonly Prepared<D>[], texts: readonly string[], measure: Measure, values = true): BarLabels {
   const placed = rows.map((row, slot) => placeLabels(frame, slot, row.total, row.category, texts[slot]!));
   const horizontal = frame.orientation === "horizontal";
-  const values = !overlaps(boxesOf(placed.map(({ value }) => value), measure, "ec-value", VALUE_SIZE), horizontal);
+  values &&= !overlaps(boxesOf(placed.map(({ value }) => value), measure, "ec-value", VALUE_SIZE), horizontal);
   const categories = (every: number): Rect[] =>
     boxesOf(
       placed.filter((_, slot) => slot % every === 0).map(({ label }) => label),
@@ -454,18 +459,20 @@ export function niceStep(span: number): number {
   return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * power;
 }
 
-function horizontalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[], domain: Domain, values: readonly string[], ticks: readonly string[]): BarFrame {
+/** The bars' frame, with room for the value labels' `values`, or none without them. */
+function horizontalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[], domain: Domain, values: readonly string[] | undefined, ticks: readonly string[]): BarFrame {
   const { width, measure } = input;
   const n = rows.length;
   const labelWidth = widest(rows.map((row) => row.category), "ec-label", LABEL_SIZE, measure);
-  const valueWidth = widest(values, "ec-value", VALUE_SIZE, measure);
+  // A value label and its gap from the tip.
+  const valueRoom = values ? widest(values, "ec-value", VALUE_SIZE, measure) + PAD : 0;
   const tickWidth = widest(ticks, "ec-tick", TICK_SIZE, measure);
   const { positive, negative } = reach(input, rows);
   // Value labels sit past the tip, so negative bars need room on the left as well.
-  const negativeRoom = domain.lo < 0 ? valueWidth + PAD : 0;
+  const negativeRoom = domain.lo < 0 ? valueRoom : 0;
   // `room` is outermost: past the names on the left, which negative bars' text goes past too.
   const left = Math.max(labelWidth + 10 + negativeRoom + negative, tickWidth / 2 + 2);
-  const right = Math.max(valueWidth + PAD + 4 + positive, tickWidth / 2 + 2);
+  const right = Math.max(valueRoom + 4 + positive, tickWidth / 2 + 2);
   const rowSize = input.height === undefined || n === 0 ? ROW : Math.max(0, input.height - TOP - AXIS) / n;
   return {
     orientation: "horizontal",
@@ -474,16 +481,17 @@ function horizontalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>
   };
 }
 
-function verticalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[], domain: Domain, _values: readonly string[], ticks: readonly string[]): BarFrame {
+/** The columns' frame, with room for value labels if there are `values`, or none without them. */
+function verticalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[], domain: Domain, values: readonly string[] | undefined, ticks: readonly string[]): BarFrame {
   const { width, measure } = input;
   const n = rows.length;
   const height = input.height ?? VERTICAL_HEIGHT;
   const tickWidth = widest(ticks, "ec-tick", TICK_SIZE, measure);
   const { positive, negative } = reach(input, rows);
   // Room above positive columns (and below negative ones) for their value labels, and `room` past them.
-  const top = (domain.hi > 0 ? VALUE_SIZE + PAD + 2 : TOP) + positive;
-  const values = domain.lo < 0 ? VALUE_SIZE + PAD : 0;
-  const bottom = AXIS + values + negative;
+  const top = (values && domain.hi > 0 ? VALUE_SIZE + PAD + 2 : TOP) + positive;
+  const under = values && domain.lo < 0 ? VALUE_SIZE + PAD : 0;
+  const bottom = AXIS + under + negative;
   const left = tickWidth + 8 + 2;
   const plot = { x: left, y: top, width: Math.max(0, width - left - 8), height: Math.max(0, height - top - bottom) };
   const band = n > 0 ? plot.width / n : 0;
@@ -491,7 +499,7 @@ function verticalFrame<D>(input: BarLayoutInput<D>, rows: readonly Prepared<D>[]
   return {
     orientation: "vertical",
     // The names go below the negative columns' value labels' room, so a column reaching the bottom never has its value on its name.
-    scale: { lo: domain.lo, hi: domain.hi, from: base, extent: -plot.height, label: base + values + 18 },
+    scale: { lo: domain.lo, hi: domain.hi, from: base, extent: -plot.height, label: base + under + 18 },
     bands: { start: plot.x, band, thickness: Math.min((band * BAR) / ROW, MAX_COLUMN), span: plot.width, width, height }
   };
 }

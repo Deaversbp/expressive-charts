@@ -70,6 +70,8 @@ interface MarkRecord<D> {
   readonly slot: Animated<number>;
   /** 0 to 1. A mark entering or leaving fades its labels; its bar grows or shrinks. */
   readonly presence: Animated<number>;
+  /** 0 to 1, each label as thinning draws it: a change fades out one it hides over its first half, and in one it shows over its second. */
+  readonly drawn: { readonly label: Animated<number>; readonly value: Animated<number> };
   /** The value label counts between totals, rounded to this many decimals; undefined shows the row's own text. */
   count: number | undefined;
   /** Set while the mark leaves. */
@@ -220,6 +222,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       series: row.values.map((v) => v.series),
       slot: animated(row.slot, interpolateNumber, env),
       presence: animated(entering ? 0 : 1, interpolateNumber, env),
+      drawn: { label: animated(Number(row.drawn.label), interpolateNumber, env), value: animated(Number(row.drawn.value), interpolateNumber, env) },
       count: undefined,
       leave: undefined
     };
@@ -234,10 +237,13 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     setAttributes(record.hit, { ...row.hit });
     placeText(record.label, row.label);
     placeText(record.value, row.value);
-    const presence = record.presence.value;
-    const opacity = presence < 1 ? presence : undefined;
-    setAttributes(record.label, { opacity });
-    setAttributes(record.value, { opacity });
+    // A label drawn fades with its mark, and as thinning hides or shows it.
+    const opacity = (drawn: boolean, fade: Animated<number>): number | undefined => {
+      const shown = record.presence.value * (drawn ? fade.value : 1);
+      return shown < 1 ? shown : undefined;
+    };
+    setAttributes(record.label, { opacity: opacity(row.drawn.label, record.drawn.label) });
+    setAttributes(record.value, { opacity: opacity(row.drawn.value, record.drawn.value) });
     const segments = row.geometry.segments ?? [];
     const keep = new Set<string>();
     // By category, the bar's own slot: the assignment never hears the series' name, so a shared one
@@ -372,7 +378,8 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     const values = record.series.map((series) => ({ series, value: now[series] ?? 0 }));
     const total = values.reduce((sum, v) => sum + v.value, 0);
     const text = record.count === undefined ? row.value.text : format(current)(round(total, record.count));
-    return placeRow(frame, { key: row.key, datum: row.datum, index: row.index, category: row.category, values, slot: record.slot.value, text, drawn: row.drawn }, measure);
+    const drawn = { label: record.drawn.label.value > 0, value: record.drawn.value.value > 0 };
+    return placeRow(frame, { key: row.key, datum: row.datum, index: row.index, category: row.category, values, slot: record.slot.value, text, drawn }, measure);
   }
 
   function addTick(value: number, opacity: number): void {
@@ -512,11 +519,18 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     let first: AnimateOptions | undefined;
     let second: AnimateOptions | undefined;
     let grow: AnimateOptions | undefined;
+    // Labels that thinning hides or shows: out over the change's first half, in over its second, so
+    // they don't stand on each other while the bars pass. Unstaged, they switch at once.
+    let out: AnimateOptions | undefined;
+    let into: AnimateOptions | undefined;
     if (!jump && motion.staged) {
       const wait = values ? STAGE : 0;
+      const half = values && positions ? STAGE : STAGE / 2;
       first = { duration: STAGE };
       second = { duration: STAGE, delay: wait };
       grow = { duration: STAGE / 2, delay: wait + STAGE / 2 };
+      out = { duration: half };
+      into = { duration: half, delay: half };
     } else if (!jump) {
       first = second = grow = { duration: (values && positions ? 2 : 1) * STAGE };
     }
@@ -530,6 +544,14 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
     move(scale, frame.scale, sameFields, first);
     move(bands, frame.bands, sameFields, second);
     for (const tick of ticks.values()) move(tick.opacity, tick.wanted ? 1 : 0, same, first);
+    for (const record of order) {
+      // A mark that arrives shows its labels as it grows in.
+      const fades = !arriving.has(record);
+      for (const part of ["label", "value"] as const) {
+        const to = Number(record.row.drawn[part]);
+        move(record.drawn[part], to, same, fades ? (to ? into : out) : undefined);
+      }
+    }
     for (const record of staying) {
       move(record.values, valuesOf(record.row), sameFields, first);
       move(record.presence, 1, same, first);
@@ -757,7 +779,7 @@ export function barChart<D>(target: string | Element, options: BarChartOptions<D
       unwatchWidth();
       unwatchFonts();
       for (const record of [...order, ...leaving.values()]) {
-        for (const value of [record.values, record.slot, record.presence]) value.stop();
+        for (const value of [record.values, record.slot, record.presence, record.drawn.label, record.drawn.value]) value.stop();
         record.leave?.resolve();
       }
       scale.stop();

@@ -35,6 +35,8 @@ Everything else can still change in a minor release while the library is 0.x: th
 ### Changed
 
 - **A line chart's decorations draw below its points.** The overlay where runs draw is above the lines, their end dots and end labels, and below the points, so nothing an effect draws covers a point being read: on the line page, week 12's hovered goals point shows above the red run. An end dot is part of its line, so a decoration still draws over it. Effects draw as before, and no other chart's overlay moves. In the `<svg>`, the points are in a second `.ec-marks` after the overlay, and `hover: "point"`'s stops come after the x's.
+- **A bar chart's labels fade as an update thins them.** A category or value label the new layout leaves out fades out over the change's first half, and one it draws fades in over its second, as a chart switch fades its unmatched marks. Until now they switched on the change's first frame, and stood on each other while the bars passed. A label drawn on both sides is as before. With motion off, in Analysis, and on a resize or web fonts loading, they switch at once.
+- **A bar chart whose value labels are all hidden lays its bars out longer.** When thinning hides every value label, the layout makes its frame again without their room: past a bar's tip, on the left with negative bars, above the columns and below negative ones. `room` and the ticks' half widths stay, and the names are thinned again on the new frame. A chart whose value labels show lays out as before, and a change between shown and hidden moves the frame as any change does.
 
 ### Fixed
 

@@ -1794,7 +1794,7 @@ The charts behave alike, so their options and handle are shared: [`ChartOptions<
 barChart<D>(target: string | Element, options: BarChartOptions<D>): BarChart<D>
 ```
 
-A bar chart in `target`, an element or a selector: horizontal bars or columns, plain or stacked ([architecture.md](architecture.md#bar-chart)). The axis whose values aren't numbers is the category. Options: [`BarChartOptions<D>`](#barchartoptionsd). Returns its handle, [`BarChart<D>`](#barchartd). Options it can't draw throw: a missing value counts as 0, but one that isn't a finite number throws, and so do duplicate keys and a stack that mixes signs. Labels that would overlap are thinned: every nth category label is drawn, from the first, with n the smallest of 1, 2, 5, 10, 20, 50 and so on that leaves none overlapping, and the value labels all or none. The names, the tooltip and the table keep every one.
+A bar chart in `target`, an element or a selector: horizontal bars or columns, plain or stacked ([architecture.md](architecture.md#bar-chart)). The axis whose values aren't numbers is the category. Options: [`BarChartOptions<D>`](#barchartoptionsd). Returns its handle, [`BarChart<D>`](#barchartd). Options it can't draw throw: a missing value counts as 0, but one that isn't a finite number throws, and so do duplicate keys and a stack that mixes signs. Labels that would overlap are thinned: every nth category label is drawn, from the first, with n the smallest of 1, 2, 5, 10, 20, 50 and so on that leaves none overlapping, and the value labels all or none. When none are drawn, the bars take their room. An update fades out a label it leaves out over the change's first half, and fades in one it draws over its second; with motion off, in Analysis and on a resize, they switch at once. The names, the tooltip and the table keep every one.
 
 ```ts
 import { barChart } from "expressive-charts";
@@ -1842,7 +1842,7 @@ The [shared options](#chartoptionsd), and:
 - `sort`: `"none" | "value" | "key" | ((a: D, b: D) => number)`. Default `"none"`, data order. `"value"` puts the largest total first, `"key"` the keys A to Z (numbers in numeric order). Sorting never changes a key or a colour.
 - `orientation`: `"horizontal" | "vertical"`. Forces bars or columns; needed when both axes hold numbers.
 - `colorBy`: `"series" | "category"`. Default `"series"`. `"category"` gives each bar its own palette slot by its key, as a donut's slices have, so one `colorAssignment()` shared with a donut keeps each category's colour in both. It needs one series: on a stack it throws.
-- `room`: `number`. Default 0. Px kept clear past the labels at each end of the value axis that bars reach, for text an effect draws there: a [`delta`](#delta) past a bar's value label, above a column's, or past a negative bar's or a negative column's name. At 320 px, `room: 28` keeps a `delta` inside the chart. Anything but a number of px, 0 or more, throws a `RangeError`.
+- `room`: `number`. Default 0. Px kept clear past the labels at each end of the value axis that bars reach, for text an effect draws there: a [`delta`](#delta) past a bar's value label, above a column's, or past a negative bar's or a negative column's name. With the value labels all hidden, it's past the tips. At 320 px, `room: 28` keeps a `delta` inside the chart. Anything but a number of px, 0 or more, throws a `RangeError`.
 
 Bars are 20 px thick in rows of 34 px, so a horizontal chart's height follows its rows unless `height` is given; columns are 300 px high.
 
@@ -1984,7 +1984,7 @@ What every chart's handle has. `O` is its options.
 - `marks()`: `readonly MarkGeometry[]`. The marks on screen, in visual order, part way there while a change plays. Leaving marks are left out.
 - `focus(key)`: moves keyboard focus to the mark `key` as a key press would, whatever the last input was: the focus ring shows and its hover plays. On a line chart it's the x's focus stop, for the x's key or one of its points'; with `hover: "point"`, the point's, for its key or an x's (its first series' point there). A key that isn't on screen does nothing.
 - `leave()`: ends the hover, pointer or keyboard, as the viewer moving away would: the emphasis, the dimming, the tooltip and the hover effects end, and `leave` fires for each mark that was hovered. Focus stays where it is, with its ring, as after Escape.
-- `labels()`: `readonly ChartLabel[]`. Each mark's labels as drawn now, in the marks' visual order ([`ChartLabel`](#chartlabel)). A bar's label that thinning leaves out isn't there.
+- `labels()`: `readonly ChartLabel[]`. Each mark's labels as drawn now, in the marks' visual order ([`ChartLabel`](#chartlabel)). A bar's label that thinning leaves out isn't there, and one fading as an update thins them is, until it's gone.
 - `element`: `SVGSVGElement`. The chart's `<svg>`.
 - `destroy()`: clears every effect and removes the chart.
 

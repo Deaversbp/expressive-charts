@@ -215,24 +215,175 @@ describe("layoutBars, room", () => {
     expect(negative.height - negative.rows[0]!.label.y).toBeGreaterThanOrEqual(28);
   });
 
-  it("keeps it with the labels thinned, the value labels' space too", () => {
-    // Every bar the same, so their value labels meet.
+  it("keeps it with the labels thinned and the value labels all hidden, where their room was, the ticks' half widths too", () => {
+    // Every bar the same, so their value labels meet. Each name is at most 21 px ("r99"), and the
+    // widest tick 7 px ("6") with positive bars only, or 14 px ("-6", "-5") with negative ones.
     const many = (sign: number) => Array.from({ length: 100 }, (_, i) => ({ k: `r${i}`, v: sign * 5 }));
     for (const data of [many(1), many(-1), [...many(1).slice(0, 50), ...many(-1).slice(50)]]) {
       const bars = { data, y: "k", x: "v", height: 300 } as const;
       const columns = { data, x: "k", y: "v" } as const;
-      for (const options of [bars, columns]) {
-        const { labels } = layout(options, { room: 28 });
-        expect(labels.every).toBeGreaterThan(1);
-        expect(labels.values).toBe(false);
+      const positive = data.some((row) => row.v > 0);
+      const negative = data.some((row) => row.v < 0);
+      const tick = (negative ? 14 : 7) / 2 + 2;
+      for (const room of [0, 28]) {
+        for (const options of [bars, columns]) {
+          const { labels } = layout(options, { room });
+          expect(labels.every).toBeGreaterThan(1);
+          expect(labels.values).toBe(false);
+        }
+        const at = (end: boolean) => (end ? room : 0);
+        // The names 10 px from the bars' start, with `room` past them on a negative bar's side, and 4 px past a tip.
+        expect(margins(bars, room)).toEqual({ start: Math.max(21 + 10 + at(negative), tick), end: Math.max(4 + at(positive), tick), label: 21 + at(negative) });
+        // The axis' 26 px under the columns, then `room`; 4 px above them, then `room`.
+        const { start, end, label } = margins(columns, room);
+        const { frame, height } = layout(columns, { room });
+        expect({ start, end, label }).toEqual({ start: 26 + at(negative), end: 4 + at(positive), label: frame.scale.from + 18 });
+        expect(height - label).toBe(8 + at(negative));
       }
-      const positive = data.some((row) => row.v > 0) ? 28 : 0;
-      const negative = data.some((row) => row.v < 0) ? 28 : 0;
-      expect(added(bars)).toEqual({ start: negative, end: positive, label: negative });
-      expect(added(columns)).toEqual({ start: negative, end: positive, label: negative === 0 ? 0 : -negative });
     }
   });
 });
+
+describe("layoutBars, the room hidden value labels leave", () => {
+  type Row = { k: string; v: number };
+  const rows = (...values: number[]): Row[] => values.map((v, i) => ({ k: `r${i}`, v }));
+  /** Rows 15 px apart, so value labels' boxes, 16.25 px high, meet where the bars end together. */
+  const tight = (data: Row[]) => ({ data, y: "k", x: "v", height: 4 + 26 + 15 * data.length }) as const;
+  const intersect = (a: Rect, b: Rect): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  const anyOverlap = (boxes: readonly Rect[]): boolean => boxes.some((a, i) => boxes.slice(i + 1).some((b) => intersect(a, b)));
+  /** The boxes of the labels the layout would draw on its own frame, every name and value drawn. */
+  const unthinned = (result: BarLayout<Row>, part: "label" | "value") =>
+    result.rows.map((row) => {
+      const placed = placeRow(result.frame, { ...row, text: String(row.total), drawn: { label: true, value: true } }, measure);
+      return textBox(placed[part], measure, `ec-${part}`, 12.5);
+    });
+
+  it("gives the bars the room past their tips, and on the left with negative bars", () => {
+    // Value labels 7 px wide ("5"), so they kept 7 + 6 + 4 px past a tip; now 4 px, or the ticks' half width.
+    const shown = layout(tight(rows(5, 3)));
+    expect(shown.labels.values).toBe(true);
+    expect(shown.width - shown.frame.scale.from - shown.frame.scale.extent).toBe(17);
+    const hidden = layout(tight(rows(5, 5, 3)));
+    expect(hidden.labels).toEqual({ every: 2, values: false });
+    expect(hidden.width - hidden.frame.scale.from - hidden.frame.scale.extent).toBe(5.5);
+    expect([hidden.frame.scale.from, hidden.frame.scale.label]).toEqual([24, 14]);
+    // Negative bars: their value labels ("-5", 14 px) kept 20 px on the left, between the names and the bars.
+    const negative = layout(tight(rows(-5, -5, 3)));
+    expect(negative.labels.values).toBe(false);
+    expect([negative.frame.scale.from, negative.frame.scale.label]).toEqual([24, 14]);
+    expect(layout(tight(rows(-5, 3))).frame.scale.from).toBe(24 + 20);
+  });
+
+  it("gives the columns the room above them, and below the negative ones, the names 18 px under the axis", () => {
+    // 600 px for 100 columns: 5.2 px apart, so their value labels meet.
+    const columns = (...values: number[]) => layout({ data: Array.from({ length: 100 }, (_, i) => ({ k: `r${i}`, v: values[i % values.length]! })), x: "k", y: "v" });
+    for (const result of [columns(5), columns(-5), columns(5, -5)]) {
+      const { frame, height, labels } = result;
+      expect(labels.values).toBe(false);
+      // The plot's top 4 px down, as with no positive column, and its bottom over the axis' 26 px.
+      expect(frame.scale.from + frame.scale.extent).toBe(4);
+      expect(height - frame.scale.from).toBe(26);
+      expect(frame.scale.label).toBe(frame.scale.from + 18);
+    }
+  });
+
+  it("keeps `room` and the ticks' half widths", () => {
+    const hidden = tight(rows(5, 5, 3, -1));
+    // "-2" is the widest tick: 14 px, so 9 px for its half.
+    expect(margins(layout(hidden))).toEqual({ left: 24, right: 9 });
+    expect(margins(layout(hidden, { room: 28 }))).toEqual({ left: 24 + 28, right: 4 + 28 });
+    function margins(result: BarLayout<Row>) {
+      const { from, extent } = result.frame.scale;
+      return { left: from, right: result.width - from - extent };
+    }
+  });
+
+  it("thins the names again on the new frame, and keeps the value labels hidden where they'd fit on the longer bars", () => {
+    // 100 and 97, 15 px apart: past the tips the 97's box, 18 px across, reaches the 100's at 640 px with
+    // the value labels' room (3 / 100 of 585 px is 17.55), and not without it (of 603.5, 18.105).
+    const result = layout(tight(rows(100, 97)), { width: 640 });
+    expect(result.labels).toEqual({ every: 2, values: false });
+    expect(result.frame.scale.extent).toBe(603.5);
+    expect(anyOverlap(unthinned(result, "value"))).toBe(false);
+    expect(result.rows.map((row) => [row.label.text, row.value.text, row.drawn])).toEqual([
+      ["r0", "", { label: true, value: false }],
+      ["", "", { label: false, value: false }]
+    ]);
+    // The names on the new frame: every nth, n as small as it can be, none overlapping.
+    const data = Array.from({ length: 100 }, (_, i) => ({ k: `Bar ${i}`, v: 5 }));
+    const steps = [1, 2, 5, 10, 20, 50, 100];
+    for (const options of [
+      { data, y: "k", x: "v", height: 300 },
+      { data, x: "k", y: "v" }
+    ] as const) {
+      const thinned = layout(options);
+      expect(thinned.labels.values).toBe(false);
+      const names = unthinned(thinned, "label");
+      const { every } = thinned.labels;
+      const previous = steps[steps.indexOf(every) - 1]!;
+      expect(anyOverlap(names.filter((_, slot) => slot % every === 0))).toBe(false);
+      expect(anyOverlap(names.filter((_, slot) => slot % previous === 0))).toBe(true);
+    }
+  });
+
+  it("lays out a chart whose value labels show byte for byte as main did", () => {
+    expect(layoutDigests()).toEqual(SHOWN);
+  });
+});
+
+/**
+ * Layouts whose value labels show, as digests: bars and columns, plain and stacked, with negative
+ * values, `room`, `height`, and thinned names. Numbers are rounded to 1e-9, so Node 22's and 24's last
+ * bits agree.
+ */
+function layoutDigests(): Record<string, string> {
+  const serial = (value: unknown): string => JSON.stringify(value, (_, v: unknown) => (typeof v === "number" ? Math.round(v * 1e9) / 1e9 : v));
+  const signed = players.map((p, i) => ({ ...p, goals: i === 1 ? -p.goals : p.goals }));
+  const named = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `Bar ${i + 1}`, goals: 1 + ((i * 7) % 23), assists: i % 5 }));
+  const cases: Record<string, readonly [Omit<BarChartOptions<Player>, "label">, Partial<BarLayoutInput<Player>>]> = {
+    bars: [{ data: players, y: "name", x: "goals" }, {}],
+    columns: [{ data: players, x: "name", y: "goals" }, {}],
+    "a stack": [{ data: players, y: "name", stack: ["goals", "assists"], sort: "value" }, {}],
+    "negative bars": [{ data: signed, y: "name", x: "goals" }, { room: 28 }],
+    "negative columns": [{ data: signed, x: "name", y: "goals" }, { room: 28 }],
+    "room and height": [{ data: players, y: "name", x: "goals", height: 200 }, { room: 12, width: 320 }],
+    "thinned names": [{ data: named(12), y: "name", x: "goals", height: 160 }, {}],
+    "thinned columns": [{ data: named(40), x: "name", stack: ["goals", "assists"] }, { width: 320 }]
+  };
+  const out: Record<string, string> = {};
+  for (const [name, [options, more]] of Object.entries(cases)) {
+    const result = layout(options, more);
+    expect(result.labels.values, name).toBe(true);
+    out[name] = hash(serial({ ...result, rows: result.rows.map(({ data, ...row }) => ({ ...row, samples: data.samples })) }));
+  }
+  return out;
+}
+
+/** The digests main (2d84d47) gave, with this file's layoutDigests() run there, before the bars took hidden value labels' room. */
+const SHOWN: Readonly<Record<string, string>> = {
+  bars: "a011ba0b886d5be4",
+  columns: "4364478d2e42a7f3",
+  "a stack": "c2a4ffbc9e32b355",
+  "negative bars": "8d200dfab4a649a0",
+  "negative columns": "49e6304d6716a195",
+  "room and height": "5bebb892b9d05f94",
+  "thinned names": "cc09a2f0858626ef",
+  "thinned columns": "ac5a6e0d9395866c"
+};
+
+/** A 64-bit hash of the text (cyrb53's mixing, both halves kept), as 16 hex digits: enough to tell two layouts apart. */
+function hash(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
 
 describe("layoutBars, a negative column's labels", () => {
   type Row = { k: string; v: number };

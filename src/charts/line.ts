@@ -68,7 +68,7 @@ import { leavingMarks, type Leave } from "./shell/leaving";
 import { orderElements } from "./shell/order";
 import { checkChartOptions, checkNeeds, containerWidth, describeChart, nextEffects, resolveTarget, type ChartEnv } from "./shell/setup";
 import { busy, chartTransitions, geometryChanged, playUpdate, same, sameFields, type ChartDiff } from "./shell/transitions";
-import { watchFonts, watchHoverDuration, watchWidth } from "./shell/watch";
+import { watchFonts, watchHoverDuration, watchText, watchWidth } from "./shell/watch";
 import type { ChartSwitchPaint } from "./switch";
 import { chartTable, tableModel, type TableModel } from "./table";
 import { monthsOn } from "./time";
@@ -1410,7 +1410,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 
   const unwatchHoverDuration = watchHoverDuration(svg, motion);
 
-  /** Re-lays out without animating: a resize or fonts loading. A change in flight lands at once. Effects follow through change(). */
+  /** Re-lays out without animating: a resize, fonts loading or the text changing size. A change in flight lands at once. Effects follow through change(). */
   function relayout(): void {
     if (destroyed) return;
     const next = layout(current);
@@ -1423,17 +1423,21 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
     void transitionTo(next, true);
   }
 
+  // Margins are measured; measure again when the text changes size, such as spacing added after the
+  // chart drew, and once web fonts arrive.
+  const remeasure = (): void => {
+    measure.clear();
+    relayout();
+  };
+  const unwatchText = watchText(svg, clock, remeasure);
+
   const unwatchWidth = watchWidth(container, clock, measuredWidth, (width) => {
     measuredWidth = width;
     // A fixed `width` ignores the container.
     if (current.width === undefined) relayout();
   });
 
-  // Margins are measured; measure again once web fonts arrive.
-  const unwatchFonts = watchFonts(doc, () => {
-    measure.clear();
-    relayout();
-  });
+  const unwatchFonts = watchFonts(doc, remeasure);
 
   // ── First render ───────────────────────────────────────────────────────────
 
@@ -1611,6 +1615,7 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
       table.destroy();
       announcer?.destroy();
       unwatchHoverDuration();
+      unwatchText();
       unwatchWidth();
       unwatchFonts();
       for (const record of [...rowOrder, ...leavingRows.values()]) for (const value of [record.x, record.values, record.presence]) value.stop();

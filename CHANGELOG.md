@@ -35,6 +35,7 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Fixed
 
+- **A chart measures its text again when the text changes size.** The bar, donut and line charts measured each text once, as they drew, and again only once web fonts loaded. So spacing a viewer adds after load (WCAG 1.4.12's), or a font or size set on the page, widened the text without a new layout: on Windows, a bar chart's names ran together. Now each chart keeps a hidden line of text, with no class, watched with a `ResizeObserver`. When its width changes, the chart measures again and lays out at once, as when fonts load: a bar chart thins its names again, and its margins fit its text. Until text changes size, every chart draws as before.
 - **`update({ colors })` recolours every bar on the change's first frame.** A bar the change left in place kept its old colour until the change landed. With motion off, and with `colors` alone, it's at once, as before.
 - **Overlays drawn in a stack's later part's colour follow it.** A path drawn in a part's colour (`Paint.part`), as `drawIn` draws a stack's, kept its old colour when a part other than the first changed colour: on our bar chart, and on `expressive()`'s marks when they're read again.
 

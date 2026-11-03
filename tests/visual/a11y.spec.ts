@@ -1,11 +1,12 @@
 // The accessibility audit's automatic checks (docs/a11y-audit.md has the rest, and the results).
 // axe-core, a pinned dev dependency, runs its WCAG 2.2 A and AA rules on every demo page: in light and
-// dark, at 320 px wide, under forced colours, on morph.html mid-switch and with its season's other views
-// shown, and on line.html with Curved and Nearest point picked. Beside it, DOM checks for
-// what axe can't see: the tab order with a visible focus at every stop, no sideways scroll at 320 px,
-// the tooltip clear of the focus ring, dismissed by Escape and hoverable, every label at 4.5:1 while
-// another mark is hovered, nothing moving by itself after 5 s, and legends keeping their colours under
-// forced colours. There are no screenshots here, so every browser runs all of it.
+// dark, at 320 px wide, under forced colours, on morph.html mid-switch, with its season's other views
+// shown and with its D3 switch mid-switch and on its columns, and on line.html with Curved and Nearest
+// point picked. Beside it, DOM checks for what axe can't see: the tab order with a visible focus at
+// every stop, no sideways scroll at 320 px, the tooltip clear of the focus ring, dismissed by Escape
+// and hoverable, every label at 4.5:1 while another mark is hovered, nothing moving by itself after
+// 5 s, and legends keeping their colours under forced colours. There are no screenshots here, so every
+// browser runs all of it.
 
 import axe from "axe-core";
 import { expect, test, type Page } from "@playwright/test";
@@ -75,7 +76,9 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
     stops: [
       ...MOTION,
       ...["Show as columns", "Drop", "Unroll", "Goal: 58 shots, 14%", "Data table", "Off target: 149 shots", "Data table"],
-      ...["Per match", "Season to date", "Columns", "Matchweek 1: 0 goals, 0.6 xG", "Data table"]
+      ...["Per match", "Season to date", "Columns", "Matchweek 1: 0 goals, 0.6 xG", "Data table"],
+      // The D3 card's toggle and its pie, the view on show.
+      ...["Show as columns", "Goal: 58 shots, 14%"]
     ],
     // A linked hover hovers the other chart too: "contrast on hover" measures the chart hovered. Not
     // #season, whose line charts have weeks with no values, as line.html's chart with missing weeks has:
@@ -87,7 +90,9 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
         other: '.ec-switch-view[data-view="donut"] .ec-mark[data-key="Goal"] .ec-slice'
       },
       { chart: "#ranked", shape: '.ec-mark[data-key="Saved"] .ec-segment', other: '.ec-mark[data-key="Goal"] .ec-segment' }
-    ]
+    ],
+    // The D3 pie, an attachment, which draws no tooltip: its hover dims the other slices.
+    hosts: [{ chart: "#d3-shots", shape: '.ec-switch-view[data-view="pie"] path.slice-saved' }]
   },
   {
     name: "season",
@@ -263,6 +268,21 @@ test.describe("axe", () => {
     expect(await axeViolations(page)).toEqual([]);
     // axe moved the clock a little, and the switch is still under way.
     await expect(views).toHaveClass([/ec-switching/, /ec-switching/]);
+  });
+
+  test("morph.html's D3 switch mid-switch, then on its columns with a column focused", async ({ page }) => {
+    await openAtRest(page, morphDemo);
+    await page.locator("#d3-toggle").click();
+    await page.clock.runFor(300);
+    const views = page.locator("#d3-shots .ec-switch-view");
+    await expect(views).toHaveClass([/ec-switching/, /ec-switching/]);
+    expect(await axeViolations(page)).toEqual([]);
+    await expect(views).toHaveClass([/ec-switching/, /ec-switching/]);
+    await page.clock.runFor(REST);
+    await page.locator("#d3-toggle").focus();
+    await page.keyboard.press("Tab");
+    await expect(page.locator("#d3-shots rect.column-goal")).toBeFocused();
+    expect(await axeViolations(page)).toEqual([]);
   });
 });
 

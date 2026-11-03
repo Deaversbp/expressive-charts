@@ -5,7 +5,11 @@
 // switch, across a switch. Then the season's switch of two line charts and columns: its views, half way
 // from a line to its columns and between the two lines, and a column focused, with DOM checks for its
 // toggles, V and focus following the week, Tab after a toggle landing on the week, the weeks both lines
-// miss and the end dots on every frame of a switch, reduced motion and Off, and what can be read. Names start with "morph-", since screenshot names are shared across files.
+// miss and the end dots on every frame of a switch, reduced motion and Off, and what can be read. Last,
+// the D3 pie and columns in a switch through hostView(): each view at rest in light and dark and at
+// 320 px, half way, and a column focused after V, with DOM checks for the load, the host's marks and
+// labels hidden while the overlay draws them, the labels moving and swapping, focus and the tab stop
+// following the outcome, Off and reduced motion, each view announced, and what can be read. Names start with "morph-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, hoverShape, morphDemo, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
@@ -655,5 +659,330 @@ test.describe("the season's switch", () => {
       await seasonButton(page, name).click();
       await expectSeasonLanded(page, view);
     }
+  });
+});
+
+// ── The same morph on D3 ─────────────────────────────────────────────────────
+
+type D3View = "pie" | "columns";
+/** The D3 card: its toggle and the switch of a D3 pie and D3 columns. */
+const d3Card = (page: Page): Locator => page.locator('section[aria-labelledby="d3-title"]');
+const d3Shots = (page: Page): Locator => page.locator("#d3-shots");
+const d3View = (page: Page, name: D3View): Locator => d3Shots(page).locator(`.ec-switch-view[data-view="${name}"]`);
+const d3Runs = (page: Page): Locator => d3Shots(page).locator(".ec-switch-overlay .ec-switch-runs > .ec-run");
+const d3Toggle = (page: Page): Locator => page.locator("#d3-toggle");
+const d3Announcer = (page: Page): Locator => d3Shots(page).getByRole("status");
+/** An outcome's mark in a D3 view, by the D3 code's own classes: its slice, or its column. */
+const d3Mark = (page: Page, name: D3View, outcome: string): Locator =>
+  d3View(page, name).locator(`.${name === "pie" ? "slice" : "column"}-${outcome.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+/** The D3 charts' marks and the labels the page names, as the D3 code drew them. */
+const HOST_PARTS = "svg :is(path.slice, rect.column, text.host-label, text.host-value)";
+
+/** Each D3 view's marks and named labels, each as whether it's drawn now: 4 marks and 8 labels a view. */
+async function d3Drawn(page: Page): Promise<Record<D3View, boolean[]>> {
+  return d3Shots(page).evaluate(
+    (root, selector) =>
+      Object.fromEntries(
+        ["pie", "columns"].map((name) => [
+          name,
+          [...root.querySelectorAll(`.ec-switch-view[data-view="${name}"] ${selector}`)].map((part) => getComputedStyle(part).visibility === "visible")
+        ])
+      ) as Record<D3View, boolean[]>,
+    HOST_PARTS
+  );
+}
+
+/** The D3 view shown, the other inactive, its marks and labels drawn, and nothing in the overlay: the switch has landed there. */
+async function expectD3Landed(page: Page, name: D3View): Promise<void> {
+  const other: D3View = name === "pie" ? "columns" : "pie";
+  await expect(d3View(page, name)).not.toHaveClass(/ec-switch-inactive|ec-switching/);
+  await expect(d3View(page, name)).not.toHaveAttribute("inert");
+  await expect(d3View(page, name)).not.toHaveAttribute("aria-hidden");
+  await expect(d3View(page, other)).toHaveClass(/ec-switch-inactive/);
+  await expect(d3View(page, other)).toHaveAttribute("inert", "");
+  await expect(d3View(page, other)).toHaveAttribute("aria-hidden", "true");
+  await expect(d3Runs(page)).toHaveCount(0);
+  expect((await d3Drawn(page))[name]).toEqual(Array<boolean>(12).fill(true));
+}
+
+/** Each of a D3 view's marks' fill, by outcome, as the page's CSS colours it. */
+async function hostColours(page: Page, name: D3View): Promise<Record<string, string>> {
+  return d3View(page, name)
+    .locator("svg :is(path.slice, rect.column)")
+    .evaluateAll((marks) =>
+      Object.fromEntries(
+        marks.map((mark) => {
+          // D3's row on each element: a pie's slice has its row under `data`.
+          const row = (mark as unknown as { __data__: { outcome?: string; data?: { outcome: string } } }).__data__;
+          return [row.data?.outcome ?? row.outcome ?? "", getComputedStyle(mark).fill];
+        })
+      )
+    );
+}
+
+/** Each pair's morph's fill in the overlay, by key. */
+async function runColours(page: Page): Promise<Record<string, string>> {
+  return d3Runs(page).evaluateAll((groups) => Object.fromEntries(groups.map((group) => [group.getAttribute("data-key") ?? "", getComputedStyle(group.querySelector("path")!).fill])));
+}
+
+/** A text and the middle of its box on screen. */
+interface Placed {
+  readonly text: string;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** A D3 view's named labels, by their text, each where its chart draws it. */
+async function hostLabels(page: Page, name: D3View): Promise<Map<string, Placed>> {
+  const placed = await d3View(page, name)
+    .locator("svg :is(text.host-label, text.host-value)")
+    .evaluateAll((texts) =>
+      texts.map((text) => {
+        const box = text.getBoundingClientRect();
+        return { text: text.textContent ?? "", x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      })
+    );
+  return new Map(placed.map((label) => [label.text, label]));
+}
+
+/** The overlay's label copies that show now, each where it's drawn. */
+async function copiesShown(page: Page): Promise<Placed[]> {
+  return d3Shots(page)
+    .locator(".ec-switch-overlay .ec-switch-labels > text")
+    .evaluateAll((texts) =>
+      texts
+        .filter((text) => text.getAttribute("visibility") !== "hidden")
+        .map((text) => {
+          const box = text.getBoundingClientRect();
+          return { text: text.textContent ?? "", x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        })
+    );
+}
+
+const distance = (a: Placed, b: Placed): number => Math.hypot(a.x - b.x, a.y - b.y);
+
+/** Whether a view shows a focus ring: one of its <svg>'s rings, drawn. */
+async function ringShown(view: Locator): Promise<boolean> {
+  return view.evaluate((root) =>
+    [...root.querySelectorAll(".ec-focus-ring")].some((ring) => {
+      const box = ring.getBoundingClientRect();
+      return getComputedStyle(ring).visibility === "visible" && (box.width > 0 || box.height > 0);
+    })
+  );
+}
+
+test.describe("the D3 switch", () => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`the D3 pie and the D3 columns at rest, each announced, ${colorScheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openDemo(page, morphDemo);
+      await expectD3Landed(page, "pie");
+      await expect(d3Toggle(page)).toHaveText("Show as columns");
+      await expect(d3Card(page)).toHaveScreenshot(`morph-d3-pie-${colorScheme}.png`);
+
+      await d3Toggle(page).click();
+      await pointerAway(page);
+      await page.clock.runFor(REST);
+      await expectD3Landed(page, "columns");
+      await expect(d3Toggle(page)).toHaveText("Show as pie");
+      // The announcer adds a no-break space every other time, so the same text twice is still a change.
+      await expect(d3Announcer(page)).toHaveText(/^Shot outcomes on D3 columns, counts\s?$/);
+      await expect(d3Card(page)).toHaveScreenshot(`morph-d3-columns-${colorScheme}.png`);
+
+      await d3Toggle(page).click();
+      await pointerAway(page);
+      await page.clock.runFor(REST);
+      await expectD3Landed(page, "pie");
+      await expect(d3Announcer(page)).toHaveText(/^Shot outcomes on a D3 pie, share of total\s?$/);
+    });
+  }
+
+  test("at 320 px, each view fits its card", async ({ page }) => {
+    // Tall enough for the page in one column, about 7,150 px.
+    await page.setViewportSize({ width: 320, height: 9000 });
+    await openDemo(page, morphDemo);
+    await expectD3Landed(page, "pie");
+    await expect(d3Card(page)).toHaveScreenshot("morph-d3-pie-320.png");
+    await d3Toggle(page).click();
+    await pointerAway(page);
+    await page.clock.runFor(REST);
+    await expectD3Landed(page, "columns");
+    await expect(d3Card(page)).toHaveScreenshot("morph-d3-columns-320.png");
+  });
+
+  test("loads as the pie, and nothing moves at load", async ({ page }) => {
+    // openDemo runs a second of the page's frames; a reload with the clock stopped shows the page as it loads.
+    await openDemo(page, morphDemo);
+    await page.reload();
+    await morphDemo.ready(page);
+    await expectD3Landed(page, "pie");
+    await expect(d3Toggle(page)).toHaveText("Show as columns");
+    await expect(d3Announcer(page)).toHaveText("");
+    const atLoad = await d3Shots(page).innerHTML();
+    await page.clock.runFor(REST);
+    expect(await d3Shots(page).innerHTML()).toBe(atLoad);
+  });
+
+  test("half way to the columns and back: no D3 mark drawn twice, each in its own colour, and the labels moving and swapping", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    // One palette by outcome: each column has its slice's colour.
+    const colours = await hostColours(page, "pie");
+    expect(Object.keys(colours).sort()).toEqual(["Blocked", "Goal", "Off target", "Saved"]);
+    expect(await hostColours(page, "columns")).toEqual(colours);
+    const pieLabels = await hostLabels(page, "pie");
+    const columnLabels = await hostLabels(page, "columns");
+    expect([...pieLabels.keys()].sort()).toEqual(["112", "149", "58", "87", "Blocked", "Goal", "Off target", "Saved"]);
+    expect([...columnLabels.keys()].sort()).toEqual([...pieLabels.keys()].sort());
+
+    await d3Toggle(page).click();
+    await expect(d3Toggle(page)).toHaveText("Show as pie");
+    // As it starts, with no time passed: each label's copy where the pie has it, and every D3 mark and
+    // named label hidden, in both views, so only the overlay draws them.
+    const start = await copiesShown(page);
+    expect(start).toHaveLength(8);
+    for (const copy of start) expect(distance(copy, pieLabels.get(copy.text)!), copy.text).toBeLessThan(1.5);
+    expect(await d3Drawn(page)).toEqual({ pie: Array<boolean>(12).fill(false), columns: Array<boolean>(12).fill(false) });
+
+    // 472 ms in, the last frame before half way: each slice half way to its column, in its own colour,
+    // and each label on its way, away from both its places.
+    await page.clock.runFor(475);
+    await expect(d3View(page, "pie")).toHaveClass(/ec-switching/);
+    await expect(d3View(page, "columns")).toHaveClass(/ec-switching/);
+    await expect(d3Runs(page)).toHaveCount(4);
+    expect(await runColours(page)).toEqual(colours);
+    expect(await d3Drawn(page)).toEqual({ pie: Array<boolean>(12).fill(false), columns: Array<boolean>(12).fill(false) });
+    const half = await copiesShown(page);
+    expect(half.map((copy) => copy.text).sort()).toEqual([...pieLabels.keys()].sort());
+    for (const copy of half) {
+      expect(distance(copy, pieLabels.get(copy.text)!), `${copy.text} has left the pie`).toBeGreaterThan(5);
+      expect(distance(copy, columnLabels.get(copy.text)!), `${copy.text} hasn't reached its column`).toBeGreaterThan(5);
+    }
+    await expect(d3Shots(page)).toHaveScreenshot("morph-d3-half.png");
+
+    // A frame later, half way, each label has swapped to its column's copy: the same words, drawn by
+    // the other copy.
+    const shown = d3Shots(page).locator(".ec-switch-overlay .ec-switch-labels > text:not([visibility])");
+    await shown.evaluateAll((texts) => texts.forEach((text) => text.setAttribute("data-before", "")));
+    await page.clock.runFor(FRAME);
+    await expect(shown).toHaveCount(8);
+    await expect(shown.and(page.locator("[data-before]"))).toHaveCount(0);
+
+    // And back from where the shapes are, to the pie as the D3 code drew it: nothing left hidden inline.
+    await d3Toggle(page).click();
+    await expect(d3Toggle(page)).toHaveText("Show as columns");
+    await expect(d3Runs(page)).toHaveCount(4);
+    await page.clock.runFor(REST);
+    await expectD3Landed(page, "pie");
+    const hiddenInline = await d3Shots(page)
+      .locator(HOST_PARTS)
+      .evaluateAll((parts) => parts.filter((part) => (part as SVGElement).style.visibility !== "").length);
+    expect(hiddenInline).toBe(0);
+  });
+
+  test("V on a slice switches, and focus follows its outcome into the columns with the ring, and back", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    // The pie's tab stop is the toggle's next.
+    await d3Toggle(page).focus();
+    await page.keyboard.press("Tab");
+    await expect(d3Mark(page, "pie", "Goal")).toBeFocused();
+    await expect(d3Mark(page, "pie", "Goal")).toHaveAttribute("aria-label", "Goal: 58 shots, 14%");
+    await page.keyboard.press("ArrowRight");
+    await expect(d3Mark(page, "pie", "Saved")).toBeFocused();
+
+    await page.keyboard.press("v");
+    await expect(d3Toggle(page)).toHaveText("Show as pie");
+    await page.clock.runFor(REST);
+    await expectD3Landed(page, "columns");
+    await expect(d3Mark(page, "columns", "Saved")).toBeFocused();
+    await expect(d3Mark(page, "columns", "Saved")).toHaveAttribute("aria-label", "Saved: 112 shots");
+    expect(await ringShown(d3View(page, "columns"))).toBe(true);
+    await expect(d3Card(page)).toHaveScreenshot("morph-d3-focus-columns.png");
+
+    // And back: focus on the column follows it into the pie.
+    await page.keyboard.press("ArrowRight");
+    await expect(d3Mark(page, "columns", "Off target")).toBeFocused();
+    await page.keyboard.press("V");
+    await page.clock.runFor(REST);
+    await expectD3Landed(page, "pie");
+    await expect(d3Mark(page, "pie", "Off target")).toBeFocused();
+    expect(await ringShown(d3View(page, "pie"))).toBe(true);
+  });
+
+  test("the toggle keeps focus, the tab stop follows the outcome, and V does nothing off a mark", async ({ page }) => {
+    await openDemo(page, morphDemo);
+    await d3Toggle(page).focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("End");
+    await expect(d3Mark(page, "pie", "Blocked")).toBeFocused();
+
+    // Back to the toggle, and switch from it: focus stays there.
+    await page.keyboard.press("Shift+Tab");
+    await expect(d3Toggle(page)).toBeFocused();
+    await page.keyboard.press("Enter");
+    await page.clock.runFor(REST);
+    await expectD3Landed(page, "columns");
+    await expect(d3Toggle(page)).toBeFocused();
+    await expect(d3Toggle(page)).toHaveText("Show as pie");
+    await page.keyboard.press("v");
+    await expectD3Landed(page, "columns");
+
+    // Tab goes on to the same outcome's column, and back on the pie, its slice.
+    await page.keyboard.press("Tab");
+    await expect(d3Mark(page, "columns", "Blocked")).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Space");
+    await page.clock.runFor(REST);
+    await expectD3Landed(page, "pie");
+    await expect(d3Toggle(page)).toHaveText("Show as columns");
+    await page.keyboard.press("Tab");
+    await expect(d3Mark(page, "pie", "Blocked")).toBeFocused();
+  });
+
+  test("Off and reduced motion: a switch lands at once, focus following, until the viewer picks a mode", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openDemo(page, morphDemo);
+    await d3Toggle(page).click();
+    // No time passes.
+    await expectD3Landed(page, "columns");
+    await d3Toggle(page).focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("ArrowRight");
+    await expect(d3Mark(page, "columns", "Saved")).toBeFocused();
+    await page.keyboard.press("v");
+    await expectD3Landed(page, "pie");
+    await expect(d3Mark(page, "pie", "Saved")).toBeFocused();
+
+    // The viewer's own pick overrides the device's setting.
+    await pickMode(page, "Presentation");
+    await d3Toggle(page).click();
+    await expect(d3Runs(page)).toHaveCount(4);
+    await page.clock.runFor(REST);
+    await expectD3Landed(page, "columns");
+    await pickMode(page, "Off");
+    await d3Toggle(page).click();
+    await expectD3Landed(page, "pie");
+  });
+
+  test("only the view shown can be read, each mark named, and the switch announces the new one", async ({ page, browserName }) => {
+    test.skip(browserName !== "chromium", "It reads Chrome's accessibility tree, over CDP.");
+    const pie = ["group: Shot outcomes on a D3 pie, share of total", "image: Goal: 58 shots, 14%", "image: Saved: 112 shots, 28%", "image: Off target: 149 shots, 37%", "image: Blocked: 87 shots, 21%"];
+    const columns = ["group: Shot outcomes on D3 columns, counts", "image: Goal: 58 shots", "image: Saved: 112 shots", "image: Off target: 149 shots", "image: Blocked: 87 shots"];
+    /** What can be read, in any order: Chrome lists nodes by when they were made. */
+    const sorted = (lines: readonly string[]): string[] => [...lines].sort();
+    await openDemo(page, morphDemo);
+    expect(sorted(await readable(page, ["#d3-shots"]))).toEqual(sorted(pie));
+
+    await d3Toggle(page).click();
+    // Mid-switch, neither view can be read: both are inert, and the new one is hidden until it lands.
+    await page.clock.runFor(300);
+    expect(await readable(page, ["#d3-shots"])).toEqual([]);
+    await page.clock.runFor(REST);
+    await expect(d3Announcer(page)).toHaveText(/^Shot outcomes on D3 columns, counts\s?$/);
+    expect(sorted(await readable(page, ["#d3-shots"]))).toEqual(sorted(columns));
+
+    await d3Toggle(page).click();
+    await page.clock.runFor(REST);
+    await expect(d3Announcer(page)).toHaveText(/^Shot outcomes on a D3 pie, share of total\s?$/);
+    expect(sorted(await readable(page, ["#d3-shots"]))).toEqual(sorted(pie));
   });
 });

@@ -106,6 +106,21 @@ export const shapesDemo: Demo = {
   }
 };
 
+/** demo/charts.html: a D3 waterfall, dumbbell, radar and butterfly, each through expressive(). */
+export const chartsDemo: Demo = {
+  path: "/charts.html",
+  // About 2,110 px at 1,000 px wide.
+  height: 2400,
+  async ready(page) {
+    // expressive() has named each chart's marks, so every attachment that takes the keyboard is attached.
+    await expect(page.locator('#waterfall rect.step[role="img"]')).toHaveCount(11);
+    await expect(page.locator('#dumbbell line.connector[role="img"]')).toHaveCount(8);
+    await expect(page.locator('#radar polygon.outline[role="img"]')).toHaveCount(2);
+    await expect(page.locator('#radar circle.value[role="img"]')).toHaveCount(12);
+    await expect(page.locator('#butterfly rect.bar[role="img"]')).toHaveCount(12);
+  }
+};
+
 /** demo/season.html: the three linked charts, the players' bars and the D3 slope chart, after matchweek 24. */
 export const seasonDemo: Demo = {
   path: "/season.html",

@@ -17,6 +17,7 @@
 //
 // With `watch`, the host's own transitions are followed frame by frame (./watch.ts): the marks that
 // changed are read again and the runner hears change(), as on our charts' frames, with no events.
+// The overlay's text is measured again when it changes size, as on our charts, and placed again the same way.
 //
 // A link (../link.ts) hovers marks too, as "linked": the dimming and emphasis with `dim`, and their
 // hover runs, with no focus ring or focus. It hears the attachment's own hovers.
@@ -45,9 +46,11 @@ import { chartMotion } from "../motion";
 import { maskedRing } from "../render/outside";
 import { svgSurface } from "../render/surface";
 import { setAttributes, setStyles, transformAttribute } from "../render/svg";
+import { textMeasure } from "../render/text";
 import { injectStyles } from "../render/theme";
 import { nextEffects } from "../shell/setup";
 import { labelsMoved } from "../shell/transitions";
+import { watchFonts, watchText } from "../shell/watch";
 import type { MarkEvents } from "../types";
 import { baselines, describeRects, isBaseline, union, visualOrder, type RectPart } from "./bars";
 import { hostEdits, type HostEdits } from "./edits";
@@ -507,8 +510,11 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   const ring = maskedRing(overlay);
 
   const find = (key: string): MarkRecord<D> | undefined => records.get(key) ?? leaving.get(key);
+  // The runs' text is measured in the overlay, and again when it changes size: see remeasure().
+  const measure = textMeasure(runs);
   const surface = svgSurface({
     overlay: runs,
+    measure,
     // Looked up on each call, so the handle follows the mark's record.
     mark: (key) => ({
       set: (style) => find(key)?.handle.set(style),
@@ -518,6 +524,19 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   });
   const runner = createRunner<D>({ effects, motion, icons: env.icons, clock, surface });
   const input = (record: MarkRecord<D>): RunInput<D> => ({ mark: record.mark.geometry, data: record.mark.data });
+
+  /**
+   * The text changed size after it was measured, as on our charts: spacing or a font set on the page,
+   * seen by a hidden probe in the root (watchText, from moveTo()), or web fonts loading. Its widths are
+   * measured again, and each live mark's runs follow through change(), with its geometry as last read,
+   * so their text is placed again. No event: the marks didn't change.
+   */
+  function remeasure(): void {
+    measure.clear();
+    for (const record of order) runner.change(record.mark.geometry, record.mark.data);
+  }
+  let unwatchText = (): void => {};
+  const unwatchFonts = watchFonts(doc, remeasure);
 
   function createRecord(mark: ReadMark<D>): MarkRecord<D> {
     const record: MarkRecord<D> = {
@@ -648,10 +667,12 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     if (!isIdentity(m)) overlay.setAttribute("transform", transformAttribute(m));
   }
 
-  /** Listens on a new root <svg> (Plot draws a new one each time) and moves the overlay there. */
+  /** Listens on a new root <svg> (Plot draws a new one each time) and moves the text probe and the overlay there. */
   function moveTo(next: SVGSVGElement): void {
     detach();
     root = next;
+    // The probe goes before the overlay, outside it, so what finds the overlay's text doesn't find it.
+    unwatchText = watchText(root, clock, remeasure);
     root.appendChild(overlay);
     if ((options.keyboard === true || options.markLabel) && root.getAttribute("role") === "img" && !warnedImage) {
       warnedImage = true;
@@ -678,12 +699,13 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     });
   }
 
-  /** Stops listening on the current root. */
+  /** Stops listening on the current root, and takes its text probe out. */
   function detach(): void {
     if (!root) return;
     endHover();
     interaction?.destroy();
     interaction = undefined;
+    unwatchText();
   }
 
   function ownerOf(eventTarget: EventTarget | null): Owner<D> | undefined {
@@ -1125,6 +1147,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       // The runner resets every mark it styled, through the records, so it goes first.
       runner.destroy();
       unsubscribeMotion?.();
+      unwatchFonts();
       keyboard?.destroy();
       detach();
       overlay.remove();

@@ -88,6 +88,11 @@ segmented("metric", (value) => {
   dumbbellEffects.refresh();
   void dumbbell.move({ values: motion.duration(STAGE), positions: motion.duration(STAGE), staged: motion.staged });
 });
+// The transition reads the mode as it starts, so Off, or reduced motion turned on, part way through lands it
+// where it's going at once, as the library's own transitions and effects do.
+motion.subscribe(() => {
+  if (motion.mode === "off") dumbbell.finish();
+});
 
 // ── The page ─────────────────────────────────────────────────────────────────
 

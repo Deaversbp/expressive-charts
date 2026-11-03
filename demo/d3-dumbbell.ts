@@ -61,6 +61,8 @@ export interface DrawnDumbbell {
   set(metric: Metric): void;
   /** Moves the dots, the lines and the rows to where the data puts them; resolves once they're there, or a later move takes over. */
   move(timing: Timing): Promise<void>;
+  /** Lands a move part way through where it's going, at once, and resolves it; does nothing when nothing is moving. */
+  finish(): void;
   /** Draws it again at the parent's width, everything where the data puts it. */
   resize(): void;
 }
@@ -142,6 +144,8 @@ export function drawDumbbell(svgElement: SVGSVGElement, players: readonly Player
   const drawn = new Map<string, Place>();
   /** Bumped by each move, so an earlier one stops. */
   let moves = 0;
+  /** Lands the move in flight, while there is one. */
+  let land: (() => void) | undefined;
 
   /** Where the data puts each row. */
   const targets = (): Map<string, Place> => new Map(rows.map((row, i) => [row.name, { first: x(row.first), second: x(row.second), y: i * ROW + ROW / 2 }]));
@@ -198,6 +202,7 @@ export function drawDumbbell(svgElement: SVGSVGElement, players: readonly Player
       .attr("text-anchor", "end")
       .text((m) => (m === "goals" ? "Goals in each half" : "Assists in each half"));
     moves++;
+    land = undefined;
     place(targets());
   }
 
@@ -216,6 +221,7 @@ export function drawDumbbell(svgElement: SVGSVGElement, players: readonly Player
 
   function move(timing: Timing): Promise<void> {
     const id = ++moves;
+    land = undefined;
     const from = new Map([...drawn].map(([name, p]) => [name, { ...p }]));
     const to = targets();
     const values = Math.max(0, timing.values);
@@ -239,13 +245,23 @@ export function drawDumbbell(svgElement: SVGSVGElement, players: readonly Player
     }
     return new Promise((resolve) => {
       let start: number | undefined;
+      land = () => {
+        // The frame waiting for this move finds it taken over, and stops.
+        moves++;
+        land = undefined;
+        frame(total);
+        resolve();
+      };
       const tick = (time: number): void => {
         if (id !== moves) return resolve();
         start ??= time;
         const elapsed = time - start;
         frame(elapsed);
         if (elapsed < total) requestAnimationFrame(tick);
-        else resolve();
+        else {
+          land = undefined;
+          resolve();
+        }
       };
       requestAnimationFrame(tick);
     });
@@ -267,6 +283,7 @@ export function drawDumbbell(svgElement: SVGSVGElement, players: readonly Player
     },
     set,
     move,
+    finish: () => land?.(),
     resize
   };
 }

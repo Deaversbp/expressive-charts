@@ -514,5 +514,5 @@ A waterfall, a dumbbell, a radar and a butterfly, each drawn with D3 and given i
 | 3.3.2 Labels or instructions | Pass | Every control's text is its label, and the toggle's group has a visible one. |
 | 4.1.2 Name, role, value | Pass | axe; the toggle's buttons are `aria-pressed`. |
 | 4.1.3 Status messages | Not applicable | Nothing is announced: the toggle's pressed button says what the dumbbell shows, and its rows re-sorting isn't status. |
-| Reduced motion | Pass | `charts.spec.ts`: with reduced motion, only end states show at load (the ball on the total, the labels, the halves drawn, the colour past the average), and Replay shows them at once; in Off, Replay, a hover and the toggle show their end states at once. |
+| Reduced motion | Pass | `charts.spec.ts`: with reduced motion, only end states show at load (the ball on the total, the labels, the halves drawn, the colour past the average), and Replay shows them at once; in Off, Replay, a hover and the toggle show their end states at once, and Off picked part way through the toggle lands it at once. |
 | Forced colours | Pass | forced: each legend keeps its colours, the first half's hollow dot its card colour, and the toggle's pressed button shows in the selection colours. axe under forced colours. |

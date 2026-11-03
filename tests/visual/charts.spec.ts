@@ -289,6 +289,19 @@ test.describe("the dumbbell", () => {
     expect([...off].sort((a, b) => a.y - b.y).map((row) => row.name)).toEqual(["Lindqvist", "Reyes", "Tanaka", "Castillo", "Novak", "Adeyemi", "Moreau", "Okafor"]);
   });
 
+  test("picking Off part way through lands the change at once", async ({ page }) => {
+    await openAtRest(page);
+    await metric(page, "Assists").click();
+    // Part way through the values, and the rows not yet moving.
+    await page.clock.runFor(250);
+    await pickMode(page, "Off");
+    const landed = await rows(page);
+    expect([...landed].sort((a, b) => a.y - b.y).map((row) => row.name)).toEqual(["Adeyemi", "Tanaka", "Okafor", "Novak", "Moreau", "Reyes", "Castillo", "Lindqvist"]);
+    for (const row of landed) expect((row.y - 16) % 32, row.name).toBe(0);
+    await page.clock.runFor(REST);
+    expect(await rows(page)).toEqual(landed);
+  });
+
   test("the arrow keys go through the rows top to bottom, and after a re-sort in their new order", async ({ page }) => {
     await openAtRest(page);
     await tabInto(page, svg(page, "dumbbell"));

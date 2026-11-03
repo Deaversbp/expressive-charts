@@ -62,6 +62,22 @@
   /* Legend swatches as short lines, so xG's shows its dash. */
   #season .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
   #season .ec-legend-item[data-series="xg"] .ec-legend-swatch { border-top-style: dashed; }
+  /* The D3 pie's and columns' own styles: they're someone else's charts, so the page styles them, not
+     the library. Each outcome takes its slot in the first switch's palette, in both views, so nothing
+     changes colour as it morphs; the slices' separators are the card's colour. */
+  #d3-shots { min-width: 0; }
+  #d3-shots svg { display: block; max-width: 100%; height: auto; }
+  #d3-shots text { font-size: 12.5px; }
+  #d3-shots .host-label { fill: var(--ink-2); }
+  #d3-shots .host-value { fill: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  #d3-shots .tick { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
+  #d3-shots .grid { stroke: var(--ec-grid, #e1e0d9); }
+  #d3-shots .baseline { stroke: var(--ec-axis, #c3c2b7); }
+  #d3-shots .slice { stroke: var(--surface); stroke-width: 2px; stroke-linejoin: round; }
+  #d3-shots .slice-goal, #d3-shots .column-goal { fill: var(--ec-series-1, #2a78d6); }
+  #d3-shots .slice-saved, #d3-shots .column-saved { fill: var(--ec-series-2, #eb6834); }
+  #d3-shots .slice-off-target, #d3-shots .column-off-target { fill: var(--ec-series-3, #02a471); }
+  #d3-shots .slice-blocked, #d3-shots .column-blocked { fill: var(--ec-series-4, #c28409); }
 </style>
 </head>
 <body>
@@ -162,6 +178,31 @@
     </section>
   </div>
 
+  <div class="pair">
+    <section class="card" aria-labelledby="d3-title">
+      <h2 id="d3-title">The same morph on D3</h2>
+      <p class="note">The shot outcomes again, on a pie drawn with D3's <code>d3.pie()</code> and <code>d3.arc()</code> and on columns drawn with <code>d3-selection</code>. Each is attached with <code>expressive()</code> and made a view with <code>hostView()</code>, so one <code>chartSwitch</code> turns each slice into its column and back, as above, and each slice's outcome and count move to its column's. With a slice or column focused, <kbd>V</kbd> switches too, and focus follows its outcome.</p>
+      <div class="bar">
+        <!-- Its name is the view a click goes to; the switch announces the new view's <svg> name when it lands. -->
+        <button type="button" class="btn" id="d3-toggle">Show as columns</button>
+      </div>
+      <!-- chartSwitch() makes a container for each view here, and the page's D3 code draws in each. -->
+      <div id="d3-shots"></div>
+    </section>
+
+    <section class="card" aria-labelledby="d3-notes-title">
+      <h2 id="d3-notes-title">Someone else's charts in a switch</h2>
+      <ul class="checklist">
+        <li>Each view's function draws its D3 chart in the container the switch gives it, attaches to it with <code>expressive()</code>, and returns <code>hostView()</code> of that. The D3 code knows nothing about the switch.</li>
+        <li>While a switch plays, the D3 marks and the labels the page names are hidden, and they morph and move in the switch's overlay. The columns' axis fades with its view. Once it lands, each chart is as D3 drew it.</li>
+        <li>The page names the labels that move, each outcome and each count, keyed by outcome. Their copies keep the D3 text's font and colour.</li>
+        <li>Each slice morphs in its own colour, which its column has too: the page's CSS gives both the first switch's palette slots, by outcome.</li>
+        <li>With <code>keyboard: true</code>, focus and the tab stop follow the outcome, though nothing new is written into the D3 charts. The switch announces each <code>&lt;svg&gt;</code>'s <code>aria-label</code>.</li>
+        <li>The Morph control above is its own card's, so this switch always uses <code>morph()</code>'s default, Unroll.</li>
+      </ul>
+    </section>
+  </div>
+
   <section class="card" aria-labelledby="try-title">
     <h2 id="try-title">Things to try</h2>
     <ul class="checklist">
@@ -172,6 +213,7 @@
       <li>Pick <b>Columns</b> below, then <b>Per match</b>: the goals points grow into columns and shrink back, while the lines fade. Pick <b>Season to date</b> and watch the gaps at matchweeks 4, 5, 9 and 10.</li>
       <li>Tab into the line chart below, go to a week with the arrow keys, and press <kbd>V</kbd> three times: focus stays on that week through each view.</li>
       <li>Go to a week, Shift+Tab back to the toggles and pick another view, then press Tab: you're on the same week, or its column.</li>
+      <li>Switch the D3 pie and the first donut one after the other: the same morph plays on both. Then Tab into the D3 pie, go to a slice with the arrow keys and press <kbd>V</kbd>: focus follows it into its D3 column.</li>
     </ul>
   </section>
 </main>

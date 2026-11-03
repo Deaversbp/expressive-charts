@@ -75,12 +75,13 @@ export const lineDemo: Demo = {
 
 /**
  * demo/morph.html: the donut and the columns in one chartSwitch, and the bars linked with it; below,
- * a season's goals and xG in a second chartSwitch, as two line charts and as columns.
+ * a season's goals and xG in a second chartSwitch, as two line charts and as columns; and last, a D3
+ * pie and D3 columns in a third, through hostView().
  */
 export const morphDemo: Demo = {
   path: "/morph.html",
-  // About 2,780 px at 1,000 px wide.
-  height: 3000,
+  // About 3,490 px at 1,000 px wide.
+  height: 3800,
   async ready(page) {
     await expect(page.locator('#shots .ec-switch-view[data-view="donut"] .ec-mark')).toHaveCount(4);
     await expect(page.locator('#shots .ec-switch-view[data-view="columns"] .ec-mark')).toHaveCount(4);
@@ -89,6 +90,9 @@ export const morphDemo: Demo = {
     await expect(page.locator('#season .ec-switch-view[data-view="toDate"] .ec-line')).toHaveCount(2);
     // The weeks with goals: the feed missed matchweeks 9 and 10.
     await expect(page.locator('#season .ec-switch-view[data-view="columns"] .ec-mark')).toHaveCount(36);
+    // expressive() has named the D3 pie's slices and the D3 columns, so both views are attached.
+    await expect(page.locator('#d3-shots .ec-switch-view[data-view="pie"] path.slice[role="img"]')).toHaveCount(4);
+    await expect(page.locator('#d3-shots .ec-switch-view[data-view="columns"] rect.column[role="img"]')).toHaveCount(4);
   }
 };
 

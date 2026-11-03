@@ -5,21 +5,29 @@
 // one link() with the switch: hovering a bar hovers its slice or column, and the other way round.
 // Below, the line page's season with missing weeks in a second chartSwitch of three views: goals and xG
 // per match and season to date, each a lineChart, and goals per match as columns keyed as the lines'
-// points, so each point grows into its column.
+// points, so each point grows into its column. Last, the shot outcomes again on a pie and on columns
+// drawn with D3, each attached with expressive() and made a view with hostView(), in a third
+// chartSwitch: the same morph on someone else's charts.
+import { select } from "d3-selection";
 import {
   barChart,
   chartSwitch,
   colorAssignment,
   donutChart,
+  expressive,
+  hostView,
   lineChart,
   link,
   morph,
   motionSwitch,
   type ChartSwitch,
   type ColorAssignment,
+  type HostLabel,
   type Link,
   type MorphAlign
 } from "../src/index";
+import { drawOutcomeColumns } from "./d3-outcome-columns";
+import { drawPie, type Slice } from "./d3-pie";
 
 interface Outcome {
   readonly outcome: string;
@@ -319,6 +327,131 @@ document.querySelector("#season")?.addEventListener("keydown", (event) => {
   event.preventDefault();
   showSeason(seasonOrder[(seasonOrder.indexOf(seasonSwitch.current) + 1) % seasonOrder.length]!);
 });
+
+// ── The same morph on D3 ─────────────────────────────────────────────────────
+
+/** "1 shot", "112 shots". */
+const shotCount = (value: number): string => `${value} ${value === 1 ? "shot" : "shots"}`;
+
+/**
+ * A view's <svg>, in the container the switch gives it: a group, not an image, since screen readers
+ * skip what's inside an image and its marks take focus, named for the switch to announce when it lands.
+ */
+function hostSvg(container: HTMLElement, name: string): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("role", "group");
+  svg.setAttribute("aria-label", name);
+  container.appendChild(svg);
+  return svg;
+}
+
+/**
+ * The labels a D3 chart draws that move with their marks: each outcome's name and its count, keyed
+ * by outcome, read from the chart as it is now. Read as each switch starts, so they follow a redraw.
+ */
+function namedLabels<D>(svg: SVGSVGElement, outcome: (datum: D) => string): HostLabel[] {
+  const labels: HostLabel[] = [];
+  for (const [selector, role] of [["text.host-label", "category"], ["text.host-value", "value"]] as const) {
+    select(svg)
+      .selectAll<SVGTextElement, D>(selector)
+      .each(function (datum) {
+        labels.push({ element: this, key: outcome(datum), role });
+      });
+  }
+  return labels;
+}
+
+/** Each view's redraw at the card's width: its D3 code draws again, and refresh() reads its marks. */
+const d3Redraws: (() => void)[] = [];
+
+/**
+ * The two views, each a D3 chart drawn in its container and attached with expressive(), keyed by
+ * outcome, so each slice pairs with its column. The page's CSS colours both by outcome, in the slots
+ * the first switch gives them, so nothing changes colour as it morphs. Each <svg>'s aria-label is
+ * what the switch announces when it lands there.
+ */
+const d3Views = {
+  pie: (container: HTMLElement) => {
+    const svg = hostSvg(container, "Shot outcomes on a D3 pie, share of total");
+    // Data order from 12 o'clock, as the donut above: d3.pie() would sort largest first.
+    const draw = () => drawPie(svg, outcomes, { sort: "none" }).slices;
+    const effects = expressive(draw(), {
+      key: (d) => d.data.outcome,
+      // What each slice shows, so a redraw at a new width isn't taken for a change.
+      value: (d) => d.value,
+      keyboard: true,
+      // Named as the donut above names its slices: "Saved: 112 shots, 28%".
+      markLabel: (d) => `${d.data.outcome}: ${shotCount(d.value)}, ${Math.round(((d.endAngle - d.startAngle) / (2 * Math.PI)) * 100)}%`,
+      dim: true
+    });
+    d3Redraws.push(() => effects.refresh(draw()));
+    return hostView(effects, { labels: () => namedLabels<Slice>(svg, (d) => d.data.outcome) });
+  },
+  columns: (container: HTMLElement) => {
+    const svg = hostSvg(container, "Shot outcomes on D3 columns, counts");
+    const draw = () => drawOutcomeColumns(svg, outcomes).columns;
+    const effects = expressive(draw(), {
+      key: (d) => d.outcome,
+      value: (d) => d.shots,
+      keyboard: true,
+      // Named as the columns above name theirs: "Saved: 112 shots".
+      markLabel: (d) => `${d.outcome}: ${shotCount(d.shots)}`,
+      dim: true
+    });
+    d3Redraws.push(() => effects.refresh(draw()));
+    return hostView(effects, { labels: () => namedLabels<Outcome>(svg, (d) => d.outcome) });
+  }
+};
+type D3View = keyof typeof d3Views;
+
+// morph()'s default mapping, unroll: the first card's Morph control is that card's own.
+const d3Shots = chartSwitch("#d3-shots", { views: d3Views, initial: "pie", transition: morph(), announce: true });
+
+const d3Toggle = document.querySelector<HTMLButtonElement>("#d3-toggle");
+
+/** The button names the view a click goes to, as the first card's does. */
+function showD3Toggle(): void {
+  if (d3Toggle) d3Toggle.textContent = d3Shots.current === "columns" ? "Show as pie" : "Show as columns";
+}
+
+/** Switches playing: the D3 charts aren't drawn again under one, since the switch has hidden the marks they had. */
+let d3Playing = 0;
+/** A resize came while a switch played, so the charts draw again once it lands. */
+let d3RedrawLater = false;
+
+function redrawD3(): void {
+  if (d3Playing > 0) d3RedrawLater = true;
+  else for (const redraw of d3Redraws) redraw();
+}
+
+/** Switches to the other view. A second switch mid-way goes back from where the shapes are. */
+function toggleD3(): void {
+  const next: D3View = d3Shots.current === "pie" ? "columns" : "pie";
+  d3Playing++;
+  const settled = (): void => {
+    d3Playing--;
+    if (d3Playing === 0 && d3RedrawLater) {
+      d3RedrawLater = false;
+      redrawD3();
+    }
+  };
+  void d3Shots.show(next).then(settled, settled);
+  showD3Toggle();
+}
+d3Toggle?.addEventListener("click", toggleD3);
+
+// With a slice or column focused, V switches too, and focus follows its outcome into the other view,
+// as on the first card. The D3 charts' own classes say which elements are marks.
+document.querySelector("#d3-shots")?.addEventListener("keydown", (event) => {
+  const { key, altKey, ctrlKey, metaKey, target } = event as KeyboardEvent;
+  if ((key !== "v" && key !== "V") || altKey || ctrlKey || metaKey) return;
+  if (!(target instanceof Element) || !target.matches("path.slice, rect.column")) return;
+  event.preventDefault();
+  toggleD3();
+});
+
+// The D3 charts draw at their container's width, so they draw again when it changes.
+window.addEventListener("resize", redrawD3);
 
 // The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.
 motionSwitch("#motion");

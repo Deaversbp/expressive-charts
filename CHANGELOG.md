@@ -25,7 +25,9 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
-## Unreleased
+## 0.9.0 (3 November 2026)
+
+Host charts in a chart switch: `hostView()` makes an `expressive()` or `fromVegaView()` attachment a switch's view, so a D3 pie can morph into D3 columns as our donut morphs into our columns, with the switch's optional `keyOf`, `morphing`, `space` and `cssColor` for it; and `expressive()` measuring its effects' text again when it changes size. Nothing in the effect-author API changes. Every change is outside the promise, and none needs anything written instead.
 
 ### Added
 

@@ -9,7 +9,7 @@
 
 import axe from "axe-core";
 import { expect, test, type Page } from "@playwright/test";
-import { barsDemo, donutDemo, FRAME, hoverShape, lineDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, shapesDemo, stressDemo, tabInto, type Demo } from "./demo";
+import { barsDemo, chartsDemo, donutDemo, FRAME, hoverShape, lineDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, shapesDemo, stressDemo, tabInto, type Demo } from "./demo";
 
 /** axe's rules for WCAG 2.0, 2.1 and 2.2 at levels A and AA. */
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -23,11 +23,17 @@ interface TooltipChart {
   readonly other: string;
 }
 
+/** A chart drawn by other code, through expressive(), which shows no tooltip, and a shape in it to hover. */
+interface HostChart {
+  readonly chart: string;
+  readonly shape: string;
+}
+
 /**
  * Each page, its tab stops in order (a chart's is its first mark, named; a11y-check.md's scripts count
- * on them), and the library's charts on it.
+ * on them), the library's charts on it, and the host charts "contrast on hover" hovers too.
  */
-const demos: { readonly name: string; readonly demo: Demo; readonly stops: readonly string[]; readonly charts: readonly TooltipChart[] }[] = [
+const demos: { readonly name: string; readonly demo: Demo; readonly stops: readonly string[]; readonly charts: readonly TooltipChart[]; readonly hosts?: readonly HostChart[] }[] = [
   {
     name: "bars",
     demo: barsDemo,
@@ -110,6 +116,26 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
     // None: its four charts are attachments, which draw no tooltip, so the tooltip checks below have
     // nothing to check there. shapes.spec.ts checks their hover and focus.
     charts: []
+  },
+  {
+    name: "charts",
+    demo: chartsDemo,
+    stops: [
+      ...MOTION,
+      ...["Replay the waterfall", "August: −1, −1 so far"],
+      ...["Goals", "Assists", "Lindqvist: 3 goals in the first half, 7 in the second, up 4"],
+      ...["Okafor: above the league average in goals, shots and dribbles", "Okafor, goals: 0.50 per 90, 96th percentile", "League average, goals: 0.18 per 90, 63rd percentile"],
+      ...["Replay the butterfly", "0–15 minutes: 6 conceded", "0–15 minutes: 7 scored"]
+    ],
+    // None: its four charts are attachments, which draw no tooltip. Their hovers dim marks, so
+    // "contrast on hover" hovers one in each; charts.spec.ts checks the rest.
+    charts: [],
+    hosts: [
+      { chart: "#waterfall", shape: "rect.step-fall >> nth=1" },
+      { chart: "#dumbbell", shape: "circle.dot-second >> nth=7" },
+      { chart: "#radar", shape: "circle.value-player >> nth=2" },
+      { chart: "#butterfly", shape: "rect.bar-conceded >> nth=4" }
+    ]
   },
   {
     name: "stress",
@@ -296,11 +322,14 @@ async function focusStop(page: Page, fresh = false): Promise<{ readonly name: st
     const again = pass.visited.has(element);
     pass.visited.add(element);
     const name = (element.getAttribute("aria-label") ?? element.textContent ?? "").trim().replace(/\s+/g, " ");
-    // A chart's mark shows the ring the chart draws; everything else, its outline.
+    // A chart's mark shows the ring the chart draws: one of the rings in its <svg>, since attachments
+    // on one <svg> each have their own. A ring round a straight line has a box with no width, or no
+    // height. Everything else, its outline.
     const svg = element.closest("svg");
     if (svg && element !== svg) {
-      const ring = svg.querySelector(".ec-focus-ring");
-      return { name, again, visible: ring !== null && getComputedStyle(ring).visibility === "visible" && ring.getBoundingClientRect().width > 0 };
+      const rings = [...svg.querySelectorAll(".ec-focus-ring")];
+      const drawn = (box: DOMRect): boolean => box.width > 0 || box.height > 0;
+      return { name, again, visible: rings.some((ring) => getComputedStyle(ring).visibility === "visible" && drawn(ring.getBoundingClientRect())) };
     }
     const style = getComputedStyle(element);
     return { name, again, visible: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0 };
@@ -611,13 +640,13 @@ async function pathOntoTooltip(
 test.describe("contrast on hover", () => {
   // WCAG 1.4.3 while a mark is hovered, which axe never sees: the other marks dim, and every text in
   // the chart keeps 4.5:1 against the card behind it. A text's colour is its fill at the opacity it's
-  // drawn with (its own and every ancestor's), over that card.
-  for (const { name, demo, charts } of withTooltips) {
+  // drawn with (its own and every ancestor's), over that card. Host charts dim their marks too.
+  for (const { name, demo, charts, hosts = [] } of demos.filter(({ charts, hosts }) => charts.length > 0 || hosts)) {
     for (const colorScheme of ["light", "dark"] as const) {
       test(`${name}.html, ${colorScheme}: every label keeps 4.5:1 while another mark is hovered`, async ({ page }) => {
         await page.emulateMedia({ colorScheme });
         await openAtRest(page, demo);
-        for (const { chart, shape } of charts) {
+        for (const { chart, shape } of [...charts, ...hosts]) {
           await hoverShape(page, page.locator(`${chart} ${shape}`));
           await page.clock.runFor(REST);
           const { dimmed, texts } = await page.evaluate((selector) => {
@@ -646,7 +675,8 @@ test.describe("contrast on hover", () => {
               }
             }
             const hovering = root.querySelector(".ec-chart.ec-hovering");
-            const parts = hovering ? [...hovering.querySelectorAll(".ec-mark:not(.ec-hot) > .ec-body > *")] : [];
+            // A host chart's dimmed marks are its own elements.
+            const parts = hovering ? [...hovering.querySelectorAll(".ec-mark:not(.ec-hot) > .ec-body > *")] : [...root.querySelectorAll(".ec-attached.ec-dimmed")];
             return {
               dimmed: parts.length > 0 && parts.every((part) => opacity(part) < 0.5),
               texts: [...root.querySelectorAll("svg text")]
@@ -662,7 +692,7 @@ test.describe("contrast on hover", () => {
             };
           }, chart);
           // The line chart doesn't dim; the others do, or this checks nothing.
-          if ((await page.locator(`${chart} .ec-mark`).count()) > 0) expect(dimmed, `${chart}: the other marks dimmed`).toBe(true);
+          if ((await page.locator(`${chart} .ec-mark`).count()) > 0 || hosts.some((host) => host.chart === chart)) expect(dimmed, `${chart}: the other marks dimmed`).toBe(true);
           expect(texts.length, `${chart}: text to check`).toBeGreaterThan(0);
           expect(texts.filter(({ ratio }) => ratio < 4.5), `${chart}: text under 4.5:1`).toEqual([]);
           await page.mouse.move(2, 2);

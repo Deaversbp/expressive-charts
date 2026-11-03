@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four charts drawn with D3 · expressive-charts</title>
+<style>
+  /* Page chrome only, as on shapes.html. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d67;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6; --link: #226dc7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5; --link: #3987e5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+  /* Two charts side by side where there's room. Each card's title, note, controls and chart share rows
+     with the other's, so the charts start at the same height. */
+  .pair { display: grid; gap: 20px; min-width: 0; }
+  @media (min-width: 860px) {
+    .pair { grid-template-columns: 1fr 1fr; }
+    .pair.charts > .card { grid-row: span 4; grid-template-rows: subgrid; }
+  }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 20px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
+  .note { font-size: 14px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: 32px; }
+  /* The radar has no controls: its empty row keeps it level with the butterfly beside it, and goes in one column. */
+  @media (max-width: 859px) { .bar:empty { display: none; } }
+  .label { font-size: 13px; color: var(--muted); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
+  .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+  /* Forced colours drop the wash, which leaves only the weight: the pressed button takes the viewer's selection colours, as the motion switch does. */
+  @media (forced-colors: active) { .seg button[aria-pressed="true"] { background: Highlight; color: HighlightText; } }
+  .seg button:hover { background: var(--wash); }
+  .replay { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); border: 1px solid var(--ring); background: var(--surface); padding: 5px 12px; border-radius: 8px; cursor: pointer; }
+  .replay:hover { background: var(--wash); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+  .box { min-width: 0; }
+  .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  a { color: var(--link); }
+  /* The motion switch sits on the page, darker than the charts' surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
+  #motion { --ec-text-muted: var(--muted); }
+  /* The charts' own styles: they're someone else's charts, so the page styles them, not the library.
+     Their marks take the library's palette slots, and their axes its grid and text tokens. */
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  /* Under forced colours (Windows contrast themes), keep the swatches' colours, as the library's legend does: the marks keep theirs. */
+  .legend i { flex: none; width: 12px; height: 12px; border-radius: 3px; forced-color-adjust: none; }
+  .legend .swatch-rise { background: var(--ec-series-1, #2a78d6); }
+  .legend .swatch-fall { background: var(--ec-negative, #d03b3b); }
+  .legend .swatch-total { background: var(--ec-text-muted, #75736d); }
+  /* The first half's dot is hollow: the card's colour inside a ring, drawn inset so it's the same size as the filled one. */
+  .legend .swatch-first { border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 2px var(--ec-text-muted, #75736d); }
+  .legend .swatch-second { border-radius: 50%; background: var(--ec-text-muted, #75736d); }
+  .legend .swatch-player { width: 16px; height: 0; border-radius: 0; border-top: 3px solid var(--ec-series-1, #2a78d6); }
+  .legend .swatch-average { width: 16px; height: 0; border-radius: 0; border-top: 3px dashed var(--ec-text-muted, #75736d); }
+  .legend .swatch-above { width: 16px; height: 0; border-radius: 0; border-top: 3px solid var(--ec-series-2, #eb6834); }
+  .legend .swatch-conceded { background: var(--ec-series-2, #eb6834); }
+  .legend .swatch-scored { background: var(--ec-series-1, #2a78d6); }
+  .chart { display: block; max-width: 100%; height: auto; overflow: visible; }
+  .chart .tick, .chart .axis-title { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
+  .chart .grid { stroke: var(--ec-grid, #e1e0d9); }
+  .chart .baseline { stroke: var(--ec-axis, #c3c2b7); }
+  /* The waterfall: rises in the first series colour, falls in the negative one, the total in grey. */
+  #waterfall .step-rise { fill: var(--ec-series-1, #2a78d6); }
+  #waterfall .step-fall { fill: var(--ec-negative, #d03b3b); }
+  #waterfall .step-total { fill: var(--ec-text-muted, #75736d); }
+  #waterfall .connector { stroke: var(--ec-text-muted, #75736d); stroke-width: 1.25px; }
+  /* The dumbbell: each row in the colour of its change, the first half hollow and the second filled. */
+  #dumbbell .name { font-size: 12.5px; fill: var(--ink-2); }
+  #dumbbell .connector { stroke-width: 3px; stroke-linecap: round; }
+  #dumbbell .dot { stroke-width: 2px; }
+  #dumbbell .rise .connector, #dumbbell .rise .dot { stroke: var(--ec-series-1, #2a78d6); }
+  #dumbbell .fall .connector, #dumbbell .fall .dot { stroke: var(--ec-negative, #d03b3b); }
+  /* The first half's dot is hollow, with no fill, so a hover's strong colour goes to its ring; the pointer still finds its middle. */
+  #dumbbell .dot-first { fill: none; pointer-events: all; }
+  #dumbbell .rise .dot-second { fill: var(--ec-series-1, #2a78d6); }
+  #dumbbell .fall .dot-second { fill: var(--ec-negative, #d03b3b); }
+  /* The radar: the rings and spokes are its axes; the player in the first colour over the dashed average. */
+  #radar .ring { fill: none; stroke: var(--ec-grid, #e1e0d9); }
+  #radar .spoke { stroke: var(--ec-grid, #e1e0d9); }
+  #radar .axis-name { font-size: 12.5px; fill: var(--ink-2); }
+  /* A halo in the card's colour, so the outlines crossing the rings' values don't cut them. */
+  #radar .ring-value { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  #radar .outline { stroke-linejoin: round; }
+  #radar .outline-player { fill: color-mix(in srgb, var(--ec-series-1, #2a78d6) 14%, transparent); stroke: var(--ec-series-1, #2a78d6); }
+  #radar .outline-average { fill: none; stroke: var(--ec-text-muted, #75736d); stroke-dasharray: 5 4; }
+  #radar .value-player { fill: var(--ec-series-1, #2a78d6); }
+  #radar .value-average { fill: var(--ec-text-muted, #75736d); }
+  /* The butterfly: conceded and scored in the first two series colours, the counts and bands in text colours. */
+  #butterfly .bar-conceded { fill: var(--ec-series-2, #eb6834); }
+  #butterfly .bar-scored { fill: var(--ec-series-1, #2a78d6); }
+  #butterfly .band, #butterfly .count { font-size: 12.5px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+  #butterfly .heading, #butterfly .minutes { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Four charts drawn with D3 · expressive()</p>
+    <h1>A waterfall, a dumbbell, a radar and a butterfly</h1>
+    <p class="lede">Four charts from the ideas doc, each drawn with D3 by code that knows nothing about expressive-charts, and given its effects through <code>expressive()</code>. Where a chart's marks aren't what the adapter reads from their tags, the page describes them with <code>describe</code>: the waterfall's floating steps, and the radar's outlines and values. The waterfall and the butterfly play at load; the dumbbell and the radar play when you hover or Tab into them.</p>
+  </header>
+
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
+
+  <div class="pair charts">
+    <section class="card" aria-labelledby="waterfall-title">
+      <h2 id="waterfall-title">Goal difference, on a D3 waterfall</h2>
+      <p class="note">Harbor City's goal difference month by month, and the season's total. Each step is a <code>&lt;rect&gt;</code> described with <code>describe.bar</code> and its own baseline, and keeps its signed value (<code>label</code>). At load the connectors draw in (<code>drawIn</code>) and a ball travels down the staircase to rest on the total. Press Replay to see it again, or Tab to the steps.</p>
+      <div class="bar">
+        <button type="button" class="replay" id="waterfall-replay" aria-label="Replay the waterfall">Replay</button>
+      </div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-rise"></i>Better month</span><span><i class="swatch-fall"></i>Worse month</span><span><i class="swatch-total"></i>Season total</span></div>
+        <!-- A group, not an image: screen readers skip what's inside an image, and its steps take focus. -->
+        <svg id="waterfall" class="chart" role="group" aria-label="Goal difference by month on a D3 waterfall"></svg>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="dumbbell-title">
+      <h2 id="dumbbell-title">First half against second, on a D3 dumbbell</h2>
+      <p class="note">Each player's goals before and after the turn of the year: a <code>&lt;line&gt;</code> from a hollow dot to a filled one, sorted by the change. Hover a dot or a line, or Tab to them: an arrow travels from the first half to the second, so the way it goes is the change. Switch to Assists to see the dots move, then the rows re-sort.</p>
+      <div class="bar">
+        <span class="label" id="metric-label">Show</span>
+        <div class="seg" id="metric" role="group" aria-labelledby="metric-label">
+          <button type="button" data-value="goals" aria-pressed="true">Goals</button>
+          <button type="button" data-value="assists" aria-pressed="false">Assists</button>
+        </div>
+      </div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-first"></i>First half</span><span><i class="swatch-second"></i>Second half</span><span><i class="swatch-rise"></i>Up</span><span><i class="swatch-fall"></i>Down</span></div>
+        <!-- A group, not an image, as the waterfall is. -->
+        <svg id="dumbbell" class="chart" role="group" aria-label="Each player's first half against their second on a D3 dumbbell"></svg>
+      </div>
+    </section>
+  </div>
+
+  <div class="pair charts">
+    <section class="card" aria-labelledby="radar-title">
+      <h2 id="radar-title">Okafor against the league, on a D3 radar</h2>
+      <p class="note">Six numbers per 90 minutes, each a percentile of the league's outfield players. The outlines are <code>&lt;polygon&gt;</code>s described as lines, so the player's is coloured where it's past the league average (<code>threshold</code>). Hover a value, or Tab to the values: a dot travels out its spoke, and the same axis lights on the other shape.</p>
+      <div class="bar"></div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-player"></i>Okafor</span><span><i class="swatch-average"></i>League average</span><span><i class="swatch-above"></i>Above the average</span></div>
+        <!-- A group, not an image, as the waterfall is. -->
+        <svg id="radar" class="chart" role="group" aria-label="Okafor against the league average per 90 minutes on a D3 radar"></svg>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="butterfly-title">
+      <h2 id="butterfly-title">When goals come, on a D3 butterfly</h2>
+      <p class="note">The season's goals in each 15 minutes of a match, conceded on the left and scored on the right. Each half is an attachment of its own on one <code>&lt;svg&gt;</code>, so each grows out from the middle at load (<code>drawIn</code>), and the two are linked, so hovering a bar lights its mirror. Press Replay to see them grow again.</p>
+      <div class="bar">
+        <button type="button" class="replay" id="butterfly-replay" aria-label="Replay the butterfly">Replay</button>
+      </div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-conceded"></i>Conceded</span><span><i class="swatch-scored"></i>Scored</span></div>
+        <!-- A group, not an image, as the waterfall is. -->
+        <svg id="butterfly" class="chart" role="group" aria-label="Goals conceded and scored by 15-minute band on a D3 butterfly"></svg>
+      </div>
+    </section>
+  </div>
+
+  <div class="pair">
+    <section class="card" aria-labelledby="notes-title">
+      <h2 id="notes-title">Design notes</h2>
+      <ul class="checklist">
+        <li>Each chart is drawn by a module that knows nothing about expressive-charts, as a D3 author's would be. What the adapter can't read from an element's tag, the page describes, so the effects stay blind to the kind of chart they're on.</li>
+        <li>A waterfall's steps float: no edge is shared by every step, so the page gives each its own baseline with <code>describe.bar</code>, up from its bottom for a rise and down from its top for a fall.</li>
+        <li>The staircase is a path of its own, with no keyboard or names: the steps' names already say each month and the running total. The ball rests on the total, the total's label above it.</li>
+        <li>A closed shape has no direction, so the radar's outlines are described as lines from the first corner round to the first again. Their samples are each outline's distance from the centre on shared rays, so the colour ends where the outlines cross.</li>
+        <li>A link lights the marks in its other attachments, so the dumbbell's lines and each half's dots are three attachments linked by player: any part of a row lights the whole row. Only the lines take the keyboard, each naming both halves, so a row is read once.</li>
+        <li>The dumbbell's change is staged as a bar chart's is: the values first, then the rows, in Presentation; both at once in Analysis; at once in Off. Its own transition reads the motion mode, and <code>watch</code> keeps the effects on the marks as they move.</li>
+        <li>A linked hover lights the other marks and shows nothing else: no tooltip, and nothing announced.</li>
+      </ul>
+    </section>
+
+    <section class="card" aria-labelledby="try-title">
+      <h2 id="try-title">Things to try</h2>
+      <ul class="checklist">
+        <li>Press the waterfall's Replay: the connectors draw in and the ball travels down the staircase to rest on the total.</li>
+        <li>Hover Okafor's line on the dumbbell: the arrow goes left, since he scored fewer in the second half. Then switch to Assists while hovering.</li>
+        <li>Pick Analysis, then switch the dumbbell back to Goals: the dots and the rows move together, in a fifth of a second.</li>
+        <li>Hover a value on the radar, or Tab to it and use the arrow keys: a dot travels out its spoke, and the league average lights on the same axis.</li>
+        <li>Turn on reduced motion and reload: the ball is on the total at once, the labels are in place, and the halves are drawn.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+<script type="module" src="./charts.ts"></script>
+</body>
+</html>

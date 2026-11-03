@@ -25,6 +25,15 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`hostView()`**, with `HostView`, `HostViewOptions` and `HostLabel`: an attachment that `expressive()` or `fromVegaView()` returned, as a view for `chartSwitch`, so a switch takes host charts. A D3 pie morphs into D3 columns as our donut morphs into our columns, and a host chart and one of ours can share a switch. While a switch plays, the host's mark elements and the labels the page names (`labels`: each `<text>` with its mark's key and role) are hidden inline, through the attachment's own edits, and they're as the host had them once it lands. The labels move and swap their text, in the host text's computed font and fill, at the size the host draws them, and the host's axes and other text fade with its view. Each mark morphs in the host's own colour, its fill or its stroke on a line, a pair in the new view's. With `keyboard: true` on the attachment, focus and the tab stop follow by key, and nothing new is written into the host's DOM. `announce` says the host `<svg>`'s `aria-label`. The view is the attachment's own handle too, so `chart(view)` gives `refresh()` and `update({ on })`, and it's linkable. Anything but an attachment with marks throws a `TypeError`.
+- **`keyOf(element)`, `morphing(on)` and `space` on `ChartSwitchView`, and `cssColor` on `ChartSwitchPaint`,** all optional: a mark's key from its elements, which the switch asks first when it remembers focus; the view hiding its own marks while a switch plays; the element whose space its marks and labels are in; and a mark's own colour, drawn in place of its name's slot. A host view has them. A view without them switches as before, byte for byte.
+
+### Fixed
+
 ## 0.8.0 (2 November 2026)
 
 Time zones by name on a line chart's date axis, and a word for a missing value; charts that measure their text again when it changes size, so spacing a viewer adds after load lays them out again; every bar recoloured at once on `update({ colors })`, and a line chart's decorations drawn below its points; a bar chart's labels fading as they thin, and its bars taking the room of the value labels it hides; and `link()` linking an x with every value missing. Nothing in the effect-author API changes. Every change is outside the promise, and none needs anything written instead.

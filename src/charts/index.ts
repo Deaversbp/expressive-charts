@@ -8,9 +8,13 @@ export type { ChartEnv } from "./shell/setup";
 export {
   expressive,
   fromVegaView,
+  hostView,
   type Attachment,
   type ExpressiveOptions,
+  type HostLabel,
   type HostMark,
+  type HostView,
+  type HostViewOptions,
   type MarkSource,
   type VegaAttachment,
   type VegaItem,

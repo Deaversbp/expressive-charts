@@ -112,7 +112,27 @@ export function hostColors(element: Element, root: Element): HostColors | undefi
   const paint = fill === NONE ? "stroke" : "fill";
   const color = paint === "fill" ? fill : paintOf(element, root, "stroke");
   if (color === undefined || color === NONE) return undefined;
-  return { color, strong: `color-mix(in oklab, ${color}, ${cssColor("text")} ${STRONG})`, paint };
+  return { ...strongColors(color), paint };
+}
+
+/** A host's colour with its strong colour, as hostColors() gives them: what a chart switch draws a host view's mark in. */
+export function strongColors(color: string): SeriesColors {
+  return { color, strong: `color-mix(in oklab, ${color}, ${cssColor("text")} ${STRONG})` };
+}
+
+/**
+ * A style property as the browser draws the element: its computed value. jsdom computes no
+ * presentation attributes, so there the nearest value declared on the element or above it, an
+ * inline style or an attribute, comes before the computed one, as for colours.
+ */
+export function drawnStyle(element: Element, root: Element, property: string): string {
+  const computed = element.ownerDocument.defaultView?.getComputedStyle?.(element).getPropertyValue(property).trim() ?? "";
+  if (attributesComputed(root)) return computed;
+  for (let node: Element | null = element; node; node = node === root ? null : node.parentElement) {
+    const value = (node as SVGElement).style?.getPropertyValue(property) || node.getAttribute(property);
+    if (value) return value.trim();
+  }
+  return computed;
 }
 
 /** How far a host's colour steps toward the text colour for its strong colour. */

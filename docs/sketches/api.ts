@@ -64,7 +64,8 @@ import type { ChartOptions as BuiltChartOptions } from "../../src/index";
 
 // The sketch's MarkSourceHandle, what reference charts and adapters have in common, went with its
 // chartSwitch declaration: the built chartSwitch types its views by what it uses (ChartSwitchView:
-// element, marks(), labels(), focus(key) and destroy()), so adapters can join later (M5 decision 4).
+// element, marks(), labels(), focus(key) and destroy()), so adapters can join later (M5 decision 4),
+// as they do through hostView() since M14 step 1.
 
 // ── Geometry builders: public, shared by reference charts and adapters ───────
 
@@ -137,6 +138,11 @@ export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 // NEW in M12 step 1: ChartSwitchPaint has optional end and ring (a line's end dot and a point's ring,
 // which the switch draws), and ChartSwitchView optional moveTabStop(key), so Tab after a toggle lands
 // on the same week.
+// NEW in M14 step 1: hostView(attachment, { labels }) makes an attachment from expressive() or
+// fromVegaView() a view (HostView, with HostViewOptions and HostLabel), so a D3 pie morphs into D3
+// columns. For it, ChartSwitchView has optional keyOf(element), morphing(on) and space (the element
+// whose space its marks are in), and ChartSwitchPaint optional cssColor, a mark's own colour. The
+// Attachment type doesn't change (M14 decisions 5, 14 and 15).
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 

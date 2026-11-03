@@ -2202,7 +2202,7 @@ interface ColorAssignment {
 chartSwitch<T extends ChartSwitchViews>(target: string | Element, options: ChartSwitchOptions<T>): ChartSwitch<T>
 ```
 
-Views of the same data in one place, one shown at a time, which turns each mark into the mark with its key in the next view: a donut turning into columns, or a line chart's points into columns keyed as they are ([architecture.md](architecture.md#switching-between-charts)). Each view is a function that draws its chart in the container it's given. Each mark is drawn in its view's colour, a line with its end dot and a point with its ring. Labels move with their shapes and swap their text half way, a key in only one view fades, and the old view's axes, legend and table fade out as the new one's fade in. Only the view shown can be seen, reached or read; focus on a mark moves to its key in the new view, and focus on a line chart's x to its first series' point there. With focus outside the switch, on a toggle, the new view's tab stop moves to the same key, so Tab lands there. A switch back mid-way reverses from where the shapes are. A switch takes 950 ms in Presentation and 200 ms in Analysis, and jumps with motion off. Options that aren't a switch's throw a `TypeError`. Returns [`ChartSwitch<T>`](#chartswitcht).
+Views of the same data in one place, one shown at a time, which turns each mark into the mark with its key in the next view: a donut turning into columns, or a line chart's points into columns keyed as they are ([architecture.md](architecture.md#switching-between-charts)). Each view is a function that draws its chart in the container it's given: one of ours, or a host chart through [`hostView()`](#hostview). Each mark is drawn in its view's colour, a line with its end dot and a point with its ring. Labels move with their shapes and swap their text half way, a key in only one view fades, and the old view's axes, legend and table fade out as the new one's fade in. Only the view shown can be seen, reached or read; focus on a mark moves to its key in the new view, and focus on a line chart's x to its first series' point there. With focus outside the switch, on a toggle, the new view's tab stop moves to the same key, so Tab lands there. A switch back mid-way reverses from where the shapes are. A switch takes 950 ms in Presentation and 200 ms in Analysis, and jumps with motion off. Options that aren't a switch's throw a `TypeError`. Returns [`ChartSwitch<T>`](#chartswitcht).
 
 ```ts
 import { barChart, chartSwitch, donutChart, link } from "expressive-charts";
@@ -2260,7 +2260,7 @@ A switch can be in a [link](#link): its view on show hovers with the other sourc
 interface ChartSwitchOptions<T extends ChartSwitchViews>
 ```
 
-- `views`: `T`, required. The views by name, each drawn once, when the switch is made: a bar chart, a donut or a line chart, or anything else that's a [`ChartSwitchView`](#chartswitchview).
+- `views`: `T`, required. The views by name, each drawn once, when the switch is made: a bar chart, a donut or a line chart, a [host view](#hostview), or anything else that's a [`ChartSwitchView`](#chartswitchview).
 - `initial`: a view's name, required. The view shown first.
 - `transition`: `TransitionEffect`. Plays each pair of marks with the same key. Default [`morph()`](#morph). The switch draws the labels and fades on morph's schedule, so one with other timing still plays, but its shapes drift from the labels.
 - `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots by key, given to every view's function. Default: a new assignment.
@@ -2271,6 +2271,7 @@ interface ChartSwitchOptions<T extends ChartSwitchViews>
 ```ts
 interface ChartSwitchPaint {
   readonly color: string;
+  readonly cssColor?: string;
   readonly drawn: boolean;
   readonly end?: number;
   readonly ring?: number;
@@ -2280,6 +2281,7 @@ interface ChartSwitchPaint {
 How a view's chart paints one of its marks, as its `paintOf(key)` gives it.
 
 - `color`: the name its colour comes from in the switch's assignment, as `colors.slot(color)`. A bar's is its key with `colorBy: "category"`, and otherwise its first part's series; a slice's is its key; a line's and its points' are their series.
+- `cssColor`: optional. The colour itself, any CSS colour, drawn in place of `color`'s slot, with a strong colour stepped 25% toward the text colour, as `expressive()` makes a host colour's. A [host view's](#hostview) is the host's own.
 - `drawn`: whether the chart draws it at rest. A line chart's points aren't, but for a value alone between gaps. A mark that isn't has no end dot or ring.
 - `end`: optional. The radius of the dot the chart draws at the end of the mark's walk, in its `<svg>`'s units: 4.5 for a line chart's line, unless it has no values. The switch draws it there, filled in the mark's colour. Between two lines that both have one, it moves straight from one end to the other as the shapes move, its radius mixed; a dot whose partner has none fades where it stands, and a line with no partner fades with its dot. Unset: no dot.
 - `ring`: optional. The width of the ring in `--ec-surface` the chart draws round the mark's filled shape at rest, or round its end dot when it has `end`: 2 round a line chart's end dot and a point drawn at rest. In a pair, the ring's width is mixed from one side's to the other's, 0 for a side without one, so a value alone between gaps keeps its ring into another line chart and loses it as it grows into its column. Unset: none.
@@ -2299,14 +2301,20 @@ interface ChartSwitchView {
   paintOf?(key: string): ChartSwitchPaint | undefined;
   standsFor?(key: string): readonly string[];
   moveTabStop?(key: string): boolean;
+  keyOf?(element: Element): string | undefined;
+  morphing?(on: boolean): void;
+  readonly space?: Element;
 }
 ```
 
-What a switch uses of each view's chart. The bar, donut and line charts' handles have all of it: a line chart's has `standsFor`, the others don't need it. A view's function that returns something without the six methods that aren't optional throws. They also have `on()`, which the switch's `on()` hears, and a hover a [link](#link) can drive: a view without them isn't heard or linked.
+What a switch uses of each view's chart. The bar, donut and line charts' handles have all of it but `keyOf`, `morphing` and `space`: a line chart's has `standsFor`, the others don't need it. A [host view](#hostview) has all of it but `standsFor`. A view's function that returns something without the six methods that aren't optional throws. They also have `on()`, which the switch's `on()` hears, and a hover a [link](#link) can drive: a view without them isn't heard or linked.
 
 - `paintOf(key)`: optional. How the chart paints the mark `key` ([`ChartSwitchPaint`](#chartswitchpaint)). The switch draws each pair in its new view's colour, and each mark that fades in its own view's. A mark that isn't drawn at rest starts or ends as a dot of no size at its centre, so a column grows out of its point, and a pair that neither view draws isn't played. Without it, or for a key it doesn't know, the mark is drawn in its key's colour, drawn at rest.
 - `standsFor(key)`: optional. The keys the focus stop `key` stands for, in the order the next view's `focus(key)` is tried with them. A line chart's x stands for each series' point key there, in series order, then itself; anything else stands for its own key. Focus lands on the first the next view takes, or else on its first mark.
 - `moveTabStop(key)`: optional. Moves the chart's tab stop to the stop `focus(key)` would focus, without focus, so no ring shows and nothing hovers: Tab lands there next. Returns whether it did: not for a key the chart doesn't take, or while one of its marks has focus. When focus isn't in the old view as a switch starts (it's on a toggle, say), the switch reads that view's tab stop and the keys it stands for, and on landing moves the new view's tab stop to the first of them it takes, so Tab from the toggle lands on the same week. A line chart's takes an x's key or a point's, as its `focus(key)` does. Without it, or when the new view takes none of the keys, a view keeps its own tab stop.
+- `keyOf(element)`: optional. The key of the mark an element is part of. The switch asks it first when it reads which mark had focus, or the tab stop, and then the element's closest `[data-key]`, which a host's marks don't have. Without it, the switch reads `[data-key]` alone.
+- `morphing(on)`: optional. Hides (`true`) or shows again (`false`) the marks and labels the switch draws in its overlay: called as a switch starts, just before `element` takes `ec-morphing`, and as it lands, after `element` loses it, or when the switch is destroyed mid-way. A switch back mid-way doesn't call it. Without it, the stylesheet hides the marks of an `element` with `ec-morphing`, as on our charts.
+- `space`: optional. The element whose user space `marks()` and `labels()` are in, when it isn't `element`'s: a host view's marks' common ancestor. Read as each switch starts. Its labels' text is sized in it too, so the switch scales each copy into its overlay as it maps the marks, about the copy's place. A view without it keeps its copies at the stylesheet's sizes, as our charts' are.
 
 #### `ChartSwitchViewFactory`
 
@@ -2342,7 +2350,7 @@ The same effects on SVG charts drawn by other code: D3, Observable Plot, a hand-
 expressive<D = unknown>(target: MarkSource<D>, options: ExpressiveOptions<D>): Attachment<D>
 ```
 
-Attaches effects to SVG marks drawn by other code. `target` is a selector, an element, a list of elements or a D3 selection, whose data types the callbacks ([`MarkSource`](#marksourced)). `<rect>`s are read as bars, stacks included, `<circle>`s as points, a `<path>` that draws a ring's slice as that slice, with [`describe.arc`](#arcspec), and other `<path>`s, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements, and `<rect>`s turned or skewed, as shapes, from their own path data with [`describe.shape`](#shapespec), each through its transforms. Anything else takes a `geometry` built with [`describe`](#describe), which wins over all of them. Call `refresh()` after the host redraws, which fires `enter`, `update` and `exit` by key, or pass `watch: true` to follow the host's own transitions frame by frame. Marks it can't read, bad samples and missing series throw before anything changes. Options: [`ExpressiveOptions<D>`](#expressiveoptionsd). Returns [`Attachment<D>`](#attachmentd).
+Attaches effects to SVG marks drawn by other code. `target` is a selector, an element, a list of elements or a D3 selection, whose data types the callbacks ([`MarkSource`](#marksourced)). `<rect>`s are read as bars, stacks included, `<circle>`s as points, a `<path>` that draws a ring's slice as that slice, with [`describe.arc`](#arcspec), and other `<path>`s, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements, and `<rect>`s turned or skewed, as shapes, from their own path data with [`describe.shape`](#shapespec), each through its transforms. Anything else takes a `geometry` built with [`describe`](#describe), which wins over all of them. Call `refresh()` after the host redraws, which fires `enter`, `update` and `exit` by key, or pass `watch: true` to follow the host's own transitions frame by frame. Its effects' text is placed again when it changes size after it draws, such as spacing a viewer's stylesheet adds, or once web fonts load, with no event. Marks it can't read, bad samples and missing series throw before anything changes. Options: [`ExpressiveOptions<D>`](#expressiveoptionsd). Returns [`Attachment<D>`](#attachmentd).
 
 D3 stacked bars, a D3 pie and a D3 line:
 
@@ -2565,6 +2573,81 @@ type VegaSample = number | { readonly value: number; readonly at?: string | numb
 ```
 
 A value for data effects, alone or with where it is along x (`at`), which `threshold` matches series by.
+
+#### `hostView()`
+
+```ts
+hostView<D>(attachment: Attachment<D>, options?: HostViewOptions): HostView<D>
+```
+
+Makes an attachment that `expressive()` or `fromVegaView()` returned a view for a [`chartSwitch`](#chartswitch), so a switch takes host charts: a D3 pie morphs into D3 columns as our donut morphs into our columns, and a host chart and one of ours can share a switch ([architecture.md](architecture.md#switching-between-charts)). A view's function draws the host chart in the container it's given, attaches to it and returns `hostView(attachment)`. While a switch plays, the host's mark elements and the labels it's given are hidden inline, and they move and swap in the switch's overlay; its axes and other text fade with the view, as our charts' do. Each mark morphs in the host's own colour, its fill or its stroke on a line, a pair in the new view's. With `keyboard: true` on the attachment, focus and the tab stop follow by key, as between our charts; nothing new is written into the host's DOM. The switch's `announce` says the host `<svg>`'s `aria-label`, so give it one. Throws a `TypeError` on anything else, and on an attachment with no marks yet, which has no `<svg>`. Options: [`HostViewOptions`](#hostviewoptions). Returns [`HostView<D>`](#hostviewd).
+
+```ts
+import { chartSwitch, expressive, hostView } from "expressive-charts";
+
+// The page's own D3 code: each draws its chart in the element it's given, its <svg> role="group" with an
+// aria-label, and returns its marks and the <text>s that name them, in the marks' order.
+declare function drawPie(el: HTMLElement, rows: Outcome[]): { slices: D3Selection<SVGPathElement, Slice>; names: SVGTextElement[] };
+declare function drawColumns(el: HTMLElement, rows: Outcome[]): { rects: D3Selection<SVGRectElement, Outcome>; names: SVGTextElement[] };
+
+const shots = chartSwitch("#shots", {
+  views: {
+    pie: (el) => {
+      const pie = drawPie(el, outcomes);
+      const fx = expressive(pie.slices, { key: (d) => d.data.outcome, keyboard: true, markLabel: (d) => `${d.data.outcome}: ${d.value} shots` });
+      return hostView(fx, { labels: () => pie.names.map((element, i) => ({ element, key: outcomes[i]!.outcome, role: "category" })) });
+    },
+    columns: (el) => {
+      const columns = drawColumns(el, outcomes);
+      const fx = expressive(columns.rects, { key: (d) => d.outcome, value: (d) => d.shots, keyboard: true, markLabel: (d) => `${d.outcome}: ${d.shots} shots` });
+      return hostView(fx, { labels: () => columns.names.map((element, i) => ({ element, key: outcomes[i]!.outcome, role: "category" })) });
+    }
+  },
+  initial: "pie",
+  announce: true                                     // "Shot outcomes, columns": the host <svg>'s aria-label
+});
+button.addEventListener("click", () => void shots.show(shots.current === "pie" ? "columns" : "pie"));
+shots.chart("pie").refresh();                         // the attachment's own methods, after the page redraws
+```
+
+#### `HostView<D>`
+
+```ts
+interface HostView<D> extends Attachment<D>, ChartSwitchView
+```
+
+An attachment as a switch's view: the attachment's own methods (`refresh()`, `update({ on })`, `on()`, `marks()`, `focus()`, `leave()` and `destroy()`), so `chart(view)` gives a page all of them, with what a switch reads of a view ([`ChartSwitchView`](#chartswitchview)). It's linkable through the attachment's hover, so a [link](#link) takes it, and a switch of host views.
+
+- `element`: the host's root `<svg>`.
+- `space`: the marks' nearest common ancestor, whose space `marks()` and `labels()` are in, as the attachment's marks are.
+- `labels()`: the labels `labels` gives, as a switch draws them: each at its anchor, its first `x` and `y` as the browser resolves them (a percentage or an em too) through its transforms, with its `text-anchor`, and an `element` with the host text's computed font (family, size, style, weight, numerals and spacing), `dominant-baseline` and fill written inline, since the host's CSS may not reach the switch's overlay, and its `dx` and `dy`. Its lengths (its font size and spacing, and a `dx` or `dy` in px or user units) take its transforms' scale, since they're in the marks' space, and the switch scales each copy into its overlay with the marks, so a label keeps the size the host draws it at, in a `<svg>` scaled by its `viewBox` too. A rotated label is drawn upright at its anchor while a switch plays.
+- `paintOf(key)`: `{ color: key, drawn: true, cssColor }`, with the host's colour as the mark's first part draws it. A mark painted with a gradient or a pattern has none, so it's drawn in its key's colour in the switch's assignment.
+- `keyOf(element)`: the key of the mark an element is part of.
+- `moveTabStop(key)`: moves the attachment's tab stop without focus. With `keyboard` off, nothing has one, so it returns false.
+- `morphing(on)`: hides the marks' elements and the labels with `visibility: hidden`, through the attachment's own edits, and gives back what the host had.
+- `destroy()`: destroys the attachment, which puts the host's DOM back as it was. A switch's `destroy()` removes its containers, and the host's `<svg>` drawn in them.
+
+#### `HostViewOptions`
+
+```ts
+interface HostViewOptions {
+  readonly labels?: () => Iterable<HostLabel>;
+}
+```
+
+- `labels`: the host's labels, each a `<text>` in its `<svg>` with its mark's key and its role ([`HostLabel`](#hostlabel)), read as each switch starts. Each moves to the label with its key and role in the next view, as a chart's labels do, and swaps its text half way; one with no partner fades. A label whose key is no mark's is left out, and so is every label when it throws (reported). The host's other text fades with its view. Default: none.
+
+#### `HostLabel`
+
+```ts
+interface HostLabel {
+  readonly element: SVGTextElement;
+  readonly key: string;
+  readonly role: "category" | "value";
+}
+```
+
+A host's `<text>` that names a mark (`"category"`: a slice's outside label, a column's name) or gives its value (`"value"`), by the mark's key.
 
 ### Linked hover
 

@@ -37,7 +37,7 @@ export * from "./effects";
 export * from "./icons";
 export { registerIcon, registerIcons, registerPreset } from "./registries";
 export { configure } from "./settings";
-export { colorAssignment, link } from "./charts";
+export { colorAssignment, hostView, link } from "./charts";
 export type {
   Accessor,
   Attachment,
@@ -58,7 +58,10 @@ export type {
   DonutChart,
   DonutChartOptions,
   ExpressiveOptions,
+  HostLabel,
   HostMark,
+  HostView,
+  HostViewOptions,
   KeyOfType,
   LegendEntry,
   LegendOptions,

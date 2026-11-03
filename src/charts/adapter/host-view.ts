@@ -15,7 +15,7 @@ import type { ChartSwitchPaint, ChartSwitchView } from "../switch";
 import type { ChartLabel } from "../types";
 import { insidesOf } from "./expressive";
 import { drawnStyle } from "./host-style";
-import { between } from "./space";
+import { between, scaleOf } from "./space";
 import type { Attachment } from "./types";
 
 /** A host's `<text>` that names a mark or gives its value, which a chart switch moves and swaps as a chart's labels. */
@@ -55,6 +55,25 @@ export interface HostView<D> extends Attachment<D>, ChartSwitchView {
 
 /** What a label's copy takes from the host's text, written inline, since the host's CSS may not reach a switch's overlay. */
 const FONT = ["font-family", "font-size", "font-style", "font-weight", "font-variant-numeric", "letter-spacing", "word-spacing", "dominant-baseline", "fill"];
+/** Those that are lengths, which a transform's scale changes as drawn. */
+const LENGTHS = new Set(["font-size", "letter-spacing", "word-spacing"]);
+
+/**
+ * The first of a <text>'s `x` or `y` positions, in its user units: as the browser resolves it (a
+ * percentage of the viewport, an em), or where there's no layout, as jsdom has none, the number
+ * written, a length in user units.
+ */
+function first(element: SVGTextElement, name: "x" | "y"): number {
+  const list = (element as unknown as Partial<Record<"x" | "y", { readonly baseVal?: SVGLengthList }>>)[name]?.baseVal;
+  if (list && list.numberOfItems > 0) return list.getItem(0).value;
+  return Number.parseFloat(element.getAttribute(name) ?? "") || 0;
+}
+
+/** Lengths scaled by `scale`: numbers in px, or with no unit, as SVG's user units; ems, percentages and keywords as they are. */
+function scaled(value: string, scale: number): string {
+  if (scale === 1) return value;
+  return value.replace(/(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px)?(?![\w.%])/gi, (_, n: string, px: string | undefined) => `${Math.round(Number(n) * scale * 1000) / 1000}${px ?? ""}`);
+}
 
 /**
  * Makes an attachment that expressive() or fromVegaView() returned a view for chartSwitch: a view's
@@ -90,19 +109,25 @@ export function hostView<D>(attachment: Attachment<D>, options: HostViewOptions 
 
   /**
    * A label as a switch draws it: its anchor through its transforms in the marks' space, and a <text>
-   * in the host's font. A rotated label is drawn upright at its anchor while a switch plays.
+   * in the host's font, sized in that space too, so its transforms' scale is in its lengths: the switch
+   * scales it into its overlay with the marks. A rotated label is drawn upright at its anchor while a
+   * switch plays.
    */
   function chartLabel({ element, key, role }: HostLabel): ChartLabel {
     const root = svg();
-    const first = (name: string): number => Number.parseFloat(element.getAttribute(name) ?? "") || 0;
-    const at = matrix.apply(between(view.space, element, root), { x: first("x"), y: first("y") });
+    const m = between(view.space, element, root);
+    const at = matrix.apply(m, { x: first(element, "x"), y: first(element, "y") });
+    const scale = scaleOf(m);
     const text = element.ownerDocument.createElementNS(SVG_NS, "text");
     text.textContent = element.textContent;
     for (const name of ["dx", "dy"]) {
       const value = element.getAttribute(name);
-      if (value !== null) text.setAttribute(name, value);
+      if (value !== null) text.setAttribute(name, scaled(value, scale));
     }
-    setStyles(text, Object.fromEntries(FONT.map((property) => [property, drawnStyle(element, root, property) || undefined])));
+    setStyles(text, Object.fromEntries(FONT.map((property) => {
+      const value = drawnStyle(element, root, property);
+      return [property, (LENGTHS.has(property) ? scaled(value, scale) : value) || undefined];
+    })));
     const anchor = drawnStyle(element, root, "text-anchor");
     return { key, role, text: element.textContent ?? "", x: at.x, y: at.y, anchor: anchor === "middle" || anchor === "end" ? anchor : "start", element: text };
   }

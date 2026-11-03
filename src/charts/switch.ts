@@ -25,7 +25,7 @@ import { chartAnnouncer, type Announcer } from "./announce";
 import { toColorAssignment, type ColorAssignment } from "./colors";
 import { linkable, portOf, type LinkListener, type LinkPort, type RowsOf } from "./link";
 import { svgLayer } from "./render/layer";
-import { setAttributes, setStyles, SVG_NS, svgElement } from "./render/svg";
+import { setAttributes, setStyles, SVG_NS, svgElement, transformAttribute } from "./render/svg";
 import { cssColor, injectStyles, markColorStyles, seriesColors } from "./render/theme";
 import { resolveTarget, type ChartEnv } from "./shell/setup";
 import type { ChartLabel, MarkEvents } from "./types";
@@ -77,7 +77,11 @@ export interface ChartSwitchView {
    * the class hides them.
    */
   morphing?(on: boolean): void;
-  /** The element whose user space marks() and labels() are in, when it isn't `element`: an attachment's marks' common ancestor. */
+  /**
+   * The element whose user space marks() and labels() are in, when it isn't `element`: an attachment's
+   * marks' common ancestor. Its labels' text is sized in it too, so their copies scale into the overlay
+   * with the marks, as a chart's, sized by the stylesheet, don't.
+   */
   readonly space?: Element;
 }
 
@@ -627,20 +631,23 @@ export function chartSwitch<T extends ChartSwitchViews>(
     for (const mark of to) if (!fromByKey.has(mark.key)) fade(b, mark, scaleB, fadeIn);
 
     // Labels match by key and role. A pair moves from one place to the other and swaps its text half
-    // way; a label with no partner fades, as a mark does.
+    // way; a label with no partner fades, as a mark does. A view with `space` sizes its labels' text in
+    // that space, so their copies scale into the overlay with its marks; a chart's keep the stylesheet's sizes.
     const id = (label: ChartLabel): string => `${label.role}\n${label.key}`;
     const labelsA = a.chart.labels();
     const labelsB = b.chart.labels();
+    const sizeA = a.chart.space ? scaleA : 1;
+    const sizeB = b.chart.space ? scaleB : 1;
     const byId = new Map(labelsA.map((label) => [id(label), label]));
     const matched = new Set<string>();
     for (const label of labelsB) {
       const partner = byId.get(id(label));
       if (!partner) continue;
       matched.add(id(label));
-      drawings.push(moveLabel(copyLabel(partner, toA), copyLabel(label, toB)));
+      drawings.push(moveLabel(copyLabel(partner, toA, sizeA), copyLabel(label, toB, sizeB)));
     }
-    for (const label of labelsA) if (!matched.has(id(label))) drawings.push(fadeLabel(copyLabel(label, toA), fadeOut));
-    for (const label of labelsB) if (!byId.has(id(label))) drawings.push(fadeLabel(copyLabel(label, toB), fadeIn));
+    for (const label of labelsA) if (!matched.has(id(label))) drawings.push(fadeLabel(copyLabel(label, toA, sizeA), fadeOut));
+    for (const label of labelsB) if (!byId.has(id(label))) drawings.push(fadeLabel(copyLabel(label, toB, sizeB), fadeIn));
 
     // The views' other parts: the old one's gone by 40% of the way, the new one's in from half way.
     drawings.push((s) => {
@@ -683,15 +690,15 @@ export function chartSwitch<T extends ChartSwitchViews>(
     return element;
   }
 
-  /** A copy of the label's <text> in the overlay, with its classes, and where it sits there. */
-  function copyLabel(label: ChartLabel, m: Matrix): { readonly text: SVGTextElement; readonly at: Point } {
+  /** A copy of the label's <text> in the overlay, with its classes, where it sits there, and scaled by `scale` about that point. */
+  function copyLabel(label: ChartLabel, m: Matrix, scale: number): LabelCopy {
     const text = label.element.cloneNode(true) as SVGTextElement;
     for (const name of ["id", "opacity", "visibility", "aria-hidden"]) text.removeAttribute(name);
     text.textContent = label.text;
-    const at = matrix.apply(m, label);
-    setAttributes(text, { x: at.x, y: at.y, "text-anchor": label.anchor });
+    const copy = { text, at: matrix.apply(m, label), scale };
+    setAttributes(text, { x: copy.at.x, y: copy.at.y, "text-anchor": label.anchor, ...scaledAt(copy, copy.at.x, copy.at.y) });
     labelsLayer.appendChild(text);
-    return { text, at };
+    return copy;
   }
 
   const api: ChartSwitch<T> = {
@@ -869,16 +876,27 @@ function setOpacity(container: HTMLElement, opacity: number): void {
   container.style.setProperty("opacity", String(Math.round(opacity * 1000) / 1000));
 }
 
-/** A matched label at s: both copies at the same place along the way, the old text before half way and the new from there. */
-function moveLabel(a: { readonly text: SVGTextElement; readonly at: Point }, b: { readonly text: SVGTextElement; readonly at: Point }): (s: number) => void {
+/** A label's copy in the overlay: where it sits, and how much it's scaled about that point (1 for a chart's). */
+interface LabelCopy {
+  readonly text: SVGTextElement;
+  readonly at: Point;
+  readonly scale: number;
+}
+
+/** A matched label at s: both copies at the same place along the way, each at its own scale, the old text before half way and the new from there. */
+function moveLabel(a: LabelCopy, b: LabelCopy): (s: number) => void {
   return (s) => {
     const x = mix(a.at.x, b.at.x, s);
     const y = mix(a.at.y, b.at.y, s);
     const second = s >= HALF;
-    setAttributes(a.text, { x, y, visibility: second ? "hidden" : undefined });
-    setAttributes(b.text, { x, y, visibility: second ? undefined : "hidden" });
+    setAttributes(a.text, { x, y, visibility: second ? "hidden" : undefined, ...scaledAt(a, x, y) });
+    setAttributes(b.text, { x, y, visibility: second ? undefined : "hidden", ...scaledAt(b, x, y) });
   };
 }
+
+/** A copy's transform at (x, y): its scale about that point. None for a copy at scale 1, which keeps any it has. */
+const scaledAt = (copy: LabelCopy, x: number, y: number): Record<string, string> =>
+  copy.scale === 1 ? {} : { transform: transformAttribute([copy.scale, 0, 0, copy.scale, x * (1 - copy.scale), y * (1 - copy.scale)]) };
 
 function fadeLabel(label: { readonly text: SVGTextElement }, opacity: (s: number) => number): (s: number) => void {
   return (s) => setAttributes(label.text, { opacity: opacity(s) });

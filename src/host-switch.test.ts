@@ -97,12 +97,13 @@ const arcOf = (key: string, slice: Slice): MarkGeometry => build.arc({ key, cx: 
  * What a D3 page draws for a donut of shots, as d3.pie() and d3.arc() would: a 640 × 300 <svg
  * role="group"> with its name and a title, a <g> centred at (320, 150) with a <path> per outcome, its
  * pie datum on __data__ and filled by outcome, and each slice's name outside it, placed by a
- * transform as arc.centroid() would place it, anchored by the <g> around the names.
+ * transform as arc.centroid() would place it, anchored by the <g> around the names. `scale` scales the
+ * centred <g>, and `nameScale` each name.
  */
-function drawPie(parent: Element, rows: readonly Outcome[] = outcomes) {
+function drawPie(parent: Element, rows: readonly Outcome[] = outcomes, { scale = 1, nameScale = 1 } = {}) {
   const svg = el("svg", { width: 640, height: 300, viewBox: "0 0 640 300", role: "group", "aria-label": "Shot outcomes, a pie" }, parent);
   const title = el("text", { class: "title", x: 12, y: 20 }, svg, "Shots by outcome");
-  const plot = el("g", { transform: "translate(320,150)" }, svg);
+  const plot = el("g", { transform: `translate(320,150)${scale === 1 ? "" : ` scale(${scale})`}` }, svg);
   const total = rows.reduce((sum, row) => sum + row.shots, 0);
   let angle = 0;
   const slices = rows.map((row) => {
@@ -113,7 +114,8 @@ function drawPie(parent: Element, rows: readonly Outcome[] = outcomes) {
   const names = slices.map((path) => {
     const { data, startAngle, endAngle } = rowOf<Slice>(path);
     const mid = (startAngle + endAngle) / 2;
-    return el("text", { transform: `translate(${round(140 * Math.sin(mid))},${round(-140 * Math.cos(mid))})`, dy: "0.35em" }, labels, data.outcome);
+    const place = `translate(${round(140 * Math.sin(mid))},${round(-140 * Math.cos(mid))})${nameScale === 1 ? "" : ` scale(${nameScale})`}`;
+    return el("text", { transform: place, dy: "0.35em" }, labels, data.outcome);
   });
   return { svg, plot, slices, names, title };
 }
@@ -445,6 +447,74 @@ describe("hostView: labels", () => {
     expect(failing.labels()).toEqual([]);
     expect(reported).toHaveBeenCalledWith(new Error("no labels"));
     vi.unstubAllGlobals();
+  });
+
+  it("sizes each copy as the host draws it: its own transforms' scale in its font, spacing and dx, and its view's into the overlay, with its marks", () => {
+    const e = env();
+    let pie!: Pie;
+    const target = document.body.appendChild(document.createElement("div"));
+    const switcher = chartSwitch(
+      target,
+      {
+        views: {
+          // The centred <g> at half size, and each name at three times its size inside it.
+          pie: (container: HTMLElement) => hostView(attachPie((pie = drawPie(container, outcomes, { scale: 0.5, nameScale: 3 })), e), { labels: pieLabels(pie) }),
+          columns: (container: HTMLElement) => {
+            const columns = drawColumns(container);
+            return hostView(attachColumns(columns, e), { labels: columnLabels(columns) });
+          }
+        },
+        initial: "pie",
+        transition: morph()
+      },
+      e
+    );
+    const overlay = target.querySelector(".ec-switch-overlay") as SVGSVGElement;
+    pie.names[0]!.setAttribute("dx", "4");
+    const style = (text: SVGTextElement) => ["font-size", "letter-spacing", "word-spacing"].map((name) => text.style.getPropertyValue(name));
+    // In the pie's <g>'s space, the name's own scale(3) is in its lengths: 12 px is 36, and its dx 12; ems are as they are.
+    const label = switcher.chart("pie").labels()[0]!;
+    expect(style(label.element)).toEqual(["36px", "0.6px", "normal"]);
+    expect([label.element.getAttribute("dx"), label.element.getAttribute("dy")]).toEqual(["12", "0.35em"]);
+    expect(style(switcher.chart("columns").labels()[0]!.element)).toEqual(["12px", "0.2px", "normal"]);
+
+    // The <g>'s scale(0.5) maps each copy into the overlay about its place, as it maps the slices; the columns' copies aren't scaled.
+    const scaleAbout = (copy: { readonly element: SVGTextElement; readonly x: number; readonly y: number }) => {
+      const m = /^matrix\(([-\d.]+) 0 0 ([-\d.]+) ([-\d.]+) ([-\d.]+)\)$/.exec(copy.element.getAttribute("transform") ?? "");
+      expect(m).not.toBeNull();
+      const [a, d, tx, ty] = m!.slice(1).map(Number);
+      expect([a, d]).toEqual([0.5, 0.5]);
+      expect(tx).toBeCloseTo(copy.x * 0.5, 2);
+      expect(ty).toBeCloseTo(copy.y * 0.5, 2);
+    };
+    void switcher.show("columns");
+    const start = copies(overlay);
+    for (const key of KEYS) scaleAbout(start.find((copy) => copy.text === key && copy.shown)!);
+    for (const copy of start.filter((each) => !each.shown || !KEYS.includes(each.text))) expect(copy.element.hasAttribute("transform")).toBe(false);
+    e.clock.advance(475);
+    const half = copies(overlay);
+    for (const key of KEYS) {
+      const [old, next] = half.filter((copy) => copy.text === key);
+      expect({ x: old!.x, y: old!.y }).toEqual({ x: next!.x, y: next!.y });
+      scaleAbout(old!);
+      expect(next!.element.hasAttribute("transform")).toBe(false);
+    }
+  });
+
+  it("places a label at its x and y as the browser resolves them, a percentage too, and where there's no layout at the number written", () => {
+    const pie = drawPie(document.body);
+    const name = pie.names[0]!;
+    // jsdom has no length lists: a browser's, which resolves 50% of the 640 px viewport.
+    name.setAttribute("x", "50%");
+    name.setAttribute("y", "1em");
+    Object.defineProperty(name, "x", { value: { baseVal: { numberOfItems: 1, getItem: () => ({ value: 320 }) } } });
+    Object.defineProperty(name, "y", { value: { baseVal: { numberOfItems: 1, getItem: () => ({ value: 12 }) } } });
+    const view = hostView(attachPie(pie, env()), { labels: pieLabels(pie) });
+    const [tx, ty] = /translate\((-?[\d.]+),(-?[\d.]+)\)/.exec(name.getAttribute("transform")!)!.slice(1).map(Number);
+    const label = view.labels()[0]!;
+    expect({ x: round(label.x), y: round(label.y) }).toEqual({ x: round(tx! + 320), y: round(ty! + 12) });
+    pie.names[1]!.setAttribute("x", "7");
+    expect(round(view.labels()[1]!.x)).toBe(round(Number(/translate\((-?[\d.]+),/.exec(pie.names[1]!.getAttribute("transform")!)![1]) + 7));
   });
 
   it("draws a rotated label upright at its anchor", () => {

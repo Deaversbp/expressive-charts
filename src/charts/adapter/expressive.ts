@@ -22,6 +22,9 @@
 // A link (../link.ts) hovers marks too, as "linked": the dimming and emphasis with `dim`, and their
 // hover runs, with no focus ring or focus. It hears the attachment's own hovers.
 //
+// hostView() (./host-view.ts) makes the attachment a chart switch's view, through its insides, kept
+// by its link port: its root, its marks' elements, colours and keys, its tab stop and its edits.
+//
 // update({ on }) swaps effects through the runner, as a chart's does, and leave() ends the hover.
 
 import type { Baseline, MarkData, MarkGeometry, Matrix, Point, Rect, Sample } from "../../core";
@@ -50,7 +53,7 @@ import { labelsMoved } from "../shell/transitions";
 import { watchFonts, watchText } from "../shell/watch";
 import type { MarkEvents } from "../types";
 import { baselines, describeRects, isBaseline, union, visualOrder, type RectPart } from "./bars";
-import { hostEdits } from "./edits";
+import { hostEdits, type HostEdits } from "./edits";
 import { hostColors, hostMarkHandle, strokeWidthOf, type HostMarkHandle, type HostPart, type StrokeWidth } from "./host-style";
 import { sliceOf } from "./slice";
 import { boundRows, commonAncestor, readSource, rootOf } from "./source";
@@ -158,6 +161,28 @@ const SHAPES = new Set(["circle", "ellipse", "line", "path", "polygon", "polylin
  * `graphics-object`, which takes its name from its contents, so the marks' names would be read twice.
  */
 const WRAPPING_ROLES = new Set(["img", "image", "graphics-symbol", "graphics-object"]);
+
+/**
+ * What hostView() reaches of an attachment, which its handle doesn't show: its root, its marks'
+ * common ancestor, the live marks' elements, the mark an element is part of, the host's colour for
+ * each mark, its keyboard's tab stop, and its edits, which destroy() undoes.
+ */
+export interface Insides {
+  root(): SVGSVGElement | undefined;
+  ancestor(): Element | undefined;
+  elements(): Element[];
+  keyOf(element: Element): string | undefined;
+  /** As the mark's first part draws it: its fill, or its stroke on a line. */
+  colorOf(key: string): string | undefined;
+  moveTabStop(key: string): boolean;
+  readonly edits: HostEdits;
+}
+
+/** By the attachment's link port, which fromVegaView()'s handle shares, as link.ts keeps ports by handle. */
+const insides = new WeakMap<LinkPort, Insides>();
+
+/** The insides of the attachment whose handle has this port; undefined for any other. */
+export const insidesOf = (port: LinkPort | undefined): Insides | undefined => (port ? insides.get(port) : undefined);
 
 export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<D>, env: ChartEnv): Attachment<D> {
   checkOptions(options);
@@ -1024,6 +1049,16 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       return true;
     }
   };
+
+  insides.set(link, {
+    root: () => root,
+    ancestor: () => ancestor,
+    elements: () => order.flatMap((record) => record.mark.parts.map((part) => part.element)),
+    keyOf: (element) => ownerOf(element)?.record.key,
+    colorOf: (key) => records.get(key)?.mark.parts[0]?.colors?.color,
+    moveTabStop: (key) => keyboard?.moveTabStop(key) ?? false,
+    edits
+  });
 
   return linkable(link, {
     refresh(next) {

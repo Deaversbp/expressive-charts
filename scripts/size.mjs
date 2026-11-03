@@ -32,6 +32,7 @@ const importSets = [
   ["barChart"],
   ["lineChart", "threshold", "playback", "playButton"],
   ["chartSwitch", "donutChart", "barChart"],
+  ["chartSwitch", "expressive", "hostView"],
   ["*"]
 ];
 

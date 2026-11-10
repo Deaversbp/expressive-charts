@@ -133,8 +133,19 @@ export interface ChartSwitchOptions<T extends ChartSwitchViews> {
   readonly announce?: boolean;
 }
 
+/** How show() switches. */
+export interface ChartSwitchShowOptions<T extends ChartSwitchViews> {
+  /**
+   * A view to stage the jump through. In Presentation (`motion.staged`), the switch plays from the
+   * view on show to `via`, then from `via` to the view, each a full switch, and lands once: focus
+   * follows its key into the view, and the view alone is announced. In Analysis and Off, and when
+   * `via` is the view on show or the view itself, it switches straight there. Rejects for an unknown view.
+   */
+  readonly via?: ChartSwitchViewName<T>;
+}
+
 export interface ChartSwitch<T extends ChartSwitchViews> {
-  /** The view shown, or the one a switch is heading for. */
+  /** The view shown, or the one a switch is heading for: a staged jump's view from its start. */
   readonly current: ChartSwitchViewName<T>;
   /**
    * Switches to `view`: each mark morphs into the mark with its key, by the motion mode. Resolves
@@ -142,8 +153,15 @@ export interface ChartSwitch<T extends ChartSwitchViews> {
    * a switch is leaving reverses it from where the shapes are; one to a third view lands the switch
    * first. With motion off, the switch has landed when show() returns. Rejects for an unknown view.
    * One a `leave` listener calls as the old view's hover ends runs once the switch has begun.
+   *
+   * With `via`, in Presentation, the jump is staged through that view, and `current` is `view` from
+   * the start. A show() for `view` plays on. One in the first leg drops the leg still to come and acts
+   * on the one playing, as on any switch: back to the view it began in, it reverses; to `via`, it plays
+   * on and stops there; to another view, it lands on `via` and switches on from there, by that show()'s
+   * own `via`. The second leg is a switch from `via` to `view`, as any other. Motion turning off, or a
+   * resize, lands the jump on `view` at once.
    */
-  show(view: ChartSwitchViewName<T>): Promise<void>;
+  show(view: ChartSwitchViewName<T>, options?: ChartSwitchShowOptions<T>): Promise<void>;
   /** The chart a view's function returned: for update(), on() and the rest. */
   chart<K extends ChartSwitchViewName<T>>(view: K): ReturnType<T[K]>;
   /**
@@ -225,6 +243,8 @@ interface Switch {
   readonly surface: TransitionSurface;
   readonly scene: Scene;
   readonly focus: FocusMemory | undefined;
+  /** A staged jump's leg still to come, while it plays to `via` (b): the view it goes on to from there. */
+  next: View | undefined;
   /** The run's eased progress from where it began to where it's heading, as last drawn: the shapes' progress, as morph draws them. */
   progress: number;
   transition: Transition | undefined;
@@ -412,6 +432,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
   observer?.observe(wrapper);
 
   const view = (name: string): View => views.get(name)!;
+  const missing = (name: unknown, what = ""): TypeError => new TypeError(`chartSwitch: there's no view ${JSON.stringify(name)}${what}. The views are ${names.map((n) => JSON.stringify(n)).join(", ")}.`);
 
   /** The element with focus in the switch's document or shadow root. */
   function focused(): Element | null {
@@ -461,7 +482,13 @@ export function chartSwitch<T extends ChartSwitchViews>(
     if (held) linked?.shown();
   }
 
-  function start(from: View, to: View, carried?: { readonly focus: FocusMemory | undefined }): Promise<void> {
+  /** A switch from `from` to `to`, staged through `via` in Presentation when it's neither of them. */
+  function jump(from: View, to: View, via: string | undefined, carried?: { readonly focus: FocusMemory | undefined }): Promise<void> {
+    return via === undefined || !motion.staged || via === from.name || via === to.name ? start(from, to, carried) : start(from, view(via), carried, to);
+  }
+
+  /** Switches from `from` to `to`, and with `next`, on from there to `next`: a staged jump. */
+  function start(from: View, to: View, carried?: { readonly focus: FocusMemory | undefined }, next?: View): Promise<void> {
     const memory = carried ? carried.focus : readFocus(from);
     // The old view's hover ends as the viewer's would, a link's too, while it's still the view on
     // show, so the switch's on() and its link hear it end. A show() its listeners call waits until
@@ -474,18 +501,23 @@ export function chartSwitch<T extends ChartSwitchViews>(
     } finally {
       opening = undefined;
     }
-    const done = destroyed ? Promise.resolve() : begin(from, to, memory);
+    const done = destroyed ? Promise.resolve() : begin(from, to, memory, next);
     for (const run of waiting) run();
     return done;
   }
 
-  /** Switches from `from` to `to`, its hover ended. */
-  function begin(from: View, to: View, memory: FocusMemory | undefined): Promise<void> {
-    current = to.name;
+  /**
+   * Switches from `from` to `to`, its hover ended, and on to `next` when there is one: that's the
+   * view on show (`current`) from the start. `carried` is a staged jump's promise, kept for its second leg.
+   */
+  function begin(from: View, to: View, memory: FocusMemory | undefined, next?: View, carried?: { readonly done: Promise<void>; readonly settle: () => void }): Promise<void> {
+    current = (next ?? to).name;
     if (motion.mode === "off") {
-      for (const each of views.values()) setActive(each.container, each === to);
-      restoreFocus(to, memory);
-      say(to);
+      // Straight to the view on show: a leave listener may have turned motion off as a jump began.
+      const end = view(current);
+      for (const each of views.values()) setActive(each.container, each === end);
+      restoreFocus(end, memory);
+      say(end);
       reached();
       return Promise.resolve();
     }
@@ -500,7 +532,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
       each.chart.element.classList.add("ec-morphing");
     }
     const { pairs, surface, scene } = prepare(from, to);
-    const { done, settle } = deferred();
+    const { done, settle } = carried ?? deferred();
     const session: Switch = {
       a: from,
       b: to,
@@ -510,6 +542,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
       surface,
       scene,
       focus: memory,
+      next,
       progress: 0,
       transition: undefined,
       driver: undefined,
@@ -526,7 +559,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
   function play(session: Switch, begin: number): void {
     const run = ++session.run;
     if (begin >= 1) {
-      land(session, true);
+      arrive(session);
       return;
     }
     const at = (progress: number): void => {
@@ -542,8 +575,24 @@ export function chartSwitch<T extends ChartSwitchViews>(
     session.driver = drive(begin, at, { clock: started.clock, motion });
     started.release();
     void Promise.all([session.driver.finished, session.transition.finished]).then(([result]) => {
-      if (active === session && session.run === run && result === "done") land(session, true);
+      if (active === session && session.run === run && result === "done") arrive(session);
     });
+  }
+
+  /**
+   * The switch has got where it was heading. It lands, unless it's a staged jump's first leg: that
+   * lands on `via` without settling, as a switch landed for a third view does, and the second leg
+   * plays on from there with the focus it remembered and the jump's promise. With motion off, the
+   * jump lands on its view at once.
+   */
+  function arrive(session: Switch): void {
+    const next = session.forward ? session.next : undefined;
+    if (!next || motion.mode === "off") return land(session, true);
+    const { done, settle } = session;
+    session.next = undefined;
+    session.settle = () => {};
+    land(session, false);
+    void begin(session.b, next, session.focus, undefined, { done, settle });
   }
 
   /** A show() back mid-way: the pairs play back from where the shapes are, and so does everything drawn with them. */
@@ -559,9 +608,9 @@ export function chartSwitch<T extends ChartSwitchViews>(
   }
 
   /**
-   * Ends the switch where it's heading: the overlay empties, that view's marks show and it becomes
-   * the active view, every other view inactive. `settle`: focus follows its key and the new view is
-   * announced; a switch landed for one to a third view hands its focus on instead.
+   * Ends the switch where it's heading, a staged jump on its view: the overlay empties, that view's
+   * marks show and it becomes the active view, every other view inactive. `settle`: focus follows its
+   * key and the new view is announced; a switch landed for one to a third view hands its focus on instead.
    */
   function land(session: Switch, settle: boolean): void {
     if (active !== session) return;
@@ -570,7 +619,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
     session.driver?.cancel();
     session.transition?.clear();
     session.scene.clear();
-    const to = session.forward ? session.b : session.a;
+    const to = session.forward ? (session.next ?? session.b) : session.a;
     for (const each of [session.a, session.b]) {
       each.chart.element.classList.remove("ec-morphing");
       each.chart.morphing?.(false);
@@ -705,24 +754,38 @@ export function chartSwitch<T extends ChartSwitchViews>(
     get current() {
       return current as ChartSwitchViewName<T>;
     },
-    show(name) {
-      if (!views.has(name)) return Promise.reject(new TypeError(`chartSwitch: there's no view ${JSON.stringify(name)}. The views are ${names.map((n) => JSON.stringify(n)).join(", ")}.`));
+    show(name, options) {
+      if (!views.has(name)) return Promise.reject(missing(name));
+      const via = options?.via;
+      if (via !== undefined && !views.has(via)) return Promise.reject(missing(via, " to go via"));
       if (destroyed) return Promise.resolve();
       const waiting = opening;
-      if (waiting) return new Promise<void>((resolve) => waiting.push(() => resolve(api.show(name))));
+      if (waiting) return new Promise<void>((resolve) => waiting.push(() => resolve(api.show(name, options))));
       const session = active;
-      if (!session) return name === current ? Promise.resolve() : start(view(current), view(name));
+      if (!session) return name === current ? Promise.resolve() : jump(view(current), view(name), via);
       const heading = session.forward ? session.b : session.a;
       const leaving = session.forward ? session.a : session.b;
-      if (name === heading.name) return session.done;
+      // The view it's heading for: a staged jump's own view too, so it plays on as it is.
+      const next = session.next;
+      if (name === (next ?? heading).name) return session.done;
+      if (next) {
+        // A staged jump's first leg: the leg still to come is dropped, and this one plays on or back.
+        session.next = undefined;
+        if (name === heading.name) {
+          current = name;
+          session.settle();
+          ({ done: session.done, settle: session.settle } = deferred());
+          return session.done;
+        }
+      }
       if (name === leaving.name) return reverse(session);
       // A third view: this switch lands first, and its focus goes on with the next.
       land(session, false);
-      return start(heading, view(name), { focus: session.focus });
+      return jump(heading, view(name), via, { focus: session.focus });
     },
     chart(name) {
       const found = views.get(name);
-      if (!found) throw new TypeError(`chartSwitch: there's no view ${JSON.stringify(name)}. The views are ${names.map((n) => JSON.stringify(n)).join(", ")}.`);
+      if (!found) throw missing(name);
       return found.chart as ReturnType<T[typeof name]>;
     },
     on(type, listener) {

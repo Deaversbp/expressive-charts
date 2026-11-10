@@ -23,7 +23,8 @@
 // hover runs, with no focus ring or focus. It hears the attachment's own hovers.
 //
 // hostView() (./host-view.ts) makes the attachment a chart switch's view, through its insides, kept
-// by its link port: its root, its marks' elements, colours and keys, its tab stop and its edits.
+// by its link port: its root, its marks' elements, colours and keys, its tab stop, its edits, and a
+// listener for each refresh, so a view hides a host drawn again mid-switch.
 //
 // update({ on }) swaps effects through the runner, as a chart's does, and leave() ends the hover.
 
@@ -165,7 +166,7 @@ const WRAPPING_ROLES = new Set(["img", "image", "graphics-symbol", "graphics-obj
 /**
  * What hostView() reaches of an attachment, which its handle doesn't show: its root, its marks'
  * common ancestor, the live marks' elements, the mark an element is part of, the host's colour for
- * each mark, its keyboard's tab stop, and its edits, which destroy() undoes.
+ * each mark, its keyboard's tab stop, its edits, which destroy() undoes, and who hears it refresh.
  */
 export interface Insides {
   root(): SVGSVGElement | undefined;
@@ -176,6 +177,8 @@ export interface Insides {
   colorOf(key: string): string | undefined;
   moveTabStop(key: string): boolean;
   readonly edits: HostEdits;
+  /** Each called after every refresh(): the page's, or fromVegaView()'s after a Vega render. */
+  readonly refreshed: Set<() => void>;
 }
 
 /** By the attachment's link port, which fromVegaView()'s handle shares, as link.ts keeps ports by handle. */
@@ -1050,6 +1053,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     }
   };
 
+  const refreshed = new Set<() => void>();
   insides.set(link, {
     root: () => root,
     ancestor: () => ancestor,
@@ -1057,7 +1061,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
     keyOf: (element) => ownerOf(element)?.record.key,
     colorOf: (key) => records.get(key)?.mark.parts[0]?.colors?.color,
     moveTabStop: (key) => keyboard?.moveTabStop(key) ?? false,
-    edits
+    edits,
+    refreshed
   });
 
   return linkable(link, {
@@ -1094,6 +1099,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       // Focus stays with its key, on the mark's new element if the host replaced it (Vega does). If the
       // mark left, focus moves to its nearest neighbour. Every mark's tabindex is set again.
       keyboard?.sync();
+      // A view mid-switch hides the marks as they are now.
+      for (const listener of refreshed) listener();
 
       void exited.then(() => {
         for (const record of diff.exiting) if (leaving.get(record.key) === record) leaving.delete(record.key);

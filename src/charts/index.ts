@@ -30,6 +30,7 @@ export {
   type ChartSwitch,
   type ChartSwitchOptions,
   type ChartSwitchPaint,
+  type ChartSwitchShowOptions,
   type ChartSwitchView,
   type ChartSwitchViewFactory,
   type ChartSwitchViewName,

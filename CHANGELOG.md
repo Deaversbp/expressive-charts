@@ -25,6 +25,16 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+### Changed
+
+- **`morph()` pairs two areas by x.** Two closed outlines that are each a band across the same x's, as `d3.area()` draws an area (its longest loop, with no arc, splits at its leftmost and rightmost points into an upper and a lower run, each going one way across x in two straight pieces or more), pair upper run with upper and lower with lower, each by share of its span, as two lines across x have since 0.7.0. So two areas over the same weeks, stacked and at 100%, keep each week's x on every frame, where they slid up to 63 px sideways mid-morph; the corners pair with the corners, the edges at each end move with them, and holes morph as before. An area with weeks missing pairs its longest loop so, when the other's spans the same x's. A diamond, a regular polygon such as a hexagon, and a rectangle with Bézier corners (Vega's SVG with `cornerRadius`, read by tag) are bands too, and two of them over the same x span now pair by x, which keeps each x where it is. Every other morph draws as before, byte for byte: bars and columns (a rectangle's top and base are a piece each), slices, points, rings, lines, Vega's bars drawn as paths, and two areas over different x's. Nothing needs writing differently.
+
+### Fixed
+
 ## 0.9.0 (3 November 2026)
 
 Host charts in a chart switch: `hostView()` makes an `expressive()` or `fromVegaView()` attachment a switch's view, so a D3 pie can morph into D3 columns as our donut morphs into our columns, with the switch's optional `keyOf`, `morphing`, `space` and `cssColor` for it; and `expressive()` measuring its effects' text again when it changes size. Nothing in the effect-author API changes. Every change is outside the promise, and none needs anything written instead.

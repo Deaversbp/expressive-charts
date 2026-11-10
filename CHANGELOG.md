@@ -29,6 +29,8 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Added
 
+- **`show(view, { via })` on a chart switch,** with `ChartSwitchShowOptions`: a jump staged through a third view. In Presentation, the switch plays from the view on show to `via`, then from `via` to `view`, each a full switch, 1.9 s in all, so side-by-side columns can stack before they become shares of 100%. `current` is `view` from the start; focus follows its key through `via` into `view`, or the tab stop does; and `announce` says `view`'s name once. In Analysis and Off, as with reduced motion when the viewer hasn't picked a mode, it goes straight there, as `show(view)` does. A `show()` part way drops the leg still to come and acts on the one playing, as on any switch, and motion turning off or a resize lands the jump on `view`. An unknown `via` rejects. Every `show()` without `via` switches as before, byte for byte.
+
 ### Changed
 
 ### Fixed

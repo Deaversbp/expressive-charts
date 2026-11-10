@@ -1,6 +1,7 @@
 // morph: the transition effect that turns one mark's shape into another's, as the lab's donut turns
 // into columns. Both outlines are sampled at the same number of points and each point moves in a
-// straight line to its partner; two lines that each run one way across x pair by x instead. It reads
+// straight line to its partner; two lines that each run one way across x pair by x instead, and so
+// do two areas that are each a band across the same x's, upper run with upper and lower with lower. It reads
 // only the two geometries, so it morphs any mark into any other: bars, slices and points (closed
 // outlines) and lines (open ones). A line's gaps and a shape's holes come through: gaps from the
 // marks' `gaps`, holes from their outlines' path data.
@@ -13,6 +14,7 @@ import { flattenPath } from "../core/geometry/flatten";
 import { loopOutline } from "../core/geometry/outline";
 import { parsePath } from "../core/geometry/path";
 import { goesRound } from "../core/geometry/ring";
+import type { PathSegment } from "../core/geometry/segment";
 
 /** How two closed outlines' sides are matched. */
 export type MorphAlign = "unroll" | "drop";
@@ -77,6 +79,14 @@ type Draw = (p: number) => void;
  *   where that place is outside it or near its edge. Where it would leave the shape on the way, it
  *   closes sooner, as soon as a sixteenth of the way. Each is written the other way round from the
  *   outside, so it stays a hole under either fill rule.
+ * - **Two bands across the same x's** (closed outlines whose longest loop, with no arc, splits at its
+ *   leftmost and rightmost points into an upper run and a lower run, each going one way across x in
+ *   two straight pieces or more, as d3.area() draws an area; the two bands' leftmost x's within
+ *   0.01 px, and their rightmost) pair by x: upper run with upper and lower with lower, each as two
+ *   lines across x pair, by share of its span, with stops at `points` shares and at each vertex of
+ *   either run. So two areas over the same weeks keep each week's x on every frame, corners pair with
+ *   corners, and the edges at each end join the runs as they move. `align` doesn't turn them. Holes
+ *   morph as above. A rectangle's top and base are a piece each, so bars aren't bands.
  * - **Two lines that each run one way across x** (every vertex's x more than the one before, or
  *   every one less, the same way for both) pair by x: the point a share of the way across one
  *   line's x span moves to the point that share across the other's. They're sampled at `points`
@@ -136,10 +146,11 @@ function drawing(from: MarkGeometry, to: MarkGeometry, layer: Layer, points: num
   if (closed !== to.outline.closed) return crossfade(from, to, layer);
   const across = closed ? undefined : acrossX(from, to, points);
   if (across) return piecewise(from, to, layer, across.stops, across.kinds);
-  const a = from.outline.sample(points);
-  const b = to.outline.sample(points);
+  const bands = closed ? bandsAcross(from, to, points) : undefined;
+  const a = bands?.from ?? from.outline.sample(points);
+  const b = bands?.to ?? to.outline.sample(points);
   if (!closed) return from.gaps?.length || to.gaps?.length ? gapped(from, to, layer, a, b) : stroke(from, to, layer, a, b);
-  const [shiftA, shiftB] = align === "drop" ? turn(from, to, points) : [0, 0];
+  const [shiftA, shiftB] = !bands && align === "drop" ? turn(from, to, points) : [0, 0];
   const holes = holePairs(from, to, a, b, [shiftA, shiftB], points / 4);
   let path: PathHandle | undefined;
   return (p) => {
@@ -265,6 +276,11 @@ function acrossX(from: MarkGeometry, to: MarkGeometry, points: number): { stops:
   const a = courseOf(from);
   const b = a && courseOf(to);
   if (!a || !b || a.way !== b.way) return undefined;
+  return byX(a, b, points);
+}
+
+/** Two courses that run the same way across x, paired by x as `acrossX` pairs two lines. */
+function byX(a: Course, b: Course, points: number): { stops: Stop[]; kinds: number[] } | undefined {
   // Each share, and whose it is: 0 an even share, 1 the old line's vertex, 2 the new line's.
   const all: [share: number, whose: number][] = [
     ...Array.from({ length: points }, (_, i): [number, number] => [i / (points - 1), 0]),
@@ -324,7 +340,14 @@ function courseOf(mark: MarkGeometry): Course | undefined {
     before.push(points.length - 1);
     from = end;
   }
-  if (!stretch(1) || next < subpaths.length || points.length < 2) return undefined;
+  return !stretch(1) || next < subpaths.length || points.length < 2 ? undefined : courseThrough(points, before);
+}
+
+/**
+ * The course through two points or more, when every one's x is more than the one before, or every one less, with a
+ * gap from each vertex in `before` to the next. Undefined otherwise.
+ */
+function courseThrough(points: readonly Point[], before: readonly number[] = []): Course | undefined {
   const x0 = points[0]!.x;
   const span = points[points.length - 1]!.x - x0;
   const way = Math.sign(span);
@@ -367,6 +390,70 @@ function placed(course: Course, shares: readonly number[]): Point[] {
     const width = at[i + 1]! - at[i]!;
     return mixed(points[i]!, points[i + 1]!, width > 0 ? Math.min(1, Math.max(0, (s - at[i]!) / width)) : 0);
   });
+}
+
+/**
+ * A closed outline's longest loop as a band, as d3.area() draws one: an upper run, every vertex's x more than the one
+ * before, and a lower run, every one less, from its leftmost and rightmost points, and its x span.
+ */
+interface Band {
+  readonly upper: Course;
+  readonly lower: Course;
+  readonly left: number;
+  readonly right: number;
+}
+
+/**
+ * Two closed outlines that are each a band across the same x's, their leftmost and their rightmost x's within
+ * `SAME_X`, paired by x: the upper runs as `acrossX` pairs two lines, then the lower runs, each by share of its span.
+ * Given as the points of each outline's polygon, upper run then lower, for `between`: the edges at each end, where
+ * d3.area() closes a band, are the polygon's joins from one run to the other. Undefined for any other two.
+ */
+function bandsAcross(from: MarkGeometry, to: MarkGeometry, points: number): { from: Point[]; to: Point[] } | undefined {
+  const a = bandOf(from.outline);
+  const b = a && bandOf(to.outline);
+  if (!a || !b || Math.abs(a.left - b.left) > SAME_X || Math.abs(a.right - b.right) > SAME_X) return undefined;
+  const upper = byX(a.upper, b.upper, points);
+  const lower = byX(a.lower, b.lower, points);
+  if (!upper || !lower) return undefined;
+  const stops = [...upper.stops, ...lower.stops];
+  return { from: stops.map((stop) => stop.from), to: stops.map((stop) => stop.to) };
+}
+
+/**
+ * The outline as a band, when its longest loop is one. Its ends are its leftmost and rightmost points: each a vertex,
+ * with any next to it in a row whose x is within `SAME_X` of it, as d3.area()'s straight edge up each end is. Walked
+ * clockwise on screen, the loop goes from the left end along the upper run to the right end, and back along the lower
+ * run. Each run goes one way across x, every vertex's x more than the one before (the upper) or every one less (the
+ * lower), and has two straight pieces or more: so a rectangle, whose top and base are a piece each, isn't a band.
+ * Undefined for any other outline, and one with an arc.
+ */
+function bandOf(outline: Outline): Band | undefined {
+  const loops = loopsOf(outline);
+  // Its vertices, each where a piece ends, clockwise on screen.
+  const ring: Point[] = [];
+  for (const segment of loops[outsideOf(loops)] ?? []) {
+    if (segment.kind !== "line") return undefined;
+    ring.push(segment.to);
+  }
+  if (areaOf(ring) < 0) ring.reverse();
+  const left = ring.reduce((x, point) => Math.min(x, point.x), Infinity);
+  const right = ring.reduce((x, point) => Math.max(x, point.x), -Infinity);
+  if (!(right - left > 2 * SAME_X)) return undefined;
+  const atLeft = (point: Point): boolean => point.x - left <= SAME_X;
+  const atRight = (point: Point): boolean => right - point.x <= SAME_X;
+  // The walk from the top left, the left end's last vertex, round to it again.
+  const s = ring.findIndex((point, i) => atLeft(point) && !atLeft(ring[(i + 1) % ring.length]!));
+  const walk = [...ring.slice(s), ...ring.slice(0, s + 1)];
+  // The top right, the right end's first vertex, and the base right, its last; then the base left, the left end's first.
+  const topRight = walk.findIndex(atRight);
+  let baseRight = topRight;
+  while (atRight(walk[baseRight + 1]!)) baseRight++;
+  const baseLeft = walk.findIndex((point, i) => i > baseRight && atLeft(point));
+  if (walk.slice(baseLeft).some((point) => !atLeft(point))) return undefined;
+  const upper = courseThrough(walk.slice(0, topRight + 1));
+  const lower = courseThrough(walk.slice(baseRight, baseLeft + 1));
+  return upper && lower && upper.points.length > 2 && lower.points.length > 2 ? { upper, lower, left, right } : undefined;
 }
 
 /** Whether a share is inside one of the stretches, asked of shares in order. */
@@ -532,16 +619,9 @@ function placeIn(point: Point, own: Rect, other: Rect): Point {
  * D3 ring's: so it stays a hole under either fill rule.
  */
 function holesOf(outline: Outline, count: number): Hole[] {
-  const loops = flattenPath(parsePath(outline.d))
-    .map((subpath) => subpath.segments)
-    .filter((segments) => segments.length > 0);
+  const loops = loopsOf(outline);
   if (loops.length < 2) return [];
-  const lengths = loops.map((loop) => loop.reduce((sum, segment) => sum + segment.length, 0));
-  // Of two as long, give or take the path data's rounding, the first: describe.shape writes the longest first.
-  let longest = 0;
-  lengths.forEach((length, i) => {
-    if (length > lengths[longest]! + Math.max(0.01, lengths[longest]! / 1000)) longest = i;
-  });
+  const longest = outsideOf(loops);
   return loops
     .filter((_, i) => i !== longest)
     .map((loop): Hole => {
@@ -557,6 +637,22 @@ function holesOf(outline: Outline, count: number): Hole[] {
       };
     })
     .sort((x, y) => y.area - x.area);
+}
+
+/** The loops of the outline's `d`, each a subpath with length. */
+const loopsOf = (outline: Outline): (readonly PathSegment[])[] =>
+  flattenPath(parsePath(outline.d))
+    .map((subpath) => subpath.segments)
+    .filter((segments) => segments.length > 0);
+
+/** Which loop is the outside: the longest, and of two as long, give or take the path data's rounding, the first, as describe.shape writes the longest first. */
+function outsideOf(loops: readonly (readonly PathSegment[])[]): number {
+  const lengths = loops.map((loop) => loop.reduce((sum, segment) => sum + segment.length, 0));
+  let longest = 0;
+  lengths.forEach((length, i) => {
+    if (length > lengths[longest]! + Math.max(0.01, lengths[longest]! / 1000)) longest = i;
+  });
+  return longest;
 }
 
 /** The area a polygon encloses, signed: more than 0 when it runs clockwise on screen. */

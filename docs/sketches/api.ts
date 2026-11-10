@@ -143,6 +143,9 @@ export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 // columns. For it, ChartSwitchView has optional keyOf(element), morphing(on) and space (the element
 // whose space its marks are in), and ChartSwitchPaint optional cssColor, a mark's own colour. The
 // Attachment type doesn't change (M14 decisions 5, 14 and 15).
+// NEW in M15 step 1: show(view, { via }) (ChartSwitchShowOptions) stages a jump through a third view
+// in Presentation: to via, then on to view, each a full switch, with one announcement and focus carried
+// through; in Analysis and Off it goes straight there (M15 decisions 6 and 18).
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 

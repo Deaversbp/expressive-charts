@@ -2202,7 +2202,7 @@ interface ColorAssignment {
 chartSwitch<T extends ChartSwitchViews>(target: string | Element, options: ChartSwitchOptions<T>): ChartSwitch<T>
 ```
 
-Views of the same data in one place, one shown at a time, which turns each mark into the mark with its key in the next view: a donut turning into columns, or a line chart's points into columns keyed as they are ([architecture.md](architecture.md#switching-between-charts)). Each view is a function that draws its chart in the container it's given: one of ours, or a host chart through [`hostView()`](#hostview). Each mark is drawn in its view's colour, a line with its end dot and a point with its ring. Labels move with their shapes and swap their text half way, a key in only one view fades, and the old view's axes, legend and table fade out as the new one's fade in. Only the view shown can be seen, reached or read; focus on a mark moves to its key in the new view, and focus on a line chart's x to its first series' point there. With focus outside the switch, on a toggle, the new view's tab stop moves to the same key, so Tab lands there. A switch back mid-way reverses from where the shapes are. A switch takes 950 ms in Presentation and 200 ms in Analysis, and jumps with motion off. Options that aren't a switch's throw a `TypeError`. Returns [`ChartSwitch<T>`](#chartswitcht).
+Views of the same data in one place, one shown at a time, which turns each mark into the mark with its key in the next view: a donut turning into columns, or a line chart's points into columns keyed as they are ([architecture.md](architecture.md#switching-between-charts)). Each view is a function that draws its chart in the container it's given: one of ours, or a host chart through [`hostView()`](#hostview). Each mark is drawn in its view's colour, a line with its end dot and a point with its ring. Labels move with their shapes and swap their text half way, a key in only one view fades, and the old view's axes, legend and table fade out as the new one's fade in. Only the view shown can be seen, reached or read; focus on a mark moves to its key in the new view, and focus on a line chart's x to its first series' point there. With focus outside the switch, on a toggle, the new view's tab stop moves to the same key, so Tab lands there. A switch back mid-way reverses from where the shapes are. A switch takes 950 ms in Presentation and 200 ms in Analysis, and jumps with motion off. In Presentation, `show(view, { via })` stages a jump through a third view, in two switches, 1.9 s in all, announced once. Options that aren't a switch's throw a `TypeError`. Returns [`ChartSwitch<T>`](#chartswitcht).
 
 ```ts
 import { barChart, chartSwitch, donutChart, link } from "expressive-charts";
@@ -2238,14 +2238,26 @@ const season = chartSwitch("#season", {
 await season.show("columns");                         // focus on week 12's x goes to its column, goals@12
 ```
 
+With three views or more, a jump of two can go through the one between, so the change reads a step at a time: columns side by side, then stacked, then as shares of 100%.
+
+```ts
+import { chartSwitch, type ChartSwitchViewFactory } from "expressive-charts";
+
+// Each draws D3 columns in the container it's given and returns hostView() of its attachment.
+declare const sideBySide: ChartSwitchViewFactory, stacked: ChartSwitchViewFactory, shares: ChartSwitchViewFactory;
+
+const goals = chartSwitch("#goals", { views: { sideBySide, stacked, shares }, initial: "sideBySide", announce: true });
+await goals.show("shares", { via: "stacked" });        // to stacked, then on to shares, announced once
+```
+
 #### `ChartSwitch<T>`
 
 ```ts
 interface ChartSwitch<T extends ChartSwitchViews>
 ```
 
-- `current`: the view shown, or the one a switch is heading for.
-- `show(view)`: `Promise<void>`. Switches to `view`, by the motion mode. It resolves when the switch has landed, or as soon as another `show()` replaces it. A `show()` back to the view a switch is leaving reverses it; one to a third view lands the switch first. One that a `leave` listener calls as the old view's hover ends runs once the switch has begun. It rejects for a view the switch doesn't have.
+- `current`: the view shown, or the one a switch is heading for: a staged jump's `view` from its start.
+- `show(view, options?)`: `Promise<void>`. Switches to `view`, by the motion mode. It resolves when the switch has landed, or as soon as another `show()` replaces it. A `show()` back to the view a switch is leaving reverses it; one to a third view lands the switch first. One that a `leave` listener calls as the old view's hover ends runs once the switch has begun. It rejects for a view the switch doesn't have. With `options.via` ([`ChartSwitchShowOptions<T>`](#chartswitchshowoptionst)), it stages a jump through that view in Presentation. A `show()` for `view` while the jump plays plays on; one in its first leg drops the leg still to come and acts on the one playing, as on any switch: back to the view it began in, it reverses; to `via`, it plays on and stops there; to another view, it lands on `via` and switches on from there. Its second leg is a switch from `via` to `view` as any other. Motion turning off, or a resize, lands the jump on `view` at once, and `destroy()` stops both legs.
 - `chart(view)`: the chart a view's function returned, typed as it returned it, for `update()` and the rest.
 - `on(type, listener)`: `() => void`, the unsubscribe. Listens for the mark events of the view on show, `current`, as its chart's `on()` does, typed by the views' rows (a union when they differ). The other views' events aren't heard. The old view's hover ends as a switch starts, while it's still the view on show, so its `leave` events are heard; from then the view the switch is heading for is heard.
 - `marks()`: `readonly MarkGeometry[]`. The view on show's marks, as its chart's `marks()` gives them; while a switch plays, the marks of the view it's heading for.
@@ -2265,6 +2277,14 @@ interface ChartSwitchOptions<T extends ChartSwitchViews>
 - `transition`: `TransitionEffect`. Plays each pair of marks with the same key. Default [`morph()`](#morph). The switch draws the labels and fades on morph's schedule, so one with other timing still plays, but its shapes drift from the labels.
 - `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots by key, given to every view's function. Default: a new assignment.
 - `announce`: `boolean`. Default false. A polite live region that says the new view's label after each switch.
+
+#### `ChartSwitchShowOptions<T>`
+
+```ts
+interface ChartSwitchShowOptions<T extends ChartSwitchViews>
+```
+
+- `via`: a view's name. A view to stage the jump through. In Presentation (`motion.staged`), the switch plays from the view on show to `via`, then from `via` to the view, each a full switch, 950 ms base, so 1.9 s in all. The first leg lands without settling, as a switch landed for a third view does; only the second does, so focus follows its key through `via` into the view, or the view's tab stop moves to it, and `announce` says the view's name alone, once. In Analysis and Off, as with reduced motion when the viewer hasn't picked a mode, it switches straight there, as `show(view)` does, and so it does when `via` is the view on show or the view itself. `show()` rejects for a `via` the switch doesn't have, as for a view.
 
 #### `ChartSwitchPaint`
 

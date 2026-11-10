@@ -25,6 +25,16 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`show(view, { via })` on a chart switch,** with `ChartSwitchShowOptions`: a jump staged through a third view. In Presentation, the switch plays from the view on show to `via`, then from `via` to `view`, each a full switch, 1.9 s in all, so side-by-side columns can stack before they become shares of 100%. `current` is `view` from the start; focus follows its key through `via` into `view`, or the tab stop does; and `announce` says `view`'s name once. In Analysis and Off, as with reduced motion when the viewer hasn't picked a mode, it goes straight there, as `show(view)` does. A `show()` part way drops the leg still to come and acts on the one playing, as on any switch, and motion turning off or a resize lands the jump on `view`. An unknown `via` rejects. Every `show()` without `via` switches as before, byte for byte.
+
+### Changed
+
+### Fixed
+
 ## 0.9.0 (3 November 2026)
 
 Host charts in a chart switch: `hostView()` makes an `expressive()` or `fromVegaView()` attachment a switch's view, so a D3 pie can morph into D3 columns as our donut morphs into our columns, with the switch's optional `keyOf`, `morphing`, `space` and `cssColor` for it; and `expressive()` measuring its effects' text again when it changes size. Nothing in the effect-author API changes. Every change is outside the promise, and none needs anything written instead.

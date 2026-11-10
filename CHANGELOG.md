@@ -27,9 +27,17 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ## Unreleased
 
+### Added
+
+- **`show(view, { via })` on a chart switch,** with `ChartSwitchShowOptions`: a jump staged through a third view. In Presentation, the switch plays from the view on show to `via`, then from `via` to `view`, each a full switch, 1.9 s in all, so side-by-side columns can stack before they become shares of 100%. `current` is `view` from the start; focus follows its key through `via` into `view`, or the tab stop does; and `announce` says `view`'s name once. In Analysis and Off, as with reduced motion when the viewer hasn't picked a mode, it goes straight there, as `show(view)` does. A `show()` part way drops the leg still to come and acts on the one playing, as on any switch, and motion turning off or a resize lands the jump on `view`. An unknown `via` rejects. Every `show()` without `via` switches as before, byte for byte.
+
 ### Changed
 
 - **The type declarations are built with tsdown 0.23.7,** on rolldown-plugin-dts 0.30. They no longer end with a `sourceMappingURL` comment, which pointed at a declaration map the package never had, and the CommonJS declarations share their types through other chunks. Each entry has the same names, as an ES module and as CommonJS, with the same types, checked on TypeScript 5.4, 6 and 7. The scripts, their source maps and the stylesheet are byte for byte as in 0.9.0. Nothing to write instead.
+
+### Fixed
+
+- **A host view drawn again mid-switch stays hidden until the switch lands.** `hostView()` hid a host's marks and the labels the page names as they were when a switch started, so a host drawn again while it played, for new data or a resize, showed its new elements over the switch's overlay. Now, after the attachment refreshes while a switch plays, through the page's `refresh()` or `fromVegaView()`'s own after a Vega render, the view hides the live marks' elements and the labels, read again, as they are then. What it hid that the host still draws stays hidden, such as a mark leaving through the host's own exit transition, and what the host took away is given back. The switch plays on with the pairs it began with, and lands on the host as it drew it. A host that isn't drawn again mid-switch switches as before, byte for byte.
 
 ## 0.9.0 (3 November 2026)
 

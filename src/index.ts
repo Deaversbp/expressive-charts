@@ -50,6 +50,7 @@ export type {
   ChartSwitch,
   ChartSwitchOptions,
   ChartSwitchPaint,
+  ChartSwitchShowOptions,
   ChartSwitchView,
   ChartSwitchViewFactory,
   ChartSwitchViewName,
@@ -121,8 +122,9 @@ export function lineChart<D>(target: string | Element, options: LineChartOptions
 /**
  * Views of the same data in `target` (an element or a selector), one shown at a time: `show(view)`
  * turns each mark into the mark with its key in the other view with `transition`, morph() by default,
- * while the labels move and swap their text. Each view's function draws its chart in the container
- * it's given; pass it the `colors` it's given too, so a key keeps its colour from view to view.
+ * while the labels move and swap their text, and `show(view, { via })` stages a jump through a third
+ * view in Presentation. Each view's function draws its chart in the container it's given; pass it the
+ * `colors` it's given too, so a key keeps its colour from view to view.
  */
 export function chartSwitch<T extends ChartSwitchViews>(target: string | Element, options: ChartSwitchOptions<T>): ChartSwitch<T> {
   // Charts never import effects: the default transition is filled in here.

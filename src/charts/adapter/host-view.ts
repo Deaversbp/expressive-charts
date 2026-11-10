@@ -4,8 +4,10 @@
 // space (`space`); the labels the page names, in its font; each mark's key from its elements; the
 // host's colour for each mark; and its keyboard's tab stop. While a switch plays, it hides the host's
 // marks and those labels inline through the attachment's edits, so what the host had comes back when
-// the switch lands, and the attachment's destroy() puts everything back. Like the adapter, it never
-// names an effect, and nothing is written into the host's DOM but while a switch plays.
+// the switch lands, and the attachment's destroy() puts everything back. A host drawn again mid-switch
+// is hidden again as it is then, after each refresh, so its new marks and labels stay hidden too. Like
+// the adapter, it never names an effect, and nothing is written into the host's DOM but while a
+// switch plays.
 
 import { matrix } from "../../core";
 import { report } from "../../core/report";
@@ -91,9 +93,10 @@ export function hostView<D>(attachment: Attachment<D>, options: HostViewOptions 
   }
   const { edits } = inside;
   const svg = (): SVGSVGElement => inside.root()!;
-  /** The labels a switch started with, which it draws, and the elements hidden while it plays. */
+  /** While a switch plays: the labels last read, the elements hidden, and the <svg> that took `ec-morphing`. */
   let given: readonly HostLabel[] | undefined;
   let hidden: readonly Element[] = [];
+  let classed: SVGSVGElement | undefined;
 
   /** The page's labels now: those of a mark's key, in the host's <svg>. */
   function read(): HostLabel[] {
@@ -132,6 +135,28 @@ export function hostView<D>(attachment: Attachment<D>, options: HostViewOptions 
     return { key, role, text: element.textContent ?? "", x: at.x, y: at.y, anchor: anchor === "middle" || anchor === "end" ? anchor : "start", element: text };
   }
 
+  /**
+   * While a switch plays (`on`): hides the live marks' elements and the page's labels, read again, as
+   * they are now, and gives their <svg> `ec-morphing`. What it hid that the host still draws stays
+   * hidden (a mark the host takes away in a transition of its own, which the switch draws still), and
+   * the rest is given back. Not `on`: everything is given back.
+   */
+  const hide = (on: boolean): void => {
+    const root = on ? svg() : undefined;
+    given = on ? read() : undefined;
+    const now = new Set(given ? [...inside.elements(), ...given.map((label) => label.element), ...hidden.filter((element) => root?.contains(element))] : []);
+    for (const element of hidden) if (!now.has(element)) edits.style(element, "visibility", undefined);
+    hidden = [...now];
+    for (const element of hidden) edits.style(element, "visibility", "hidden");
+    // Through the edits, before the switch adds it, so the class attribute comes back as it was; on
+    // the <svg> the marks are in now, if the host drew a new one.
+    if (classed !== root) {
+      if (classed) edits.toggleClass(classed, "ec-morphing", false);
+      if (root) edits.toggleClass(root, "ec-morphing", true);
+      classed = root;
+    }
+  };
+
   const view: HostView<D> = {
     get element() {
       return svg();
@@ -146,7 +171,7 @@ export function hostView<D>(attachment: Attachment<D>, options: HostViewOptions 
     focus: (key) => attachment.focus(key),
     leave: () => attachment.leave(),
     destroy() {
-      given = undefined;
+      given = classed = undefined;
       hidden = [];
       attachment.destroy();
     },
@@ -157,15 +182,13 @@ export function hostView<D>(attachment: Attachment<D>, options: HostViewOptions 
     },
     keyOf: (element) => inside.keyOf(element),
     moveTabStop: (key) => inside.moveTabStop(key),
-    morphing(on) {
-      for (const element of hidden) edits.style(element, "visibility", undefined);
-      given = on ? read() : undefined;
-      hidden = given ? [...inside.elements(), ...given.map((label) => label.element)] : [];
-      for (const element of hidden) edits.style(element, "visibility", "hidden");
-      // Through the edits, before the switch adds it, so the class attribute comes back as it was.
-      edits.toggleClass(svg(), "ec-morphing", on);
-    }
+    morphing: hide
   };
+  // After every refresh while a switch plays, however it came (the page's, or fromVegaView()'s after
+  // a Vega render): the switch plays on with the pairs it began with, over the host's new drawing.
+  inside.refreshed.add(() => {
+    if (given) hide(true);
+  });
   // A link takes the view, and a switch of host views, through the attachment's hover.
   return linkable(port, view);
 }

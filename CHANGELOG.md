@@ -35,6 +35,8 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 ### Fixed
 
+- **A host view drawn again mid-switch stays hidden until the switch lands.** `hostView()` hid a host's marks and the labels the page names as they were when a switch started, so a host drawn again while it played, for new data or a resize, showed its new elements over the switch's overlay. Now, after the attachment refreshes while a switch plays, through the page's `refresh()` or `fromVegaView()`'s own after a Vega render, the view hides the live marks' elements and the labels, read again, as they are then. What it hid that the host still draws stays hidden, such as a mark leaving through the host's own exit transition, and what the host took away is given back. The switch plays on with the pairs it began with, and lands on the host as it drew it. A host that isn't drawn again mid-switch switches as before, byte for byte.
+
 ## 0.9.0 (3 November 2026)
 
 Host charts in a chart switch: `hostView()` makes an `expressive()` or `fromVegaView()` attachment a switch's view, so a D3 pie can morph into D3 columns as our donut morphs into our columns, with the switch's optional `keyOf`, `morphing`, `space` and `cssColor` for it; and `expressive()` measuring its effects' text again when it changes size. Nothing in the effect-author API changes. Every change is outside the promise, and none needs anything written instead.

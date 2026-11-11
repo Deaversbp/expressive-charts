@@ -1,8 +1,8 @@
 // The accessibility audit's automatic checks (docs/a11y-audit.md has the rest, and the results).
 // axe-core, a pinned dev dependency, runs its WCAG 2.2 A and AA rules on every demo page: in light and
 // dark, at 320 px wide, under forced colours, on morph.html mid-switch, with its season's other views
-// shown and with its D3 switch mid-switch and on its columns, and on line.html with Curved and Nearest
-// point picked. Beside it, DOM checks for what axe can't see: the tab order with a visible focus at
+// shown and with its D3 switch mid-switch and on its columns, on layouts.html mid-jump and at 100% with
+// a segment focused, and on line.html with Curved and Nearest point picked. Beside it, DOM checks for what axe can't see: the tab order with a visible focus at
 // every stop, no sideways scroll at 320 px, the tooltip clear of the focus ring, dismissed by Escape
 // and hoverable, every label at 4.5:1 while another mark is hovered, nothing moving by itself after
 // 5 s, and legends keeping their colours under forced colours. There are no screenshots here, so every
@@ -10,7 +10,7 @@
 
 import axe from "axe-core";
 import { expect, test, type Page } from "@playwright/test";
-import { barsDemo, chartsDemo, donutDemo, FRAME, hoverShape, lineDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, shapesDemo, stressDemo, tabInto, type Demo } from "./demo";
+import { barsDemo, chartsDemo, donutDemo, FRAME, hoverShape, layoutsDemo, lineDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, shapesDemo, stressDemo, tabInto, type Demo } from "./demo";
 
 /** axe's rules for WCAG 2.0, 2.1 and 2.2 at levels A and AA. */
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -140,6 +140,26 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
       { chart: "#dumbbell", shape: "circle.dot-second >> nth=7" },
       { chart: "#radar", shape: "circle.value-player >> nth=2" },
       { chart: "#butterfly", shape: "rect.bar-conceded >> nth=4" }
+    ]
+  },
+  {
+    name: "layouts",
+    demo: layoutsDemo,
+    stops: [
+      ...MOTION,
+      ...["Side by side", "Stacked", "100%", "Okafor: 16 goals"],
+      ...["Stacked", "100%", "Shots on target: 177 in 38 matches"],
+      ...["Radar", "Bars", "Okafor, goals: 0.50 per 90, 96th percentile"],
+      ...["Treemap", "Bars", "Okafor, forward: 16 goals, 28% of 58"]
+    ],
+    // None: its four switches' views are attachments, which draw no tooltip. Their hovers dim marks, so
+    // "contrast on hover" hovers one in each card's first view; layouts.spec.ts checks the rest.
+    charts: [],
+    hosts: [
+      { chart: "#bars", shape: '.ec-switch-view[data-view="side"] rect.segment-goals >> nth=2' },
+      { chart: "#areas", shape: '.ec-switch-view[data-view="stacked"] path.band-onTarget' },
+      { chart: "#radar", shape: '.ec-switch-view[data-view="radar"] circle.value-player >> nth=2' },
+      { chart: "#treemap", shape: '.ec-switch-view[data-view="treemap"] rect.tile-winger >> nth=0' }
     ]
   },
   {
@@ -282,6 +302,21 @@ test.describe("axe", () => {
     await page.locator("#d3-toggle").focus();
     await page.keyboard.press("Tab");
     await expect(page.locator("#d3-shots rect.column-goal")).toBeFocused();
+    expect(await axeViolations(page)).toEqual([]);
+  });
+
+  test("layouts.html's bars mid-jump, then at 100% with a segment focused", async ({ page }) => {
+    await openAtRest(page, layoutsDemo);
+    await page.locator('#bars-layout button[data-value="share"]').click();
+    // In the second leg, from Stacked to 100%.
+    await page.clock.runFor(1200);
+    const views = page.locator('#bars .ec-switch-view:is([data-view="stacked"], [data-view="share"])');
+    await expect(views).toHaveClass([/ec-switching/, /ec-switching/]);
+    expect(await axeViolations(page)).toEqual([]);
+    await expect(views).toHaveClass([/ec-switching/, /ec-switching/]);
+    await page.clock.runFor(REST);
+    await page.keyboard.press("Tab");
+    await expect(page.locator('#bars .ec-switch-view[data-view="share"] rect.segment-goals').first()).toBeFocused();
     expect(await axeViolations(page)).toEqual([]);
   });
 });

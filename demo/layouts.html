@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layout morphs on D3 charts · expressive-charts</title>
+<style>
+  /* Page chrome only, as on charts.html. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d67;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6; --link: #226dc7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5; --link: #3987e5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+  /* Two charts side by side where there's room. Each card's title, note, controls and chart share rows
+     with the other's, so the charts start at the same height. */
+  .pair { display: grid; gap: 20px; min-width: 0; }
+  @media (min-width: 860px) {
+    .pair { grid-template-columns: 1fr 1fr; }
+    .pair.charts > .card { grid-row: span 4; grid-template-rows: subgrid; }
+  }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 20px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
+  .note { font-size: 14px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: 32px; }
+  .label { font-size: 13px; color: var(--muted); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ring); border-radius: 8px; background: var(--surface); }
+  .seg button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2); padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+  /* Forced colours drop the wash, which leaves only the weight: the pressed button takes the viewer's selection colours, as the motion switch does. */
+  @media (forced-colors: active) { .seg button[aria-pressed="true"] { background: Highlight; color: HighlightText; } }
+  .seg button:hover { background: var(--wash); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+  .box { min-width: 0; }
+  .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  kbd { font: inherit; font-size: 12px; border: 1px solid var(--ring); border-radius: 4px; padding: 0 4px; background: var(--page); }
+  a { color: var(--link); }
+  /* The motion switch sits on the page, darker than the charts' surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
+  #motion { --ec-text-muted: var(--muted); }
+  /* The charts' own styles: they're someone else's charts, so the page styles them, not the library.
+     Their marks take the library's palette slots, and their axes its grid and text tokens. Each card's
+     views take the same slots, by series or by position, so nothing changes colour as it morphs. */
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  /* Under forced colours (Windows contrast themes), keep the swatches' colours, as the library's legend does: the marks keep theirs. */
+  .legend i { flex: none; width: 12px; height: 12px; border-radius: 3px; forced-color-adjust: none; }
+  .legend .swatch-1 { background: var(--ec-series-1, #2a78d6); }
+  .legend .swatch-2 { background: var(--ec-series-2, #eb6834); }
+  .legend .swatch-3 { background: var(--ec-series-3, #02a471); }
+  .legend .swatch-4 { background: var(--ec-series-4, #c28409); }
+  .legend .swatch-average { border-radius: 50%; background: var(--ec-text-muted, #75736d); }
+  .legend .swatch-player { border-radius: 50%; }
+  .switch { min-width: 0; }
+  .chart { display: block; max-width: 100%; height: auto; overflow: visible; }
+  .chart .tick, .chart .axis-title { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
+  .chart .grid { stroke: var(--ec-grid, #e1e0d9); }
+  .chart .baseline { stroke: var(--ec-axis, #c3c2b7); }
+  .chart .host-label { font-size: 12.5px; fill: var(--ink-2); }
+  /* The numbers sit on the bars or past their ends: a halo in the card's colour keeps them 4.5:1 on any colour, as the radar's ring values have. */
+  .chart .host-value { font-size: 11px; font-weight: 600; fill: var(--ink); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  /* The bars: goals and assists in the bars page's slots. */
+  #bars .segment-goals { fill: var(--ec-series-1, #2a78d6); }
+  #bars .segment-assists { fill: var(--ec-series-4, #c28409); }
+  /* The areas: on target and off it, as on the shapes page. */
+  #areas .band-onTarget { fill: var(--ec-series-1, #2a78d6); }
+  #areas .band-offTarget { fill: var(--ec-series-2, #eb6834); }
+  /* The radar, as on the charts page: the rings and spokes are its axes; the player in the first colour over the dashed average. */
+  #radar .ring { fill: none; stroke: var(--ec-grid, #e1e0d9); }
+  #radar .spoke { stroke: var(--ec-grid, #e1e0d9); }
+  #radar .axis-name { font-size: 12.5px; fill: var(--ink-2); }
+  /* A halo in the card's colour, so the outlines crossing the rings' values don't cut them. */
+  #radar .ring-value { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  #radar .outline { stroke-linejoin: round; }
+  #radar .outline-player { fill: color-mix(in srgb, var(--ec-series-1, #2a78d6) 14%, transparent); stroke: var(--ec-series-1, #2a78d6); }
+  #radar .outline-average { fill: none; stroke: var(--ec-text-muted, #75736d); stroke-dasharray: 5 4; }
+  #radar .value-player, #radar .bar-player { fill: var(--ec-series-1, #2a78d6); }
+  #radar .value-average, #radar .bar-average { fill: var(--ec-text-muted, #75736d); }
+  /* The treemap and its bars: each position in its slot. The names in the tiles take the numbers' halo. */
+  #treemap .tile-forward, #treemap .bar-forward { fill: var(--ec-series-1, #2a78d6); }
+  #treemap .tile-winger, #treemap .bar-winger { fill: var(--ec-series-2, #eb6834); }
+  #treemap .tile-midfielder, #treemap .bar-midfielder { fill: var(--ec-series-3, #02a471); }
+  #treemap .tile-defender, #treemap .bar-defender { fill: var(--ec-series-4, #c28409); }
+  #treemap .treemap-labels .host-label { font-size: 12px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  #treemap .treemap-labels .host-value { font-weight: 400; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Layout morphs on D3 charts · hostView()</p>
+    <h1>Bars, areas, a radar and a treemap that change their layout</h1>
+    <p class="lede">Four cards, each a chart switch of charts drawn with D3 by code that knows nothing about expressive-charts. Each chart is attached with <code>expressive()</code> and made a view with <code>hostView()</code>, and <code>morph()</code> turns each mark into its own mark in the next layout, by its key. Nothing moves until you press a card's buttons, or <kbd>V</kbd> on a mark.</p>
+  </header>
+
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
+
+  <div class="pair charts">
+    <section class="card" aria-labelledby="bars-title">
+      <h2 id="bars-title">Goals and assists, three ways, on D3 bars</h2>
+      <p class="note">Each player's goals and assists side by side, stacked, or as shares of 100%. Each segment is a <code>&lt;rect&gt;</code> keyed by its series and player, so it slides from beside the other into the stack, then stretches to its share, and its number becomes a percentage. A jump from side by side to 100% goes through Stacked.</p>
+      <div class="bar">
+        <span class="label" id="bars-layout-label">Show</span>
+        <div class="seg" id="bars-layout" role="group" aria-labelledby="bars-layout-label">
+          <button type="button" data-value="side" aria-pressed="true">Side by side</button>
+          <button type="button" data-value="stacked" aria-pressed="false">Stacked</button>
+          <button type="button" data-value="share" aria-pressed="false">100%</button>
+        </div>
+      </div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-1"></i>Goals</span><span><i class="swatch-4"></i>Assists</span></div>
+        <div id="bars" class="switch"></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="areas-title">
+      <h2 id="areas-title">Shots, stacked and as shares, on a D3 area</h2>
+      <p class="note">Shots on target and off target per match, each averaged over the last five, as two <code>d3.area()</code> bands, stacked, or as shares of each week's shots. Both layouts span the same weeks, so <code>morph()</code> keeps each week's top and bottom on its week as they move, and each band's name moves with it.</p>
+      <div class="bar">
+        <span class="label" id="areas-layout-label">Show</span>
+        <div class="seg" id="areas-layout" role="group" aria-labelledby="areas-layout-label">
+          <button type="button" data-value="stacked" aria-pressed="true">Stacked</button>
+          <button type="button" data-value="share" aria-pressed="false">100%</button>
+        </div>
+      </div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-1"></i>On target</span><span><i class="swatch-2"></i>Off target</span></div>
+        <div id="areas" class="switch"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="pair charts">
+    <section class="card" aria-labelledby="radar-title">
+      <h2 id="radar-title">Okafor against the league, from a D3 radar to bars</h2>
+      <p class="note">Six numbers per 90 minutes, each a percentile of the league's outfield players. Each value's <code>&lt;circle&gt;</code> grows into its bar, the player's above the league average's, and the outlines, rings and spokes fade. The axes' names move to the bars', and the percentiles fade in.</p>
+      <div class="bar">
+        <span class="label" id="radar-layout-label">Show</span>
+        <div class="seg" id="radar-layout" role="group" aria-labelledby="radar-layout-label">
+          <button type="button" data-value="radar" aria-pressed="true">Radar</button>
+          <button type="button" data-value="bars" aria-pressed="false">Bars</button>
+        </div>
+      </div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-1 swatch-player"></i>Okafor</span><span><i class="swatch-average"></i>League average</span></div>
+        <div id="radar" class="switch"></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="treemap-title">
+      <h2 id="treemap-title">The season's scorers, from a D3 treemap to bars</h2>
+      <p class="note">The season's 58 goals by scorer, the tiles grouped by position and laid out by <code>d3.treemap()</code>. Each tile turns into its scorer's bar, most goals first, in its position's colour. A tile with room for its scorer's name and goals has them, and they move to the bar; a small tile's bar's fade in.</p>
+      <div class="bar">
+        <span class="label" id="treemap-layout-label">Show</span>
+        <div class="seg" id="treemap-layout" role="group" aria-labelledby="treemap-layout-label">
+          <button type="button" data-value="treemap" aria-pressed="true">Treemap</button>
+          <button type="button" data-value="bars" aria-pressed="false">Bars</button>
+        </div>
+      </div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-1"></i>Forward</span><span><i class="swatch-2"></i>Winger</span><span><i class="swatch-3"></i>Midfielder</span><span><i class="swatch-4"></i>Defender</span></div>
+        <div id="treemap" class="switch"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="pair">
+    <section class="card" aria-labelledby="notes-title">
+      <h2 id="notes-title">Design notes</h2>
+      <ul class="checklist">
+        <li>Each view is a chart drawn by a D3 module that knows nothing about expressive-charts, attached with <code>expressive()</code> and made a view with <code>hostView()</code>. The switch pairs each mark with the mark that has its key in the next view, and <code>morph()</code> turns one into the other, so no effect knows the kind of chart it's on.</li>
+        <li>A bar's segments float in a stack, so they're given <code>baseline: "left"</code>, and so are the treemap's tiles: each tile's sides then pair with its bar's. The radar's circles are read as points, and its areas' paths as shapes: two bands across the same weeks pair week by week.</li>
+        <li>A jump of two, from side by side to 100% or back, goes through Stacked in Presentation: two switches of about a second each, announced once, when it lands. In Analysis it goes straight there in a fifth of a second, and in Off at once.</li>
+        <li>Each label the page names moves with its mark and swaps its text half way: a count becomes a share, an axis's name a bar's. A label with no partner fades, as do the rings, the spokes and the axes.</li>
+        <li>Each card's views give a series or a position the same colour, through the page's CSS, so nothing changes colour as it morphs.</li>
+        <li>Focus follows its mark's key into the next view, and the switch announces the view it lands on. The buttons are toggle buttons and keep focus; <kbd>V</kbd> on a focused mark goes to the next view.</li>
+      </ul>
+    </section>
+
+    <section class="card" aria-labelledby="try-title">
+      <h2 id="try-title">Things to try</h2>
+      <ul class="checklist">
+        <li>Press 100% on the bars: each segment slides into the stack, then stretches, and its number becomes a share. Press Side by side to go back the same way.</li>
+        <li>Press 100% on the areas, and watch a week: its top and bottom move straight up or down.</li>
+        <li>Tab to a circle on the radar and press <kbd>V</kbd>: it grows into its bar, and focus stays on it there.</li>
+        <li>Pick Analysis, then press Bars on the treemap: the tiles become bars in a fifth of a second.</li>
+        <li>Press 100% on the bars, then Side by side part way through: the bars go back from where they are.</li>
+        <li>Turn on reduced motion and press any button: the new layout is there at once.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+<script type="module" src="./layouts.ts"></script>
+</body>
+</html>

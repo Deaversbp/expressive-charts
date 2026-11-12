@@ -11,6 +11,7 @@ export {
   hostView,
   type Attachment,
   type ExpressiveOptions,
+  type HostGuide,
   type HostLabel,
   type HostMark,
   type HostView,
@@ -28,6 +29,7 @@ export { link, type Link, type LinkOptions, type LinkSource } from "./link";
 export {
   chartSwitch,
   type ChartSwitch,
+  type ChartSwitchGuide,
   type ChartSwitchOptions,
   type ChartSwitchPaint,
   type ChartSwitchShowOptions,

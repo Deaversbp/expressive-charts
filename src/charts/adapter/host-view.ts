@@ -2,24 +2,26 @@
 // D3 pie morphs into D3 columns as our donut morphs into our columns. The view is the attachment's own
 // handle with what a switch reads of a chart: the host's <svg>; its marks, in their common ancestor's
 // space (`space`); the labels the page names, in its font; each mark's key from its elements; the
-// host's colour for each mark; and its keyboard's tab stop. While a switch plays, it hides the host's
-// marks and those labels inline through the attachment's edits, so what the host had comes back when
+// host's colour for each mark; its keyboard's tab stop; and the guides the page names, which stay put
+// when the next view draws them the same. While a switch plays, it hides the host's marks, those
+// labels and those guides inline through the attachment's edits, so what the host had comes back when
 // the switch lands, and the attachment's destroy() puts everything back. A host drawn again mid-switch
-// is hidden again as it is then, after each refresh, so its new marks and labels stay hidden too. Like
-// the adapter, it never names an effect, and nothing is written into the host's DOM but while a
-// switch plays.
+// is hidden again as it is then, after each refresh, so its new marks, labels and guides stay hidden
+// too. Like the adapter, it never names an effect, and nothing is written into the host's DOM but
+// while a switch plays.
 //
 // Several attachments on one <svg> make one view (M16 step 3), as a dumbbell's dots and connectors
 // are one chart: its marks are all of theirs, in their ancestors' nearest common ancestor's space, and
 // a mark's focus, tab stop, colour and hiding go to the attachment it's from. Each key is one mark's:
-// a key two of them have stays the first's. It has no one hover for a link, so it takes no part in a
-// link of its switch, and a link between the attachments goes on as it was.
+// a key two of them have stays the first's. Its labels and guides are the whole <svg>'s. It has no one
+// hover for a link, so it takes no part in a link of its switch, and a link between the attachments
+// goes on as it was.
 
 import { matrix } from "../../core";
 import { report } from "../../core/report";
 import { linkable, portOf, type LinkPort, type RowsOf } from "../link";
 import { setStyles, SVG_NS } from "../render/svg";
-import type { ChartSwitchPaint, ChartSwitchView } from "../switch";
+import type { ChartSwitchGuide, ChartSwitchPaint, ChartSwitchView } from "../switch";
 import type { ChartLabel } from "../types";
 import { insidesOf, type Insides } from "./expressive";
 import { drawnStyle } from "./host-style";
@@ -35,6 +37,14 @@ export interface HostLabel {
   readonly role: "category" | "value";
 }
 
+/** A part of the host's drawing that a chart switch keeps where it is when the next view draws it the same: an axis, a grid, a tick. */
+export interface HostGuide {
+  /** An element in the host's `<svg>`, drawn as it is, with everything in it. */
+  readonly element: Element;
+  /** Its own key: it pairs with the next view's guide with this key, never with a mark or a label. */
+  readonly key: string;
+}
+
 export interface HostViewOptions {
   /**
    * The host's labels, each a `<text>` in its `<svg>` with its mark's key and its role, read as each
@@ -44,6 +54,14 @@ export interface HostViewOptions {
    * Default: none.
    */
   readonly labels?: () => Iterable<HostLabel>;
+  /**
+   * The host's guides (an axis, a grid, a tick), each an element in its `<svg>` with a key of its
+   * own, read as each switch starts. One whose key the next view's guides have too stays on screen at
+   * full strength, where it is, while the switch plays, when the two are drawn the same; every other
+   * fades with its view. One that isn't in the `<svg>`, or has no key, is left out, and so is
+   * everything if it throws (reported). Default: none.
+   */
+  readonly guides?: () => Iterable<HostGuide>;
 }
 
 /**
@@ -57,6 +75,8 @@ export interface HostView<D> extends Attachment<D>, ChartSwitchView {
   readonly space: Element;
   /** The labels `labels` gives, as a switch draws them: at their anchor, in the host text's computed font and fill. */
   labels(): readonly ChartLabel[];
+  /** The guides `guides` gives: each the host's own element, with its key. */
+  guides(): readonly ChartSwitchGuide[];
   /** The host's colour for the mark, its fill or its stroke on a line, as its first part draws it. */
   paintOf(key: string): ChartSwitchPaint | undefined;
   keyOf(element: Element): string | undefined;
@@ -126,14 +146,18 @@ export function hostView<D>(attachments: Attachment<D> | readonly Attachment<D>[
   if (typeof options !== "object" || options === null || (options.labels !== undefined && typeof options.labels !== "function")) {
     throw new TypeError("hostView: labels must be a function that returns the host's labels, such as () => names.map((element) => ({ element, key: element.textContent, role: \"category\" })).");
   }
+  if (options.guides !== undefined && typeof options.guides !== "function") {
+    throw new TypeError("hostView: guides must be a function that returns the host's guides, such as () => [{ element: svg.querySelector(\"g.axis\"), key: \"y\" }].");
+  }
   const lead = parts[0]!;
   /** Several attachments: one view of them, with no one hover for a link. */
   const several = parts.length > 1;
-  // The labels (the page's, of the whole <svg>) and the class through the first's edits.
+  // The labels and guides (the page's, of the whole <svg>) and the class through the first's edits.
   const { edits } = lead.inside;
   const svg = (): SVGSVGElement => lead.inside.root()!;
-  /** While a switch plays: the labels last read, and the <svg> that took `ec-morphing`. Each part keeps the elements it hid. */
+  /** While a switch plays: the labels and guides last read, and the <svg> that took `ec-morphing`. Each part keeps the elements it hid. */
   let given: readonly HostLabel[] | undefined;
+  let guided: readonly HostGuide[] | undefined;
   let classed: SVGSVGElement | undefined;
   const clash = several ? clashOf(parts, svg()) : undefined;
   if (clash) throw new TypeError(`hostView: ${clash.problem}.`);
@@ -149,6 +173,18 @@ export function hostView<D>(attachments: Attachment<D> | readonly Attachment<D>[
     const keys = new Set(drawn().flatMap((part) => part.attachment.marks().map((mark) => mark.key)));
     try {
       return Array.from(options.labels()).filter((label) => label?.element?.localName === "text" && svg().contains(label.element) && keys.has(label.key) && (label.role === "category" || label.role === "value"));
+    } catch (error) {
+      report(error);
+      return [];
+    }
+  }
+
+  /** The page's guides now: elements in the host's <svg>, each with a key. */
+  function guides(): HostGuide[] {
+    if (!options.guides) return [];
+    const root = svg();
+    try {
+      return Array.from(options.guides()).filter((guide) => (guide?.element as Node | undefined)?.nodeType === 1 && guide.element !== root && root.contains(guide.element) && typeof guide.key === "string");
     } catch (error) {
       report(error);
       return [];
@@ -181,15 +217,15 @@ export function hostView<D>(attachments: Attachment<D> | readonly Attachment<D>[
   }
 
   /**
-   * While a switch plays (`on`): hides the live marks' elements and the page's labels, read again, as
-   * they are now, and gives their <svg> `ec-morphing`. What it hid that the host still draws stays
-   * hidden (a mark the host takes away in a transition of its own, which the switch draws still), and
-   * the rest is given back. Not `on`: everything is given back. Each attachment's elements through its
-   * own edits, and the labels and the class through the first's; an element two of them have, through
-   * the first's. Everything goes back before anything is hidden again, so an element that moved from
-   * one to another is given back by the one and hidden by the other. As a switch starts, the
-   * attachments of several that a refresh has left in two <svg>s, or with a key two of them have, are
-   * reported.
+   * While a switch plays (`on`): hides the live marks' elements and the page's labels and guides, read
+   * again, as they are now, and gives their <svg> `ec-morphing`. What it hid that the host still draws
+   * stays hidden (a mark the host takes away in a transition of its own, which the switch draws
+   * still), and the rest is given back. Not `on`: everything is given back. Each attachment's elements
+   * through its own edits, and the labels, the guides and the class through the first's; an element two
+   * of them have, through the first's. Everything goes back before anything is hidden again, so an
+   * element that moved from one to another is given back by the one and hidden by the other. As a
+   * switch starts, the attachments of several that a refresh has left in two <svg>s, or with a key two
+   * of them have, are reported.
    */
   const hide = (on: boolean): void => {
     if (on && given === undefined && several) {
@@ -198,8 +234,9 @@ export function hostView<D>(attachments: Attachment<D> | readonly Attachment<D>[
     }
     const root = on ? svg() : undefined;
     given = on ? read() : undefined;
-    const labels = given;
-    const now = parts.map(({ inside, hidden }, i) => new Set(labels ? [...inside.elements(), ...(i === 0 ? labels.map((label) => label.element) : []), ...hidden.filter((element) => root?.contains(element))] : []));
+    guided = on ? guides() : undefined;
+    const named = [...(given ?? []).map((label) => label.element), ...(guided ?? []).map((guide) => guide.element)];
+    const now = parts.map(({ inside, hidden }, i) => new Set(given ? [...inside.elements(), ...(i === 0 ? named : []), ...hidden.filter((element) => root?.contains(element))] : []));
     for (let i = 1; i < now.length; i++) for (const element of now[i]!) if (now.some((earlier, j) => j < i && earlier.has(element))) now[i]!.delete(element);
     parts.forEach((part, i) => {
       for (const element of part.hidden) if (!now[i]!.has(element)) part.inside.edits.style(element, "visibility", undefined);
@@ -255,11 +292,12 @@ export function hostView<D>(attachments: Attachment<D> | readonly Attachment<D>[
       for (const { attachment } of parts) attachment.leave();
     },
     destroy() {
-      given = classed = undefined;
+      given = guided = classed = undefined;
       for (const part of parts) part.hidden = [];
       for (const { attachment } of [...parts].reverse()) attachment.destroy();
     },
     labels: () => (given ?? read()).map(chartLabel),
+    guides: () => guided ?? guides(),
     paintOf(key) {
       for (const { inside } of drawn()) {
         const color = inside.colorOf(key);

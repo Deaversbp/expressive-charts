@@ -413,6 +413,10 @@ interface SeveralOptions {
   readonly resize?: boolean;
   /** A third view: our own bars. */
   readonly ours?: boolean;
+  /** Each host's axis named as a guide, keyed "x". */
+  readonly guides?: boolean;
+  /** The bars' rows' step. Default 40 px, so the names move between the views. */
+  readonly barRow?: number;
 }
 
 /** The bars' rows, 40 px apart, so the names move between the views. */
@@ -438,12 +442,12 @@ function setup(options: SeveralOptions = {}) {
       drawn.dumbbell = canonical(dumbbell.svg);
       parts = { first: attachDots(dumbbell, "first", e), second: attachDots(dumbbell, "second", e), connectors: attachConnectors(dumbbell, e) };
       if (options.linked ?? true) joined = link([parts.first, parts.second, parts.connectors], { by: ({ data }) => data.datum.name });
-      return hostView([parts.first, parts.second, parts.connectors], { labels: dumbbellLabels(dumbbell) });
+      return hostView([parts.first, parts.second, parts.connectors], { labels: dumbbellLabels(dumbbell), ...(options.guides ? { guides: () => [{ element: dumbbell.svg.querySelector(".axes")!, key: "x" }] } : {}) });
     },
     bars: (container: HTMLElement) => {
-      bars = barsHost(container, players, { row: BAR_ROW });
+      bars = barsHost(container, players, { row: options.barRow ?? BAR_ROW });
       drawn.bars = bars.svg.outerHTML;
-      return hostView(attachBars(bars, e), { labels: barLabels(bars) });
+      return hostView(attachBars(bars, e), { labels: barLabels(bars), ...(options.guides ? { guides: () => [{ element: bars.svg.querySelector(".axes")!, key: "x" }] } : {}) });
     },
     ...(options.ours ? { ours: ours(e) } : {})
   } satisfies ChartSwitchViews;
@@ -636,6 +640,30 @@ describe("hostView([a, b, c]): a dumbbell's three attachments as one view", () =
     expect(switcher.current).toBe("bars");
     expect([...dumbbell.svg.querySelectorAll("*")].filter(hidden)).toEqual([]);
     expect(dumbbell.svg.hasAttribute("class")).toBe(false);
+  });
+
+  it("gives the whole <svg>'s guides, hidden through the first's edits, and the switch keeps the axis both views draw the same", async () => {
+    const { switcher, view, dumbbell, parts, overlay, clock, land, rest } = setup({ guides: true, barRow: ROW });
+    const axes = dumbbell.svg.querySelector(".axes")!;
+    expect(view.guides()).toEqual([{ element: axes, key: "x" }]);
+    /** Each copy of a guide in the switch's overlay, by key, with its opacity: the old view's, then the new view's. */
+    const copies = (): string[] => Array.from(overlay.querySelectorAll(":scope > .ec-switch-guides > g"), (group) => `${group.getAttribute("data-key")} ${group.getAttribute("opacity")}`);
+    void switcher.show("bars");
+    expect(hidden(axes)).toBe(true);
+    clock.advance(300);
+    // Drawn the same in both: at full strength, the dumbbell's until half way, then the bars'.
+    expect(copies()).toEqual(["x 1", "x 0"]);
+    clock.advance(400);
+    expect(copies()).toEqual(["x 0", "x 1"]);
+    await land(250);
+    expect(dumbbell.svg.outerHTML).toBe(rest.dumbbell);
+    // Hidden through the first attachment's edits: the second's destroy() leaves it hidden, the first's gives it back.
+    void switcher.show("dumbbell");
+    clock.advance(300);
+    parts.second.destroy();
+    expect(hidden(axes)).toBe(true);
+    parts.first.destroy();
+    expect(hidden(axes)).toBe(false);
   });
 
   it("moves focus from a dot to the bar with its key once the switch lands, and back; from a connector, which no bar has, to the bars' first", async () => {
@@ -1158,7 +1186,8 @@ async function digests(cases: Readonly<Record<string, DigestCase>>, views: (e: E
 /**
  * The digests main (779118e, 0.10.0's library code on jsdom 31) gave, with this file's digests() run
  * there before views of several came in: each frames' then words'. Pinned again there once the
- * dumbbell's connectors were drawn with fill none, which moved their markup and no words.
+ * dumbbell's connectors were drawn with fill none, which moved their markup and no words. Main with
+ * guides (d04ea02, M16 step 2) gives the same: a switch whose views name no guides is as before.
  */
 const MAIN: Readonly<Record<string, string>> = {
   "a half's dots, the bars and ours": "58ebe5147f0e31e3 d68ed16db42e8120",

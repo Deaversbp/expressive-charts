@@ -25,7 +25,11 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
-## Unreleased
+From 1.0, everything the package exports follows semantic versioning: the motion core, the charts, the adapters, the built-in effects and the controls, as well as the effect-author API.
+
+## 0.11.0 (12 November 2026)
+
+Guides that stay put through a chart switch: a view names its axes, grids and ticks, and one that both views draw the same stays on screen, where it is, while the marks morph; and `hostView([a, b, c])`, one switch view of several attachments on one `<svg>`, so a chart drawn with more than one attachment, such as a dumbbell, switches as one chart. Nothing in the effect-author API changes. Every change is an addition outside the promise, and none needs anything written instead. The 0.x promise, above, now says what 1.0 will promise.
 
 ### Added
 

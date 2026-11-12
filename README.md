@@ -15,7 +15,7 @@ Composable motion and expressive effects for web charts. Hover, update and morph
 
 Each picture plays once and stops where its effect ends. **[The demo site](https://deaversbp.github.io/expressive-charts/)** has every effect to try, on the library's charts and on D3, Vega-Lite and hand-written ones, with the motion modes and reduced motion.
 
-> **Status: 0.10.0 (November 2026).** The effect-author API is under [the 0.x promise](#the-0x-promise); the charts, adapters, built-in effects and motion core can still change in a minor release. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#0100-11-november-2026) lists what's new and what changed since 0.9.0.
+> **Status: 0.11.0 (November 2026).** The effect-author API is under [the 0.x promise](#the-0x-promise); the charts, adapters, built-in effects and motion core can still change in a minor release. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#0110-12-november-2026) lists what's new and what changed since 0.10.0.
 
 - **Effects first.** The mark effects `travel`, `flash`, `wiggle`, `pulse`, `trace`, `drawIn` and the data effects `threshold`, `delta` and `label`, put together with `sequence`, `parallel`, `only` and `stagger`; and the transition effect `morph`, which `chartSwitch` plays to turn each mark of one chart into its mark in the next (a transition can't go into a combinator). An effect reads only a shared description of the mark, so one effect works on every chart, and effects of your own work everywhere the built-in ones do.
 - **Charts and adapters.** Bar, donut and line charts, a switch that morphs one into another, adapters that bring the same effects to SVG marks drawn by other code, and hover linked across them.
@@ -28,13 +28,13 @@ Each picture plays once and stops where its effect ends. **[The demo site](https
 npm install expressive-charts
 ```
 
-It has no runtime dependencies. It's an ES module and CommonJS, each with its own types, and its JavaScript has no side effects, so a bundler keeps only what a page imports: a bar chart is about 32 KB gzipped, and everything 90 KB.
+It has no runtime dependencies. It's an ES module and CommonJS, each with its own types, and its JavaScript has no side effects, so a bundler keeps only what a page imports: a bar chart is about 32 KB gzipped, and everything 92 KB.
 
 On a page with no bundler, the script-tag bundle defines one global, `ExpressiveCharts`, holding the main entry:
 
 ```html
 <div id="sales"></div>
-<script src="https://cdn.jsdelivr.net/npm/expressive-charts@0.10/dist/expressive-charts.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/expressive-charts@0.11/dist/expressive-charts.global.js"></script>
 <script>
   const { barChart } = ExpressiveCharts;
   barChart("#sales", {
@@ -217,7 +217,7 @@ The first draw of 1,000 static bars takes about 90 ms, and of 10,000 about a sec
 
 ## The 0.x promise
 
-From 0.1.0 the library follows semantic versioning. While it's 0.x, the effect-author API (`defineEffect`, `defineDataEffect`, `describe`, `matrix`, `offset`, the effect contracts and `expressive-charts/testing`) breaks only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. The charts, adapters, built-in effects, controls and motion core can still change in a minor release, and [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#the-0x-promise) lists every change. [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) marks each promised name.
+From 0.1.0 the library follows semantic versioning. While it's 0.x, the effect-author API (`defineEffect`, `defineDataEffect`, `describe`, `matrix`, `offset`, the effect contracts and `expressive-charts/testing`) breaks only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. The charts, adapters, built-in effects, controls and motion core can still change in a minor release, and [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#the-0x-promise) lists every change. [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) marks each promised name. From 1.0, everything the package exports follows semantic versioning.
 
 ## Links
 

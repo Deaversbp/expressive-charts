@@ -25,6 +25,12 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **`hostView([a, b, c])`: one chart switch view of several attachments on one `<svg>`,** so a chart drawn with more than one attachment, such as a dumbbell's dots for each half and the lines between them, switches as one chart. Its marks are all of theirs, and each mark's focus, tab stop, colour and hiding go to the attachment it's from; the labels are the view's. Each key must be one mark's, so a page keys the attachments' marks apart (`first@Okafor`): `hostView()` throws a `TypeError` naming a key two of them have, or two attachments in different `<svg>`s, and a clash a later refresh makes is reported as each switch starts, the key staying the first attachment's. A link between the attachments goes on, and the view takes no part in a link of its switch. `refresh()`, `update()`, `on()`, `leave()` and `destroy()` go to each. `hostView(attachment)` draws as before, byte for byte.
+
 ## 0.10.0 (11 November 2026)
 
 A chart switch that stages a jump through a third view, `show(view, { via })`, so bars side by side can stack before they become shares of 100%; `morph()` pairing two areas across the same x's by x, so stacked areas keep each week's x as they become shares of 100%; and a host view drawn again mid-switch keeping its new marks and labels hidden until the switch lands. The type declarations are built with tsdown 0.23.7, with the same types. Nothing in the effect-author API changes. Every change is outside the promise, and none needs anything written instead.

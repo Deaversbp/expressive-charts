@@ -8,16 +8,22 @@
 // is hidden again as it is then, after each refresh, so its new marks and labels stay hidden too. Like
 // the adapter, it never names an effect, and nothing is written into the host's DOM but while a
 // switch plays.
+//
+// Several attachments on one <svg> make one view (M16 step 3), as a dumbbell's dots and connectors
+// are one chart: its marks are all of theirs, in their ancestors' nearest common ancestor's space, and
+// a mark's focus, tab stop, colour and hiding go to the attachment it's from. Each key is one mark's:
+// a key two of them have stays the first's. It has no one hover for a link, so it takes no part in a
+// link of its switch, and a link between the attachments goes on as it was.
 
 import { matrix } from "../../core";
 import { report } from "../../core/report";
-import { linkable, portOf } from "../link";
+import { linkable, portOf, type LinkPort, type RowsOf } from "../link";
 import { setStyles, SVG_NS } from "../render/svg";
 import type { ChartSwitchPaint, ChartSwitchView } from "../switch";
 import type { ChartLabel } from "../types";
-import { insidesOf } from "./expressive";
+import { insidesOf, type Insides } from "./expressive";
 import { drawnStyle } from "./host-style";
-import { between, scaleOf } from "./space";
+import { between, mapMark, scaleOf } from "./space";
 import type { Attachment } from "./types";
 
 /** A host's `<text>` that names a mark or gives its value, which a chart switch moves and swaps as a chart's labels. */
@@ -40,11 +46,14 @@ export interface HostViewOptions {
   readonly labels?: () => Iterable<HostLabel>;
 }
 
-/** An attachment as a chart switch's view: the attachment's own methods, with the view's. */
+/**
+ * An attachment, or several on one `<svg>`, as a chart switch's view: the attachment's own methods, or
+ * each of theirs, with the view's.
+ */
 export interface HostView<D> extends Attachment<D>, ChartSwitchView {
-  /** The host's root `<svg>`. Its `aria-label` is what a switch's `announce` says. */
+  /** The host's root `<svg>`, which its attachments share. Its `aria-label` is what a switch's `announce` says. */
   readonly element: SVGSVGElement;
-  /** The marks' nearest common ancestor, whose space marks() and labels() are in. */
+  /** The marks' nearest common ancestor, whose space marks() and labels() are in: every attachment's marks'. */
   readonly space: Element;
   /** The labels `labels` gives, as a switch draws them: at their anchor, in the host text's computed font and fill. */
   labels(): readonly ChartLabel[];
@@ -77,6 +86,14 @@ function scaled(value: string, scale: number): string {
   return value.replace(/(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(px)?(?![\w.%])/gi, (_, n: string, px: string | undefined) => `${Math.round(Number(n) * scale * 1000) / 1000}${px ?? ""}`);
 }
 
+/** One of a view's attachments: its port and insides, and what the view hid of its elements through its edits. */
+interface Part<D> {
+  readonly attachment: Attachment<D>;
+  readonly port: LinkPort;
+  readonly inside: Insides;
+  hidden: readonly Element[];
+}
+
 /**
  * Makes an attachment that expressive() or fromVegaView() returned a view for chartSwitch: a view's
  * function attaches to the chart it draws in its container and returns hostView(attachment). The
@@ -84,24 +101,52 @@ function scaled(value: string, scale: number): string {
  * swap, its other parts fade, and with `keyboard: true` focus follows its key. Throws a TypeError on
  * anything else, or on an attachment with no marks yet, which has no `<svg>`.
  */
-export function hostView<D>(attachment: Attachment<D>, options: HostViewOptions = {}): HostView<D> {
-  const port = typeof attachment === "object" && attachment !== null ? portOf(attachment) : undefined;
-  const inside = insidesOf(port);
-  if (!port || !inside?.root()) throw new TypeError("hostView needs an attachment that expressive() or fromVegaView() returned, with marks in an <svg>.");
+export function hostView<D>(attachment: Attachment<D>, options?: HostViewOptions): HostView<D>;
+/**
+ * Makes several attachments on one `<svg>` one view for chartSwitch, as a chart drawn with several
+ * (a dumbbell's dots and its connectors) is one chart: its marks are all of theirs, and each mark's
+ * focus, tab stop, colour and hiding go to the attachment it's from. Its rows are theirs, as a union.
+ * Throws a TypeError, naming it, on anything but attachments with marks, on two in different `<svg>`s,
+ * and on a key two of them give a mark: key each one's marks apart (`first@Okafor`). An array of one
+ * makes that attachment's view.
+ */
+export function hostView<A extends Attachment<unknown>>(attachments: readonly A[], options?: HostViewOptions): HostView<RowsOf<A>>;
+export function hostView<D>(attachments: Attachment<D> | readonly Attachment<D>[], options: HostViewOptions = {}): HostView<D> {
+  const list: readonly Attachment<D>[] = Array.isArray(attachments) ? attachments : [attachments as Attachment<D>];
+  if (list.length === 0) throw new TypeError("hostView needs an attachment, or an array of attachments on one <svg>: hostView([dots, connectors]).");
+  const parts = list.map((attachment, i): Part<D> => {
+    const port = typeof attachment === "object" && attachment !== null ? portOf(attachment) : undefined;
+    const inside = insidesOf(port);
+    if (!port || !inside?.root()) {
+      throw new TypeError(list === attachments ? `hostView needs attachments that expressive() or fromVegaView() returned, each with marks in an <svg>: attachments[${i}] isn't one.` : "hostView needs an attachment that expressive() or fromVegaView() returned, with marks in an <svg>.");
+    }
+    if (list.indexOf(attachment) !== i) throw new TypeError(`hostView: attachments[${i}] is attachments[${list.indexOf(attachment)}] again. Each attachment is in a view once.`);
+    return { attachment, port, inside, hidden: [] };
+  });
   if (typeof options !== "object" || options === null || (options.labels !== undefined && typeof options.labels !== "function")) {
     throw new TypeError("hostView: labels must be a function that returns the host's labels, such as () => names.map((element) => ({ element, key: element.textContent, role: \"category\" })).");
   }
-  const { edits } = inside;
-  const svg = (): SVGSVGElement => inside.root()!;
-  /** While a switch plays: the labels last read, the elements hidden, and the <svg> that took `ec-morphing`. */
+  const lead = parts[0]!;
+  /** Several attachments: one view of them, with no one hover for a link. */
+  const several = parts.length > 1;
+  // The labels (the page's, of the whole <svg>) and the class through the first's edits.
+  const { edits } = lead.inside;
+  const svg = (): SVGSVGElement => lead.inside.root()!;
+  /** While a switch plays: the labels last read, and the <svg> that took `ec-morphing`. Each part keeps the elements it hid. */
   let given: readonly HostLabel[] | undefined;
-  let hidden: readonly Element[] = [];
   let classed: SVGSVGElement | undefined;
+  const clash = several ? clashOf(parts, svg()) : undefined;
+  if (clash) throw new TypeError(`hostView: ${clash.problem}.`);
+
+  /** The attachments whose marks are in the first's <svg>: all of them, unless a host drew one of them in another. */
+  const drawn = (): Part<D>[] => parts.filter((part) => part.inside.root() === svg());
+  /** The attachment with the mark `key`: the first that has it. */
+  const ownerOf = (key: string): Part<D> | undefined => drawn().find((part) => part.attachment.marks().some((mark) => mark.key === key));
 
   /** The page's labels now: those of a mark's key, in the host's <svg>. */
   function read(): HostLabel[] {
     if (!options.labels) return [];
-    const keys = new Set(attachment.marks().map((mark) => mark.key));
+    const keys = new Set(drawn().flatMap((part) => part.attachment.marks().map((mark) => mark.key)));
     try {
       return Array.from(options.labels()).filter((label) => label?.element?.localName === "text" && svg().contains(label.element) && keys.has(label.key) && (label.role === "category" || label.role === "value"));
     } catch (error) {
@@ -139,15 +184,30 @@ export function hostView<D>(attachment: Attachment<D>, options: HostViewOptions 
    * While a switch plays (`on`): hides the live marks' elements and the page's labels, read again, as
    * they are now, and gives their <svg> `ec-morphing`. What it hid that the host still draws stays
    * hidden (a mark the host takes away in a transition of its own, which the switch draws still), and
-   * the rest is given back. Not `on`: everything is given back.
+   * the rest is given back. Not `on`: everything is given back. Each attachment's elements through its
+   * own edits, and the labels and the class through the first's; an element two of them have, through
+   * the first's. Everything goes back before anything is hidden again, so an element that moved from
+   * one to another is given back by the one and hidden by the other. As a switch starts, the
+   * attachments of several that a refresh has left in two <svg>s, or with a key two of them have, are
+   * reported.
    */
   const hide = (on: boolean): void => {
+    if (on && given === undefined && several) {
+      const found = clashOf(parts, svg());
+      if (found) report(new TypeError(`hostView: ${found.problem}. The switch plays on, and ${found.left}.`));
+    }
     const root = on ? svg() : undefined;
     given = on ? read() : undefined;
-    const now = new Set(given ? [...inside.elements(), ...given.map((label) => label.element), ...hidden.filter((element) => root?.contains(element))] : []);
-    for (const element of hidden) if (!now.has(element)) edits.style(element, "visibility", undefined);
-    hidden = [...now];
-    for (const element of hidden) edits.style(element, "visibility", "hidden");
+    const labels = given;
+    const now = parts.map(({ inside, hidden }, i) => new Set(labels ? [...inside.elements(), ...(i === 0 ? labels.map((label) => label.element) : []), ...hidden.filter((element) => root?.contains(element))] : []));
+    for (let i = 1; i < now.length; i++) for (const element of now[i]!) if (now.some((earlier, j) => j < i && earlier.has(element))) now[i]!.delete(element);
+    parts.forEach((part, i) => {
+      for (const element of part.hidden) if (!now[i]!.has(element)) part.inside.edits.style(element, "visibility", undefined);
+    });
+    parts.forEach((part, i) => {
+      part.hidden = [...now[i]!];
+      for (const element of part.hidden) part.inside.edits.style(element, "visibility", "hidden");
+    });
     // Through the edits, before the switch adds it, so the class attribute comes back as it was; on
     // the <svg> the marks are in now, if the host drew a new one.
     if (classed !== root) {
@@ -162,33 +222,93 @@ export function hostView<D>(attachment: Attachment<D>, options: HostViewOptions 
       return svg();
     },
     get space() {
-      return inside.ancestor() ?? svg();
+      // The nearest element that holds every attachment's marks' ancestor.
+      const root = svg();
+      const [space, ...others] = drawn().map((part) => part.inside.ancestor() ?? root);
+      let common = space!;
+      for (const other of others) while (common !== root && !common.contains(other)) common = common.parentElement ?? root;
+      return common;
     },
-    refresh: (source) => attachment.refresh(source),
-    update: (next) => attachment.update(next),
-    on: (type, listener) => attachment.on(type, listener),
-    marks: () => attachment.marks(),
-    focus: (key) => attachment.focus(key),
-    leave: () => attachment.leave(),
+    refresh(source) {
+      if (several && source !== undefined) throw new TypeError("hostView: a view of several attachments refreshes each from what it last read, with refresh(). To read new sources, refresh each attachment with its own.");
+      for (const { attachment } of parts) attachment.refresh(source);
+    },
+    update: (next) => (several ? Promise.all(parts.map(({ attachment }) => attachment.update(next))).then(() => {}) : lead.attachment.update(next)),
+    on(type, listener) {
+      const stops = parts.map(({ attachment }) => attachment.on(type, listener));
+      return several ? () => stops.forEach((stop) => stop()) : stops[0]!;
+    },
+    marks() {
+      // Each attachment's in the view's space, mapped there from its own marks' ancestor's; a key two
+      // of them have stays the first's.
+      const root = svg();
+      const space = view.space;
+      const keys = new Set<string>();
+      return drawn().flatMap(({ attachment, inside }) => {
+        const ancestor = inside.ancestor() ?? root;
+        const m = ancestor === space ? undefined : between(space, ancestor, root);
+        return attachment.marks().flatMap((mark) => (keys.has(mark.key) ? [] : (keys.add(mark.key), [m ? mapMark(mark, m) : mark])));
+      });
+    },
+    focus: (key) => ownerOf(key)?.attachment.focus(key),
+    leave() {
+      for (const { attachment } of parts) attachment.leave();
+    },
     destroy() {
       given = classed = undefined;
-      hidden = [];
-      attachment.destroy();
+      for (const part of parts) part.hidden = [];
+      for (const { attachment } of [...parts].reverse()) attachment.destroy();
     },
     labels: () => (given ?? read()).map(chartLabel),
     paintOf(key) {
-      const color = inside.colorOf(key);
-      return color === undefined ? undefined : { color: key, drawn: true, cssColor: color };
+      for (const { inside } of drawn()) {
+        const color = inside.colorOf(key);
+        if (color !== undefined) return { color: key, drawn: true, cssColor: color };
+      }
+      return undefined;
     },
-    keyOf: (element) => inside.keyOf(element),
-    moveTabStop: (key) => inside.moveTabStop(key),
+    keyOf(element) {
+      for (const { inside } of parts) {
+        const key = inside.keyOf(element);
+        if (key !== undefined) return key;
+      }
+      return undefined;
+    },
+    moveTabStop: (key) => drawn().some(({ inside }) => inside.moveTabStop(key)),
     morphing: hide
   };
   // After every refresh while a switch plays, however it came (the page's, or fromVegaView()'s after
-  // a Vega render): the switch plays on with the pairs it began with, over the host's new drawing.
-  inside.refreshed.add(() => {
-    if (given) hide(true);
-  });
-  // A link takes the view, and a switch of host views, through the attachment's hover.
-  return linkable(port, view);
+  // a Vega render), of any of its attachments: the switch plays on with the pairs it began with, over
+  // the host's new drawing.
+  for (const { inside } of parts) {
+    inside.refreshed.add(() => {
+      if (given) hide(true);
+    });
+  }
+  // A link takes the view, and a switch of host views, through the attachment's hover. A view of
+  // several has no one hover, so it takes no part: its attachments' own link goes on.
+  return several ? view : linkable(lead.port, view);
+}
+
+/**
+ * What keeps several attachments from being one view, as words for a TypeError, with what the view
+ * leaves out while it lasts: one whose marks are in another <svg> than the first's, or a key two of
+ * them give a mark. Undefined when there's nothing.
+ */
+function clashOf<D>(parts: readonly Part<D>[], root: SVGSVGElement): { readonly problem: string; readonly left: string } | undefined {
+  const owners = new Map<string, number>();
+  for (const [i, { attachment, inside }] of parts.entries()) {
+    if (inside.root() !== root) return { problem: `attachments[${i}]'s marks are in another <svg> than attachments[0]'s, and a view's attachments share one`, left: `attachments[${i}]'s marks are left out` };
+    for (const { key } of attachment.marks()) {
+      const owner = owners.get(key);
+      if (owner !== undefined && owner !== i) {
+        return {
+          problem: `attachments[${owner}] and attachments[${i}] both have a mark with the key ${JSON.stringify(key)}, and each key must be one mark's. Key each one's marks apart, such as (d) => \`first@\${d.name}\``,
+          left: `the key stays attachments[${owner}]'s: attachments[${i}]'s mark is left out`
+        };
+      }
+      owners.set(key, i);
+    }
+  }
+  return undefined;
 }

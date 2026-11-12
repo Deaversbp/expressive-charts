@@ -2598,6 +2598,7 @@ A value for data effects, alone or with where it is along x (`at`), which `thres
 
 ```ts
 hostView<D>(attachment: Attachment<D>, options?: HostViewOptions): HostView<D>
+hostView<A extends Attachment<unknown>>(attachments: readonly A[], options?: HostViewOptions): HostView<D>
 ```
 
 Makes an attachment that `expressive()` or `fromVegaView()` returned a view for a [`chartSwitch`](#chartswitch), so a switch takes host charts: a D3 pie morphs into D3 columns as our donut morphs into our columns, and a host chart and one of ours can share a switch ([architecture.md](architecture.md#switching-between-charts)). A view's function draws the host chart in the container it's given, attaches to it and returns `hostView(attachment)`. While a switch plays, the host's mark elements and the labels it's given are hidden inline, and they move and swap in the switch's overlay; its axes and other text fade with the view, as our charts' do. A host drawn again while a switch plays is hidden again once the attachment refreshes, through the page's `refresh()` or `fromVegaView()`'s own after a Vega render: its new marks and the labels it's given, read again, stay hidden until the switch lands, and the switch plays on with the pairs it began with and lands on the host as it drew it. Each mark morphs in the host's own colour, its fill or its stroke on a line, a pair in the new view's. With `keyboard: true` on the attachment, focus and the tab stop follow by key, as between our charts; nothing new is written into the host's DOM. The switch's `announce` says the host `<svg>`'s `aria-label`, so give it one. Throws a `TypeError` on anything else, and on an attachment with no marks yet, which has no `<svg>`. Options: [`HostViewOptions`](#hostviewoptions). Returns [`HostView<D>`](#hostviewd).
@@ -2630,22 +2631,51 @@ button.addEventListener("click", () => void shots.show(shots.current === "pie" ?
 shots.chart("pie").refresh();                         // the attachment's own methods, after the page redraws
 ```
 
+**Several attachments, one view.** A chart drawn with several attachments on one `<svg>`, such as a dumbbell's dots for each half and the lines between them, switches as one view: `hostView([first, second, lines], options)`. Its marks are all of theirs, in the array's order, in the nearest element that holds each one's marks' common ancestor (each attachment's mapped into it when their ancestors differ), and a mark's focus, tab stop, colour and hiding go to the attachment it's from. `labels` is the view's, over all of them. `D` is their rows, as a union. Each key must be one mark's, so key their marks apart (`first@Okafor`, `second@Okafor`, and the line `Okafor`): `hostView()` throws a `TypeError`, naming it, on a key two of them give a mark, on two in different `<svg>`s, on an attachment twice, and on an empty array. If a refresh later makes a key two of theirs, or leaves one in another `<svg>` than the first's, the view reports it, naming it, as each switch starts (as an uncaught error, which doesn't stop the switch), and the switch plays with the first attachment's mark for that key and leaves the other's out. A link between the attachments goes on: the switch's start ends their hovers. The view has no one hover, so it takes no part in a link of its switch, which hears the switch's other views, and `link()` doesn't take it alone. Its attachment's methods go to each: `refresh()` refreshes each from what it last read (a page that reads new sources refreshes each attachment with its own, and `refresh(source)` throws a `TypeError`), `update({ on })` updates each and resolves once all have, or rejects as one of them does, `on()` hears each, `leave()` ends each one's hover, and `destroy()` destroys each, the last first. An array of one attachment makes that attachment's view, as `hostView(attachment)` does.
+
+```ts
+import { chartSwitch, expressive, hostView, link } from "expressive-charts";
+
+// The page's own D3 code: a dumbbell, a <g> a player holding a dot for each half and the line between
+// them, and the same players as bars side by side, a <rect> each half; each returns its marks.
+interface Half { name: string; half: "first" | "second"; goals: number }
+declare function drawDumbbell(el: HTMLElement): { first: D3Selection<SVGCircleElement, Half>; second: D3Selection<SVGCircleElement, Half>; lines: D3Selection<SVGLineElement, Player>; names: SVGTextElement[] };
+declare function drawBars(el: HTMLElement): { rects: D3Selection<SVGRectElement, Half> };
+
+const byHalf = (d: Half) => `${d.half}@${d.name}`;  // first@Okafor: each half's mark keyed apart
+const halves = chartSwitch("#halves", {
+  views: {
+    dumbbell: (el) => {
+      const drawn = drawDumbbell(el);
+      const first = expressive(drawn.first, { key: byHalf, keyboard: true, markLabel: (d) => `${d.name}: ${d.goals} in the first half` });
+      const second = expressive(drawn.second, { key: byHalf, keyboard: true, markLabel: (d) => `${d.name}: ${d.goals} in the second half` });
+      const lines = expressive(drawn.lines, { key: (d) => d.name });
+      link([first, second, lines], { by: (event) => event.data.datum.name }); // a row lights as one
+      return hostView([first, second, lines], { labels: () => drawn.names.map((element) => ({ element, key: `first@${element.textContent}`, role: "category" })) });
+    },
+    bars: (el) => hostView(expressive(drawBars(el).rects, { key: byHalf, keyboard: true }))
+  },
+  initial: "dumbbell"
+});
+halves.chart("dumbbell").refresh();                   // each attachment, from what it last read
+```
+
 #### `HostView<D>`
 
 ```ts
 interface HostView<D> extends Attachment<D>, ChartSwitchView
 ```
 
-An attachment as a switch's view: the attachment's own methods (`refresh()`, `update({ on })`, `on()`, `marks()`, `focus()`, `leave()` and `destroy()`), so `chart(view)` gives a page all of them, with what a switch reads of a view ([`ChartSwitchView`](#chartswitchview)). It's linkable through the attachment's hover, so a [link](#link) takes it, and a switch of host views.
+An attachment, or several on one `<svg>`, as a switch's view: the attachment's own methods (`refresh()`, `update({ on })`, `on()`, `marks()`, `focus()`, `leave()` and `destroy()`), so `chart(view)` gives a page all of them, with what a switch reads of a view ([`ChartSwitchView`](#chartswitchview)). It's linkable through the attachment's hover, so a [link](#link) takes it, and a switch of host views. A view of several goes to each of its attachments, as [`hostView()`](#hostview) says, and isn't linkable, since it has no one hover.
 
-- `element`: the host's root `<svg>`.
-- `space`: the marks' nearest common ancestor, whose space `marks()` and `labels()` are in, as the attachment's marks are.
+- `element`: the host's root `<svg>`, which a view's attachments share.
+- `space`: the marks' nearest common ancestor, whose space `marks()` and `labels()` are in, as the attachment's marks are. Of several: the nearest element that holds each attachment's marks' common ancestor, and `marks()` gives each one's mapped into it when they differ.
 - `labels()`: the labels `labels` gives, as a switch draws them: each at its anchor, its first `x` and `y` as the browser resolves them (a percentage or an em too) through its transforms, with its `text-anchor`, and an `element` with the host text's computed font (family, size, style, weight, numerals and spacing), `dominant-baseline` and fill written inline, since the host's CSS may not reach the switch's overlay, and its `dx` and `dy`. Its lengths (its font size and spacing, and a `dx` or `dy` in px or user units) take its transforms' scale, since they're in the marks' space, and the switch scales each copy into its overlay with the marks, so a label keeps the size the host draws it at, in a `<svg>` scaled by its `viewBox` too. A rotated label is drawn upright at its anchor while a switch plays.
-- `paintOf(key)`: `{ color: key, drawn: true, cssColor }`, with the host's colour as the mark's first part draws it. A mark painted with a gradient or a pattern has none, so it's drawn in its key's colour in the switch's assignment.
-- `keyOf(element)`: the key of the mark an element is part of.
-- `moveTabStop(key)`: moves the attachment's tab stop without focus. With `keyboard` off, nothing has one, so it returns false.
-- `morphing(on)`: hides the marks' elements and the labels with `visibility: hidden`, through the attachment's own edits, and gives back what the host had. After each refresh while a switch plays, it hides them again as they are then: the host's new elements, and the labels read again. What it hid that the host still draws stays hidden, such as a mark leaving through the host's own exit transition, which the switch still draws, and what the host took away is given back. If the host drew a new `<svg>`, `ec-morphing` moves to it.
-- `destroy()`: destroys the attachment, which puts the host's DOM back as it was. A switch's `destroy()` removes its containers, and the host's `<svg>` drawn in them.
+- `paintOf(key)`: `{ color: key, drawn: true, cssColor }`, with the host's colour as the mark's first part draws it, from the attachment whose mark it is. A mark painted with a gradient or a pattern has none, so it's drawn in its key's colour in the switch's assignment. A `<line>`'s colour is its stroke only when its fill is `none`, so give a host's lines `fill="none"`.
+- `keyOf(element)`: the key of the mark an element is part of, in whichever attachment it is.
+- `moveTabStop(key)`: moves the tab stop of the attachment whose mark it is without focus; each attachment with `keyboard: true` keeps a tab stop of its own. With `keyboard` off, nothing has one, so it returns false.
+- `morphing(on)`: hides the marks' elements and the labels with `visibility: hidden`, through the attachment's own edits, and gives back what the host had. Of several, each attachment's elements through its own edits, and the labels and `ec-morphing` through the first's. After each refresh while a switch plays, of any of its attachments, it hides them again as they are then: the host's new elements, and the labels read again. What it hid that the host still draws stays hidden, such as a mark leaving through the host's own exit transition, which the switch still draws, and what the host took away is given back. If the host drew a new `<svg>`, `ec-morphing` moves to it.
+- `destroy()`: destroys the attachment, or each of them, the last first, which puts the host's DOM back as it was. A switch's `destroy()` removes its containers, and the host's `<svg>` drawn in them.
 
 #### `HostViewOptions`
 

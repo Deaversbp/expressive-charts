@@ -146,6 +146,11 @@ export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 // NEW in M15 step 1: show(view, { via }) (ChartSwitchShowOptions) stages a jump through a third view
 // in Presentation: to via, then on to view, each a full switch, with one announcement and focus carried
 // through; in Analysis and Off it goes straight there (M15 decisions 6 and 18).
+// NEW in M16 step 3: hostView([a, b, c], options) makes several attachments on one <svg>, their keys
+// unique across them, one view: their marks in their ancestors' common ancestor's space, focus, tab
+// stops, colours and hiding by the attachment with the key, and their own link kept, since the view
+// has no port. A key a refresh makes two attachments' is reported as a switch starts, and stays the
+// first's. HostView<D>, Attachment and ChartSwitchView don't change (M16 decisions 10 and 20).
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 

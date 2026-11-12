@@ -1,14 +1,18 @@
-// The layouts page's four cards (demo/layouts.html, M15 step 5): each card's views built with the page's
-// own D3 modules and demo/layouts-effects.ts, in a chart switch with the real morph(), on a clock the
-// test controls. These pin what the page promises: the bars' segments paired by `series@player` in
-// every layout, and a jump of two staged through Stacked with one announcement; the areas' bands keeping
-// each week's x on every frame; the radar's circles paired with their bars while the outlines fade with
-// their view; the treemap's tiles paired with their bars side for side; each card's labels moving and
-// swapping; focus following its key; and a redraw mid-switch kept hidden. It brings charts and an effect
-// together, so it lives beside src/index.ts, the only module allowed to.
+// The layouts page's five cards (demo/layouts.html, M15 step 5 and M16 step 5): each card's views built
+// with the page's own D3 modules and demo/layouts-effects.ts, in a chart switch with the real morph(), on
+// a clock the test controls. These pin what the page promises: the bars' segments paired by
+// `series@player` in every layout, and a jump of two staged through Stacked with one announcement; the
+// areas' bands keeping each week's x on every frame; the radar's circles paired with their bars while the
+// outlines fade with their view; the treemap's tiles paired with their bars side for side; the guides
+// the page names kept on every frame where both views draw them the same (the bars' axis, the areas'
+// weeks, the dumbbell's axis), and the bars' 100% axis fading; the dumbbell's three attachments, one
+// view, their dots paired with their bars and their lines fading, and their link kept; each card's
+// labels moving and swapping; focus following its key; and a redraw mid-switch kept hidden. It brings
+// charts and an effect together, so it lives beside src/index.ts, the only module allowed to.
 
-import { areasCard, barsCard, players, radarCard, scorers, shotForm, treemapCard, type Attach, type LayoutCard } from "../demo/layouts-effects";
-import { chartSwitch, expressive, type ChartEnv, type ChartSwitch } from "./charts";
+import type { Dot, Row } from "../demo/d3-dumbbell";
+import { areasCard, barsCard, dumbbellCard, halves, players, radarCard, scorers, shotForm, treemapCard, type Attach, type LayoutCard } from "../demo/layouts-effects";
+import { chartSwitch, expressive, type ChartEnv, type ChartSwitch, type HostView } from "./charts";
 import { createMotion, manualClock, type MotionMode } from "./core";
 import { formatPath, parsePath, transformPath } from "./core/geometry/path";
 import { flush } from "./core/testing";
@@ -99,6 +103,7 @@ const seen = (overlay: SVGSVGElement): string[] =>
     .sort();
 
 const round = (value: number): number => Math.round(value * 1000) / 1000;
+const pointer = (type: string, target: Element): boolean => target.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "mouse" }));
 const hidden = (element: Element): boolean => (element as SVGElement).style.getPropertyValue("visibility") === "hidden";
 /** A D3 element's row. */
 const rowOf = <T>(element: Element): T => (element as unknown as { __data__: T }).__data__;
@@ -117,6 +122,31 @@ function offset(element: Element): Point {
 
 /** A mark's outline as the overlay draws it at rest: in its <svg>, which jsdom puts at the overlay's origin. */
 const placed = (d: string, by: Point): string => formatPath(transformPath(parsePath(d), [1, 0, 0, 1, by.x, by.y]));
+
+/** Each guide's copies in the switch's overlay, by key: the old view's, then the new view's, each with its opacity and its drawing. */
+function guides(overlay: SVGSVGElement): Map<string, { readonly opacity: string; readonly drawing: string; readonly transform: string | null }[]> {
+  const byKey = new Map<string, { readonly opacity: string; readonly drawing: string; readonly transform: string | null }[]>();
+  for (const group of overlay.querySelectorAll<SVGGElement>(":scope > .ec-switch-guides > .ec-switch-guide")) {
+    const key = group.getAttribute("data-key")!;
+    byKey.set(key, [...(byKey.get(key) ?? []), { opacity: group.getAttribute("opacity") ?? "", drawing: group.innerHTML, transform: group.getAttribute("transform") }]);
+  }
+  return byKey;
+}
+
+/**
+ * Checks that each of `keys` is kept on this frame: its two copies, the old view's and the new view's,
+ * drawn the same in the same place, one at full strength and the other not drawn.
+ */
+function expectKept(overlay: SVGSVGElement, keys: readonly string[], when: string): void {
+  const now = guides(overlay);
+  expect([...now.keys()].sort(), when).toEqual([...keys].sort());
+  for (const key of keys) {
+    const [a, b] = now.get(key)!;
+    expect([a!.opacity, b!.opacity].sort(), `${key}, ${when}`).toEqual(["0", "1"]);
+    expect(b!.drawing, `${key}, ${when}`).toBe(a!.drawing);
+    expect(b!.transform, `${key}, ${when}`).toBe(a!.transform);
+  }
+}
 
 /** The keys of a view's marks, sorted. */
 const keysOf = <V extends string>(switcher: ChartSwitch<LayoutCard<V>["views"]>, view: NoInfer<V>): string[] =>
@@ -260,6 +290,43 @@ describe("the bars: side by side, stacked and at 100%", () => {
     expect(switcher.current).toBe("stacked");
     for (const element of svg("stacked").querySelectorAll("rect.segment, text.host-label, text.host-value")) expect(hidden(element)).toBe(false);
   });
+
+  it("keeps the axis, a guide keyed by its scale, at full strength where it is on every frame between side by side and stacked, both ways", async () => {
+    const { switcher, svg, overlay, run } = setup(barsCard, "side");
+    for (const [from, to] of [
+      ["side", "stacked"],
+      ["stacked", "side"]
+    ] as const) {
+      void switcher.show(to);
+      // Its grid and ticks, 0 to 20 in both: copied into the overlay, and the host's own hidden.
+      expect([...overlay.querySelectorAll(".ec-switch-guide text.tick")].map((tick) => tick.textContent)).toEqual(["0", "5", "10", "15", "20", "0", "5", "10", "15", "20"]);
+      for (const view of [from, to]) expect(hidden(svg(view).querySelector("g.bars-axis")!), view).toBe(true);
+      expectKept(overlay, ["axis@count"], `${from} to ${to} at the start`);
+      let frame = 0;
+      await run(944, () => expectKept(overlay, ["axis@count"], `${from} to ${to}, frame ${++frame}`));
+      await run(16);
+      expect(switcher.current).toBe(to);
+      expect(overlay.querySelector(".ec-switch-guides")).toBeNull();
+      for (const view of [from, to]) expect(hidden(svg(view).querySelector("g.bars-axis")!), view).toBe(false);
+    }
+  });
+
+  it("fades the axis at 100%, on another scale, as each view's other parts fade: neither drawn between 40% and half way", async () => {
+    const { switcher, container, overlay, run } = setup(barsCard, "stacked");
+    void switcher.show("share");
+    let gap = 0;
+    await run(944, () => {
+      const now = guides(overlay);
+      expect([...now.keys()].sort()).toEqual(["axis@count", "axis@share"]);
+      const [from, to] = [now.get("axis@count")![0]!.opacity, now.get("axis@share")![0]!.opacity];
+      expect(from).toBe(container("stacked").style.opacity);
+      expect(to).toBe(container("share").style.opacity);
+      if (from === "0" && to === "0") gap++;
+    });
+    expect(gap).toBeGreaterThan(0);
+    await run(16);
+    expect(switcher.current).toBe("share");
+  });
 });
 
 // ── The areas ────────────────────────────────────────────────────────────────
@@ -326,6 +393,28 @@ describe("the areas: stacked and at 100%", () => {
     await run(1000);
     expect(document.activeElement).toBe(svg("share").querySelector("path.band-offTarget"));
     expect(document.activeElement?.getAttribute("aria-label")).toMatch(/^Shots off target: \d+% of \d+ shots in 38 matches$/);
+  });
+
+  it("keeps each week under the plot, a guide keyed by its week, at full strength on every frame, both ways, while the counts, the shares and the grid fade with their views", async () => {
+    const { switcher, svg, overlay, run } = setup(areasCard, "stacked");
+    const weeks = ["week@1", "week@10", "week@20", "week@30", "week@38"];
+    for (const [from, to] of [
+      ["stacked", "share"],
+      ["share", "stacked"]
+    ] as const) {
+      void switcher.show(to);
+      expectKept(overlay, weeks, `${from} to ${to} at the start`);
+      expect([...overlay.querySelectorAll(".ec-switch-guide text")].map((tick) => tick.textContent)).toEqual(["MW 1", "10", "20", "30", "38", "MW 1", "10", "20", "30", "38"]);
+      for (const view of [from, to]) {
+        for (const tick of svg(view).querySelectorAll("text.x-tick")) expect(hidden(tick), `${view}: ${tick.textContent}`).toBe(true);
+        // Not guides: left as drawn, in their view's container, which fades.
+        for (const part of svg(view).querySelectorAll("text.y-tick, line.grid")) expect(hidden(part), `${view}: ${part.outerHTML}`).toBe(false);
+      }
+      let frame = 0;
+      await run(944, () => expectKept(overlay, weeks, `${from} to ${to}, frame ${++frame}`));
+      await run(16);
+      expect(switcher.current).toBe(to);
+    }
   });
 });
 
@@ -453,5 +542,157 @@ describe("the treemap into bars", () => {
     await run(1000);
     expect(svg("bars").contains(document.activeElement)).toBe(true);
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Haddad, defender: 2 goals");
+  });
+});
+
+// ── The dumbbell ─────────────────────────────────────────────────────────────
+
+describe("the dumbbell into bars", () => {
+  const NAMES = halves.map((p) => p.name);
+  const DOTS = NAMES.flatMap((name) => [`first@${name}`, `second@${name}`]).sort();
+  /** A view's dot or bar for a key, found by its D3 row. */
+  const markOf = (svg: SVGSVGElement, key: string): SVGElement =>
+    [...svg.querySelectorAll<SVGElement>("circle.dot, rect.bar")].find((element) => {
+      const d = rowOf<Dot>(element);
+      return `${d.half}@${d.name}` === key;
+    })!;
+  /** Every part of either view the switch draws in its overlay: the marks, the names, the numbers and the axis. */
+  const PARTS = "circle.dot, line.connector, rect.bar, text.name, text.value, g.axes";
+
+  it("makes its three attachments one view, keyed apart, and pairs each dot with its half's bar, the lines fading with the dumbbell, both ways", async () => {
+    const { switcher, svg, overlay, run } = setup(dumbbellCard, "dumbbell");
+    expect(keysOf(switcher, "dumbbell")).toEqual([...DOTS, ...NAMES].sort());
+    expect(keysOf(switcher, "bars")).toEqual(DOTS);
+    // The dots are named and take the keyboard, and the lines aren't, so each half is read once.
+    expect(svg("dumbbell").querySelectorAll('circle.dot[role="img"]:not([aria-hidden])')).toHaveLength(16);
+    for (const line of svg("dumbbell").querySelectorAll("line.connector")) expect([line.getAttribute("role"), line.getAttribute("aria-label")]).toEqual([null, null]);
+    for (const to of ["bars", "dumbbell"] as const) {
+      void switcher.show(to);
+      expect([...runs(overlay).keys()].sort(), `to ${to}`).toEqual(DOTS);
+      expect(fades(overlay).sort(), `to ${to}`).toEqual([...NAMES].sort());
+      // Every part of both views hidden while the overlay draws it, each attachment's through its own edits.
+      for (const view of ["dumbbell", "bars"] as const) for (const part of svg(view).querySelectorAll(PARTS)) expect(hidden(part), `${view}: ${part.outerHTML}`).toBe(true);
+      await run(960);
+      expect(switcher.current).toBe(to);
+      expect(runs(overlay).size).toBe(0);
+      for (const part of svg(to).querySelectorAll(PARTS)) expect(hidden(part), `${to}: ${part.outerHTML}`).toBe(false);
+    }
+  });
+
+  it("keeps each player's name where it is, from the dumbbell's to the bars', and the axis on every frame, and fades the bars' numbers in", async () => {
+    const { switcher, overlay, run } = setup(dumbbellCard, "dumbbell");
+    void switcher.show("bars");
+    // At the start, the names the dumbbell draws, and the bars' numbers there to fade in.
+    expect(seen(overlay)).toEqual([...NAMES].sort());
+    const numbers = copies(overlay).filter((copy) => /^\d+$/.test(copy.text));
+    expect(numbers.map((copy) => copy.text).sort()).toEqual(halves.flatMap((p) => [String(p.goals.first), String(p.goals.second)]).sort());
+    expect(numbers.every((copy) => copy.opacity === 0)).toBe(true);
+    const start = new Map(copies(overlay).filter((copy) => copy.shown && NAMES.includes(copy.text)).map((copy) => [copy.text, copy]));
+    expect(start.size).toBe(NAMES.length);
+    expectKept(overlay, ["axis"], "at the start");
+    let frame = 0;
+    await run(944, () => {
+      expectKept(overlay, ["axis"], `frame ${++frame}`);
+      // The bars name each row where the dumbbell does, so each name stays put as it swaps.
+      for (const copy of copies(overlay).filter((c) => c.shown && c.opacity > 0 && NAMES.includes(c.text))) expect(copy, copy.text).toMatchObject({ x: start.get(copy.text)!.x, y: start.get(copy.text)!.y });
+    });
+    expect(seen(overlay)).toEqual(expect.arrayContaining(["Okafor", "10", "6", "0"]));
+    await run(16);
+    expect(switcher.current).toBe("bars");
+  });
+
+  it("follows focus on a dot into its half's bar and back, each named the same", async () => {
+    const { switcher, svg, run } = setup(dumbbellCard, "dumbbell");
+    const name = "Okafor: 6 goals in the second half, down 4";
+    switcher.chart("dumbbell").focus("second@Okafor");
+    expect(document.activeElement).toBe(markOf(svg("dumbbell"), "second@Okafor"));
+    expect(document.activeElement?.getAttribute("aria-label")).toBe(name);
+    void switcher.show("bars");
+    await run(1000);
+    expect(document.activeElement).toBe(markOf(svg("bars"), "second@Okafor"));
+    expect(document.activeElement?.getAttribute("aria-label")).toBe(name);
+    void switcher.show("dumbbell");
+    await run(1000);
+    expect(document.activeElement).toBe(markOf(svg("dumbbell"), "second@Okafor"));
+    switcher.chart("dumbbell").focus("first@Castillo");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Castillo: 0 goals in the first half");
+  });
+
+  it("keeps each half's tab stop on the row focus is on, so Tab from a dot goes to the other half of its row", async () => {
+    const { switcher, svg, run } = setup(dumbbellCard, "dumbbell");
+    /** Each half's tab stop: the dot with tabindex 0. */
+    const stops = (): string[] => [...svg("dumbbell").querySelectorAll('circle.dot[tabindex="0"]')].map((dot) => `${rowOf<Dot>(dot).half}@${rowOf<Dot>(dot).name}`);
+    // At load, both in the first row.
+    expect(stops()).toEqual(["first@Lindqvist", "second@Lindqvist"]);
+    switcher.chart("dumbbell").focus("first@Castillo");
+    expect(stops()).toEqual(["first@Castillo", "second@Castillo"]);
+    switcher.chart("dumbbell").focus("second@Okafor");
+    expect(stops()).toEqual(["first@Okafor", "second@Okafor"]);
+    // And after a switch there and back, focus following its key.
+    void switcher.show("bars");
+    await run(1000);
+    void switcher.show("dumbbell");
+    await run(1000);
+    expect(document.activeElement).toBe(markOf(svg("dumbbell"), "second@Okafor"));
+    expect(stops()).toEqual(["first@Okafor", "second@Okafor"]);
+  });
+
+  it("keeps the link between its attachments: a dot lights its row and its line shows its arrow, before a switch and after one there and back", async () => {
+    const { switcher, svg, run } = setup(dumbbellCard, "dumbbell");
+    const view = switcher.chart("dumbbell") as unknown as HostView<Dot | Row>;
+    const heard: string[] = [];
+    view.on("hover", (event) => heard.push(`${event.mark.key} ${event.source}`));
+    /** The players whose marks aren't dimmed. */
+    const lit = (): string[] => [...new Set([...svg("dumbbell").querySelectorAll("circle.dot, line.connector")].filter((part) => !part.classList.contains("ec-dimmed")).map((part) => rowOf<Row>(part).name))];
+    /** The key of the line whose hover arrow is drawn. */
+    const arrow = (): string | null | undefined => svg("dumbbell").querySelector('.ec-run.ec-hot[data-slot="hover"] .ec-icon[data-icon="arrow"]')?.closest(".ec-run")?.getAttribute("data-key");
+    pointer("pointerover", markOf(svg("dumbbell"), "first@Okafor"));
+    expect(heard.splice(0)).toEqual(["first@Okafor pointer", "second@Okafor linked", "Okafor linked"]);
+    await run(320);
+    expect(lit()).toEqual(["Okafor"]);
+    expect(arrow()).toBe("Okafor");
+    void switcher.show("bars");
+    await run(1000);
+    void switcher.show("dumbbell");
+    await run(1000);
+    // Nothing lit once the switch has ended the hover.
+    expect(lit().sort()).toEqual([...NAMES].sort());
+    heard.length = 0;
+    pointer("pointerover", markOf(svg("dumbbell"), "second@Tanaka"));
+    expect(heard).toEqual(["second@Tanaka pointer", "first@Tanaka linked", "Tanaka linked"]);
+    await run(320);
+    expect(lit()).toEqual(["Tanaka"]);
+    expect(arrow()).toBe("Tanaka");
+  });
+
+  it("keeps a redraw mid-switch hidden until the switch lands, every attachment's marks, the names and the axis, and the switch plays on", async () => {
+    const { switcher, card, svg, overlay, run } = setup(dumbbellCard, "dumbbell");
+    void switcher.show("bars");
+    await run(304);
+    const before = [...runs(overlay).keys()];
+    card.redraw();
+    for (const view of ["dumbbell", "bars"] as const) for (const part of svg(view).querySelectorAll(PARTS)) expect(hidden(part), `${view}: ${part.outerHTML}`).toBe(true);
+    await run(16);
+    expect([...runs(overlay).keys()]).toEqual(before);
+    await run(700);
+    expect(switcher.current).toBe("bars");
+    for (const view of ["dumbbell", "bars"] as const) for (const part of svg(view).querySelectorAll(PARTS)) expect(hidden(part), `${view}: ${part.outerHTML}`).toBe(false);
+  });
+
+  it("lands at once in Off and with reduced motion, announced once, focus following its key", async () => {
+    for (const [mode, reduced] of [
+      ["off", false],
+      ["presentation", true]
+    ] as const) {
+      const { switcher, svg, overlay, run, said } = setup(dumbbellCard, "dumbbell", mode, reduced);
+      switcher.chart("dumbbell").focus("first@Lindqvist");
+      void switcher.show("bars");
+      expect(runs(overlay).size).toBe(0);
+      expect(overlay.querySelector(".ec-switch-guides")).toBeNull();
+      await run(16);
+      expect(document.activeElement).toBe(markOf(svg("bars"), "first@Lindqvist"));
+      expect(said()).toEqual(["Goals in each half by player on D3 bars, side by side"]);
+      document.body.replaceChildren();
+    }
   });
 });

@@ -66,9 +66,9 @@
   .chart .tick, .chart .axis-title { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); font-variant-numeric: tabular-nums; }
   .chart .grid { stroke: var(--ec-grid, #e1e0d9); }
   .chart .baseline { stroke: var(--ec-axis, #c3c2b7); }
-  .chart .host-label { font-size: 12.5px; fill: var(--ink-2); }
+  .chart .host-label, #dumbbell .name { font-size: 12.5px; fill: var(--ink-2); }
   /* The numbers sit on the bars or past their ends: a halo in the card's colour keeps them 4.5:1 on any colour, as the radar's ring values have. */
-  .chart .host-value { font-size: 11px; font-weight: 600; fill: var(--ink); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  .chart .host-value, #dumbbell .value { font-size: 11px; font-weight: 600; fill: var(--ink); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
   /* The bars: goals and assists in the bars page's slots. */
   #bars .segment-goals { fill: var(--ec-series-1, #2a78d6); }
   #bars .segment-assists { fill: var(--ec-series-4, #c28409); }
@@ -93,14 +93,20 @@
   #treemap .tile-defender, #treemap .bar-defender { fill: var(--ec-series-4, #c28409); }
   #treemap .treemap-labels .host-label { font-size: 12px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
   #treemap .treemap-labels .host-value { font-weight: 400; }
+  /* The dumbbell and its bars: the first half in the first slot and the second half in the second, dots and bars alike, so nothing
+     changes colour as it morphs (the charts page colours its rows by their change). The lines between the dots take the muted text
+     colour with no fill: a <line>'s fill is black, and the adapter takes a mark's fill as its colour unless it's none. */
+  #dumbbell .connector { fill: none; stroke: var(--ec-text-muted, #75736d); stroke-width: 3px; stroke-linecap: round; }
+  #dumbbell .dot-first, #dumbbell .bar-first { fill: var(--ec-series-1, #2a78d6); }
+  #dumbbell .dot-second, #dumbbell .bar-second { fill: var(--ec-series-2, #eb6834); }
 </style>
 </head>
 <body>
 <main class="wrap">
   <header>
     <p class="eyebrow">Layout morphs on D3 charts · hostView()</p>
-    <h1>Bars, areas, a radar and a treemap that change their layout</h1>
-    <p class="lede">Four cards, each a chart switch of charts drawn with D3 by code that knows nothing about expressive-charts. Each chart is attached with <code>expressive()</code> and made a view with <code>hostView()</code>, and <code>morph()</code> turns each mark into its own mark in the next layout, by its key. Nothing moves until you press a card's buttons, or <kbd>V</kbd> on a mark.</p>
+    <h1>Bars, areas, a radar, a treemap and a dumbbell that morph</h1>
+    <p class="lede">Five cards, each a chart switch of charts drawn with D3 by code that knows nothing about expressive-charts. Each chart is attached with <code>expressive()</code> and made a view with <code>hostView()</code>, and <code>morph()</code> turns each mark into its own mark in the next layout, by its key. Nothing moves until you press a card's buttons, or <kbd>V</kbd> on a mark.</p>
   </header>
 
   <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
@@ -109,7 +115,7 @@
   <div class="pair charts">
     <section class="card" aria-labelledby="bars-title">
       <h2 id="bars-title">Goals and assists, three ways, on D3 bars</h2>
-      <p class="note">Each player's goals and assists side by side, stacked, or as shares of 100%. Each segment is a <code>&lt;rect&gt;</code> keyed by its series and player, so it slides from beside the other into the stack, then stretches to its share, and its number becomes a percentage. A jump from side by side to 100% goes through Stacked.</p>
+      <p class="note">Each player's goals and assists side by side, stacked, or as shares of 100%. Each segment is a <code>&lt;rect&gt;</code> keyed by its series and player, so it slides from beside the other into the stack, then stretches to its share, and its number becomes a percentage. Side by side and stacked count on the same axis, so it stays put between them; at 100% it fades for a new one. A jump from side by side to 100% goes through Stacked.</p>
       <div class="bar">
         <span class="label" id="bars-layout-label">Show</span>
         <div class="seg" id="bars-layout" role="group" aria-labelledby="bars-layout-label">
@@ -126,7 +132,7 @@
 
     <section class="card" aria-labelledby="areas-title">
       <h2 id="areas-title">Shots, stacked and as shares, on a D3 area</h2>
-      <p class="note">Shots on target and off target per match, each averaged over the last five, as two <code>d3.area()</code> bands, stacked, or as shares of each week's shots. Both layouts span the same weeks, so <code>morph()</code> keeps each week's top and bottom on its week as they move, and each band's name moves with it.</p>
+      <p class="note">Shots on target and off target per match, each averaged over the last five, as two <code>d3.area()</code> bands, stacked, or as shares of each week's shots. Both layouts span the same weeks, so <code>morph()</code> keeps each week's top and bottom on its week as they move, and each band's name moves with it. The weeks below stay put; the counts fade into shares.</p>
       <div class="bar">
         <span class="label" id="areas-layout-label">Show</span>
         <div class="seg" id="areas-layout" role="group" aria-labelledby="areas-layout-label">
@@ -175,6 +181,24 @@
     </section>
   </div>
 
+  <div class="pair charts">
+    <section class="card" aria-labelledby="dumbbell-title">
+      <h2 id="dumbbell-title">First half against second, from a D3 dumbbell to bars</h2>
+      <p class="note">The charts page's dumbbell, drawn by the same D3 code, as three attachments: each half's <code>&lt;circle&gt;</code>s and the lines between them, linked by player, and made one view with <code>hostView([first, second, lines])</code>. Each dot grows into its half's bar and the lines fade, while the players' names and the axis stay where they are.</p>
+      <div class="bar">
+        <span class="label" id="dumbbell-layout-label">Show</span>
+        <div class="seg" id="dumbbell-layout" role="group" aria-labelledby="dumbbell-layout-label">
+          <button type="button" data-value="dumbbell" aria-pressed="true">Dumbbell</button>
+          <button type="button" data-value="bars" aria-pressed="false">Bars</button>
+        </div>
+      </div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-1"></i>First half</span><span><i class="swatch-2"></i>Second half</span></div>
+        <div id="dumbbell" class="switch"></div>
+      </div>
+    </section>
+  </div>
+
   <div class="pair">
     <section class="card" aria-labelledby="notes-title">
       <h2 id="notes-title">Design notes</h2>
@@ -182,8 +206,10 @@
         <li>Each view is a chart drawn by a D3 module that knows nothing about expressive-charts, attached with <code>expressive()</code> and made a view with <code>hostView()</code>. The switch pairs each mark with the mark that has its key in the next view, and <code>morph()</code> turns one into the other, so no effect knows the kind of chart it's on.</li>
         <li>A bar's segments float in a stack, so they're given <code>baseline: "left"</code>, and so are the treemap's tiles: each tile's sides then pair with its bar's. The radar's circles are read as points, and its areas' paths as shapes: two bands across the same weeks pair week by week.</li>
         <li>A jump of two, from side by side to 100% or back, goes through Stacked in Presentation: two switches of about a second each, announced once, when it lands. In Analysis it goes straight there in a fifth of a second, and in Off at once.</li>
-        <li>Each label the page names moves with its mark and swaps its text half way: a count becomes a share, an axis's name a bar's. A label with no partner fades, as do the rings, the spokes and the axes.</li>
-        <li>Each card's views give a series or a position the same colour, through the page's CSS, so nothing changes colour as it morphs.</li>
+        <li>Each label the page names moves with its mark and swaps its text half way: a count becomes a share, an axis's name a bar's. A label with no partner fades, as do the rings and the spokes.</li>
+        <li>The page names each card's guides with <code>hostView()</code>'s <code>guides</code>: the bars' axis, keyed by its scale, the areas' weeks, each by its week, and the dumbbell's axis. A guide that both views draw the same stays where it is through the switch, and the rest of each view fades: the bars' axis at 100%, on another scale, fades too.</li>
+        <li>The dumbbell is three attachments, each half's dots and the lines between them, linked by player, so any part of a row lights the whole row and its line shows the way it went. <code>hostView([first, second, lines])</code> makes them one view: each mark's key is its own across the three, and focus and colours go to the attachment with the key.</li>
+        <li>Each card's views give a series, a position or a half the same colour, through the page's CSS, so nothing changes colour as it morphs. So the dumbbell here is coloured by half, not by each row's change as on the charts page.</li>
         <li>Focus follows its mark's key into the next view, and the switch announces the view it lands on. The buttons are toggle buttons and keep focus; <kbd>V</kbd> on a focused mark goes to the next view.</li>
       </ul>
     </section>
@@ -192,7 +218,10 @@
       <h2 id="try-title">Things to try</h2>
       <ul class="checklist">
         <li>Press 100% on the bars: each segment slides into the stack, then stretches, and its number becomes a share. Press Side by side to go back the same way.</li>
-        <li>Press 100% on the areas, and watch a week: its top and bottom move straight up or down.</li>
+        <li>Press Stacked on the bars, and watch the grid: it stays put while the segments slide into the stack.</li>
+        <li>Press 100% on the areas, and watch a week: its top and bottom move straight up or down, and the weeks below don't move.</li>
+        <li>Press Bars on the dumbbell: each dot grows into its half's bar, the lines fade, and the names and the axis stay where they are.</li>
+        <li>Hover a dot on the dumbbell: its row lights up, and its line shows the way the player went. Tab to a dot and press <kbd>V</kbd>: focus follows it into its bar.</li>
         <li>Tab to a circle on the radar and press <kbd>V</kbd>: it grows into its bar, and focus stays on it there.</li>
         <li>Pick Analysis, then press Bars on the treemap: the tiles become bars in a fifth of a second.</li>
         <li>Press 100% on the bars, then Side by side part way through: the bars go back from where they are.</li>

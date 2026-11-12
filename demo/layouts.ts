@@ -1,10 +1,11 @@
-// Four layout morphs from docs/ideas/effects-by-chart.md, each on charts drawn with D3 by modules that
-// know nothing about expressive-charts, in a chart switch through hostView(): bars side by side,
-// stacked and as shares of 100%; areas stacked and as shares; a radar into bars; and a treemap into
-// bars. demo/layouts-effects.ts has each card's views, which src/layouts.test.ts builds too. Each card
-// loads at rest in its first view and moves only on its buttons or V: nothing plays by itself.
+// Five layout morphs, four from docs/ideas/effects-by-chart.md, each on charts drawn with D3 by modules
+// that know nothing about expressive-charts, in a chart switch through hostView(): bars side by side,
+// stacked and as shares of 100%; areas stacked and as shares; a radar into bars; a treemap into bars;
+// and the charts page's dumbbell, three attachments in one view, into bars. demo/layouts-effects.ts has
+// each card's views, which src/layouts.test.ts builds too. Each card loads at rest in its first view
+// and moves only on its buttons or V: nothing plays by itself.
 import { chartSwitch, morph, motionSwitch, type ChartSwitch } from "../src/index";
-import { areasCard, barsCard, radarCard, treemapCard, type LayoutCard } from "./layouts-effects";
+import { areasCard, barsCard, dumbbellCard, radarCard, treemapCard, type LayoutCard } from "./layouts-effects";
 
 /** Wires a row of toggle buttons; returns a function that shows a value as pressed. */
 function segmented(id: string, onPick: (value: string) => void): (value: string) => void {
@@ -49,6 +50,7 @@ const bars = barsCard();
 const areas = areasCard();
 const radar = radarCard();
 const treemap = treemapCard();
+const dumbbell = dumbbellCard();
 
 // The bars go side by side → stacked → 100% → side by side, the last through Stacked, and so does a
 // jump of two from the buttons.
@@ -56,12 +58,13 @@ layoutSwitch("bars", bars, ["side", "stacked", "share"], "stacked");
 layoutSwitch("areas", areas, ["stacked", "share"]);
 layoutSwitch("radar", radar, ["radar", "bars"]);
 layoutSwitch("treemap", treemap, ["treemap", "bars"]);
+layoutSwitch("dumbbell", dumbbell, ["dumbbell", "bars"]);
 
 // The D3 charts draw at their container's width, so they draw again when it changes, and refresh()
 // reads their marks again. A switch playing keeps their new marks hidden (hostView()), and the resize
 // lands it.
 window.addEventListener("resize", () => {
-  for (const card of [bars, areas, radar, treemap]) card.redraw();
+  for (const card of [bars, areas, radar, treemap, dumbbell]) card.redraw();
 });
 
 // The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.

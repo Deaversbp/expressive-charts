@@ -2,7 +2,7 @@
 // axe-core, a pinned dev dependency, runs its WCAG 2.2 A and AA rules on every demo page: in light and
 // dark, at 320 px wide, under forced colours, on morph.html mid-switch, with its season's other views
 // shown and with its D3 switch mid-switch and on its columns, on layouts.html mid-jump and at 100% with
-// a segment focused, and on line.html with Curved and Nearest point picked. Beside it, DOM checks for what axe can't see: the tab order with a visible focus at
+// a segment focused and with its dumbbell mid-switch and on its bars, and on line.html with Curved and Nearest point picked. Beside it, DOM checks for what axe can't see: the tab order with a visible focus at
 // every stop, no sideways scroll at 320 px, the tooltip clear of the focus ring, dismissed by Escape
 // and hoverable, every label at 4.5:1 while another mark is hovered, nothing moving by itself after
 // 5 s, and legends keeping their colours under forced colours. There are no screenshots here, so every
@@ -150,16 +150,19 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
       ...["Side by side", "Stacked", "100%", "Okafor: 16 goals"],
       ...["Stacked", "100%", "Shots on target: 177 in 38 matches"],
       ...["Radar", "Bars", "Okafor, goals: 0.50 per 90, 96th percentile"],
-      ...["Treemap", "Bars", "Okafor, forward: 16 goals, 28% of 58"]
+      ...["Treemap", "Bars", "Okafor, forward: 16 goals, 28% of 58"],
+      // The dumbbell's two tab stops, each half's dots, both in its first row.
+      ...["Dumbbell", "Bars", "Lindqvist: 3 goals in the first half", "Lindqvist: 7 goals in the second half, up 4"]
     ],
-    // None: its four switches' views are attachments, which draw no tooltip. Their hovers dim marks, so
+    // None: its five switches' views are attachments, which draw no tooltip. Their hovers dim marks, so
     // "contrast on hover" hovers one in each card's first view; layouts.spec.ts checks the rest.
     charts: [],
     hosts: [
       { chart: "#bars", shape: '.ec-switch-view[data-view="side"] rect.segment-goals >> nth=2' },
       { chart: "#areas", shape: '.ec-switch-view[data-view="stacked"] path.band-onTarget' },
       { chart: "#radar", shape: '.ec-switch-view[data-view="radar"] circle.value-player >> nth=2' },
-      { chart: "#treemap", shape: '.ec-switch-view[data-view="treemap"] rect.tile-winger >> nth=0' }
+      { chart: "#treemap", shape: '.ec-switch-view[data-view="treemap"] rect.tile-winger >> nth=0' },
+      { chart: "#dumbbell", shape: '.ec-switch-view[data-view="dumbbell"] circle.dot-second >> nth=7' }
     ]
   },
   {
@@ -317,6 +320,22 @@ test.describe("axe", () => {
     await page.clock.runFor(REST);
     await page.keyboard.press("Tab");
     await expect(page.locator('#bars .ec-switch-view[data-view="share"] rect.segment-goals').first()).toBeFocused();
+    expect(await axeViolations(page)).toEqual([]);
+  });
+
+  test("layouts.html's dumbbell mid-switch, its axis kept, then on its bars with a bar focused", async ({ page }) => {
+    await openAtRest(page, layoutsDemo);
+    await page.locator('#dumbbell-layout button[data-value="bars"]').click();
+    await page.clock.runFor(300);
+    const views = page.locator("#dumbbell .ec-switch-view");
+    await expect(views).toHaveClass([/ec-switching/, /ec-switching/]);
+    await expect(page.locator("#dumbbell .ec-switch-guides > .ec-switch-guide")).toHaveCount(2);
+    expect(await axeViolations(page)).toEqual([]);
+    await expect(views).toHaveClass([/ec-switching/, /ec-switching/]);
+    await page.clock.runFor(REST);
+    await page.locator('#dumbbell-layout button[data-value="bars"]').focus();
+    await page.keyboard.press("Tab");
+    await expect(page.locator('#dumbbell .ec-switch-view[data-view="bars"] rect.bar-first').first()).toBeFocused();
     expect(await axeViolations(page)).toEqual([]);
   });
 });

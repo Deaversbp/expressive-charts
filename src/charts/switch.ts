@@ -76,10 +76,10 @@ export interface ChartSwitchView {
    * element in `element` with a key of its own, read as each switch starts, before morphing(true). A
    * guide stays on screen at full strength, where it is, while the switch plays, when the other view
    * has a guide with its key drawn the same: the same markup in the same computed paint, with any ids
-   * left out, at the same place within 0.5 px. The old view's is drawn until half way and the new
-   * view's from there, so one drawn the same doesn't change. Every other guide fades with its view.
-   * The switch draws each one as a copy in its overlay, so the view hides them while it plays, as it
-   * hides its marks. Without it, a view has none.
+   * left out, at the same place within 0.5 px and at the same scale and turn. The old view's is drawn
+   * until half way and the new view's from there, so one drawn the same doesn't change. Every other
+   * guide fades with its view. The switch draws each one as a copy in its overlay, so the view hides
+   * them while it plays, as it hides its marks. Without it, a view has none.
    */
   guides?(): readonly ChartSwitchGuide[];
   /**
@@ -258,6 +258,8 @@ interface GuideCopy {
   readonly markup: string;
   /** Where the corners of the guide's box are, in overlay px: its origin, where there's no layout. */
   readonly corners: readonly Point[];
+  /** Its parent's space into the overlay: its scale and turn draw its strokes and text. */
+  readonly place: Matrix;
 }
 
 interface Switch {
@@ -800,7 +802,7 @@ export function chartSwitch<T extends ChartSwitchViews>(
       setAttributes(group, { class: "ec-switch-guide", "data-key": guide.key, transform: isIdentity(m) ? undefined : transformAttribute(m) });
       group.appendChild(copy);
       const own = ownTransform(element);
-      return [{ key: guide.key, group, markup: copy.outerHTML, corners: cornersOf(element).map((p) => matrix.apply(m, matrix.apply(own, p))) }];
+      return [{ key: guide.key, group, markup: copy.outerHTML, corners: cornersOf(element).map((p) => matrix.apply(m, matrix.apply(own, p))), place: m }];
     });
   }
 
@@ -1108,11 +1110,16 @@ function cornersOf(element: Element): Point[] {
   return [{ x: 0, y: 0 }];
 }
 
-/** Two guides drawn the same: the same markup in the same paint, at the same place within 0.5 px. */
+/**
+ * Two guides drawn the same: the same markup in the same paint, at the same place within 0.5 px, and
+ * at the same scale and turn, to a ten-thousandth, since a gridline's box has no height to tell a
+ * stretched stroke by.
+ */
 const sameGuide = (a: GuideCopy, b: GuideCopy): boolean =>
   a.markup === b.markup &&
   a.corners.length === b.corners.length &&
-  a.corners.every((p, i) => Math.hypot(p.x - b.corners[i]!.x, p.y - b.corners[i]!.y) <= 0.5);
+  a.corners.every((p, i) => Math.hypot(p.x - b.corners[i]!.x, p.y - b.corners[i]!.y) <= 0.5) &&
+  [0, 1, 2, 3].every((i) => Math.abs(a.place[i]! - b.place[i]!) <= 1e-4);
 
 /** A label's copy in the overlay: where it sits, and how much it's scaled about that point (1 for a chart's). */
 interface LabelCopy {

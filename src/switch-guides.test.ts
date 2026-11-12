@@ -514,6 +514,29 @@ describe("guides: kept when both views draw them the same", () => {
     }
   });
 
+  it("fades a gridline whose parent stretches it, though its markup and its box's corners are the same: its stroke is drawn thicker", async () => {
+    // A rule across the plot, its box of no height, in a <g> that's stretched in the second view (Codex's review of M16 step 2).
+    const ruled = (stretch: number, ranked: boolean) => (parent: Element) => {
+      const host = drawColumns(parent, { ranked, label: ranked ? "Shot outcomes, most first" : "Shot outcomes, columns" });
+      el("line", { class: "rule", x2: 560 }, el("g", { transform: `translate(40,110)${stretch === 1 ? "" : ` scale(1,${stretch})`}` }, host.svg));
+      return host;
+    };
+    const guides = (host: Host) => () => [...namedGuides(host)(), { element: host.svg.querySelector(".rule")!, key: "rule" }];
+    for (const [stretch, kept] of [
+      [2, false],
+      [1, true]
+    ] as const) {
+      const s = guideSetup({ columns: ruled(1, false), ranked: ruled(stretch, true) }, { guides });
+      void s.switcher.show("ranked");
+      for (let t = 0; t < 960; t += 64) {
+        if (kept) expectFrame(s, "columns", "ranked", at(t), [...KEPT, "rule"], { from: [], to: [] });
+        else expectFrame(s, "columns", "ranked", at(t), KEPT, { from: ["rule"], to: ["rule"] });
+        await s.advance(64);
+      }
+      s.switcher.destroy();
+    }
+  });
+
   it("keeps each guide its two views draw the same, and fades the rest: an axis with another tick, a gridline with no partner", async () => {
     const s = guideSetup(COLUMN_VIEWS);
     const grid = KEPT.slice(1);

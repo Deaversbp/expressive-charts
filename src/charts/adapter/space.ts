@@ -70,7 +70,8 @@ export function mapMark(mark: MarkGeometry, m: Matrix): MarkGeometry {
   };
 }
 
-const isIdentity = (m: Matrix): boolean => m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
+/** Whether the transform changes nothing, exactly. */
+export const isIdentity = (m: Matrix): boolean => m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
 
 /** The element's own transform attribute. */
 export function ownTransform(element: Element): Matrix {

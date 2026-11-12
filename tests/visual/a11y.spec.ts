@@ -549,7 +549,11 @@ test.describe("content on hover", () => {
         // whatever was under the tooltip, if anything was.
         const under = await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest(".ec-mark, .ec-column")), on);
         await page.mouse.move(2, 2);
-        await page.mouse.move(on.x, on.y);
+        // Back as a viewer's pointer comes, through the pixels before it. Playwright's one move from the
+        // corner lands on the very pixel the pointer left, and where the browser didn't hit-test again as
+        // the tooltip went (Firefox 159 often doesn't), the chart heard nothing in between: to it, the
+        // pointer hasn't moved.
+        for (const back of [2, 1, 0]) await page.mouse.move(on.x - back, on.y - back);
         expect((await hovered(page, chart)).text !== undefined, `${chart}: moved off and back, hovering what's under it`).toBe(under);
         await page.mouse.move(2, 2);
         await page.clock.runFor(REST);

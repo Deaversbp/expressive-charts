@@ -21,7 +21,8 @@ import { FRAME, iconTransforms, lineDemo, openDemo, pickMode, REST, tabInto } fr
 /** The library's line chart, the D3 line that expressive() drives, and the scrubber with both charts. */
 const line = (page: Page): Locator => page.locator("#line");
 const d3Line = (page: Page): Locator => page.locator("#d3-line");
-const d3Box = (page: Page): Locator => page.locator(".d3-box");
+/** The D3 line's box, by its <svg>: the page has two D3 boxes, and a screenshot takes one element. */
+const d3Box = (page: Page): Locator => page.locator(".d3-box").filter({ has: d3Line(page) });
 const season = (page: Page): Locator => page.locator("#season");
 /** The Vega-Lite line that fromVegaView() reads, and its card's box with the page's legend. */
 const vegaLine = (page: Page): Locator => page.locator("#vega-line");

@@ -85,12 +85,18 @@ function tabTo(target: SVGElement): void {
 }
 const tooltipText = () => Array.from(document.querySelector(".ec-tooltip")!.children, (line) => line.textContent);
 
-/** A property's colour on an element, its var() read from the custom properties the element inherits. */
+/**
+ * A property's colour on an element, as #rrggbb. jsdom computes a colour as a browser does, as rgb(),
+ * with its var() resolved; a custom property it gives as written, so a var() there is read from the
+ * custom properties the element inherits.
+ */
 function colorOf(element: Element, property: string): string {
   const style = getComputedStyle(element);
   const value = style.getPropertyValue(property).trim();
   const token = /^var\((--[\w-]+),\s*(.+)\)$/.exec(value);
-  return token ? style.getPropertyValue(token[1]!).trim() || token[2]! : value;
+  const color = token ? style.getPropertyValue(token[1]!).trim() || token[2]! : value;
+  const rgb = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(color);
+  return rgb ? `#${rgb.slice(1).map((c) => Number(c).toString(16).padStart(2, "0")).join("")}` : color;
 }
 
 /** WCAG 2 contrast between two #rrggbb colours. */

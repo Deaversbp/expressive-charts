@@ -6,7 +6,8 @@
 // src/index.ts because it brings charts and an effect together, as only the composition root may.
 // Last, every switch whose views have no guides as on main, byte for byte.
 
-import { createMotion, describe as build, manualClock, type MarkGeometry, type MotionMode } from "./core";
+import { createMotion, describe as build, easeInOutCubic, manualClock, type MarkGeometry, type MotionMode } from "./core";
+import { unease } from "./core/easing";
 import { createRegistry, type PresetFactory } from "./core/registry";
 import { flush } from "./core/testing";
 import {
@@ -21,6 +22,7 @@ import {
   type ChartSwitch,
   type ChartSwitchView,
   type ChartSwitchViews,
+  type HostGuide,
   type HostLabel
 } from "./charts";
 import { morph } from "./effects";
@@ -134,13 +136,7 @@ function drawColumns(parent: Element, { ranked = false, ticks = [0, 50, 100, 150
   const frame = nudge === 0 ? svg : el("g", { transform: `translate(${nudge},0)` }, svg);
   const grid = el("g", { class: "grid", transform: "translate(40,20)" }, frame);
   const gridlines = ticks.map((value) => el("line", { x2: 560, y1: 240 - value, y2: 240 - value }, grid));
-  const axis = el("g", { class: "axis", transform: "translate(40,20)", fill: "none", "font-size": 10, "font-family": "sans-serif", "text-anchor": "end", "aria-hidden": "true" }, frame);
-  el("path", { class: "domain", stroke: "currentColor", d: "M-6,240.5H0.5V0.5H-6" }, axis);
-  for (const value of ticks) {
-    const tick = el("g", { class: "tick", opacity: 1, transform: `translate(0,${240.5 - value})` }, axis);
-    el("line", { stroke: "currentColor", x2: -6 }, tick);
-    el("text", { fill: "currentColor", x: -9, dy: "0.32em" }, tick, String(value));
-  }
+  const axis = drawAxis(frame, ticks);
   const plot = el("g", { transform: "translate(40,20)" }, frame);
   const order = ranked ? [...outcomes].sort((a, b) => b.shots - a.shots) : outcomes;
   const at = (row: Outcome): number => order.indexOf(row) * 140;
@@ -159,6 +155,18 @@ function drawColumns(parent: Element, { ranked = false, ticks = [0, 50, 100, 150
     names: outcomes.map((row) => el("text", { x: at(row) + 70, y: 258 }, names, row.outcome)),
     values: outcomes.map((row) => el("text", { x: at(row) + 70, y: 234 - row.shots }, values, String(row.shots)))
   };
+}
+
+/** The columns' y axis, as d3.axisLeft() draws one, in a margin <g> at (40, 20). */
+function drawAxis(parent: Element, ticks: readonly number[]): SVGGElement {
+  const axis = el("g", { class: "axis", transform: "translate(40,20)", fill: "none", "font-size": 10, "font-family": "sans-serif", "text-anchor": "end", "aria-hidden": "true" }, parent);
+  el("path", { class: "domain", stroke: "currentColor", d: "M-6,240.5H0.5V0.5H-6" }, axis);
+  for (const value of ticks) {
+    const tick = el("g", { class: "tick", opacity: 1, transform: `translate(0,${240.5 - value})` }, axis);
+    el("line", { stroke: "currentColor", x2: -6 }, tick);
+    el("text", { fill: "currentColor", x: -9, dy: "0.32em" }, tick, String(value));
+  }
+  return axis;
 }
 
 /** D3 bars: a <rect> per outcome in a margin <g> at (100, 20), from x 0, 3 px a shot, each name left of it and its count at its end, over an x axis as d3.axisBottom() draws one. */
@@ -302,6 +310,493 @@ function announcements(region: Element): () => string[] {
     return said;
   };
 }
+
+// ── Guides ──────────────────────────────────────────────────────────────────
+
+/**
+ * The guides a page names, read from the host's <svg> each time, as a page that draws again would:
+ * the columns' y axis, and each gridline by its value; the bars' x axis; and the pie's title, by a
+ * mark's key.
+ */
+function namedGuides(host: Host): () => HostGuide[] {
+  return () => {
+    const axis = host.svg.querySelector(".axis");
+    if (host.kind === "pie") return [{ element: host.title, key: "Goal" }];
+    if (host.kind === "bars") return [{ element: axis!, key: "x" }];
+    const lines = Array.from(host.svg.querySelectorAll(".grid line"), (line): HostGuide => ({ element: line, key: `grid ${240 - Number(line.getAttribute("y1"))}` }));
+    return [{ element: axis!, key: "y" }, ...lines];
+  };
+}
+
+const COLUMN_VIEWS = {
+  columns: (parent: Element) => drawColumns(parent),
+  ranked: (parent: Element) => drawColumns(parent, { ranked: true, label: "Shot outcomes, most first" }),
+  taller: (parent: Element) => drawColumns(parent, { ticks: [0, 50, 100, 150, 200], label: "Shot outcomes, up to 200" })
+};
+
+/** The columns' guides' keys, in the order the page names them. */
+const KEPT = ["y", "grid 0", "grid 50", "grid 100", "grid 150"];
+/** Where their copies are put, in jsdom, which has no layout: through the transforms of each one's parent, the axis's the <svg> and the gridlines' the grid's <g>. */
+const PLACES = [null, ...KEPT.slice(1).map(() => "matrix(1 0 0 1 40 20)")];
+
+interface GuideSetupOptions {
+  readonly mode?: MotionMode;
+  readonly reduced?: boolean;
+  /** The view shown first. Default: the first. */
+  readonly initial?: string;
+  /** A ResizeObserver stand-in, the cell 600 px wide at first. */
+  readonly resizable?: boolean;
+  /** Each host's guides. Default: namedGuides. */
+  readonly guides?: (host: Host) => () => Iterable<HostGuide>;
+}
+
+/** Host views in a switch, each drawn by its function, attached and given to hostView() with its labels and its guides. */
+function guideSetup(draws: Readonly<Record<string, (parent: Element) => Host>>, options: GuideSetupOptions = {}) {
+  const e = env(options.mode, options.reduced);
+  const resize = options.resizable ? stubResize() : undefined;
+  const target = document.body.appendChild(document.createElement("div"));
+  const hosts: Record<string, Host> = {};
+  /** Each host's <svg> as it drew it, before it was attached. */
+  const drawn: Record<string, string> = {};
+  const views = Object.fromEntries(
+    Object.entries(draws).map(([name, draw]) => [
+      name,
+      (container: HTMLElement) => {
+        const host = (hosts[name] = draw(container));
+        drawn[name] = host.svg.outerHTML;
+        return hostView(attach(host, e), { labels: labelsOf(host), guides: (options.guides ?? namedGuides)(host) });
+      }
+    ])
+  ) satisfies ChartSwitchViews;
+  const names = Object.keys(views);
+  const switcher = chartSwitch(target, { views, initial: options.initial ?? names[0]!, transition: morph(), colors: colorAssignment({ Goal: 1, Saved: 2, "Off target": 3, Blocked: 4 }) }, e);
+  const wrapper = target.firstElementChild as HTMLDivElement;
+  resize?.(wrapper, 600);
+  const overlay = wrapper.querySelector(":scope > .ec-switch-overlay") as SVGSVGElement;
+  /** Each host's <svg> at rest, attached. */
+  const rest = Object.fromEntries(names.map((name) => [name, hosts[name]!.svg.outerHTML]));
+  return {
+    switcher,
+    e,
+    clock: e.clock,
+    hosts,
+    drawn,
+    rest,
+    wrapper,
+    overlay,
+    container: (view: string) => wrapper.querySelector(`:scope > [data-view="${view}"]`) as HTMLDivElement,
+    resize: (width: number) => resize?.(wrapper, width),
+    /** Each copy of a guide in the overlay, in its layer's order: the old view's, then the new view's. */
+    copies: () =>
+      Array.from(overlay.querySelectorAll<SVGGElement>(":scope > .ec-switch-guides > g"), (group) => ({
+        key: group.getAttribute("data-key")!,
+        opacity: group.getAttribute("opacity"),
+        transform: group.getAttribute("transform"),
+        copy: group.firstElementChild as SVGElement
+      })),
+    async advance(ms: number) {
+      e.clock.advance(ms);
+      await flush();
+    }
+  };
+}
+
+type GuideSetup = ReturnType<typeof guideSetup>;
+
+/** The switch's s after `ms` of a switch from its start. */
+const at = (ms: number): number => easeInOutCubic(ms / 950);
+
+/** Each key's copies' opacities, in the layer's order: the old view's, then the new one's. */
+function opacities(s: GuideSetup): Map<string, (string | null)[]> {
+  const out = new Map<string, (string | null)[]>();
+  for (const { key, opacity } of s.copies()) out.set(key, [...(out.get(key) ?? []), opacity]);
+  return out;
+}
+
+/** The element's markup and everything in it, with no style or id: what the host drew, without what's written inline. */
+function bare(element: Element): string {
+  const copy = element.cloneNode(true) as Element;
+  for (const each of [copy, ...copy.querySelectorAll("*")]) {
+    each.removeAttribute("style");
+    each.removeAttribute("id");
+  }
+  return copy.outerHTML;
+}
+
+/** A host's markup with its tab stop left out, which a switch moves to the key focus or the tab stop had. */
+const untabbed = (markup: string): string => markup.replace(/ tabindex="-?\d+"/g, "");
+const asDrawn = (svg: Element): string => untabbed(svg.outerHTML);
+
+const hidden = (element: Element): boolean => (element as SVGElement).style.getPropertyValue("visibility") === "hidden";
+
+/** A host's guides as namedGuides names them. */
+const guideElements = (host: Host): Element[] => namedGuides(host)().map((guide) => guide.element);
+
+/**
+ * Checks the frame: each kept key drawn once at full strength, the old view's until half way and the
+ * new view's from there, and each copy that fades with its view as that view's other parts do.
+ */
+function expectFrame(s: GuideSetup, from: string, to: string, at: number, kept: readonly string[], fading: { readonly from: readonly string[]; readonly to: readonly string[] }): void {
+  const byKey = opacities(s);
+  for (const key of kept) expect(byKey.get(key), `${key} at s ${at}`).toEqual(at < 0.5 ? ["1", "0"] : ["0", "1"]);
+  const copies = s.copies();
+  const [first, second] = [copies.slice(0, copies.length - (kept.length + fading.to.length)), copies.slice(copies.length - (kept.length + fading.to.length))];
+  for (const copy of first) if (fading.from.includes(copy.key)) expect(copy.opacity, `${from}'s ${copy.key}`).toBe(s.container(from).style.opacity);
+  for (const copy of second) if (fading.to.includes(copy.key)) expect(copy.opacity, `${to}'s ${copy.key}`).toBe(s.container(to).style.opacity);
+  expect(first.map((copy) => copy.key).sort()).toEqual([...kept, ...fading.from].sort());
+  expect(second.map((copy) => copy.key).sort()).toEqual([...kept, ...fading.to].sort());
+}
+
+describe("guides: kept when both views draw them the same", () => {
+  it("keeps a guide both views draw the same on screen at full strength on every frame, where it is: the old view's until half way, the new view's from there, both ways", async () => {
+    const s = guideSetup(COLUMN_VIEWS);
+    for (const [from, to] of [
+      ["columns", "ranked"],
+      ["ranked", "columns"]
+    ] as const) {
+      void s.switcher.show(to);
+      // Each copy as its host draws its guide, its paint written inline, where it is: a <g> from its
+      // parent's space into the overlay's, which jsdom, with no layout, puts at the <svg>'s origin.
+      const copies = s.copies();
+      expect(copies.map((copy) => bare(copy.copy))).toEqual([...guideElements(s.hosts[from]!), ...guideElements(s.hosts[to]!)].map(bare));
+      expect(copies.map((copy) => copy.transform)).toEqual([...PLACES, ...PLACES]);
+      // The host's own guides hidden while it plays, with its marks.
+      for (const host of [s.hosts[from]!, s.hosts[to]!]) for (const element of guideElements(host)) expect(hidden(element)).toBe(true);
+      for (let t = 0; t < 960; t += 16) {
+        expectFrame(s, from, to, at(t), KEPT, { from: [], to: [] });
+        // The views' other parts fade as they always have.
+        expect(s.container(from).style.opacity).toBe(String(Math.round(Math.max(0, 1 - at(t) / 0.4) * 1000) / 1000));
+        await s.advance(16);
+      }
+      expect(s.switcher.current).toBe(to);
+      expect(s.copies()).toEqual([]);
+      expect(s.overlay.querySelector(".ec-switch-guides")).toBeNull();
+      for (const name of [from, to]) expect(asDrawn(s.hosts[name]!.svg)).toBe(untabbed(s.rest[name]!));
+    }
+  });
+
+  it("draws the guides below the pairs, the fades and the labels, each copy in its host's computed paint, with no ids", () => {
+    const s = guideSetup(COLUMN_VIEWS);
+    s.hosts.columns!.svg.querySelector(".axis")!.setAttribute("id", "y-axis");
+    s.hosts.ranked!.svg.querySelector(".axis")!.setAttribute("id", "y-axis-ranked");
+    void s.switcher.show("ranked");
+    expect(Array.from(s.overlay.children, (child) => child.getAttribute("class"))).toEqual(["ec-switch-guides", "ec-switch-fades", "ec-switch-runs", "ec-switch-labels"]);
+    // Ids left out: the two axes are still drawn the same.
+    expect(opacities(s).get("y")).toEqual(["1", "0"]);
+    const [axis, grid] = s.copies().map((copy) => copy.copy);
+    expect(axis!.hasAttribute("id")).toBe(false);
+    // The page's CSS, which may not reach the overlay, written inline: the grid's stroke and dashes, and the axis's hidden domain.
+    expect([grid!.style.getPropertyValue("stroke"), grid!.style.getPropertyValue("stroke-dasharray")]).toEqual(["rgb(225, 224, 217)", "2 2"]);
+    expect(axis!.querySelector(".domain")!.getAttribute("style")).toContain("display: none");
+    // An attribute stands where it isn't overridden: the ticks' opacity, the axis's anchor.
+    expect(axis!.querySelector(".tick")!.getAttribute("opacity")).toBe("1");
+    expect(axis!.style.getPropertyValue("text-anchor")).toBe("end");
+  });
+
+  it("keeps one at the same place within 0.5 px, and fades one 1 px away", async () => {
+    for (const [nudge, kept] of [
+      [0.4, true],
+      [0.5, true],
+      [0.6, false],
+      [1, false]
+    ] as const) {
+      const s = guideSetup({ columns: (parent) => drawColumns(parent), nudged: (parent) => drawColumns(parent, { nudge, label: "Shot outcomes, nudged" }) });
+      void s.switcher.show("nudged");
+      const copies = s.copies();
+      // The nudged view's copies are mapped through its <g>, as its marks are.
+      expect(copies.map((copy) => copy.transform)).toEqual([...PLACES, `matrix(1 0 0 1 ${nudge} 0)`, ...KEPT.slice(1).map(() => `matrix(1 0 0 1 ${40 + nudge} 20)`)]);
+      for (let t = 0; t < 960; t += 64) {
+        if (kept) expectFrame(s, "columns", "nudged", at(t), KEPT, { from: [], to: [] });
+        else expectFrame(s, "columns", "nudged", at(t), [], { from: KEPT, to: KEPT });
+        await s.advance(64);
+      }
+      s.switcher.destroy();
+    }
+  });
+
+  it("keeps each guide its two views draw the same, and fades the rest: an axis with another tick, a gridline with no partner", async () => {
+    const s = guideSetup(COLUMN_VIEWS);
+    const grid = KEPT.slice(1);
+    void s.switcher.show("taller");
+    for (let t = 0; t < 960; t += 16) {
+      expectFrame(s, "columns", "taller", at(t), grid, { from: ["y"], to: ["y", "grid 200"] });
+      await s.advance(16);
+    }
+    void s.switcher.show("columns");
+    for (let t = 0; t < 960; t += 16) {
+      expectFrame(s, "taller", "columns", at(t), grid, { from: ["y", "grid 200"], to: ["y"] });
+      await s.advance(16);
+    }
+  });
+
+  it("pairs a guide with a guide alone: one keyed as a mark is, and guides with no partner, fade with their views while the marks pair", async () => {
+    const s = guideSetup({ pie: drawPie, columns: (parent) => drawColumns(parent), bars: drawBars });
+    void s.switcher.show("columns");
+    for (let t = 0; t < 960; t += 16) {
+      expectFrame(s, "pie", "columns", at(t), [], { from: ["Goal"], to: KEPT });
+      // The pie's title, keyed as the Goal slice is, fades, and the slice morphs into its column.
+      expect(s.overlay.querySelector('.ec-switch-runs > .ec-run[data-key="Goal"]')).not.toBeNull();
+      await s.advance(16);
+    }
+    void s.switcher.show("bars");
+    for (let t = 0; t < 960; t += 16) {
+      expectFrame(s, "columns", "bars", at(t), [], { from: KEPT, to: ["x"] });
+      await s.advance(16);
+    }
+  });
+
+  it("keeps each key once: a second guide with a key fades with its view", () => {
+    const twice = (host: Host) => () => [...namedGuides(host)(), ...namedGuides(host)().slice(0, 1)];
+    const s = guideSetup(COLUMN_VIEWS, { guides: twice });
+    void s.switcher.show("ranked");
+    expect(opacities(s).get("y")).toEqual(["1", "1", "0", "0"]);
+    s.clock.advance(304);
+    expect(opacities(s).get("y")).toEqual(["1", s.container("columns").style.opacity, "0", "0"]);
+  });
+});
+
+describe("guides: a switch back, a staged jump and a third view", () => {
+  for (const p of [0.2, 0.5, 0.8]) {
+    it(`keeps a guide through a switch back at ${p}, playing the same picture backwards, and gives the host back what it had once that lands`, async () => {
+      const s = guideSetup(COLUMN_VIEWS);
+      // The frame nearest p of the way.
+      const back = 16 * Math.round((950 * unease(p)) / 16);
+      void s.switcher.show("ranked");
+      for (let t = 0; t < back; t += 16) await s.advance(16);
+      void s.switcher.show("columns");
+      // Back from where it is: the same s, frame by frame, as it went.
+      for (let t = back; t > 0; t -= 16) {
+        expectFrame(s, "columns", "ranked", at(t), KEPT, { from: [], to: [] });
+        await s.advance(16);
+      }
+      await s.advance(16);
+      expect(s.switcher.current).toBe("columns");
+      expect(s.copies()).toEqual([]);
+      for (const name of ["columns", "ranked"]) expect(asDrawn(s.hosts[name]!.svg)).toBe(untabbed(s.rest[name]!));
+    });
+  }
+
+  it("keeps the guides each leg's two views share through a staged jump, on every frame of both legs", async () => {
+    const s = guideSetup(COLUMN_VIEWS);
+    const grid = KEPT.slice(1);
+    void s.switcher.show("ranked", { via: "taller" });
+    for (let t = 0; t < 960; t += 16) {
+      expectFrame(s, "columns", "taller", at(t), grid, { from: ["y"], to: ["y", "grid 200"] });
+      await s.advance(16);
+    }
+    // The second leg begins with the via view's own guides, where the first left them.
+    for (let t = 0; t < 960; t += 16) {
+      expectFrame(s, "taller", "ranked", at(t), grid, { from: ["y", "grid 200"], to: ["y"] });
+      await s.advance(16);
+    }
+    expect(s.switcher.current).toBe("ranked");
+    expect(s.copies()).toEqual([]);
+    for (const name of Object.keys(COLUMN_VIEWS)) expect(asDrawn(s.hosts[name]!.svg)).toBe(untabbed(s.rest[name]!));
+  });
+
+  it("keeps them when a third view lands the switch: the guides of the view it lands on, from there", async () => {
+    const s = guideSetup(COLUMN_VIEWS);
+    void s.switcher.show("ranked");
+    await s.advance(304);
+    void s.switcher.show("taller");
+    // Landed on ranked, and on from there: ranked's guides, each grid line at full strength.
+    expect(asDrawn(s.hosts.columns!.svg)).toBe(untabbed(s.rest.columns!));
+    expect(s.copies().slice(0, KEPT.length).map((copy) => bare(copy.copy))).toEqual(guideElements(s.hosts.ranked!).map(bare));
+    for (let t = 0; t < 960; t += 16) {
+      expectFrame(s, "ranked", "taller", at(t), KEPT.slice(1), { from: ["y"], to: ["y", "grid 200"] });
+      await s.advance(16);
+    }
+    expect(s.switcher.current).toBe("taller");
+    for (const name of Object.keys(COLUMN_VIEWS)) expect(asDrawn(s.hosts[name]!.svg)).toBe(untabbed(s.rest[name]!));
+  });
+});
+
+describe("guides: the host's DOM", () => {
+  it("is given back as it was when the switch is landed by a resize or by motion turning off, and as drawn when it's destroyed mid-way", async () => {
+    for (const end of ["resize", "off", "destroy"] as const) {
+      const s = guideSetup(COLUMN_VIEWS, { resizable: true });
+      void s.switcher.show("ranked");
+      await s.advance(304);
+      expect(guideElements(s.hosts.ranked!).every(hidden)).toBe(true);
+      if (end === "resize") s.resize(500);
+      else if (end === "off") s.e.motion.setMode("off");
+      else s.switcher.destroy();
+      if (end === "destroy") {
+        expect(s.wrapper.isConnected).toBe(false);
+        for (const name of ["columns", "ranked"]) expect(s.hosts[name]!.svg.outerHTML).toBe(s.drawn[name]);
+      } else {
+        expect(s.switcher.current).toBe("ranked");
+        expect(s.copies()).toEqual([]);
+        for (const name of ["columns", "ranked"]) expect(asDrawn(s.hosts[name]!.svg)).toBe(untabbed(s.rest[name]!));
+        s.switcher.destroy();
+      }
+    }
+  });
+
+  it("hides the guides a host draws anew mid-switch, read again after its refresh: one drawn the same stays put, its copy as it was", async () => {
+    const s = guideSetup(COLUMN_VIEWS);
+    void s.switcher.show("ranked");
+    await s.advance(304);
+    const before = s.overlay.innerHTML;
+    // The host draws its axis again, a new element drawn the same, and refreshes.
+    const host = s.hosts.ranked as Columns;
+    const old = host.svg.querySelector(".axis")!;
+    const anew = drawAxis(host.svg, host.ticks);
+    old.replaceWith(anew);
+    s.switcher.chart("ranked").refresh();
+    expect(hidden(anew)).toBe(true);
+    expect(s.overlay.innerHTML).toBe(before);
+    for (let t = 304; t < 960; t += 16) {
+      expectFrame(s, "columns", "ranked", at(t), KEPT, { from: [], to: [] });
+      await s.advance(16);
+    }
+    expect(s.switcher.current).toBe("ranked");
+    expect(asDrawn(s.hosts.ranked!.svg)).toBe(untabbed(s.rest.ranked!));
+    expect(old.hasAttribute("style")).toBe(false);
+  });
+
+  it("hides one drawn anew that isn't drawn the same too: the switch plays on with the copy it began with, as with labels, and the host's new drawing shows once it lands", async () => {
+    const s = guideSetup(COLUMN_VIEWS);
+    void s.switcher.show("ranked");
+    await s.advance(304);
+    const before = s.overlay.innerHTML;
+    const host = s.hosts.ranked as Columns;
+    const anew = drawAxis(host.svg, [0, 50, 100, 150, 200]);
+    host.svg.querySelector(".axis")!.replaceWith(anew);
+    const drawnAnew = anew.outerHTML;
+    s.switcher.chart("ranked").refresh();
+    expect(hidden(anew)).toBe(true);
+    expect(s.overlay.innerHTML).toBe(before);
+    await s.advance(656);
+    expect(s.switcher.current).toBe("ranked");
+    // The axis as the host drew it anew, and nothing of the switch's left in its <svg>.
+    expect(anew.outerHTML).toBe(drawnAnew);
+    expect(host.svg.outerHTML).not.toMatch(/visibility: hidden|ec-morphing/);
+  });
+});
+
+describe("guides: what hostView() takes", () => {
+  it("gives the page's guides, leaving out one that isn't in the host's <svg>, the <svg> itself, one with no key, and every guide when guides throws (reported)", () => {
+    const e = env();
+    const host = drawColumns(document.body);
+    const view = hostView(attach(host, e), { guides: leftOut(host) as () => Iterable<HostGuide> });
+    expect(view.guides()).toEqual([]);
+    const named = namedGuides(host);
+    const other = drawColumns(document.body);
+    const both = hostView(attach(other, e), { guides: () => [...(leftOut(other)() as HostGuide[]), ...namedGuides(other)()] });
+    expect(both.guides()).toEqual(namedGuides(other)());
+    // Hidden while it morphs, as its marks are; the ones left out aren't.
+    view.morphing(true);
+    expect(hidden(host.axis)).toBe(false);
+    view.morphing(false);
+    const mine = hostView(attach(host, e), { guides: named });
+    mine.morphing(true);
+    expect(guideElements(host).every(hidden)).toBe(true);
+    expect(mine.guides().map((guide) => guide.element)).toEqual(guideElements(host));
+    mine.morphing(false);
+    expect(guideElements(host).some(hidden)).toBe(false);
+
+    const reported = vi.fn();
+    vi.stubGlobal("reportError", reported);
+    const failing = hostView(attach(drawColumns(document.body), e), {
+      guides: () => {
+        throw new Error("no guides");
+      }
+    });
+    expect(failing.guides()).toEqual([]);
+    expect(reported).toHaveBeenCalledWith(new Error("no guides"));
+  });
+
+  it("switches with guides that throw as with none: nothing copied, and their parts fade with their views", async () => {
+    vi.stubGlobal("reportError", vi.fn());
+    const s = guideSetup(COLUMN_VIEWS, {
+      guides: () => () => {
+        throw new Error("no guides");
+      }
+    });
+    void s.switcher.show("ranked");
+    expect(s.overlay.querySelector(".ec-switch-guides")).toBeNull();
+    expect(hidden(s.hosts.columns!.svg.querySelector(".axis")!)).toBe(false);
+    await s.advance(960);
+    expect(asDrawn(s.hosts.columns!.svg)).toBe(untabbed(s.rest.columns!));
+  });
+
+  it("takes a view's own guides as it takes hostView()'s: one in the view's <svg> with a key, and none that isn't", () => {
+    const e = env();
+    const target = document.body.appendChild(document.createElement("div"));
+    // A view of the page's own, made from a host view, whose guides() gives what it likes.
+    const own = (ranked: boolean) => (container: HTMLElement): ChartSwitchView => {
+      const host = drawColumns(container, { ranked });
+      const view = hostView(attach(host, e));
+      const outside = el("line", {}, document.createElementNS(SVG, "svg"));
+      return {
+        element: view.element,
+        space: view.space,
+        marks: () => view.marks(),
+        labels: () => view.labels(),
+        focus: (key) => view.focus(key),
+        leave: () => view.leave(),
+        destroy: () => view.destroy(),
+        morphing: (on) => view.morphing(on),
+        guides: () => [null, { element: outside, key: "y" }, { element: host.svg, key: "y" }, { element: host.axis }, { key: "y" }, { element: host.axis, key: "y" }] as never
+      };
+    };
+    const switcher = chartSwitch(target, { views: { columns: own(false), ranked: own(true) }, initial: "columns", transition: morph() }, e);
+    void switcher.show("ranked");
+    const groups = Array.from(target.querySelectorAll(".ec-switch-overlay > .ec-switch-guides > g"), (group) => [group.getAttribute("data-key"), group.getAttribute("opacity")]);
+    expect(groups).toEqual([
+      ["y", "1"],
+      ["y", "0"]
+    ]);
+    switcher.destroy();
+  });
+
+  it("throws a TypeError on guides that aren't a function", () => {
+    const e = env();
+    const host = drawColumns(document.body);
+    expect(() => hostView(attach(host, e), { guides: [] as never })).toThrow(
+      new TypeError('hostView: guides must be a function that returns the host\'s guides, such as () => [{ element: svg.querySelector("g.axis"), key: "y" }].')
+    );
+  });
+});
+
+describe("guides: motion", () => {
+  it("keeps them in Analysis, on every frame of its shorter switch", async () => {
+    const s = guideSetup(COLUMN_VIEWS, { mode: "analysis" });
+    const landed = vi.fn();
+    void s.switcher.show("ranked").then(landed);
+    let frames = 0;
+    while (!landed.mock.calls.length && frames < 30) {
+      // Each kept key drawn once at full strength, the old view's first.
+      const byKey = opacities(s);
+      expect([...byKey.keys()]).toEqual(KEPT);
+      for (const key of KEPT) expect(byKey.get(key)!.filter((opacity) => opacity === "1")).toHaveLength(1);
+      frames++;
+      await s.advance(16);
+    }
+    expect(landed).toHaveBeenCalled();
+    expect(frames).toBeLessThan(15);
+    expect(s.copies()).toEqual([]);
+    expect(asDrawn(s.hosts.ranked!.svg)).toBe(untabbed(s.rest.ranked!));
+  });
+
+  for (const [name, options] of [
+    ["motion off", { mode: "off" }],
+    ["reduced motion", { reduced: true }]
+  ] as const) {
+    it(`goes straight there with ${name}: no guide read, copied or hidden`, async () => {
+      const read = vi.fn(namedGuides);
+      const s = guideSetup(COLUMN_VIEWS, { ...options, guides: (host) => () => read(host)() });
+      read.mockClear();
+      const shown = s.switcher.show("ranked");
+      expect(s.switcher.current).toBe("ranked");
+      expect(read).not.toHaveBeenCalled();
+      expect(s.overlay.querySelector(".ec-switch-guides")).toBeNull();
+      for (const host of Object.values(s.hosts)) expect(guideElements(host).some(hidden)).toBe(false);
+      await shown;
+    });
+  }
+});
 
 // ── Switches with no guides, as on main ─────────────────────────────────────
 

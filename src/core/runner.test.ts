@@ -7,15 +7,24 @@ import type { Icon } from "./contracts/icon";
 import { linear } from "./easing";
 import { describe as build } from "./geometry";
 import { createMotion, type MotionMode, type ReducedMotionSource } from "./motion";
-import { report } from "./report";
 import { createRunner, type SlotEffects } from "./runner";
 import { estimatedBox } from "./text-box";
 import { recordingSurface } from "./testing";
 
-vi.mock("./report", () => ({ report: vi.fn() }));
+/**
+ * What report() reports, heard through reportError, which it calls where there is one, as jsdom has.
+ * Not by mocking ./report: files share their modules on a worker, so another may have loaded the
+ * runner with the real one already.
+ */
+const report = vi.fn();
 
 beforeEach(() => {
-  vi.mocked(report).mockClear();
+  report.mockClear();
+  vi.stubGlobal("reportError", report);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 interface Row {

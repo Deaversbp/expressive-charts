@@ -581,7 +581,7 @@ describe("expressive: hover", () => {
     const assists = host.rect("Okafor", "assists");
     // 5 px right in the plot's space; the group's own translate stays out of it.
     expect(assists.style.getPropertyValue("transform")).toBe("matrix(1, 0, 0, 1, 5, 0)");
-    expect(assists.style.getPropertyValue("transform-origin")).toBe("0 0");
+    expect(assists.style.getPropertyValue("transform-origin")).toBe("0px 0px");
     expect(assists.style.getPropertyValue("opacity")).toBe("0.5");
     // The host's strong colour, toward the text colour (jsdom writes the hex as rgb()).
     expect(assists.style.getPropertyValue("fill")).toMatch(ORANGE);
@@ -1169,7 +1169,8 @@ describe("expressive: keyboard", () => {
     expect(document.activeElement).toBe(host.rect("Okafor", "goals"));
     expect(ring.getAttribute("visibility")).toBeNull();
     expect(ring.getAttribute("d")).toBe(fx.marks()[0]!.outline.d);
-    expect(host.rect("Okafor", "goals").style.getPropertyValue("outline")).toBe("none");
+    // Its style alone: jsdom writes `outline: none` back as `medium`, the initial width, leaving out the style.
+    expect(host.rect("Okafor", "goals").style.getPropertyValue("outline-style")).toBe("none");
 
     expect(key(host.rect("Okafor", "goals"), "ArrowDown").defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(host.rect("Tanaka", "goals"));

@@ -202,7 +202,8 @@ describe('lineChart({ hover: "point" }): the pointer', () => {
 describe('lineChart({ hover: "point" }): dimming', () => {
   /** What the stylesheet sets, as jsdom cascades it: "1" where no rule sets an opacity. */
   const opacity = (element: Element | null) => getComputedStyle(element!).opacity;
-  const DIM = "var(--ec-dim-opacity, 0.3)";
+  /** The stylesheet's `var(--ec-dim-opacity, 0.3)`, computed as a browser does: no page sets the property here. */
+  const DIM = "0.3";
   /** A path along each mark and a label above its end, kept until the mark goes. */
   const decorate = recorder((mark, ctx) => {
     ctx.layer.path(mark.outline.d, { stroke: "mark", width: 2 });

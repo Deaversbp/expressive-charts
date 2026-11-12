@@ -1,6 +1,6 @@
 import type { GeometryEffect, Icon } from "./core";
 import { resolveEffects } from "./core/registry";
-import { icons, registerIcon, registerIcons, registerPreset } from "./index";
+import { registerIcon, registerIcons, registerPreset } from "./index";
 import { iconRegistry, presetRegistry } from "./registries";
 
 const icon = (name: string): Icon => ({
@@ -14,7 +14,12 @@ const icon = (name: string): Icon => ({
 });
 
 describe("page-wide registries", () => {
-  it("start with the neutral core icons, and no sport icons", () => {
+  it("start with the neutral core icons, and no sport icons", async () => {
+    // A page's first copy of the modules: files share theirs on a worker, and another may have
+    // registered the sport icons in it.
+    vi.resetModules();
+    const { iconRegistry } = await import("./registries");
+    const { icons } = await import("./index");
     expect(iconRegistry.names().slice(0, 3)).toEqual(["dot", "arrow", "chevron"]);
     expect(iconRegistry.get("arrow")).toBe(icons.arrow);
     expect(iconRegistry.get("soccer-ball")).toBeUndefined();

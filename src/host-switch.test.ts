@@ -51,10 +51,13 @@ function env(mode: MotionMode = "presentation", reduced = false): ChartEnv & { r
 }
 
 // The page's CSS for its hosts' labels, as a D3 page styles its text: jsdom computes it, as a browser would.
-document.head.appendChild(document.createElement("style")).textContent = [
+const css = document.head.appendChild(document.createElement("style"));
+css.textContent = [
   ".labels text, .names text { font-family: Inter; font-size: 12px; font-weight: 600; letter-spacing: 0.2px; fill: #333333; }",
   ".values text { font-family: Inter; font-size: 11px; font-weight: 400; fill: #555555; }"
 ].join("\n");
+// Taken out once the file is done: the files a worker runs share its document.
+afterAll(() => css.remove());
 
 afterEach(() => {
   document.body.textContent = "";

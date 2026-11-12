@@ -343,12 +343,12 @@ describe("a D3 curve through expressive(), read by tag", () => {
     // The red and the ball are drawn in one group, which follows the curve.
     const follows = () => [...overlayOf(host.svg).querySelectorAll('.ec-run[data-key="goals"] > .ec-follow')];
     expect(follows().flatMap((group) => Array.from(group.children, (drawn) => drawn.getAttribute("class")))).toEqual(["ec-path", "ec-icon"]);
-    /** What the stylesheet sets, as jsdom cascades it. */
+    /** What the stylesheet sets, as jsdom cascades it: its `var(--ec-dim-opacity, 0.3)` computes as 0.3, as in a browser. */
     const opacity = (element: Element) => getComputedStyle(element).opacity;
 
     pointer("pointerover", xg);
     expect(goals.classList.contains("ec-dimmed")).toBe(true);
-    expect(follows().map(opacity)).toEqual(["var(--ec-dim-opacity, 0.3)"]);
+    expect(follows().map(opacity)).toEqual(["0.3"]);
     pointer("pointerleave", host.svg);
     expect(follows().map(opacity)).toEqual(["1"]);
 

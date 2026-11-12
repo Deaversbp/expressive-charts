@@ -138,6 +138,7 @@ function listen(chart: LineChart<Week>) {
 afterEach(() => {
   document.body.textContent = "";
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("lineChart: drawing", () => {
@@ -219,7 +220,9 @@ describe("lineChart: drawing", () => {
   });
 
   it("keeps the default end label when labels throws, and reports it once", async () => {
-    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
+    // report() goes to reportError, which jsdom has, as a browser does.
+    const reported = vi.fn();
+    vi.stubGlobal("reportError", reported);
     const { line, chart } = setup({
       labels: () => {
         throw new Error("no label");

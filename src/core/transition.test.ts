@@ -5,14 +5,23 @@ import type { Icon } from "./contracts/icon";
 import { linear } from "./easing";
 import { describe as build } from "./geometry";
 import { createMotion, type MotionMode, type ReducedMotionSource } from "./motion";
-import { report } from "./report";
 import { recordingLayer, type RecordingLayer } from "./testing";
 import { isTransitionEffect, playTransition, type TransitionPair, type TransitionSurface } from "./transition";
 
-vi.mock("./report", () => ({ report: vi.fn() }));
+/**
+ * What report() reports, heard through reportError, which it calls where there is one, as jsdom has.
+ * Not by mocking ./report: files share their modules on a worker, so another may have loaded the
+ * transition with the real one already.
+ */
+const report = vi.fn();
 
 beforeEach(() => {
-  vi.mocked(report).mockClear();
+  report.mockClear();
+  vi.stubGlobal("reportError", report);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 const dot: Icon = {

@@ -45,10 +45,13 @@ function env(mode: MotionMode = "presentation", reduced = false): Env {
 }
 
 // The page's CSS for its hosts' labels, as a D3 page styles its text: jsdom computes it, as a browser would.
-document.head.appendChild(document.createElement("style")).textContent = [
+const css = document.head.appendChild(document.createElement("style"));
+css.textContent = [
   ".labels text, .names text { font-family: Inter; font-size: 12px; font-weight: 600; fill: #333333; }",
   ".values text { font-family: Inter; font-size: 11px; font-weight: 400; fill: #555555; }"
 ].join("\n");
+// Taken out once the file is done: the files a worker runs share its document.
+afterAll(() => css.remove());
 
 afterEach(() => {
   document.body.textContent = "";
@@ -873,15 +876,19 @@ async function digests(cases: Readonly<Record<string, Case>>, show: Show = (swit
   return out;
 }
 
-/** The digests main (f5900e9, 0.9.0's code) gave, with this file's digests() run there before via came in: each frames' then words'. */
+/**
+ * The digests main (f5900e9, 0.9.0's code) gave, with this file's digests() run there before via came
+ * in: each frames' then words'. The host views' frames pinned again on jsdom 31 (M16 step 1), which
+ * writes a host mark's `outline: none` back as `outline: medium`: nothing else moved.
+ */
 const MAIN: Readonly<Record<string, string>> = {
-  "three host views": "cd8e03ac08b9ab35 74eeca67c13a42b2",
-  "three host views in Analysis": "4fd03fa028959f2e b206231ec6befb76",
+  "three host views": "c7d779187a75a696 74eeca67c13a42b2",
+  "three host views in Analysis": "876a74ad741e63f5 b206231ec6befb76",
   "our three views in Analysis": "859dcaf886db4caa 9a7e552a647982bb",
   "landed early": "9e08c9cea62f7c40 8fa1c616ec387582",
-  "host views landed early": "22cb72e159583b58 c5470a1232900b4d",
+  "host views landed early": "138c976b8a2d93cf c5470a1232900b4d",
   "reduced motion": "dda2885bd4b8c4a9 623cdf406011c06f",
-  "host views with motion off": "aa1dc73f0a9fc6bb 606d6337625b0e21"
+  "host views with motion off": "3c217827683b66d3 606d6337625b0e21"
 };
 
 describe("every show() without via, as on main", () => {

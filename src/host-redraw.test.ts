@@ -41,10 +41,13 @@ function env(mode: MotionMode = "presentation", reduced = false): Env {
 }
 
 // The page's CSS for its hosts' labels, as a D3 page styles its text: jsdom computes it, as a browser would.
-document.head.appendChild(document.createElement("style")).textContent = [
+const css = document.head.appendChild(document.createElement("style"));
+css.textContent = [
   ".labels text, .names text { font-family: Inter; font-size: 12px; font-weight: 600; fill: #333333; }",
   ".values text { font-family: Inter; font-size: 11px; font-weight: 400; fill: #555555; }"
 ].join("\n");
+// Taken out once the file is done: the files a worker runs share its document.
+afterAll(() => css.remove());
 
 afterEach(() => {
   document.body.textContent = "";
@@ -917,15 +920,19 @@ async function digestOf({ mode, reduced, views, initial, steps }: DigestCase): P
   return hash(log);
 }
 
-/** The digests main (f5900e9, 0.9.0's library code) gave, with this file's digestOf() run there, before a host drawn again mid-switch was hidden. */
+/**
+ * The digests main (f5900e9, 0.9.0's library code) gave, with this file's digestOf() run there, before a
+ * host drawn again mid-switch was hidden. Pinned again on jsdom 31 (M16 step 1), which writes a host
+ * mark's `outline: none` back as `outline: medium`: nothing else in the frames moved.
+ */
 const MAIN: Readonly<Record<string, string>> = {
-  "a D3 pie and D3 columns": "6d703dd6a74ea513",
-  "hosts drawn again at rest": "542c633f50e424e9",
-  "a Vega-Lite chart and a D3 pie": "4ab1c5d180a4530a",
-  "a D3 pie and our columns": "827983895d633302",
-  analysis: "3cd71e2a916bbf61",
-  "motion off": "917f45708c45c0b3",
-  "reduced motion": "b3f91c358196c51d"
+  "a D3 pie and D3 columns": "a24826b8a1f49133",
+  "hosts drawn again at rest": "dcca27196c87572d",
+  "a Vega-Lite chart and a D3 pie": "9e823fce92b9a423",
+  "a D3 pie and our columns": "35a11d8c950706ce",
+  analysis: "7e80f88c6f4a7021",
+  "motion off": "1617f180a2af2690",
+  "reduced motion": "1bc28c9287b457d5"
 };
 
 describe("host switches with no redraw mid-switch", () => {

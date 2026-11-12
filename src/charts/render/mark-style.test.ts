@@ -122,7 +122,8 @@ describe("svgMarkHandle", () => {
     const hover = (target: Element) => target.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
     /** What the stylesheet sets, as jsdom cascades it: "1" where no rule sets an opacity. */
     const opacity = (element: Element | null) => getComputedStyle(element!).opacity;
-    const DIM = "var(--ec-dim-opacity, 0.3)";
+    /** The stylesheet's `var(--ec-dim-opacity, 0.3)`, computed as a browser does: no page sets the property here. */
+    const DIM = "0.3";
     const players = [
       { name: "Okafor", goals: 16, assists: 4 },
       { name: "Tanaka", goals: 6, assists: 10 }

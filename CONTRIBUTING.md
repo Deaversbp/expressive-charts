@@ -16,6 +16,8 @@ npm run pack-check # after a build: the packed tarball, installed and used as a 
 
 Vitest gives each test 15 s (`vitest.config.ts`), not its default 5: a few heavy tests take several seconds when other suites run on the same machine, or on CI's slower runner, though each takes about 1 s alone. A test that times itself keeps its own limit.
 
+Vitest makes one jsdom for each worker, not one for each file (`isolate: false`), which takes a third to a half off the suite's time. The files a worker runs share its document and its modules, so a test mustn't lean on a fresh one: it removes what it adds to the document (a `<style>` it adds for the file, in `afterAll`), undoes a `vi.stubGlobal`, and reads a module's first state from a fresh copy (`vi.resetModules()`, then `import()`). To hear `report()`, stub `reportError`, which it calls where there is one, as jsdom has: a `vi.mock` of `src/core/report.ts` doesn't reach a module another file loaded first. `npx vitest run --sequence.shuffle` runs the files and their tests in a random order, which finds a test that passes only because of the files before it.
+
 Three TypeScripts are dev dependencies, each pinned exactly:
 
 - `typescript` (7.0.2), the native compiler, runs `typecheck`.
@@ -32,7 +34,7 @@ The lockfile keeps two Rolldowns. tsdown asks for `~1.3.0`, so 1.3.1 builds the 
 
 `pack-check` (`scripts/pack-check.mjs`) packs the package, installs the tarball in a new project in the system's temporary folder, imports every entry in Node as ES modules and as CommonJS with no DOM, and typechecks a small consumer against it with each of the three TypeScripts, under `bundler`, `node16` (ES module) and `node16` (CommonJS) resolution. Each must read its own declarations: `.d.ts` for `import`, `.d.cts` for `require`, the stylesheet's included. CI runs it after the build. `-- --keep` keeps the temporary project.
 
-Working on the library needs Node.js 22.22.2 or newer on 22, or 24.15 or newer on 24, as jsdom 30 asks: it runs the unit tests (CI tests 22 and 24). The package itself needs Node.js 22 or newer, since jsdom is only a dev dependency.
+Working on the library needs Node.js 22.22.2 or newer on 22, or 24.15 or newer on 24, as jsdom 31 asks: it runs the unit tests (CI tests 22 and 24). The package itself needs Node.js 22 or newer, since jsdom is only a dev dependency.
 
 ## Visual tests
 

@@ -2,15 +2,16 @@
 // light and dark and at 320 px, each morph half way, the bars' jump of two at the end of its first leg
 // and part way through its second, and a mark focused after V. Beside them, DOM checks: nothing moving
 // at load, no D3 mark or named label drawn in either view while the overlay draws them, each pair in its
-// colour, the areas' weeks on their x's, one announcement for a jump, the toggle buttons and focus, V
-// with focus and the ring following its key, a resize mid-switch, reduced motion and Off (part way
-// through a jump too), and what can be read. Names start with "layouts-", since screenshot names are
-// shared across files.
+// colour, the areas' weeks on their x's, the guides the page names drawn as at rest on every frame where
+// both views draw them the same (pixel for pixel, in every browser), the dumbbell's link and its lines'
+// colour, one announcement for a jump, the toggle buttons and focus, V with focus and the ring following
+// its key, a resize mid-switch, reduced motion and Off (part way through a jump too), and what can be
+// read. Names start with "layouts-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, layoutsDemo, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
 
-type CardId = "bars" | "areas" | "radar" | "treemap";
+type CardId = "bars" | "areas" | "radar" | "treemap" | "dumbbell";
 
 interface Card {
   /** The views, the first the one it loads in, each with its button's name and its <svg>'s, which the switch announces. */
@@ -48,6 +49,14 @@ const CARDS: Readonly<Record<CardId, Card>> = {
       { view: "bars", button: "Bars", name: "The season's 58 goals by scorer on D3 bars, most first" }
     ],
     marks: 12
+  },
+  dumbbell: {
+    views: [
+      { view: "dumbbell", button: "Dumbbell", name: "Goals in each half by player on a D3 dumbbell" },
+      { view: "bars", button: "Bars", name: "Goals in each half by player on D3 bars, side by side" }
+    ],
+    // Each half's dots, which take the keyboard; the lines between them aren't named.
+    marks: 16
   }
 };
 const IDS = Object.keys(CARDS) as CardId[];
@@ -59,8 +68,8 @@ const view = (page: Page, id: CardId, name: string): Locator => chart(page, id).
 const runs = (page: Page, id: CardId): Locator => chart(page, id).locator(".ec-switch-overlay .ec-switch-runs > .ec-run");
 const button = (page: Page, id: CardId, name: string): Locator => card(page, id).getByRole("button", { name, exact: true });
 const announcer = (page: Page, id: CardId): Locator => chart(page, id).getByRole("status");
-/** The D3 charts' marks and the labels the page names, as the D3 code drew them. */
-const HOST_PARTS = "svg :is(rect.segment, rect.bar, rect.tile, path.band, circle.value, text.axis-name, text.host-label, text.host-value)";
+/** The D3 charts' marks and the labels the page names, as the D3 code drew them: the dumbbell's lines too, which fade. */
+const HOST_PARTS = "svg :is(rect.segment, rect.bar, rect.tile, path.band, circle.value, circle.dot, line.connector, text.axis-name, text.host-label, text.host-value, text.name, text.value)";
 /** A view's marks: the elements expressive() names. */
 const marks = (page: Page, id: CardId, name: string): Locator => view(page, id, name).locator('svg [role="img"]');
 
@@ -114,9 +123,11 @@ async function hostColours(page: Page, id: CardId, name: string): Promise<Record
             ? String(d.series)
             : element.matches("rect.tile")
               ? d.data!.name
-              : d.label !== undefined
-                ? `${d.series}@${d.label}`
-                : String(d.name);
+              : d.half !== undefined
+                ? `${d.half}@${d.name}`
+                : d.label !== undefined
+                  ? `${d.series}@${d.label}`
+                  : String(d.name);
         return [key, getComputedStyle(element).fill];
       })
     )
@@ -149,9 +160,11 @@ async function focusedKey(page: Page): Promise<{ readonly view: string | undefin
         ? String(d.series)
         : element.matches("rect.tile")
           ? d.data!.name
-          : d.label !== undefined
-            ? `${d.series}@${d.label}`
-            : String(d.name);
+          : d.half !== undefined
+            ? `${d.half}@${d.name}`
+            : d.label !== undefined
+              ? `${d.series}@${d.label}`
+              : String(d.name);
     return { view: element.closest<HTMLElement>(".ec-switch-view")?.dataset.view, key, label: element.getAttribute("aria-label") };
   });
 }
@@ -221,7 +234,7 @@ test.describe("each view at rest", () => {
 
   for (const id of IDS) {
     test(`at 320 px, the ${id} card's views each fit their card`, async ({ page }) => {
-      // Tall enough for the page in one column, about 4,700 px.
+      // Tall enough for the page in one column, about 6,300 px.
       await page.setViewportSize({ width: 320, height: 7000 });
       await openDemo(page, layoutsDemo);
       for (const [i, { view: name, button: label }] of CARDS[id].views.entries()) {
@@ -241,7 +254,8 @@ test.describe("half way", () => {
     { id: "bars", from: "stacked", to: "share", picture: "layouts-bars-share-half.png" },
     { id: "areas", from: "stacked", to: "share", picture: "layouts-areas-half.png" },
     { id: "radar", from: "radar", to: "bars", picture: "layouts-radar-half.png" },
-    { id: "treemap", from: "treemap", to: "bars", picture: "layouts-treemap-half.png" }
+    { id: "treemap", from: "treemap", to: "bars", picture: "layouts-treemap-half.png" },
+    { id: "dumbbell", from: "dumbbell", to: "bars", picture: "layouts-dumbbell-half.png" }
   ];
   for (const { id, from, to, picture } of morphs) {
     test(`the ${id} from ${from} to ${to}: no D3 mark or named label drawn in either view, each pair in its own colour`, async ({ page }) => {
@@ -319,6 +333,135 @@ test.describe("half way", () => {
     }
     await page.clock.runFor(REST);
     await expectLanded(page, "areas", "share");
+  });
+
+  /**
+   * Each switch whose two views draw a guide the same, and the parts of the views to hide so the
+   * guides are all that's left: the plots, with their marks and labels, and the areas' counts and grid,
+   * which fade. The overlay's pairs, fades and labels are hidden too.
+   */
+  const kept: readonly { readonly id: CardId; readonly from: string; readonly to: string; readonly others: string }[] = [
+    { id: "bars", from: "side", to: "stacked", others: ".bars-plot" },
+    { id: "bars", from: "stacked", to: "side", others: ".bars-plot" },
+    { id: "areas", from: "stacked", to: "share", others: ".areas-plot, .y-tick, .grid" },
+    { id: "dumbbell", from: "dumbbell", to: "bars", others: ".plot" },
+    { id: "dumbbell", from: "bars", to: "dumbbell", others: ".plot" }
+  ];
+  for (const { id, from, to, others } of kept) {
+    test(`the ${id} from ${from} to ${to}: the guides both draw the same, on every frame as at rest, pixel for pixel`, async ({ page }) => {
+      await openDemo(page, layoutsDemo);
+      const label = (name: string): string => CARDS[id].views.find((v) => v.view === name)!.button;
+      if (from !== CARDS[id].views[0]!.view) await show(page, id, label(from));
+      const style = await page.addStyleTag({ content: `#${id} :is(${others}, .ec-switch-runs, .ec-switch-fades, .ec-switch-labels) { display: none !important; }` });
+      const clip = (await view(page, id, from).locator("svg").boundingBox())!;
+      const rest = await page.screenshot({ clip });
+      await button(page, id, label(to)).click();
+      await pointerAway(page);
+      // Each copy is in the overlay, and the host's own guides hidden in both views.
+      await expect(chart(page, id).locator(".ec-switch-guides > .ec-switch-guide").first()).toBeAttached();
+      const moved: number[] = [];
+      let at = 0;
+      // From the click to 939 ms, before it lands at 950, through half way, where the copies swap.
+      for (const step of [0, FRAME, 144, 160, 155, 16, 16, 160, 160, 112]) {
+        await page.clock.runFor(step);
+        at += step;
+        if (!(await page.screenshot({ clip })).equals(rest)) moved.push(at);
+      }
+      expect(moved, "the frames where the guides weren't drawn as at rest").toEqual([]);
+      await expect(view(page, id, to)).toHaveClass(/ec-switching/);
+      await style.evaluate((element) => (element as Element).remove());
+      await page.clock.runFor(REST);
+      await expectLanded(page, id, to);
+    });
+  }
+
+  test("the bars from stacked to 100%: the axis, on another scale, fades with each view, gone by half way", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    await show(page, "bars", "Stacked");
+    await button(page, "bars", "100%").click();
+    await pointerAway(page);
+    /** Each guide's copy, the old view's then the new view's, with its opacity, and each view's container's. */
+    const now = async (): Promise<{ copies: string[]; views: string[] }> => ({
+      copies: await chart(page, "bars")
+        .locator(".ec-switch-guides > .ec-switch-guide")
+        .evaluateAll((groups) => groups.map((group) => `${group.getAttribute("data-key")} ${group.getAttribute("opacity")}`)),
+      views: await Promise.all(["stacked", "share"].map((name) => view(page, "bars", name).evaluate((container, key) => `axis@${key} ${container.style.opacity}`, name === "share" ? "share" : "count")))
+    });
+    await page.clock.runFor(160);
+    const part = await now();
+    expect(part.copies).toEqual(part.views);
+    expect(part.copies[0]).not.toMatch(/ (0|1)$/);
+    await page.clock.runFor(315);
+    expect((await now()).copies).toEqual(["axis@count 0", "axis@share 0"]);
+    await page.clock.runFor(REST);
+    await expectLanded(page, "bars", "share");
+  });
+});
+
+test.describe("the dumbbell's link", () => {
+  /** The players whose dots and lines aren't dimmed. */
+  const lit = (page: Page): Promise<string[]> =>
+    view(page, "dumbbell", "dumbbell")
+      .locator("circle.dot, line.connector")
+      .evaluateAll((parts) => [...new Set(parts.filter((part) => !part.classList.contains("ec-dimmed")).map((part) => (part as unknown as { __data__: { name: string } }).__data__.name))].sort());
+  /** The lines whose hover arrow is drawn, each with its run's colour. */
+  const arrows = (page: Page): Promise<{ readonly key: string; readonly colour: string }[]> =>
+    view(page, "dumbbell", "dumbbell")
+      .locator('.ec-run.ec-hot[data-slot="hover"]')
+      .evaluateAll((runs) =>
+        runs.filter((run) => run.querySelector('.ec-icon[data-icon="arrow"]')).map((run) => ({ key: run.getAttribute("data-key") ?? "", colour: getComputedStyle(run).getPropertyValue("--ec-mark").trim() }))
+      );
+
+  test("a dot lights its row and its line shows its arrow in the line's colour, before a switch and after one there and back", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    const dumbbell = view(page, "dumbbell", "dumbbell");
+    // Each line's colour at rest: hovered, it takes its strong colour.
+    const strokes = await dumbbell.locator("line.connector").evaluateAll((lines) => Object.fromEntries(lines.map((line) => [(line as unknown as { __data__: { name: string } }).__data__.name, getComputedStyle(line).stroke])));
+    // Okafor's first half, in the last row; then Tanaka's second, in the third.
+    for (const [dot, name] of [
+      [dumbbell.locator("circle.dot-first").nth(7), "Okafor"],
+      [dumbbell.locator("circle.dot-second").nth(2), "Tanaka"]
+    ] as const) {
+      if (name === "Tanaka") {
+        await show(page, "dumbbell", "Bars");
+        await show(page, "dumbbell", "Dumbbell");
+        expect(await lit(page)).toHaveLength(8);
+      }
+      await dot.hover();
+      await page.clock.runFor(400);
+      expect(await lit(page)).toEqual([name]);
+      expect(await arrows(page)).toEqual([{ key: name, colour: strokes[name] }]);
+      expect(strokes[name]).not.toBe("rgb(0, 0, 0)");
+      await pointerAway(page);
+      await page.clock.runFor(REST);
+    }
+  });
+
+  test("its lines fade in their own colour as it turns into bars, not in black", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    const strokes = await view(page, "dumbbell", "dumbbell")
+      .locator("line.connector")
+      .evaluateAll((lines) => Object.fromEntries(lines.map((line) => [(line as unknown as { __data__: { name: string } }).__data__.name, getComputedStyle(line).stroke])));
+    await button(page, "dumbbell", "Bars").click();
+    await pointerAway(page);
+    await page.clock.runFor(160);
+    const fades = await chart(page, "dumbbell")
+      .locator(".ec-switch-fades > .ec-switch-fade")
+      .evaluateAll((groups) =>
+        Object.fromEntries(
+          groups.map((group) => {
+            const path = getComputedStyle(group.querySelector("path")!);
+            return [group.getAttribute("data-key") ?? "", { stroke: path.stroke, fill: path.fill, opacity: Number(group.getAttribute("opacity")) }];
+          })
+        )
+      );
+    expect(Object.keys(fades).sort()).toEqual(Object.keys(strokes).sort());
+    for (const [key, fade] of Object.entries(fades)) {
+      expect(fade, key).toMatchObject({ stroke: strokes[key], fill: "none" });
+      expect(fade.opacity, key).toBeGreaterThan(0);
+    }
+    await page.clock.runFor(REST);
+    await expectLanded(page, "dumbbell", "bars");
   });
 });
 
@@ -426,7 +569,7 @@ test.describe("the buttons and V", () => {
     expect(await heard(page, "bars")).toEqual(["stacked", "share", "side"].map((name) => CARDS.bars.views.find((v) => v.view === name)!.name));
   });
 
-  for (const id of ["areas", "radar", "treemap"] as const) {
+  for (const id of ["areas", "radar", "treemap", "dumbbell"] as const) {
     test(`V on a focused mark of the ${id} switches, and focus and the ring follow its key, both ways`, async ({ page }) => {
       await openDemo(page, layoutsDemo);
       const [first, second] = CARDS[id].views;
@@ -443,9 +586,27 @@ test.describe("the buttons and V", () => {
         expect((await focusedKey(page)).view).toBe(name);
         expect(await ringShown(view(page, id, name))).toBe(true);
         if (id === "radar" && name === "bars") await expect(card(page, id)).toHaveScreenshot("layouts-radar-focus-bars.png");
+        if (id === "dumbbell" && name === "bars") await expect(card(page, id)).toHaveScreenshot("layouts-dumbbell-focus-bars.png");
       }
     });
   }
+
+  test("the dumbbell's two tab stops, each half's dots, stay on one row: Tab from a first half lands on its second half, and Shift+Tab back", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    await button(page, "dumbbell", "Bars").focus();
+    await page.keyboard.press("Tab");
+    expect(await focusedKey(page)).toMatchObject({ view: "dumbbell", key: "first@Lindqvist", label: "Lindqvist: 3 goals in the first half" });
+    for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight");
+    expect((await focusedKey(page)).key).toBe("first@Castillo");
+    await page.keyboard.press("Tab");
+    expect(await focusedKey(page)).toMatchObject({ view: "dumbbell", key: "second@Castillo", label: "Castillo: 1 goal in the second half, up 1" });
+    await page.keyboard.press("ArrowRight");
+    expect((await focusedKey(page)).key).toBe("second@Novak");
+    await page.keyboard.press("Shift+Tab");
+    expect((await focusedKey(page)).key).toBe("first@Novak");
+    await page.keyboard.press("Shift+Tab");
+    await expect(button(page, "dumbbell", "Bars")).toBeFocused();
+  });
 
   test("after a button's switch, Tab from the buttons lands on the same key in the new view", async ({ page }) => {
     await openDemo(page, layoutsDemo);
@@ -474,6 +635,7 @@ test.describe("a resize mid-switch", () => {
     await button(page, "areas", "100%").click();
     await button(page, "radar", "Bars").click();
     await button(page, "treemap", "Bars").click();
+    await button(page, "dumbbell", "Bars").click();
     await pointerAway(page);
     await page.clock.runFor(300);
     for (const id of IDS) await expect(runs(page, id)).toHaveCount(CARDS[id].marks);
@@ -487,6 +649,7 @@ test.describe("a resize mid-switch", () => {
     await expectLanded(page, "areas", "share");
     await expectLanded(page, "radar", "bars");
     await expectLanded(page, "treemap", "bars");
+    await expectLanded(page, "dumbbell", "bars");
     const after = await widths();
     expect(new Set(after).size).toBe(1);
     expect(Number(after[0])).toBeGreaterThan(Number(before[0]));
@@ -511,7 +674,7 @@ test.describe("reduced motion and Off", () => {
     await page.keyboard.press("v");
     await expectLanded(page, "bars", "side");
     expect(await focusedKey(page)).toMatchObject({ view: "side", key });
-    for (const id of ["areas", "radar", "treemap"] as const) {
+    for (const id of ["areas", "radar", "treemap", "dumbbell"] as const) {
       await button(page, id, CARDS[id].views[1]!.button).click();
       await expectLanded(page, id, CARDS[id].views[1]!.view);
     }
@@ -612,6 +775,17 @@ const SCORERS: readonly (readonly [string, string, number])[] = [
   ["Sousa", "midfielder", 1],
   ["Kowalski", "defender", 1]
 ];
+/** The charts page's players, their goals in the first half and the second. */
+const HALVES: readonly (readonly [string, number, number])[] = [
+  ["Okafor", 10, 6],
+  ["Lindqvist", 3, 7],
+  ["Moreau", 5, 3],
+  ["Tanaka", 2, 4],
+  ["Reyes", 1, 4],
+  ["Adeyemi", 3, 1],
+  ["Novak", 2, 1],
+  ["Castillo", 0, 1]
+];
 const RADAR: readonly (readonly [string, string, string, string])[] = [
   ["goals", "0.50", "96th", "0.18|63rd"],
   ["assists", "0.13", "52nd", "0.12|58th"],
@@ -639,6 +813,13 @@ const READ: Readonly<Record<CardId, Readonly<Record<string, readonly string[]>>>
   treemap: {
     treemap: SCORERS.map(([name, pos, goals]) => `image: ${name}, ${pos}: ${plural(goals, "goal")}, ${Math.round((goals / 58) * 100)}% of 58`),
     bars: SCORERS.map(([name, pos, goals]) => `image: ${name}, ${pos}: ${plural(goals, "goal")}`)
+  },
+  // Each half's dot, and its bar, the same: the lines between the dots aren't read.
+  dumbbell: {
+    dumbbell: HALVES.flatMap(([name, first, second]) => [
+      `image: ${name}: ${plural(first, "goal")} in the first half`,
+      `image: ${name}: ${plural(second, "goal")} in the second half, ${second > first ? `up ${second - first}` : `down ${first - second}`}`
+    ])
   }
 };
 

@@ -126,13 +126,14 @@ export const chartsDemo: Demo = {
 };
 
 /**
- * demo/layouts.html: four chart switches of D3 charts through hostView(): bars side by side, stacked and
- * at 100%; areas stacked and at 100%; a radar and its bars; a treemap and its bars.
+ * demo/layouts.html: five chart switches of D3 charts through hostView(): bars side by side, stacked and
+ * at 100%; areas stacked and at 100%; a radar and its bars; a treemap and its bars; a dumbbell of three
+ * attachments and its bars.
  */
 export const layoutsDemo: Demo = {
   path: "/layouts.html",
-  // About 2,140 px at 1,000 px wide, and 2,200 in Firefox.
-  height: 2600,
+  // About 3,160 px at 1,000 px wide, and 3,180 in Firefox.
+  height: 3600,
   async ready(page) {
     // expressive() has named every view's marks, so each view of each switch is attached.
     for (const view of ["side", "stacked", "share"]) await expect(page.locator(`#bars .ec-switch-view[data-view="${view}"] rect.segment[role="img"]`)).toHaveCount(16);
@@ -141,6 +142,9 @@ export const layoutsDemo: Demo = {
     await expect(page.locator('#radar .ec-switch-view[data-view="bars"] rect.bar[role="img"]')).toHaveCount(12);
     await expect(page.locator('#treemap .ec-switch-view[data-view="treemap"] rect.tile[role="img"]')).toHaveCount(12);
     await expect(page.locator('#treemap .ec-switch-view[data-view="bars"] rect.bar[role="img"]')).toHaveCount(12);
+    // The dumbbell's dots, each half an attachment, and its bars.
+    await expect(page.locator('#dumbbell .ec-switch-view[data-view="dumbbell"] circle.dot[role="img"]')).toHaveCount(16);
+    await expect(page.locator('#dumbbell .ec-switch-view[data-view="bars"] rect.bar[role="img"]')).toHaveCount(16);
   }
 };
 

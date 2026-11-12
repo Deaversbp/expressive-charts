@@ -4,8 +4,10 @@
 // Each chart is drawn by its own module, which knows nothing about expressive-charts; everything the
 // adapter can't read from an element by its tag is said here (CLAUDE.md rule 3: no effect knows a chart).
 
-import { expressive, hostView, type ChartSwitchViewFactory, type ExpressiveOptions, type HostLabel, type HostView, type MarkSource } from "../src/index";
-import { count, ordinal, profiles, radarAxes, type Attach } from "./charts-effects";
+import { expressive, hostView, link, travel, type ChartSwitchViewFactory, type ExpressiveOptions, type HostGuide, type HostLabel, type HostView, type MarkSource } from "../src/index";
+import { count, players as halves, ordinal, profiles, radarAxes, type Attach } from "./charts-effects";
+import { drawDumbbell, type Dot, type Row } from "./d3-dumbbell";
+import { drawDumbbellBars } from "./d3-dumbbell-bars";
 import { drawLayoutAreas, type AreaLayout } from "./d3-layout-areas";
 import { drawLayoutBars, type BarLayout, type BarPlayer, type BarSegment } from "./d3-layout-bars";
 import { drawRadar, type DrawnRadar, type Value } from "./d3-radar";
@@ -14,7 +16,7 @@ import { drawScorerBars } from "./d3-scorer-bars";
 import type { Band, ShotSeries, ShotWeek } from "./d3-shapes";
 import { drawTreemap, type Scorer, type Tile } from "./d3-treemap";
 
-export { profiles, radarAxes, type Attach };
+export { halves, profiles, radarAxes, type Attach };
 
 // ── The data ─────────────────────────────────────────────────────────────────
 
@@ -143,7 +145,22 @@ function namedLabels(svg: SVGSVGElement, readings: readonly LabelReading[]): () 
     );
 }
 
-/** What a view is made of: its name, its chart, how it's attached and its labels. */
+/** Where a chart's guides are, by selector, with each one's key from its D3 row. */
+type GuideReading = readonly [selector: string, key: (datum: never) => string];
+
+/**
+ * The parts of a D3 chart that another view of the card draws the same (an axis, a tick), each keyed,
+ * read from the chart as it is now. A guide whose key the next view has too, drawn the same, stays where
+ * it is through the switch; every other fades with its view.
+ */
+function namedGuides(svg: SVGSVGElement, readings: readonly GuideReading[]): () => HostGuide[] {
+  return () =>
+    readings.flatMap(([selector, key]) =>
+      [...svg.querySelectorAll(selector)].map((element): HostGuide => ({ element, key: (key as (datum: unknown) => string)((element as unknown as { __data__: unknown }).__data__) }))
+    );
+}
+
+/** What a view is made of: its name, its chart, how it's attached, its labels and its guides. */
 interface ViewParts<D> {
   /** The <svg>'s aria-label, which the switch announces. */
   readonly name: string;
@@ -153,17 +170,18 @@ interface ViewParts<D> {
   readonly again?: () => MarkSource<D>;
   readonly options: ExpressiveOptions<D>;
   readonly labels: readonly LabelReading[];
+  readonly guides?: readonly GuideReading[];
 }
 
 /**
  * One view in `container`: its <svg>, its chart drawn and attached, its redraw kept for the card's,
- * and the attachment made a view with its labels.
+ * and the attachment made a view with its labels and guides.
  */
 function view<D>(container: HTMLElement, attach: Attach, redraws: (() => void)[], parts: ViewParts<D>): HostView<D> {
   const svg = hostSvg(container, parts.name);
   const fx = attach(parts.draw(svg), parts.options);
   redraws.push(() => fx.refresh(parts.again ? parts.again() : parts.draw(svg)));
-  return hostView(fx, { labels: namedLabels(svg, parts.labels) });
+  return hostView(fx, { labels: namedLabels(svg, parts.labels), ...(parts.guides && { guides: namedGuides(svg, parts.guides) }) });
 }
 
 /** The bars' names: "Goals and assists by player on D3 bars, side by side". */
@@ -178,7 +196,8 @@ const BAR_NAMES: Readonly<Record<BarLayout, string>> = {
  * <rect> keyed `series@player`, so it pairs with itself in every view. A segment floats in a stack, so
  * `baseline` is "left" (auto looks for an edge every rect has). Each is named with its player, its
  * series, its value and at 100% its share. The players' names are labels keyed to their goals, and each
- * segment's number to its segment, so a count swaps to its share at 100%.
+ * segment's number to its segment, so a count swaps to its share at 100%. The axis is a guide keyed by
+ * its scale: side by side and stacked share 0 to 20, so it stays put between them, and 100%'s fades.
  */
 export function barsCard(attach: Attach = expressive): LayoutCard<BarLayout> {
   const redraws: (() => void)[] = [];
@@ -199,7 +218,8 @@ export function barsCard(attach: Attach = expressive): LayoutCard<BarLayout> {
         labels: [
           ["text.host-label", "category", (d: BarPlayer) => `goals@${d.name}`],
           ["text.host-value", "value", (d: BarSegment) => `${d.series}@${d.player}`]
-        ]
+        ],
+        guides: [["g.bars-axis", () => (layout === "share" ? "axis@share" : "axis@count")]]
       });
   return { views: { side: make("side"), stacked: make("stacked"), share: make("share") }, redraw: () => redraws.forEach((redraw) => redraw()) };
 }
@@ -213,7 +233,8 @@ const AREA_NAMES: Readonly<Record<AreaLayout, string>> = {
  * The areas card: shots on and off target per match, five-match averages, as two d3.area() bands,
  * stacked and at 100%. Each path is read by its tag as a closed shape, keyed by series, and the two
  * layouts span the same x's, so morph() pairs each week with itself. Each is named with its season
- * total or its share. The names at the bands' right ends are labels keyed by series.
+ * total or its share. The names at the bands' right ends are labels keyed by series. Each week under
+ * the plot is a guide keyed by its week, so both layouts keep it; the counts and shares fade.
  */
 export function areasCard(attach: Attach = expressive): LayoutCard<AreaLayout> {
   const redraws: (() => void)[] = [];
@@ -234,7 +255,8 @@ export function areasCard(attach: Attach = expressive): LayoutCard<AreaLayout> {
               : `${SHOT_NAMES[d.series]}: ${shotTotal(d.series)} in ${shots.length} matches`,
           dim: true
         },
-        labels: [["text.host-label", "category", (series: ShotSeries) => series]]
+        labels: [["text.host-label", "category", (series: ShotSeries) => series]],
+        guides: [["text.x-tick", (week: number) => `week@${week}`]]
       });
   return { views: { stacked: make("stacked"), share: make("share") }, redraw: () => redraws.forEach((redraw) => redraw()) };
 }
@@ -328,4 +350,76 @@ export function treemapCard(attach: Attach = expressive): LayoutCard<TreemapView
       ]
     });
   return { views: { treemap, bars }, redraw: () => redraws.forEach((redraw) => redraw()) };
+}
+
+export type DumbbellView = "dumbbell" | "bars";
+
+/** "Okafor: 10 goals in the first half"; "Okafor: 6 goals in the second half, down 4", its change from the first. */
+function halfWords(d: Dot): string {
+  const words = `${d.name}: ${count(d.value, d.metric === "goals" ? "goal" : "assist")} in the ${d.half} half`;
+  if (d.half === "first") return words;
+  const first = halves.find((player) => player.name === d.name)![d.metric].first;
+  return `${words}, ${d.value > first ? `up ${d.value - first}` : d.value < first ? `down ${first - d.value}` : "no change"}`;
+}
+
+const DUMBBELL_NAMES: Readonly<Record<DumbbellView, string>> = {
+  dumbbell: "Goals in each half by player on a D3 dumbbell",
+  bars: "Goals in each half by player on D3 bars, side by side"
+};
+
+/**
+ * The dumbbell card: the charts page's eight players and their goals in each half, on its dumbbell,
+ * drawn with drawDumbbell() unchanged, and as bars side by side. The dumbbell is three attachments, as
+ * the charts page has it, each half's dots and the lines between them, linked by player, so any part
+ * of a row lights the row and its line's hover shows the way it goes. Here they're keyed apart, the
+ * dots by half and player (`first@Okafor`) and the lines by player, so hostView() can make them one
+ * view. The dots take the keyboard and the names, not the lines: each dot grows into its half's bar,
+ * which has its key, and focus goes with it; the lines have no partner, so they fade. The players'
+ * names are labels keyed to their first half, as the bars' are, and the bars' numbers fade in. Both
+ * views draw the same axis, a guide, so it stays put.
+ */
+export function dumbbellCard(attach: Attach = expressive): LayoutCard<DumbbellView> {
+  const redraws: (() => void)[] = [];
+  const dotKey = (d: Dot): string => `${d.half}@${d.name}`;
+  const options: ExpressiveOptions<Dot> = { key: dotKey, value: (d) => d.value, keyboard: true, markLabel: halfWords, dim: true };
+  const names: LabelReading = ["text.name", "category", (d: Row) => `first@${d.name}`];
+  const axis: GuideReading = ["g.axes", () => "axis"];
+  const dumbbell: ChartSwitchViewFactory = (container) => {
+    const svg = hostSvg(container, DUMBBELL_NAMES.dumbbell);
+    const chart = drawDumbbell(svg, halves, "goals");
+    const first = attach(chart.dots.first, options);
+    const second = attach(chart.dots.second, options);
+    const lines = attach(chart.connectors, { key: (d) => d.name, dim: true, on: { hover: travel("arrow", { ride: "on" }) } });
+    // A destroyed attachment drops out of its link.
+    link([first, second, lines], { by: ({ data }) => data.datum.name });
+    // drawDumbbell() draws once; its resize() draws it again at the new width.
+    redraws.push(() => {
+      chart.resize();
+      first.refresh(chart.dots.first);
+      second.refresh(chart.dots.second);
+      lines.refresh(chart.connectors);
+    });
+    const view = hostView([first, second, lines], { labels: namedLabels(svg, [names]), guides: namedGuides(svg, [axis]) });
+    // Each half's dots keep a tab stop of their own, and a row's two dots are side by side in the
+    // document, so a stop follows the other half's focus to its row: Tab from a first half lands on its
+    // second half, and Shift+Tab back, wherever the arrow keys have gone.
+    for (const [half, other] of [
+      [first, "second"],
+      [second, "first"]
+    ] as const) {
+      half.on("hover", ({ mark, source }) => {
+        if (source === "keyboard") view.moveTabStop(`${other}@${mark.key.slice(mark.key.indexOf("@") + 1)}`);
+      });
+    }
+    return view;
+  };
+  const bars: ChartSwitchViewFactory = (container) =>
+    view<Dot>(container, attach, redraws, {
+      name: DUMBBELL_NAMES.bars,
+      draw: (svg) => drawDumbbellBars(svg, halves, "goals").bars,
+      options: { ...options, baseline: "left" },
+      labels: [names, ["text.value", "value", dotKey]],
+      guides: [axis]
+    });
+  return { views: { dumbbell, bars }, redraw: () => redraws.forEach((redraw) => redraw()) };
 }

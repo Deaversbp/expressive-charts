@@ -6,9 +6,10 @@
 // effect it's given: the composition root (src/index.ts) fills in morph() when the page leaves it out.
 //
 // A switch runs along one line, s, from 0 (the view it began in, `a`) to 1 (the view it went to,
-// `b`). The pairs morph at s; the labels move and swap their text, the unmatched marks fade, and the
-// views' other parts fade, each as a function of s, as the lab draws its centre and baseline from
-// its one `t`. So a switch back mid-way plays the same picture backwards from where it is.
+// `b`). The pairs morph at s; the labels move and swap their text, the unmatched marks fade, the
+// guides both views draw the same stay put, and the views' other parts fade, each as a function of
+// s, as the lab draws its centre and baseline from its one `t`. So a switch back mid-way plays the
+// same picture backwards from where it is.
 //
 // In a link (./link.ts), the switch's hover is the view on show's: its chart's own hovers go to the
 // link while it rests, and the link's hover shows in it. While a switch plays, neither view can be
@@ -19,8 +20,8 @@ import { unease } from "../core/easing";
 import { describePoint } from "../core/geometry/describe/point";
 import { formatPath, parsePath, transformPath } from "../core/geometry/path";
 import { isTransitionEffect, playTransition, type Transition, type TransitionPair, type TransitionSurface } from "../core/transition";
-import { strongColors } from "./adapter/host-style";
-import { between, boxIn } from "./adapter/space";
+import { drawnStyle, strongColors } from "./adapter/host-style";
+import { between, boxIn, ownTransform } from "./adapter/space";
 import { chartAnnouncer, type Announcer } from "./announce";
 import { toColorAssignment, type ColorAssignment } from "./colors";
 import { linkable, portOf, type LinkListener, type LinkPort, type RowsOf } from "./link";
@@ -71,8 +72,19 @@ export interface ChartSwitchView {
    */
   keyOf?(element: Element): string | undefined;
   /**
-   * Hides (true) or shows again (false) the marks and labels the switch draws in its overlay, while
-   * a switch plays: called as `element` takes `ec-morphing`, and as it loses it or the switch is
+   * The parts of the chart that can stay put through a switch: an axis, a grid, a tick, each an
+   * element in `element` with a key of its own, read as each switch starts, before morphing(true). A
+   * guide stays on screen at full strength, where it is, while the switch plays, when the other view
+   * has a guide with its key drawn the same: the same markup in the same computed paint, with any ids
+   * left out, at the same place within 0.5 px and at the same scale and turn. The old view's is drawn
+   * until half way and the new view's from there, so one drawn the same doesn't change. Every other
+   * guide fades with its view. The switch draws each one as a copy in its overlay, so the view hides
+   * them while it plays, as it hides its marks. Without it, a view has none.
+   */
+  guides?(): readonly ChartSwitchGuide[];
+  /**
+   * Hides (true) or shows again (false) the marks, labels and guides the switch draws in its overlay,
+   * while a switch plays: called as `element` takes `ec-morphing`, and as it loses it or the switch is
    * destroyed mid-way. A host chart's marks don't have the class that hides a chart's. Without it,
    * the class hides them.
    */
@@ -97,6 +109,14 @@ export interface ChartSwitchPaint {
   readonly end?: number;
   /** The width of the ring in `--ec-surface` the chart draws round the mark's filled shape, or round its end dot when it has one: 2 round a line chart's point and end dot. Unset: none. */
   readonly ring?: number;
+}
+
+/** A part of a view's chart that stays put through a switch when the next view draws it the same: an axis, a grid, a tick. */
+export interface ChartSwitchGuide {
+  /** The element, in the view's `<svg>`: drawn as it is, with everything in it. */
+  readonly element: Element;
+  /** Its own key: it pairs with the other view's guide with this key, never with a mark or a label. */
+  readonly key: string;
 }
 
 /**
@@ -229,6 +249,19 @@ interface Scene {
   clear(): void;
 }
 
+/** A view's guide as a switch draws it: its copy, and what tells two apart. */
+interface GuideCopy {
+  readonly key: string;
+  /** The copy in a <g> that puts it where the guide is, in overlay px. */
+  readonly group: SVGGElement;
+  /** The copy's markup, in its computed paint. */
+  readonly markup: string;
+  /** Where the corners of the guide's box are, in overlay px: its origin, where there's no layout. */
+  readonly corners: readonly Point[];
+  /** Its parent's space into the overlay: its scale and turn draw its strokes and text. */
+  readonly place: Matrix;
+}
+
 interface Switch {
   /** Where s is 0: the view the switch began in. */
   readonly a: View;
@@ -261,8 +294,9 @@ interface Switch {
  * chart is drawn once, in its own container; the containers share one grid cell, so a view keeps
  * its layout while it's hidden. `show(view)` hides both views' marks and plays `transition` on each
  * pair of marks with the same key in an overlay above them, while the labels move to their places
- * in the new view and swap their text half way, marks with no partner fade, and the old view's other
- * parts (axes, centre text, legend, table) fade out as the new one's fade in.
+ * in the new view and swap their text half way, marks with no partner fade, the guides both views
+ * draw the same stay where they are, and the old view's other parts (axes, centre text, legend,
+ * table) fade out as the new one's fade in.
  */
 export function chartSwitch<T extends ChartSwitchViews>(
   target: string | Element,
@@ -521,17 +555,20 @@ export function chartSwitch<T extends ChartSwitchViews>(
       reached();
       return Promise.resolve();
     }
-    // Both views' marks and labels hide, and neither can be reached until the switch lands; the
-    // new view shows, its other parts faded out.
+    // Both views' marks, labels and guides hide, and neither can be reached until the switch lands;
+    // the new view shows, its other parts faded out.
+    const guides: GuideCopy[][] = [];
     for (const each of [from, to]) {
       each.container.classList.remove("ec-switch-inactive");
+      // Copied as the view draws them, shown, before anything hides them.
+      guides.push(guidesOf(each));
       each.container.classList.add("ec-switching");
       each.container.setAttribute("inert", "");
       // First, so a host view can give back the class attribute its <svg> had.
       each.chart.morphing?.(true);
       each.chart.element.classList.add("ec-morphing");
     }
-    const { pairs, surface, scene } = prepare(from, to);
+    const { pairs, surface, scene } = prepare(from, to, guides);
     const { done, settle } = carried ?? deferred();
     const session: Switch = {
       a: from,
@@ -640,9 +677,9 @@ export function chartSwitch<T extends ChartSwitchViews>(
    * Each mark is drawn in the colour its view paints it, a pair in the new view's, with the ring and
    * end dot its chart draws. A mark its view doesn't draw at rest is a dot of no size at its centre,
    * so a column grows out of a line's point; a pair neither view draws isn't played, and a mark with
-   * no partner that isn't drawn doesn't fade.
+   * no partner that isn't drawn doesn't fade. `guides` are each view's, copied as it began.
    */
-  function prepare(a: View, b: View): { pairs: TransitionPair[]; surface: TransitionSurface; scene: Scene } {
+  function prepare(a: View, b: View, guides: readonly (readonly GuideCopy[])[]): { pairs: TransitionPair[]; surface: TransitionSurface; scene: Scene } {
     const toA = between(overlay, a.chart.space ?? a.chart.element, wrapper);
     const toB = between(overlay, b.chart.space ?? b.chart.element, wrapper);
     const scaleA = scaleOf(toA);
@@ -698,10 +735,36 @@ export function chartSwitch<T extends ChartSwitchViews>(
     for (const label of labelsA) if (!matched.has(id(label))) drawings.push(fadeLabel(copyLabel(label, toA, sizeA), fadeOut));
     for (const label of labelsB) if (!byId.has(id(label))) drawings.push(fadeLabel(copyLabel(label, toB, sizeB), fadeIn));
 
+    // Guides match by key, each key once. A pair drawn the same stays at full strength, the old
+    // view's until half way and the new one's from there, so it doesn't change; every other guide
+    // fades as its view's other parts do. Below the pairs, in a layer only a switch with guides has.
+    const [guidesA = [], guidesB = []] = guides;
+    const partners = new Map<string, GuideCopy>();
+    for (const guide of guidesA) if (!partners.has(guide.key)) partners.set(guide.key, guide);
+    const kept = new Set<GuideCopy>();
+    for (const guide of guidesB) {
+      const partner = partners.get(guide.key);
+      partners.delete(guide.key);
+      if (partner && sameGuide(partner, guide)) kept.add(partner).add(guide);
+    }
+    let guidesLayer: SVGGElement | undefined;
+    if (guidesA.length + guidesB.length > 0) {
+      const layer = (guidesLayer = doc.createElementNS(SVG_NS, "g"));
+      layer.setAttribute("class", "ec-switch-guides");
+      overlay.insertBefore(layer, fadesLayer);
+      ([[guidesA, (s: number) => (s < HALF ? 1 : 0), othersOut], [guidesB, (s: number) => (s < HALF ? 0 : 1), othersIn]] as const).forEach(([list, steady, fading]) => {
+        for (const guide of list) {
+          layer.appendChild(guide.group);
+          const opacity = kept.has(guide) ? steady : fading;
+          drawings.push((s) => guide.group.setAttribute("opacity", opacityText(opacity(s))));
+        }
+      });
+    }
+
     // The views' other parts: the old one's gone by 40% of the way, the new one's in from half way.
     drawings.push((s) => {
-      setOpacity(a.container, 1 - clamp(s / OUT_BY));
-      setOpacity(b.container, clamp((s - HALF) / (1 - HALF)));
+      setOpacity(a.container, othersOut(s));
+      setOpacity(b.container, othersIn(s));
     });
 
     return {
@@ -712,12 +775,35 @@ export function chartSwitch<T extends ChartSwitchViews>(
           for (const draw of drawings) draw(s);
         },
         clear: () => {
+          guidesLayer?.remove();
           fadesLayer.replaceChildren();
           runsLayer.replaceChildren();
           labelsLayer.replaceChildren();
         }
       }
     };
+  }
+
+  /**
+   * The view's guides as it draws them now, before it hides them: each copied with its computed
+   * paint written inline, since the host's CSS may not reach the overlay, and its ids left out, in a
+   * <g> that maps its parent's space into the overlay, as the marks are mapped. One that isn't in the
+   * view's <svg>, or has no key, is left out.
+   */
+  function guidesOf(view: View): GuideCopy[] {
+    const root = view.chart.element;
+    return (view.chart.guides?.() ?? []).flatMap((guide) => {
+      const element = guide?.element;
+      const parent = element?.parentElement;
+      if (typeof guide?.key !== "string" || !parent || !root.contains(parent)) return [];
+      const m = between(overlay, parent, wrapper);
+      const copy = paintedCopy(element, root);
+      const group = doc.createElementNS(SVG_NS, "g");
+      setAttributes(group, { class: "ec-switch-guide", "data-key": guide.key, transform: isIdentity(m) ? undefined : transformAttribute(m) });
+      group.appendChild(copy);
+      const own = ownTransform(element);
+      return [{ key: guide.key, group, markup: copy.outerHTML, corners: cornersOf(element).map((p) => matrix.apply(m, matrix.apply(own, p))), place: m }];
+    });
   }
 
   /** A mark with no partner, drawn as its outline in its view's colour, with its own ring and end dot, scaled as its view's <svg> is into the overlay. */
@@ -936,8 +1022,104 @@ function setActive(container: HTMLElement, active: boolean): void {
 }
 
 function setOpacity(container: HTMLElement, opacity: number): void {
-  container.style.setProperty("opacity", String(Math.round(opacity * 1000) / 1000));
+  container.style.setProperty("opacity", opacityText(opacity));
 }
+
+const opacityText = (opacity: number): string => String(Math.round(opacity * 1000) / 1000);
+
+/** The inherited properties a guide's copy takes from each of its elements, as the host draws them. */
+const INHERITED = [
+  "fill",
+  "fill-opacity",
+  "fill-rule",
+  "stroke",
+  "stroke-opacity",
+  "stroke-width",
+  "stroke-dasharray",
+  "stroke-dashoffset",
+  "stroke-linecap",
+  "stroke-linejoin",
+  "stroke-miterlimit",
+  "paint-order",
+  "marker-start",
+  "marker-mid",
+  "marker-end",
+  "color",
+  "visibility",
+  "font-family",
+  "font-size",
+  "font-style",
+  "font-weight",
+  "font-stretch",
+  "font-variant-caps",
+  "font-variant-ligatures",
+  "font-variant-numeric",
+  "font-feature-settings",
+  "font-kerning",
+  "letter-spacing",
+  "word-spacing",
+  "text-anchor",
+  "dominant-baseline",
+  "text-rendering",
+  "shape-rendering",
+  "writing-mode",
+  "direction"
+];
+
+/**
+ * Those that aren't inherited, with their initial values: a copy takes one only where it's another,
+ * so where styles don't read SVG's presentation attributes (jsdom), the attribute the copy has stands.
+ */
+const OWN: Readonly<Record<string, string>> = { opacity: "1", display: "inline", "clip-path": "none", mask: "none", filter: "none", "vector-effect": "none" };
+
+/** A copy of the element and everything in it, with no ids, each element's computed paint written inline on it. */
+function paintedCopy(source: Element, root: Element): Element {
+  const copy = source.cloneNode(true) as Element;
+  const sources = [source, ...source.querySelectorAll("*")];
+  const copies = [copy, ...copy.querySelectorAll("*")];
+  sources.forEach((element, i) => {
+    const target = copies[i] as SVGElement;
+    target.removeAttribute("id");
+    const computed = element.ownerDocument.defaultView?.getComputedStyle?.(element);
+    const styles: Record<string, string | undefined> = {};
+    for (const property of INHERITED) styles[property] = drawnStyle(element, root, property) || undefined;
+    for (const [property, initial] of Object.entries(OWN)) {
+      const value = computed?.getPropertyValue(property).trim();
+      if (value && value !== initial) styles[property] = value;
+    }
+    setStyles(target, styles);
+  });
+  return copy;
+}
+
+/** The corners of the element's box in its own space, where there's layout; its origin, where there isn't. */
+function cornersOf(element: Element): Point[] {
+  try {
+    const box = (element as Partial<SVGGraphicsElement>).getBBox?.();
+    if (box) {
+      return [
+        { x: box.x, y: box.y },
+        { x: box.x + box.width, y: box.y },
+        { x: box.x, y: box.y + box.height },
+        { x: box.x + box.width, y: box.y + box.height }
+      ];
+    }
+  } catch {
+    // One that isn't rendered, which Firefox won't measure.
+  }
+  return [{ x: 0, y: 0 }];
+}
+
+/**
+ * Two guides drawn the same: the same markup in the same paint, at the same place within 0.5 px, and
+ * at the same scale and turn, to a ten-thousandth, since a gridline's box has no height to tell a
+ * stretched stroke by.
+ */
+const sameGuide = (a: GuideCopy, b: GuideCopy): boolean =>
+  a.markup === b.markup &&
+  a.corners.length === b.corners.length &&
+  a.corners.every((p, i) => Math.hypot(p.x - b.corners[i]!.x, p.y - b.corners[i]!.y) <= 0.5) &&
+  [0, 1, 2, 3].every((i) => Math.abs(a.place[i]! - b.place[i]!) <= 1e-4);
 
 /** A label's copy in the overlay: where it sits, and how much it's scaled about that point (1 for a chart's). */
 interface LabelCopy {
@@ -967,6 +1149,9 @@ function fadeLabel(label: { readonly text: SVGTextElement }, opacity: (s: number
 
 const fadeOut = (s: number): number => 1 - clamp(s / HALF);
 const fadeIn = (s: number): number => clamp((s - HALF) / (1 - HALF));
+/** The views' other parts, and the guides that aren't kept: the old view's gone by 40% of the way, the new view's in from half way. */
+const othersOut = (s: number): number => 1 - clamp(s / OUT_BY);
+const othersIn = fadeIn;
 const clamp = (value: number): number => Math.min(1, Math.max(0, value));
 /** Weighted on both sides, as morph mixes, so a switch back puts a label where the switch forward had it. */
 const mix = (x: number, y: number, s: number): number => x * (1 - s) + y * s;

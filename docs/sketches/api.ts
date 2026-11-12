@@ -146,6 +146,10 @@ export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 // NEW in M15 step 1: show(view, { via }) (ChartSwitchShowOptions) stages a jump through a third view
 // in Presentation: to via, then on to view, each a full switch, with one announcement and focus carried
 // through; in Analysis and Off it goes straight there (M15 decisions 6 and 18).
+// NEW in M16 step 2: ChartSwitchView has optional guides() (ChartSwitchGuide: an element and a key
+// of its own), and hostView() a guides option (HostGuide), so an axis, a grid or a tick both views
+// draw the same stays where it is through a switch, copied into the overlay; every other guide fades
+// with its view, and a view with none switches as before (M16 decisions 8, 9 and 19).
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 

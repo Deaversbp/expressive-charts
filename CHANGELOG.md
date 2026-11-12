@@ -25,6 +25,12 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
+## Unreleased
+
+### Added
+
+- **Guides that stay put through a chart switch:** `guides()` on `ChartSwitchView`, with `ChartSwitchGuide`, and `hostView()`'s `guides` option, with `HostGuide`. A view names its guides, each an element in its `<svg>` (an axis, a grid, a tick) with a key of its own. While a switch plays, a guide whose key the other view has too, drawn the same (the same markup in the same computed paint, ids left out, at the same place within 0.5 px and the same scale), stays on screen at full strength, where it is: the old view's until half way, the new view's from there, through a switch back, a staged jump and a third view. Every other guide fades with its view's other parts, as before. The switch draws each as a copy in its overlay, below the pairs, and a host view hides its own while a switch plays, through the attachment's edits, and again after a refresh. A view with no guides, as our charts are, switches as before, byte for byte.
+
 ## 0.10.0 (11 November 2026)
 
 A chart switch that stages a jump through a third view, `show(view, { via })`, so bars side by side can stack before they become shares of 100%; `morph()` pairing two areas across the same x's by x, so stacked areas keep each week's x as they become shares of 100%; and a host view drawn again mid-switch keeping its new marks and labels hidden until the switch lands. The type declarations are built with tsdown 0.23.7, with the same types. Nothing in the effect-author API changes. Every change is outside the promise, and none needs anything written instead.

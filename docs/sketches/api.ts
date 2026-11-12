@@ -150,6 +150,12 @@ export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 // of its own), and hostView() a guides option (HostGuide), so an axis, a grid or a tick both views
 // draw the same stays where it is through a switch, copied into the overlay; every other guide fades
 // with its view, and a view with none switches as before (M16 decisions 8, 9 and 19).
+// NEW in M16 step 3: hostView([a, b, c], options) makes several attachments on one <svg>, their keys
+// unique across them, one view: their marks in their ancestors' common ancestor's space, focus, tab
+// stops, colours and hiding by the attachment with the key, and their own link kept, since the view
+// has no port. A key a refresh makes two attachments' is reported as a switch starts, and stays the
+// first's. Its labels and guides are the whole <svg>'s. It adds no member to HostView<D>, Attachment
+// or ChartSwitchView (M16 decisions 10 and 20).
 
 // ── Playback and on-page controls ────────────────────────────────────────────
 

@@ -18,10 +18,9 @@
 import { defaultClock, easeInOutCubic, linear, matrix, tween, type Clock, type Layer, type MarkGeometry, type Matrix, type MotionEnv, type PathHandle, type Point, type TransitionEffect, type Tween } from "../core";
 import { unease } from "../core/easing";
 import { describePoint } from "../core/geometry/describe/point";
-import { formatPath, parsePath, transformPath } from "../core/geometry/path";
 import { isTransitionEffect, playTransition, type Transition, type TransitionPair, type TransitionSurface } from "../core/transition";
 import { drawnStyle, strongColors } from "./adapter/host-style";
-import { between, boxIn, ownTransform } from "./adapter/space";
+import { between, boxIn, isIdentity, mapMark, ownTransform } from "./adapter/space";
 import { chartAnnouncer, type Announcer } from "./announce";
 import { toColorAssignment, type ColorAssignment } from "./colors";
 import { linkable, portOf, type LinkListener, type LinkPort, type RowsOf } from "./link";
@@ -1178,46 +1177,8 @@ function placeDot(element: SVGCircleElement, end: EndDot): void {
   setAttributes(element, { cx: end.at.x, cy: end.at.y, r: end.r, "stroke-width": end.ring });
 }
 
-const isIdentity = (m: Matrix): boolean => m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
-
 /** How much a transform that keeps angles scales every length. */
 const scaleOf = (m: Matrix): number => Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
-
-/**
- * The mark in another coordinate space: a view's <svg> units to the overlay's px. A switch maps by
- * where each <svg> sits and how it's scaled, so the transform keeps angles; its outline's path data
- * is moved through it, arcs and all.
- */
-function mapMark(mark: MarkGeometry, m: Matrix): MarkGeometry {
-  if (isIdentity(m)) return mark;
-  const point = (p: Point): Point => matrix.apply(m, p);
-  const path = (d: string): string => formatPath(transformPath(parsePath(d), m));
-  const scale = scaleOf(m);
-  const { outline } = mark;
-  return {
-    key: mark.key,
-    ...(mark.series === undefined ? {} : { series: mark.series }),
-    start: point(mark.start),
-    end: point(mark.end),
-    length: mark.length * scale,
-    path: (t) => point(mark.path(t)),
-    angle: (t) => {
-      const angle = mark.angle(t);
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      return Math.atan2(m[1] * cos + m[3] * sin, m[0] * cos + m[2] * sin);
-    },
-    slice: (t0, t1) => path(mark.slice(t0, t1)),
-    // At the same t: the transform keeps angles, so it scales every length along the walk alike.
-    ...(mark.gaps === undefined ? {} : { gaps: mark.gaps }),
-    thickness: mark.thickness * scale,
-    outline: { d: path(outline.d), closed: outline.closed, sample: (n) => outline.sample(n).map(point) },
-    bounds: boxIn(m, mark.bounds),
-    center: point(mark.center),
-    pivot: point(mark.pivot),
-    ...(mark.segments === undefined ? {} : { segments: mark.segments.map((segment) => mapMark(segment, m)) })
-  };
-}
 
 function deferred(): { done: Promise<void>; settle: () => void } {
   let settle!: () => void;

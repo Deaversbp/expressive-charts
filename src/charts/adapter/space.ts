@@ -2,9 +2,10 @@
 // CTMs where there's layout, and from the transform attributes where there isn't (jsdom, a chart
 // that isn't rendered yet).
 
-import type { Matrix, Point, Rect } from "../../core";
+import type { MarkGeometry, Matrix, Point, Rect } from "../../core";
 import { matrix } from "../../core";
 import { invert, parseTransform } from "../../core/geometry";
+import { formatPath, parsePath, transformPath } from "../../core/geometry/path";
 
 /** An element's screen CTM as a matrix, or undefined where there's no layout. */
 export type ScreenMatrix = (element: Element) => Matrix | undefined;
@@ -31,6 +32,46 @@ export function between(outer: Element, inner: Element, root: Element, screen: S
   if (a && b) return matrix.multiply(invert(a), b);
   return matrix.multiply(invert(fromRoot(outer, root)), fromRoot(inner, root));
 }
+
+/**
+ * The mark in another coordinate space, through `m`: a view's <svg> units to a chart switch's overlay
+ * px, or one attachment's marks' ancestor's to another's (between()). The transform keeps angles, as
+ * where each <svg> sits and how it's scaled does; its outline's path data is moved through it, arcs and
+ * all.
+ */
+export function mapMark(mark: MarkGeometry, m: Matrix): MarkGeometry {
+  if (isIdentity(m)) return mark;
+  const point = (p: Point): Point => matrix.apply(m, p);
+  const path = (d: string): string => formatPath(transformPath(parsePath(d), m));
+  const scale = scaleOf(m);
+  const { outline } = mark;
+  return {
+    key: mark.key,
+    ...(mark.series === undefined ? {} : { series: mark.series }),
+    start: point(mark.start),
+    end: point(mark.end),
+    length: mark.length * scale,
+    path: (t) => point(mark.path(t)),
+    angle: (t) => {
+      const angle = mark.angle(t);
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      return Math.atan2(m[1] * cos + m[3] * sin, m[0] * cos + m[2] * sin);
+    },
+    slice: (t0, t1) => path(mark.slice(t0, t1)),
+    // At the same t: the transform keeps angles, so it scales every length along the walk alike.
+    ...(mark.gaps === undefined ? {} : { gaps: mark.gaps }),
+    thickness: mark.thickness * scale,
+    outline: { d: path(outline.d), closed: outline.closed, sample: (n) => outline.sample(n).map(point) },
+    bounds: boxIn(m, mark.bounds),
+    center: point(mark.center),
+    pivot: point(mark.pivot),
+    ...(mark.segments === undefined ? {} : { segments: mark.segments.map((segment) => mapMark(segment, m)) })
+  };
+}
+
+/** Whether the transform changes nothing, exactly. */
+export const isIdentity = (m: Matrix): boolean => m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
 
 /** The element's own transform attribute. */
 export function ownTransform(element: Element): Matrix {

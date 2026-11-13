@@ -1,13 +1,15 @@
-// The charts page's data, and what it gives expressive() for each of its four D3 charts. demo/charts.ts
+// The charts page's data, and what it gives expressive() for each of its six D3 charts. demo/charts.ts
 // draws the charts and wires the page; src/host-charts.test.ts runs these same descriptions on the
 // same marks, so the page and its test can't drift apart. Each chart is drawn by its own module, which
 // knows nothing about expressive-charts; everything the adapter can't read from an element by its tag
 // is described here, from the points each module drew (CLAUDE.md rule 3: no effect knows a chart).
 
-import { describe, drawIn, expressive, label, link, only, samplesAlong, threshold, travel, type Attachment, type ExpressiveOptions, type Link, type MarkSource } from "../src/index";
+import { defineEffect, describe, drawIn, expressive, flash, label, link, only, samplesAlong, sequence, threshold, travel, type Attachment, type ExpressiveOptions, type Link, type MarkSource } from "../src/index";
 import { soccerBall } from "../src/icons/sport/index";
+import type { BulletRow, DrawnBullet, Measure, Range } from "./d3-bullet";
 import type { Band, DrawnButterfly, Half } from "./d3-butterfly";
 import type { Dot, DrawnDumbbell, Player, Row } from "./d3-dumbbell";
+import type { DrawnFunnel, Stage } from "./d3-funnel";
 import type { DrawnRadar, Profile, Value } from "./d3-radar";
 import type { Connector, DrawnWaterfall, Month, Step } from "./d3-waterfall";
 
@@ -57,6 +59,49 @@ export const bands: readonly Band[] = [
   { band: "61–75", conceded: 9, scored: 11 },
   { band: "76–90+", conceded: 11, scored: 13 }
 ];
+
+/** Each player's target for the season, made up: goals, then assists, in the players' order. */
+const targets: { readonly [M in Measure]: readonly number[] } = {
+  goals: [12, 8, 10, 5, 6, 6, 2, 3],
+  assists: [5, 6, 4, 8, 3, 5, 2, 4]
+};
+
+/** The bullet chart's rows for a measure: each player's season, both halves together, against their target. */
+export function bulletRows(measure: Measure): BulletRow[] {
+  return players.map((player, i): BulletRow => ({ name: player.name, measure, value: player[measure].first + player[measure].second, target: targets[measure][i]! }));
+}
+
+/** The bullet chart's three bands, the same for every player and for both measures: under 5, 5 to 9, and 10 or more. */
+export const bulletRanges: readonly Range[] = [
+  { from: 0, to: 5 },
+  { from: 5, to: 10 },
+  { from: 10, to: 20 }
+];
+export const bulletTicks: readonly number[] = [0, 5, 10, 15, 20];
+
+/** A funnel's stage as the page keeps it: its count, and what it lost from the stage before. */
+export interface FunnelStage extends Stage {
+  /** What the count is of, where the stage's name doesn't say: "shot". */
+  readonly unit?: string;
+  /** The stage before, and the share of its count that didn't get this far, as a whole percentage. None on the first. */
+  readonly from?: string;
+  readonly drop?: number;
+}
+
+/** Works each stage's drop from the stage before into its row. */
+function withDrops(stages: readonly (Stage & { readonly unit?: string })[]): FunnelStage[] {
+  return stages.map((stage, i): FunnelStage => {
+    const before = stages[i - 1];
+    return before ? { ...stage, from: before.name, drop: Math.round((1 - stage.count / before.count) * 100) } : stage;
+  });
+}
+
+/** The season's shots, down to its 58 goals. */
+export const funnelStages: readonly FunnelStage[] = withDrops([
+  { name: "Shots", count: 408 },
+  { name: "On target", count: 163, unit: "shot" },
+  { name: "Goals", count: 58 }
+]);
 
 // ── Words ────────────────────────────────────────────────────────────────────
 
@@ -324,6 +369,130 @@ export function attachButterfly(chart: DrawnButterfly, attach: Attach = expressi
       linked.destroy();
       scored.destroy();
       conceded.destroy();
+    }
+  };
+}
+
+// ── The bullet chart ─────────────────────────────────────────────────────────
+
+export interface BulletEffects {
+  readonly bars: Attachment<BulletRow>;
+  readonly markers: Attachment<BulletRow>;
+  readonly link: Link;
+  /** Reads the chart's marks again: after it joins new rows, or draws again. */
+  refresh(): void;
+  destroy(): void;
+}
+
+/** Whether a row's bar reaches its target. */
+export const met = (row: BulletRow): boolean => row.value >= row.target;
+
+/** Base ms a bar takes to fill, and so how long its marker waits: drawIn's own default. */
+const FILL = 750;
+
+/**
+ * The bars, read as bars by their tags, fill as they're attached (`drawIn`), and each is named with
+ * its value, its target and whether it's met. The markers are an attachment of their own, keyed by
+ * player as the bars are, with no keyboard or names: a marker's `value` is whether its bar has passed
+ * it, so a refresh that changes that is an update, and `flash` blinks round the markers now passed.
+ *
+ * At load a marker waits for its bar: `filling` is an effect of the page's own, which draws nothing for
+ * as long as a bar takes to fill, on the same timing, so the motion mode scales both alike. Until it's
+ * done, a change of measure flashes nothing, and when it ends the markers passed by then flash once.
+ * With motion off its end state is the wait over, and flash's is nothing.
+ *
+ * The bands aren't marks: the chart draws them, hidden, and nothing here reads them. The two
+ * attachments are linked by player, so a hovered bar's marker stays lit as the other rows dim.
+ */
+export function attachBullet(chart: DrawnBullet, attach: Attach = expressive): BulletEffects {
+  const metric = (row: BulletRow): string => (row.measure === "goals" ? "goal" : "assist");
+  /** Whether the marker with this key is passed, in the chart's rows as they are now. */
+  const passed = (key: string): boolean => chart.rows.some((row) => row.name === key && met(row));
+  /** Whether the bars have filled: until then the markers wait. */
+  let filled = false;
+  const filling = defineEffect({
+    async run(_mark, ctx) {
+      await ctx.tween({ duration: FILL, timing: "effect", update: () => {} }).finished;
+      if (!ctx.signal.aborted) filled = true;
+    },
+    end() {
+      filled = true;
+    }
+  });
+  const bars = attach(chart.bars, {
+    key: (d) => d.name,
+    value: (d) => `${d.measure} ${d.value}`,
+    keyboard: true,
+    markLabel: (d) => `${d.name}: ${count(d.value, metric(d))}, target ${d.target}, ${met(d) ? "met" : "not met"}`,
+    dim: true,
+    on: { enter: drawIn({ duration: FILL }) }
+  });
+  const markers = attach(chart.markers, {
+    key: (d) => d.name,
+    value: (d) => met(d),
+    dim: true,
+    on: {
+      enter: sequence(
+        filling,
+        only((mark) => passed(mark.key), flash())
+      ),
+      update: only((mark) => filled && passed(mark.key), flash())
+    }
+  });
+  const linked = link([bars, markers], { by: ({ data }) => data.datum.name });
+  return {
+    bars,
+    markers,
+    link: linked,
+    refresh() {
+      bars.refresh(chart.bars);
+      markers.refresh(chart.markers);
+    },
+    destroy() {
+      linked.destroy();
+      markers.destroy();
+      bars.destroy();
+    }
+  };
+}
+
+// ── The funnel ───────────────────────────────────────────────────────────────
+
+export interface FunnelEffects {
+  readonly stages: Attachment<FunnelStage>;
+  destroy(): void;
+}
+
+/** "−60%", with a true minus sign; nothing for the first stage. */
+export const dropLabel = (stage: FunnelStage): string | undefined => (stage.drop === undefined ? undefined : `−${stage.drop}%`);
+
+/**
+ * Each stage is a closed <path>, which the adapter reads as a shape with no labels of its own, so
+ * `label` would put its text inside it. The page describes each stage instead, from its path and from
+ * where the chart says its text is: its name's box, and its top edge as a box of no height, which is
+ * what sends the label up from the stage's centre to stand 6 px above it, in the gap, centred. The
+ * count's box is left out: a closed shape's label heads right from its centre first, and would go past
+ * the count instead. The label is the drop from the stage before; the first stage has none.
+ *
+ * An effect's text isn't read by a screen reader, so each stage's name says its drop too.
+ */
+export function attachFunnel(chart: DrawnFunnel<FunnelStage>, attach: Attach = expressive): FunnelEffects {
+  const stages = attach(chart.stages, {
+    key: (d) => d.name,
+    value: (d) => d.count,
+    geometry: (element, d, key) => {
+      const at = chart.place(d.name);
+      return describe.shape({ key, d: element.getAttribute("d") ?? "", labelBounds: [at.top, at.name] });
+    },
+    keyboard: true,
+    markLabel: (d) => `${d.name}: ${d.unit ? count(d.count, d.unit) : d.count}${d.drop === undefined ? "" : `, down ${d.drop}% from ${d.from}`}`,
+    dim: true,
+    on: { decorate: label((data) => dropLabel(data.datum)) }
+  });
+  return {
+    stages,
+    destroy() {
+      stages.destroy();
     }
   };
 }

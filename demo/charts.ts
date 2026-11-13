@@ -1,14 +1,37 @@
-// Four charts from docs/ideas/effects-by-chart.md, each drawn with D3 by a module that knows nothing
+// Six charts from docs/ideas/effects-by-chart.md, each drawn with D3 by a module that knows nothing
 // about expressive-charts, and given its effects through expressive() by demo/charts-effects.ts: a
 // waterfall whose ball travels down the staircase to rest on the season's total, a dumbbell whose arrow
 // shows each player's change on hover, a radar coloured where the player passes the league average,
-// and a butterfly whose halves grow out together. The waterfall and the butterfly play at load, and
-// their Replay buttons play it again; the dumbbell and the radar load at rest. Nothing plays by itself
-// after that.
+// a butterfly whose halves grow out together, a bullet chart whose bars fill and whose targets flash
+// once passed, and a funnel with the drop between its stages. The waterfall, the butterfly, the bullet
+// chart and the funnel play at load, and their Replay buttons play it again; the dumbbell and the
+// radar load at rest. Nothing plays by itself after that.
 import { motion, motionSwitch } from "../src/index";
-import { attachButterfly, attachDumbbell, attachRadar, attachWaterfall, bands, months, players, profiles, radarAxes, type ButterflyEffects, type WaterfallEffects } from "./charts-effects";
+import {
+  attachBullet,
+  attachButterfly,
+  attachDumbbell,
+  attachFunnel,
+  attachRadar,
+  attachWaterfall,
+  bands,
+  bulletRanges,
+  bulletRows,
+  bulletTicks,
+  funnelStages,
+  months,
+  players,
+  profiles,
+  radarAxes,
+  type BulletEffects,
+  type ButterflyEffects,
+  type FunnelEffects,
+  type WaterfallEffects
+} from "./charts-effects";
+import { drawBullet, type Measure } from "./d3-bullet";
 import { drawButterfly } from "./d3-butterfly";
 import { drawDumbbell, type Metric } from "./d3-dumbbell";
+import { drawFunnel } from "./d3-funnel";
 import { drawRadar } from "./d3-radar";
 import { drawWaterfall } from "./d3-waterfall";
 
@@ -40,11 +63,18 @@ const radarEffects = attachRadar(radar);
 const butterfly = drawButterfly(svgById("butterfly"), bands);
 let butterflyEffects: ButterflyEffects = attachButterfly(butterfly);
 
+const bullet = drawBullet(svgById("bullet"), bulletRows("goals"), bulletRanges, bulletTicks);
+let bulletEffects: BulletEffects = attachBullet(bullet);
+
+const funnel = drawFunnel(svgById("funnel"), funnelStages);
+let funnelEffects: FunnelEffects = attachFunnel(funnel);
+
 // ── Replay ───────────────────────────────────────────────────────────────────
 
 // An attachment plays `enter` once, as it attaches, so Replay attaches the card's marks again: the
-// connectors draw in, the ball travels and the labels rise, or the halves grow out. Focus stays on the
-// button, so nothing a viewer was reading is lost.
+// connectors draw in, the ball travels and the labels rise; the halves grow out; the bullet chart's
+// bars fill, as the measure shown, and the targets they pass flash; or the funnel's labels rise. Focus
+// stays on the button, so nothing a viewer was reading is lost.
 buttonById("waterfall-replay").addEventListener("click", () => {
   waterfallEffects.destroy();
   waterfallEffects = attachWaterfall(waterfall);
@@ -52,6 +82,14 @@ buttonById("waterfall-replay").addEventListener("click", () => {
 buttonById("butterfly-replay").addEventListener("click", () => {
   butterflyEffects.destroy();
   butterflyEffects = attachButterfly(butterfly);
+});
+buttonById("bullet-replay").addEventListener("click", () => {
+  bulletEffects.destroy();
+  bulletEffects = attachBullet(bullet);
+});
+buttonById("funnel-replay").addEventListener("click", () => {
+  funnelEffects.destroy();
+  funnelEffects = attachFunnel(funnel);
 });
 
 // ── Goals or assists ─────────────────────────────────────────────────────────
@@ -94,6 +132,16 @@ motion.subscribe(() => {
   if (motion.mode === "off") dumbbell.finish();
 });
 
+// The bullet chart has no transition of its own: it joins the other measure's rows and draws them at
+// once, and refresh() reads them. A marker whose bar now passes it gets an update, and flashes; while
+// the bars are still filling, nothing flashes until they have.
+segmented("bullet-measure", (value) => {
+  const measure = value as Measure;
+  if (measure === bullet.rows[0]?.measure) return;
+  bullet.set(bulletRows(measure));
+  bulletEffects.refresh();
+});
+
 // ── The page ─────────────────────────────────────────────────────────────────
 
 // Each chart draws itself again at the new width, and refresh() reads its marks again.
@@ -111,6 +159,10 @@ window.addEventListener("resize", () => {
   butterfly.resize();
   butterflyEffects.halves.conceded.refresh();
   butterflyEffects.halves.scored.refresh();
+  bullet.resize();
+  bulletEffects.refresh();
+  funnel.resize();
+  funnelEffects.stages.refresh();
 });
 
 // The motion switch is the viewer's own choice, so it overrides the device's reduced-motion setting.

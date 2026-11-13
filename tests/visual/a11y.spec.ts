@@ -130,16 +130,21 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
       ...["Replay the waterfall", "August: −1, −1 so far"],
       ...["Goals", "Assists", "Lindqvist: 3 goals in the first half, 7 in the second, up 4"],
       ...["Okafor: above the league average in goals, shots and dribbles", "Okafor, goals: 0.50 per 90, 96th percentile", "League average, goals: 0.18 per 90, 63rd percentile"],
-      ...["Replay the butterfly", "0–15 minutes: 6 conceded", "0–15 minutes: 7 scored"]
+      ...["Replay the butterfly", "0–15 minutes: 6 conceded", "0–15 minutes: 7 scored"],
+      // The bullet's toggle, its Replay and its bars' one stop (the markers and bands are no stop), then the funnel's.
+      ...["Goals", "Assists", "Replay the bullet chart", "Okafor: 16 goals, target 12, met"],
+      ...["Replay the funnel", "Shots: 408"]
     ],
-    // None: its four charts are attachments, which draw no tooltip. Their hovers dim marks, so
+    // None: its six charts are attachments, which draw no tooltip. Their hovers dim marks, so
     // "contrast on hover" hovers one in each; charts.spec.ts checks the rest.
     charts: [],
     hosts: [
       { chart: "#waterfall", shape: "rect.step-fall >> nth=1" },
       { chart: "#dumbbell", shape: "circle.dot-second >> nth=7" },
       { chart: "#radar", shape: "circle.value-player >> nth=2" },
-      { chart: "#butterfly", shape: "rect.bar-conceded >> nth=4" }
+      { chart: "#butterfly", shape: "rect.bar-conceded >> nth=4" },
+      { chart: "#bullet", shape: "rect.value >> nth=1" },
+      { chart: "#funnel", shape: "path.stage >> nth=1" }
     ]
   },
   {

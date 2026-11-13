@@ -4,7 +4,7 @@
 // Each chart is drawn by its own module, which knows nothing about expressive-charts; everything the
 // adapter can't read from an element by its tag is said here (CLAUDE.md rule 3: no effect knows a chart).
 
-import { expressive, hostView, link, travel, type ChartSwitchViewFactory, type ExpressiveOptions, type HostGuide, type HostLabel, type HostView, type MarkSource } from "../src/index";
+import { expressive, hostView, link, travel, type ChartSwitch, type ChartSwitchViewFactory, type ExpressiveOptions, type HostGuide, type HostLabel, type HostView, type MarkSource } from "../src/index";
 import { count, players as halves, ordinal, profiles, radarAxes, type Attach } from "./charts-effects";
 import { drawDumbbell, type Dot, type Row } from "./d3-dumbbell";
 import { drawDumbbellBars } from "./d3-dumbbell-bars";
@@ -14,7 +14,7 @@ import { drawRadar, type DrawnRadar, type Value } from "./d3-radar";
 import { drawRadarBars } from "./d3-radar-bars";
 import { drawScorerBars } from "./d3-scorer-bars";
 import type { Band, ShotSeries, ShotWeek } from "./d3-shapes";
-import { drawTreemap, type Scorer, type Tile } from "./d3-treemap";
+import { drawTreemap, slug, type Scorer, type Tile } from "./d3-treemap";
 
 export { halves, profiles, radarAxes, type Attach };
 
@@ -308,7 +308,30 @@ export function radarCard(attach: Attach = expressive): LayoutCard<RadarView> {
   return { views: { radar, bars }, redraw: () => redraws.forEach((redraw) => redraw()) };
 }
 
-export type TreemapView = "treemap" | "bars";
+/** A position's view, the position's tiles laid out to fill the chart: "midfielder". */
+export type PositionView = "forward" | "winger" | "midfielder" | "defender";
+/** A position's tiles alone, where the treemap has them: the view a drill is staged through. */
+export type ChosenView = `${PositionView}-chosen`;
+export type TreemapView = "treemap" | "bars" | PositionView | ChosenView;
+
+/** A position as the treemap card has it: its view, its button's word and its scorers. */
+export interface Position {
+  readonly view: PositionView;
+  /** "Midfielders": its button, and in lower case its view's name. */
+  readonly plural: string;
+  readonly scorers: readonly Scorer[];
+  /** Its scorers' goals. */
+  readonly goals: number;
+}
+
+/** The positions, in the order they first come in the rows, as the treemap groups them and the legend lists them. */
+export const positions: readonly Position[] = [...new Set(scorers.map((s) => s.pos))].map((pos) => {
+  const own = scorers.filter((s) => s.pos === pos);
+  return { view: slug(pos) as PositionView, plural: `${pos}s`, scorers: own, goals: own.reduce((sum, s) => sum + s.goals, 0) };
+});
+
+/** The position whose view this is, if it's one's. */
+const positionOf = (view: string): Position | undefined => positions.find((position) => position.view === view);
 
 /** "Okafor, forward: 16 goals". */
 const scorerWords = (s: Scorer): string => `${s.name}, ${s.pos.toLowerCase()}: ${count(s.goals, "goal")}`;
@@ -319,26 +342,48 @@ const scorerWords = (s: Scorer): string => `${s.name}, ${s.pos.toLowerCase()}: $
  * scorer. A tile shares no edge with every other, so `baseline` is "left", and so is the bars': each
  * tile's sides pair with its bar's. The names and goals are labels keyed by scorer; a tile too small for
  * them has none, so its bar's fade in.
+ *
+ * A position has two views more, for a drill-down: its tiles alone where the treemap has them, and its
+ * tiles laid out to fill the chart, each drawn once. A jump from the treemap to a position staged through
+ * the first (`treemapVia()`) fades the other positions' tiles while its own stay put, since they pair
+ * with themselves in the same places, then grows them. A position's tiles are named with their share of
+ * the position's goals.
  */
 export function treemapCard(attach: Attach = expressive): LayoutCard<TreemapView> {
   const redraws: (() => void)[] = [];
-  const treemap: ChartSwitchViewFactory = (container) =>
-    view<Tile>(container, attach, redraws, {
-      name: `The season's ${seasonGoals} goals by scorer and position on a D3 treemap`,
-      draw: (svg) => drawTreemap(svg, scorers).tiles,
-      options: {
-        key: (d) => d.data.name,
-        value: (d) => d.data.goals,
-        baseline: "left",
-        keyboard: true,
-        markLabel: (d) => `${scorerWords(d.data)}, ${Math.round((d.data.goals / seasonGoals) * 100)}% of ${seasonGoals}`,
-        dim: true
-      },
-      labels: [
-        ["text.host-label", "category", (d: Tile) => d.data.name],
-        ["text.host-value", "value", (d: Tile) => d.data.name]
-      ]
-    });
+  const labels: readonly LabelReading[] = [
+    ["text.host-label", "category", (d: Tile) => d.data.name],
+    ["text.host-value", "value", (d: Tile) => d.data.name]
+  ];
+  /** A view of tiles: its name, how it's drawn, and what each tile's goals are a share of. */
+  const tiles =
+    (name: string, draw: (svg: SVGSVGElement) => MarkSource<Tile>, of: string, total: number): ChartSwitchViewFactory =>
+    (container) =>
+      view<Tile>(container, attach, redraws, {
+        name,
+        draw,
+        options: {
+          key: (d) => d.data.name,
+          value: (d) => d.data.goals,
+          baseline: "left",
+          keyboard: true,
+          markLabel: (d) => `${scorerWords(d.data)}, ${Math.round((d.data.goals / total) * 100)}% of ${of}`,
+          dim: true
+        },
+        labels
+      });
+  const treemap = tiles(`The season's ${seasonGoals} goals by scorer and position on a D3 treemap`, (svg) => drawTreemap(svg, scorers).tiles, String(seasonGoals), seasonGoals);
+  const drill = Object.fromEntries(
+    positions.flatMap(({ view: name, plural, scorers: own, goals }) => {
+      const words = plural.toLowerCase();
+      return [
+        // The whole season's layout with only this position's tiles drawn, named as the treemap names them.
+        [`${name}-chosen`, tiles(`The ${words}' tiles on the season's D3 treemap`, (svg) => drawTreemap(svg, scorers, { only: (s) => own.includes(s) }).tiles, String(seasonGoals), seasonGoals)],
+        // This position's scorers alone, so d3.treemap() gives them the whole chart.
+        [name, tiles(`The ${words}' ${goals} goals by scorer on a D3 treemap`, (svg) => drawTreemap(svg, own).tiles, `the ${words}' ${goals}`, goals)]
+      ];
+    })
+  ) as Record<PositionView | ChosenView, ChartSwitchViewFactory>;
   const bars: ChartSwitchViewFactory = (container) =>
     view<Scorer>(container, attach, redraws, {
       name: `The season's ${seasonGoals} goals by scorer on D3 bars, most first`,
@@ -349,7 +394,91 @@ export function treemapCard(attach: Attach = expressive): LayoutCard<TreemapView
         ["text.host-value", "value", (d: Scorer) => d.name]
       ]
     });
-  return { views: { treemap, bars }, redraw: () => redraws.forEach((redraw) => redraw()) };
+  return { views: { treemap, bars, ...drill }, redraw: () => redraws.forEach((redraw) => redraw()) };
+}
+
+/**
+ * The view a jump on the treemap card is staged through, from the view its switch is heading for:
+ * between the treemap and a position, that position's tiles where the treemap has them, so the others
+ * fade and then the chosen grow, and the reverse on the way back. Every other jump goes straight there:
+ * a position's tiles grow into their bars as the other bars fade in, and back; and two positions share
+ * no scorer, so one's tiles fade out and the other's fade in.
+ */
+export function treemapVia(from: TreemapView, to: TreemapView): ChosenView | undefined {
+  const position = from === "treemap" ? positionOf(to) : to === "treemap" ? positionOf(from) : undefined;
+  return position && `${position.view}-chosen`;
+}
+
+/** What the treemap card's two rows of buttons show as pressed. */
+export interface TreemapPressed {
+  readonly layout: "treemap" | "bars";
+  readonly position: PositionView | "all";
+}
+
+/** The treemap card's controls: what its buttons do, and what they show. */
+export interface TreemapDrill {
+  /** The first row. Treemap from the bars goes to the whole treemap; from a position it's already a treemap. Bars goes to every scorer's bars. */
+  layout(layout: TreemapPressed["layout"]): void;
+  /** The second row. A position drills into it, from the treemap, the bars or another position; All goes back to the whole treemap, and on the bars it's already all. */
+  position(position: TreemapPressed["position"]): void;
+  /** What the rows show for the view the switch is heading for: a position is a treemap, and the bars are every position's. */
+  pressed(): TreemapPressed;
+  /** Stops listening. */
+  destroy(): void;
+}
+
+/**
+ * Wires the treemap card's drill-down on its switch, in `host`, the switch's target. A click on a tile
+ * of the whole treemap, or Enter on a focused one, drills into its position, read from the tile's D3
+ * row; Escape on a focused tile of a position goes back; and V on a focused mark goes between a treemap
+ * and the bars. Each jump is staged as `treemapVia()` says. `changed` is called after each show(), for
+ * the page's buttons. Focus is the switch's: it follows its tile's key, in and out.
+ */
+export function treemapDrill(host: HTMLElement, switcher: ChartSwitch<LayoutCard<TreemapView>["views"]>, changed: () => void = () => {}): TreemapDrill {
+  const go = (to: TreemapView): void => {
+    const via = treemapVia(switcher.current, to);
+    void switcher.show(to, via && { via });
+    changed();
+  };
+  /** The position of the tile an event came from, when the whole treemap is the view on show. */
+  const tilePosition = (target: EventTarget | null): PositionView | undefined => {
+    if (switcher.current !== "treemap" || !(target instanceof SVGElement) || !target.matches("rect.tile")) return undefined;
+    return positionOf(slug((target as unknown as { readonly __data__: Tile }).__data__.data.pos))?.view;
+  };
+  const click = (event: MouseEvent): void => {
+    const position = tilePosition(event.target);
+    if (position) go(position);
+  };
+  const keydown = (event: KeyboardEvent): void => {
+    const { key, altKey, ctrlKey, metaKey, target } = event;
+    if (altKey || ctrlKey || metaKey || !(target instanceof SVGElement) || target.getAttribute("role") !== "img") return;
+    const current = switcher.current;
+    // Escape has already ended the tile's hover, in the library's own listener; the switch would end it too.
+    const to = key === "Enter" ? tilePosition(target) : key === "Escape" ? (positionOf(current) ? "treemap" : undefined) : key === "v" || key === "V" ? (current === "bars" ? "treemap" : "bars") : undefined;
+    if (to === undefined) return;
+    event.preventDefault();
+    go(to);
+  };
+  host.addEventListener("click", click);
+  host.addEventListener("keydown", keydown);
+  return {
+    layout(layout) {
+      if (layout === "bars") go("bars");
+      else if (switcher.current === "bars") go("treemap");
+    },
+    position(position) {
+      if (position !== "all") go(position);
+      else if (positionOf(switcher.current)) go("treemap");
+    },
+    pressed: () => {
+      const current = switcher.current;
+      return { layout: current === "bars" ? "bars" : "treemap", position: positionOf(current)?.view ?? "all" };
+    },
+    destroy() {
+      host.removeEventListener("click", click);
+      host.removeEventListener("keydown", keydown);
+    }
+  };
 }
 
 export type DumbbellView = "dumbbell" | "bars";

@@ -7,11 +7,13 @@
 // the page names kept on every frame where both views draw them the same (the bars' axis, the areas'
 // weeks, the dumbbell's axis), and the bars' 100% axis fading; the dumbbell's three attachments, one
 // view, their dots paired with their bars and their lines fading, and their link kept; each card's
-// labels moving and swapping; focus following its key; and a redraw mid-switch kept hidden. It brings
+// labels moving and swapping; focus following its key; a redraw mid-switch kept hidden; and the treemap's
+// drill-down (M17 step 4), a staged jump through a position's tiles alone, with its buttons and keys. It brings
 // charts and an effect together, so it lives beside src/index.ts, the only module allowed to.
 
 import type { Dot, Row } from "../demo/d3-dumbbell";
-import { areasCard, barsCard, dumbbellCard, halves, players, radarCard, scorers, shotForm, treemapCard, type Attach, type LayoutCard } from "../demo/layouts-effects";
+import type { Tile } from "../demo/d3-treemap";
+import { areasCard, barsCard, dumbbellCard, halves, players, positions, radarCard, scorers, shotForm, treemapCard, treemapDrill, treemapVia, type Attach, type LayoutCard, type TreemapView } from "../demo/layouts-effects";
 import { chartSwitch, expressive, type ChartEnv, type ChartSwitch, type HostView } from "./charts";
 import { createMotion, manualClock, type MotionMode } from "./core";
 import { formatPath, parsePath, transformPath } from "./core/geometry/path";
@@ -476,18 +478,18 @@ describe("the radar into bars", () => {
 
 // ── The treemap ──────────────────────────────────────────────────────────────
 
+/** Whether every point of a path lies on the edges of its box: an upright rectangle, however many points it has. */
+function upright(d: string): boolean {
+  const list = points(d);
+  const xs = list.map((p) => p.x);
+  const ys = list.map((p) => p.y);
+  const [left, right, top, bottom] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const on = (a: number, b: number): boolean => Math.abs(a - b) < 0.01;
+  return list.every((p) => on(p.x, left) || on(p.x, right) || on(p.y, top) || on(p.y, bottom));
+}
+
 describe("the treemap into bars", () => {
   const NAMES = scorers.map((s) => s.name).sort();
-
-  /** Whether every point of a path lies on the edges of its box: an upright rectangle, however many points it has. */
-  function upright(d: string): boolean {
-    const list = points(d);
-    const xs = list.map((p) => p.x);
-    const ys = list.map((p) => p.y);
-    const [left, right, top, bottom] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    const on = (a: number, b: number): boolean => Math.abs(a - b) < 0.01;
-    return list.every((p) => on(p.x, left) || on(p.x, right) || on(p.y, top) || on(p.y, bottom));
-  }
 
   it("pairs each tile with its scorer's bar, side for side: an upright rectangle on every frame, both ways", async () => {
     const { switcher, overlay, svg, run } = setup(treemapCard, "treemap");
@@ -542,6 +544,524 @@ describe("the treemap into bars", () => {
     await run(1000);
     expect(svg("bars").contains(document.activeElement)).toBe(true);
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Haddad, defender: 2 goals");
+  });
+});
+
+// ── The treemap's drill-down ─────────────────────────────────────────────────
+
+describe("the treemap's drill-down", () => {
+  const MIDFIELDERS = ["Adeyemi", "Castillo", "Sousa", "Tanaka"];
+  const FORWARDS = ["Lindqvist", "Okafor"];
+  const OTHERS = scorers
+    .filter((s) => s.pos !== "Midfielder")
+    .map((s) => s.name)
+    .sort();
+  const TREEMAP = "The season's 58 goals by scorer and position on a D3 treemap";
+  const BARS = "The season's 58 goals by scorer on D3 bars, most first";
+  const MIDFIELD = "The midfielders' 12 goals by scorer on a D3 treemap";
+
+  /** The card's switch with its drill wired on the switch's target, as the page wires it. */
+  function drillSetup(mode: MotionMode = "presentation", reduced = false) {
+    const made = setup(treemapCard, "treemap", mode, reduced);
+    const host = made.container("treemap").closest(".ec-switch")!.parentElement as HTMLElement;
+    let changes = 0;
+    const drill = treemapDrill(host, made.switcher, () => changes++);
+    /** A view's tile or bar for a scorer, found by its D3 row. */
+    const markOf = (view: TreemapView, name: string): SVGRectElement =>
+      [...made.svg(view).querySelectorAll<SVGRectElement>("rect.tile, rect.bar")].find((rect) => {
+        const d = rowOf<Tile | Tile["data"]>(rect);
+        return ("data" in d ? d.data.name : d.name) === name;
+      })!;
+    return { ...made, host, drill, markOf, changes: () => changes };
+  }
+
+  type Box = readonly [x: number, y: number, width: number, height: number];
+  /** The box round a path's points, to a hundredth of a pixel. */
+  function box(d: string): Box {
+    const list = points(d);
+    const xs = list.map((p) => p.x);
+    const ys = list.map((p) => p.y);
+    const hundredth = (value: number): number => Math.round(value * 100) / 100;
+    return [hundredth(Math.min(...xs)), hundredth(Math.min(...ys)), hundredth(Math.max(...xs) - Math.min(...xs)), hundredth(Math.max(...ys) - Math.min(...ys))];
+  }
+  /** Each run's box as the overlay draws it now, by key. */
+  const boxes = (overlay: SVGSVGElement): Map<string, Box> => new Map([...runs(overlay)].map(([key, d]) => [key, box(d)]));
+  /** Each tile's box as a view draws it at rest, by key: the tiles sit in their <svg> untransformed, at the overlay's origin. */
+  const own = (switcher: ChartSwitch<LayoutCard<TreemapView>["views"]>, view: TreemapView): Map<string, Box> =>
+    new Map(
+      switcher
+        .chart(view)
+        .marks()
+        .map((mark) => [mark.key, box(mark.outline.d)])
+    );
+  /** Each fading mark's opacity as the overlay draws it now, by key. */
+  const fading = (overlay: SVGSVGElement): Map<string, number> =>
+    new Map(Array.from(overlay.querySelectorAll(".ec-switch-fades > .ec-switch-fade"), (group) => [group.getAttribute("data-key")!, group.getAttribute("opacity") === null ? 1 : Number(group.getAttribute("opacity"))]));
+  const area = ([, , width, height]: Box): number => width * height;
+  const key = (target: Element, name: string, init: KeyboardEventInit = {}): boolean => target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true, ...init }));
+  /** Focus as a key press gives it, so the tile's hover plays: a Tab, then focus on the tile. */
+  const tabTo = (tile: SVGElement): void => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    tile.focus();
+  };
+
+  it("has a position's two views for each of the four, each drawn once: its tiles where the treemap has them, and laid out to fill the chart", () => {
+    const { switcher, svg } = drillSetup();
+    expect(positions.map(({ view, plural, goals }) => [view, plural, goals])).toEqual([
+      ["forward", "Forwards", 26],
+      ["winger", "Wingers", 14],
+      ["midfielder", "Midfielders", 12],
+      ["defender", "Defenders", 6]
+    ]);
+    const whole = own(switcher, "treemap");
+    for (const { view, scorers: theirs, plural, goals } of positions) {
+      const names = theirs.map((s) => s.name).sort();
+      expect(keysOf(switcher, view)).toEqual(names);
+      expect(keysOf(switcher, `${view}-chosen`)).toEqual(names);
+      // In place: each tile's box is the whole treemap's.
+      for (const [name, at] of own(switcher, `${view}-chosen`)) expect(at, name).toEqual(whole.get(name));
+      // To fill: together they cover the chart, 280 by 300 here, less the 2 px between tiles.
+      const filled = [...own(switcher, view).values()];
+      expect(Math.min(...filled.map(([x]) => x))).toBe(0);
+      expect(Math.max(...filled.map(([x, , width]) => x + width))).toBe(280);
+      expect(Math.max(...filled.map(([, y, , height]) => y + height))).toBe(300);
+      expect(filled.reduce((sum, each) => sum + area(each), 0)).toBeGreaterThan(280 * 300 * 0.95);
+      expect(svg(view).getAttribute("aria-label")).toBe(`The ${plural.toLowerCase()}' ${goals} goals by scorer on a D3 treemap`);
+      // With more room: every name its tiles have in the whole treemap, they have here.
+      const named = (name: TreemapView): string[] => [...svg(name).querySelectorAll("text.host-label")].map((text) => text.textContent!);
+      expect(named(view)).toEqual(expect.arrayContaining(named(`${view}-chosen`)));
+    }
+    // Sousa's tile, too small for his name in the whole treemap at 280 px, has it among the midfielders.
+    expect([...svg("midfielder-chosen").querySelectorAll("text.host-label")].map((text) => text.textContent)).not.toContain("Sousa");
+    expect([...svg("midfielder").querySelectorAll("text.host-label")].map((text) => text.textContent)).toContain("Sousa");
+    // A position's tile is named with its share of the position's goals, and in place as the treemap names it.
+    expect(switcher.chart("midfielder").element.querySelector('[aria-label^="Tanaka"]')?.getAttribute("aria-label")).toBe("Tanaka, midfielder: 6 goals, 50% of the midfielders' 12");
+    expect(switcher.chart("midfielder-chosen").element.querySelector('[aria-label^="Tanaka"]')?.getAttribute("aria-label")).toBe("Tanaka, midfielder: 6 goals, 10% of 58");
+  });
+
+  it("stages a jump between the treemap and a position through that position's tiles in place, and every other jump goes straight there", () => {
+    expect(treemapVia("treemap", "midfielder")).toBe("midfielder-chosen");
+    expect(treemapVia("defender", "treemap")).toBe("defender-chosen");
+    for (const [from, to] of [
+      ["treemap", "bars"],
+      ["bars", "treemap"],
+      ["bars", "forward"],
+      ["winger", "bars"],
+      ["winger", "forward"],
+      ["treemap", "treemap"]
+    ] as const)
+      expect(treemapVia(from, to), `${from} to ${to}`).toBeUndefined();
+  });
+
+  it("drills in in two legs: the other positions' tiles fade while the chosen stay where they were on every frame, then the chosen grow and nothing else is drawn; announced once, with the position's name", async () => {
+    const { switcher, overlay, drill, run, said } = drillSetup();
+    const before = own(switcher, "treemap");
+    const after = own(switcher, "midfielder");
+    drill.position("midfielder");
+    expect(switcher.current).toBe("midfielder");
+    expect(drill.pressed()).toEqual({ layout: "treemap", position: "midfielder" });
+    // The first leg, to 944 ms: four runs that don't move, and eight tiles fading, gone by 40% of the way.
+    let frames = 0;
+    let last = 1;
+    await run(944, () => {
+      frames++;
+      const now = boxes(overlay);
+      expect([...now.keys()].sort(), `frame ${frames}`).toEqual(MIDFIELDERS);
+      for (const [name, at] of now) expect(at, `${name}, frame ${frames}`).toEqual(before.get(name));
+      const others = fading(overlay);
+      expect([...others.keys()].sort(), `frame ${frames}`).toEqual(OTHERS);
+      const [opacity, ...rest] = [...others.values()];
+      expect(rest.every((each) => each === opacity)).toBe(true);
+      expect(opacity!).toBeLessThanOrEqual(last);
+      last = opacity!;
+      if (frames === 30) expect(opacity!).toBe(0);
+    });
+    expect(frames).toBe(59);
+    expect(last).toBe(0);
+    expect(said()).toEqual([]);
+    // The second leg, from 960 ms: the four alone, growing from where they were to fill the chart.
+    await run(16);
+    expect(boxes(overlay)).toEqual(new Map(MIDFIELDERS.map((name) => [name, before.get(name)!])));
+    frames = 0;
+    await run(944, () => {
+      frames++;
+      const now = boxes(overlay);
+      expect([...now.keys()].sort(), `frame ${frames}`).toEqual(MIDFIELDERS);
+      expect(fades(overlay), `frame ${frames}`).toEqual([]);
+      for (const [name, d] of runs(overlay)) expect(upright(d), `${name}, frame ${frames}`).toBe(true);
+      for (const [name, at] of now) {
+        expect(area(at), `${name}, frame ${frames}`).toBeGreaterThanOrEqual(area(before.get(name)!) - 0.5);
+        expect(area(at), `${name}, frame ${frames}`).toBeLessThanOrEqual(area(after.get(name)!) + 0.5);
+      }
+    });
+    // Its last frame is nearly the position's own tiles.
+    for (const [name, at] of boxes(overlay)) at.forEach((value, i) => expect(Math.abs(value - after.get(name)![i]!), name).toBeLessThan(1));
+    await run(16);
+    expect(runs(overlay).size).toBe(0);
+    expect(switcher.current).toBe("midfielder");
+    expect(said()).toEqual([MIDFIELD]);
+  });
+
+  it("drills back the same way, reversed: the chosen shrink to their places with nothing else drawn, then stay put while the others fade in", async () => {
+    const { switcher, overlay, drill, run, said } = drillSetup();
+    const whole = own(switcher, "treemap");
+    const filled = own(switcher, "midfielder");
+    drill.position("midfielder");
+    await run(1920);
+    drill.position("all");
+    expect(switcher.current).toBe("treemap");
+    expect(drill.pressed()).toEqual({ layout: "treemap", position: "all" });
+    let frames = 0;
+    await run(944, () => {
+      frames++;
+      expect([...runs(overlay).keys()].sort(), `frame ${frames}`).toEqual(MIDFIELDERS);
+      expect(fades(overlay), `frame ${frames}`).toEqual([]);
+      for (const [name, at] of boxes(overlay)) expect(area(at), `${name}, frame ${frames}`).toBeLessThanOrEqual(area(filled.get(name)!) + 0.5);
+    });
+    await run(16);
+    let last = 0;
+    frames = 0;
+    await run(944, () => {
+      frames++;
+      for (const [name, at] of boxes(overlay)) expect(at, `${name}, frame ${frames}`).toEqual(whole.get(name));
+      const others = fading(overlay);
+      expect([...others.keys()].sort(), `frame ${frames}`).toEqual(OTHERS);
+      const opacity = others.get("Okafor")!;
+      expect(opacity).toBeGreaterThanOrEqual(last);
+      last = opacity;
+      // In from half way.
+      if (frames === 28) expect(opacity).toBe(0);
+    });
+    expect(last).toBe(1);
+    await run(16);
+    expect(runs(overlay).size).toBe(0);
+    expect(switcher.current).toBe("treemap");
+    expect(said()).toEqual([MIDFIELD, TREEMAP]);
+  });
+
+  it("moves each chosen tile's name and goals with it, fades the others' out, and fades in the names its small tiles had no room for", async () => {
+    const { switcher, svg, overlay, drill, run } = drillSetup();
+    const inTiles = (view: TreemapView): string[] => [...svg(view).querySelectorAll("text.host-label")].map((text) => text.textContent!).sort();
+    // At 280 px the whole treemap has room for Tanaka's name among the midfielders, and not for Sousa's.
+    expect(inTiles("midfielder-chosen")).toEqual(inTiles("treemap").filter((name) => MIDFIELDERS.includes(name)));
+    expect(inTiles("midfielder-chosen")).toContain("Tanaka");
+    expect(inTiles("midfielder-chosen")).not.toContain("Sousa");
+    drill.position("midfielder");
+    const start = copies(overlay).find((copy) => copy.text === "Tanaka")!;
+    await run(480);
+    // Half way through the first leg: the others' names are gone, and Tanaka's is where it was.
+    expect(seen(overlay)).not.toContain("Okafor");
+    expect(copies(overlay).find((copy) => copy.text === "Tanaka" && copy.shown)).toMatchObject({ x: start.x, y: start.y, opacity: 1 });
+    await run(480);
+    // The second leg: Sousa's name is there to fade in.
+    expect(copies(overlay).find((copy) => copy.text === "Sousa")).toMatchObject({ opacity: 0 });
+    await run(960);
+    expect(switcher.current).toBe("midfielder");
+    expect(overlay.querySelector(".ec-switch-labels")!.childElementCount).toBe(0);
+  });
+
+  it("follows focus on a tile by its key, in and out, each named for its view", async () => {
+    const { switcher, drill, markOf, run } = drillSetup();
+    switcher.chart("treemap").focus("Tanaka");
+    drill.position("midfielder");
+    await run(1920);
+    expect(document.activeElement).toBe(markOf("midfielder", "Tanaka"));
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Tanaka, midfielder: 6 goals, 50% of the midfielders' 12");
+    drill.position("all");
+    await run(1920);
+    expect(document.activeElement).toBe(markOf("treemap", "Tanaka"));
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Tanaka, midfielder: 6 goals, 10% of 58");
+  });
+
+  it("with focus on a button, moves the new view's tab stop to the old one's key, and leaves focus on the button", async () => {
+    const { switcher, svg, drill, run } = drillSetup();
+    const button = document.body.appendChild(document.createElement("button"));
+    /** A view's tab stop: the scorer whose mark has tabindex 0. */
+    const stop = (view: TreemapView): string => {
+      const d = rowOf<Tile | Tile["data"]>(svg(view).querySelector('[tabindex="0"]')!);
+      return "data" in d ? d.data.name : d.name;
+    };
+    switcher.chart("treemap").focus("Adeyemi");
+    button.focus();
+    drill.position("midfielder");
+    await run(1920);
+    expect(document.activeElement).toBe(button);
+    expect(stop("midfielder")).toBe("Adeyemi");
+    drill.layout("bars");
+    await run(960);
+    expect(document.activeElement).toBe(button);
+    expect(stop("bars")).toBe("Adeyemi");
+  });
+
+  it("drills back from the first leg by playing it back from where it is: the chosen never move, and the others fade back in", async () => {
+    const { switcher, overlay, drill, run, said } = drillSetup();
+    const whole = own(switcher, "treemap");
+    drill.position("midfielder");
+    await run(320);
+    const faded = fading(overlay).get("Okafor")!;
+    expect(faded).toBeLessThan(1);
+    drill.position("all");
+    expect(switcher.current).toBe("treemap");
+    let last = faded;
+    await run(304, () => {
+      for (const [name, at] of boxes(overlay)) expect(at, name).toEqual(whole.get(name));
+      const opacity = fading(overlay).get("Okafor")!;
+      expect(opacity).toBeGreaterThanOrEqual(last);
+      last = opacity;
+    });
+    // As long back as it had gone.
+    await run(16);
+    expect(runs(overlay).size).toBe(0);
+    expect(switcher.current).toBe("treemap");
+    expect(said()).toEqual([TREEMAP]);
+  });
+
+  it("drills back from the second leg as the switch goes to any third view: it lands on the position first, then plays the whole jump back", async () => {
+    const { switcher, overlay, drill, run, said } = drillSetup();
+    const filled = own(switcher, "midfielder");
+    drill.position("midfielder");
+    await run(1280);
+    expect(area(boxes(overlay).get("Tanaka")!)).toBeLessThan(area(filled.get("Tanaka")!));
+    drill.position("all");
+    expect(switcher.current).toBe("treemap");
+    // From the position's own tiles, at full size.
+    expect(boxes(overlay)).toEqual(filled);
+    expect(fades(overlay)).toEqual([]);
+    await run(1904);
+    expect(runs(overlay).size).toBe(4);
+    await run(16);
+    expect(runs(overlay).size).toBe(0);
+    expect(switcher.current).toBe("treemap");
+    expect(said()).toEqual([TREEMAP]);
+  });
+
+  it("goes from a position to the bars in one switch, its tiles growing into their bars as the other bars fade in, and from the bars into a position the same way back", async () => {
+    const { switcher, overlay, drill, run, said } = drillSetup();
+    drill.position("midfielder");
+    await run(1920);
+    drill.layout("bars");
+    expect(switcher.current).toBe("bars");
+    expect(drill.pressed()).toEqual({ layout: "bars", position: "all" });
+    expect([...runs(overlay).keys()].sort()).toEqual(MIDFIELDERS);
+    expect([...fading(overlay).keys()].sort()).toEqual(OTHERS);
+    expect([...new Set(fading(overlay).values())]).toEqual([0]);
+    await run(944, () => {
+      for (const [name, d] of runs(overlay)) expect(upright(d), name).toBe(true);
+    });
+    expect([...new Set(fading(overlay).values())]).toEqual([1]);
+    await run(16);
+    expect(switcher.current).toBe("bars");
+    expect(runs(overlay).size).toBe(0);
+    // All on the bars is already every position: nothing moves.
+    drill.position("all");
+    expect(switcher.current).toBe("bars");
+    expect(runs(overlay).size).toBe(0);
+    // A position from the bars.
+    drill.position("midfielder");
+    expect(switcher.current).toBe("midfielder");
+    expect(drill.pressed()).toEqual({ layout: "treemap", position: "midfielder" });
+    expect([...runs(overlay).keys()].sort()).toEqual(MIDFIELDERS);
+    expect([...fading(overlay).keys()].sort()).toEqual(OTHERS);
+    await run(960);
+    expect(runs(overlay).size).toBe(0);
+    expect(switcher.current).toBe("midfielder");
+    // Treemap on a position is already a treemap: nothing moves.
+    drill.layout("treemap");
+    expect(switcher.current).toBe("midfielder");
+    expect(runs(overlay).size).toBe(0);
+    expect(said()).toEqual([MIDFIELD, BARS, MIDFIELD]);
+  });
+
+  it("goes from one position straight to another in one switch with nothing to morph: the old tiles fade out, then the new fade in, and focus goes to the new one's first tile", async () => {
+    const { switcher, overlay, drill, markOf, run, said } = drillSetup();
+    drill.position("midfielder");
+    await run(1920);
+    switcher.chart("midfielder").focus("Tanaka");
+    drill.position("forward");
+    expect(switcher.current).toBe("forward");
+    expect(drill.pressed()).toEqual({ layout: "treemap", position: "forward" });
+    let both = 0;
+    let frames = 0;
+    await run(944, () => {
+      frames++;
+      expect(runs(overlay).size, `frame ${frames}`).toBe(0);
+      const now = fading(overlay);
+      expect([...now.keys()].sort(), `frame ${frames}`).toEqual([...MIDFIELDERS, ...FORWARDS].sort());
+      // Never both drawn at once.
+      if (now.get("Tanaka")! > 0 && now.get("Okafor")! > 0) both++;
+    });
+    expect(both).toBe(0);
+    expect(fading(overlay).get("Okafor")).toBe(1);
+    await run(16);
+    expect(switcher.current).toBe("forward");
+    expect(document.activeElement).toBe(markOf("forward", "Okafor"));
+    expect(said()).toEqual([MIDFIELD, "The forwards' 26 goals by scorer on a D3 treemap"]);
+  });
+
+  it("drills into a tile's position on a click, read from its D3 row, on the whole treemap alone", async () => {
+    const { switcher, overlay, drill, markOf, run, changes } = drillSetup();
+    markOf("treemap", "Novak").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(switcher.current).toBe("defender");
+    expect(drill.pressed()).toEqual({ layout: "treemap", position: "defender" });
+    expect(changes()).toBe(1);
+    expect([...runs(overlay).keys()].sort()).toEqual(["Haddad", "Kowalski", "Novak"]);
+    await run(1920);
+    // A position's own tile isn't a way further in, and a bar isn't a tile.
+    markOf("defender", "Novak").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(switcher.current).toBe("defender");
+    drill.layout("bars");
+    await run(960);
+    markOf("bars", "Okafor").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(switcher.current).toBe("bars");
+    expect(changes()).toBe(2);
+  });
+
+  it("drills in on Enter on a focused tile and back on Escape, focus following its tile, and leaves both keys alone anywhere else", async () => {
+    const { switcher, drill, markOf, run, changes } = drillSetup();
+    switcher.chart("treemap").focus("Reyes");
+    // Escape on the whole treemap is the library's alone: the first ends the tile's hover, and the next
+    // does nothing. So is Enter with a modifier.
+    expect(key(document.activeElement!, "Escape")).toBe(false);
+    expect(key(document.activeElement!, "Escape")).toBe(true);
+    expect(key(document.activeElement!, "Enter", { ctrlKey: true })).toBe(true);
+    expect(switcher.current).toBe("treemap");
+    // Enter: taken, so it does nothing else.
+    expect(key(document.activeElement!, "Enter")).toBe(false);
+    expect(switcher.current).toBe("winger");
+    expect(drill.pressed()).toEqual({ layout: "treemap", position: "winger" });
+    await run(1920);
+    expect(document.activeElement).toBe(markOf("winger", "Reyes"));
+    // Enter on a position's tile goes no further.
+    expect(key(document.activeElement!, "Enter")).toBe(true);
+    expect(switcher.current).toBe("winger");
+    expect(key(document.activeElement!, "Escape")).toBe(false);
+    expect(switcher.current).toBe("treemap");
+    await run(1920);
+    expect(document.activeElement).toBe(markOf("treemap", "Reyes"));
+    expect(changes()).toBe(2);
+    // On the bars, neither key is the card's.
+    drill.layout("bars");
+    await run(960);
+    expect(key(document.activeElement!, "Enter")).toBe(true);
+    key(document.activeElement!, "Escape");
+    expect(switcher.current).toBe("bars");
+  });
+
+  it("goes back on one Escape from a tile whose hover is playing: the library ends the hover, and the card drills back", async () => {
+    const { switcher, svg, drill, markOf, run } = drillSetup();
+    drill.position("midfielder");
+    await run(1920);
+    tabTo(markOf("midfielder", "Adeyemi"));
+    await run(160);
+    const dimmed = (): number => svg("midfielder").querySelectorAll("rect.tile.ec-dimmed").length;
+    expect(dimmed()).toBe(3);
+    expect(key(document.activeElement!, "Escape")).toBe(false);
+    expect(switcher.current).toBe("treemap");
+    await run(1920);
+    expect(dimmed()).toBe(0);
+    expect(document.activeElement).toBe(markOf("treemap", "Adeyemi"));
+  });
+
+  it("goes between a treemap and the bars on V on a focused mark: from a position to the bars, and from the bars to the whole treemap", async () => {
+    const { switcher, drill, markOf, run } = drillSetup();
+    switcher.chart("treemap").focus("Okafor");
+    key(document.activeElement!, "v");
+    expect(switcher.current).toBe("bars");
+    await run(960);
+    expect(document.activeElement).toBe(markOf("bars", "Okafor"));
+    key(document.activeElement!, "V");
+    expect(switcher.current).toBe("treemap");
+    await run(960);
+    drill.position("forward");
+    await run(1920);
+    expect(document.activeElement).toBe(markOf("forward", "Okafor"));
+    expect(key(document.activeElement!, "v")).toBe(false);
+    expect(switcher.current).toBe("bars");
+    await run(960);
+    expect(document.activeElement).toBe(markOf("bars", "Okafor"));
+    // Not with a modifier, and not from anything but a mark.
+    expect(key(document.activeElement!, "v", { ctrlKey: true })).toBe(true);
+    expect(switcher.current).toBe("bars");
+  });
+
+  it("keeps a redraw mid-jump hidden in each leg, as a resize redraws every view, and the jump plays on to its position", async () => {
+    for (const at of [304, 1264]) {
+      const { switcher, card, svg, overlay, drill, run } = drillSetup();
+      const PARTS = "rect.tile, text.host-label, text.host-value";
+      drill.position("midfielder");
+      await run(at);
+      const before = [...runs(overlay).keys()];
+      card.redraw();
+      const playing = at < 950 ? (["treemap", "midfielder-chosen"] as const) : (["midfielder-chosen", "midfielder"] as const);
+      for (const view of playing) for (const part of svg(view).querySelectorAll(PARTS)) expect(hidden(part), `${view} at ${at}: ${part.outerHTML}`).toBe(true);
+      await run(16);
+      expect([...runs(overlay).keys()]).toEqual(before);
+      await run(1920 - at);
+      expect(switcher.current).toBe("midfielder");
+      expect(runs(overlay).size).toBe(0);
+      for (const view of ["treemap", "midfielder-chosen", "midfielder"] as const) for (const part of svg(view).querySelectorAll(PARTS)) expect(hidden(part), `${view}: ${part.outerHTML}`).toBe(false);
+      // And the next jump reads the views as redrawn.
+      drill.position("all");
+      await run(1920);
+      expect(switcher.current).toBe("treemap");
+      document.body.replaceChildren();
+    }
+  });
+
+  it("goes straight to a position in Analysis in a fifth of a second, the others fading as the chosen grow, and back", async () => {
+    const { switcher, overlay, drill, run, said } = drillSetup("analysis");
+    for (const [position, view] of [
+      ["midfielder", "midfielder"],
+      ["all", "treemap"]
+    ] as const) {
+      drill.position(position);
+      expect([...runs(overlay).keys()].sort()).toEqual(MIDFIELDERS);
+      expect([...fading(overlay).keys()].sort()).toEqual(OTHERS);
+      await run(192);
+      expect(runs(overlay).size).toBe(4);
+      await run(16);
+      expect(runs(overlay).size).toBe(0);
+      expect(switcher.current).toBe(view);
+    }
+    expect(said()).toEqual([MIDFIELD, TREEMAP]);
+  });
+
+  it("lands at once in Off and with reduced motion, in and out, announced once each, focus following its tile", async () => {
+    for (const [mode, reduced] of [
+      ["off", false],
+      ["presentation", true]
+    ] as const) {
+      const { switcher, overlay, drill, markOf, run, said } = drillSetup(mode, reduced);
+      switcher.chart("treemap").focus("Sousa");
+      key(document.activeElement!, "Enter");
+      expect(runs(overlay).size).toBe(0);
+      expect(fades(overlay)).toEqual([]);
+      expect(switcher.current).toBe("midfielder");
+      await run(16);
+      expect(document.activeElement).toBe(markOf("midfielder", "Sousa"));
+      expect(said()).toEqual([MIDFIELD]);
+      key(document.activeElement!, "Escape");
+      expect(runs(overlay).size).toBe(0);
+      await run(16);
+      expect(document.activeElement).toBe(markOf("treemap", "Sousa"));
+      expect(said()).toEqual([MIDFIELD, TREEMAP]);
+      drill.position("forward");
+      await run(16);
+      drill.position("defender");
+      await run(16);
+      expect(switcher.current).toBe("defender");
+      expect(overlay.querySelector(".ec-switch-fades")!.childElementCount).toBe(0);
+      document.body.replaceChildren();
+    }
+  });
+
+  it("stops listening when its drill is destroyed", () => {
+    const { switcher, drill, markOf } = drillSetup();
+    drill.destroy();
+    markOf("treemap", "Novak").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    switcher.chart("treemap").focus("Novak");
+    expect(key(document.activeElement!, "Enter")).toBe(true);
+    expect(switcher.current).toBe("treemap");
   });
 });
 

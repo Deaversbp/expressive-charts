@@ -57,15 +57,29 @@ export const slug = (text: string): string => text.toLowerCase().replace(/[^a-z0
 /** "1 goal", "16 goals". */
 const goalsText = (goals: number): string => `${goals} ${goals === 1 ? "goal" : "goals"}`;
 
-/** Draws a tile a scorer, or draws them again at a new width: each is joined by name, so it keeps its element. */
-export function drawTreemap(svgElement: SVGSVGElement, scorers: readonly Scorer[]): DrawnTreemap {
+export interface TreemapOptions {
+  /**
+   * The scorers to draw. The layout is still every scorer's, so each tile drawn is where it is among
+   * them all, and the others' places are left empty. Default: every scorer.
+   */
+  readonly only?: (scorer: Scorer) => boolean;
+}
+
+/**
+ * Draws a tile a scorer, or draws them again at a new width or for other scorers: each is joined by
+ * name, so it keeps its element. The positions come in the order they first come in the rows, and each
+ * one's scorers most goals first, so the same rows always give the same places.
+ */
+export function drawTreemap(svgElement: SVGSVGElement, scorers: readonly Scorer[], options: TreemapOptions = {}): DrawnTreemap {
   const width = Math.max(280, Math.floor(roomFor(svgElement)));
   // Positions in the order they first come in the rows.
   const positions = [...new Set(scorers.map((s) => s.pos))];
   const root = hierarchy<TreeNode>({ children: positions.map((pos): Group => ({ pos, children: scorers.filter((s) => s.pos === pos) })) }, (d) => ("children" in d ? d.children : undefined))
     .sum((d) => ("goals" in d ? d.goals : 0))
     .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
-  const leaves = treemap<TreeNode>().size([width, HEIGHT]).paddingInner(PADDING).round(true)(root).leaves() as Tile[];
+  const laidOut = treemap<TreeNode>().size([width, HEIGHT]).paddingInner(PADDING).round(true)(root).leaves() as Tile[];
+  const only = options.only;
+  const leaves = only ? laidOut.filter((d) => only(d.data)) : laidOut;
 
   const svg = select(svgElement).attr("viewBox", `0 0 ${width} ${HEIGHT}`).attr("width", width).attr("height", HEIGHT);
   const plot = svg.selectAll<SVGGElement, null>("g.treemap-tiles").data([null]).join("g").attr("class", "treemap-tiles");

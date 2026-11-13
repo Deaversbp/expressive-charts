@@ -1,11 +1,12 @@
 // Five layout morphs, four from docs/ideas/effects-by-chart.md, each on charts drawn with D3 by modules
 // that know nothing about expressive-charts, in a chart switch through hostView(): bars side by side,
 // stacked and as shares of 100%; areas stacked and as shares; a radar into bars; a treemap into bars;
-// and the charts page's dumbbell, three attachments in one view, into bars. demo/layouts-effects.ts has
-// each card's views, which src/layouts.test.ts builds too. Each card loads at rest in its first view
-// and moves only on its buttons or V: nothing plays by itself.
+// and the charts page's dumbbell, three attachments in one view, into bars. The treemap drills into a
+// position too: a staged jump through that position's tiles alone. demo/layouts-effects.ts has each
+// card's views, which src/layouts.test.ts builds too. Each card loads at rest in its first view and
+// moves only on its buttons, V, or a click or Enter on a tile: nothing plays by itself.
 import { chartSwitch, morph, motionSwitch, type ChartSwitch } from "../src/index";
-import { areasCard, barsCard, dumbbellCard, radarCard, treemapCard, type LayoutCard } from "./layouts-effects";
+import { areasCard, barsCard, dumbbellCard, radarCard, treemapCard, treemapDrill, type LayoutCard, type TreemapPressed } from "./layouts-effects";
 
 /** Wires a row of toggle buttons; returns a function that shows a value as pressed. */
 function segmented(id: string, onPick: (value: string) => void): (value: string) => void {
@@ -57,8 +58,19 @@ const dumbbell = dumbbellCard();
 layoutSwitch("bars", bars, ["side", "stacked", "share"], "stacked");
 layoutSwitch("areas", areas, ["stacked", "share"]);
 layoutSwitch("radar", radar, ["radar", "bars"]);
-layoutSwitch("treemap", treemap, ["treemap", "bars"]);
 layoutSwitch("dumbbell", dumbbell, ["dumbbell", "bars"]);
+
+// The treemap card's switch has two views more a position, for its drill-down, and two rows of buttons:
+// Treemap and Bars, and All and each position. treemapDrill() stages each jump and listens for a click
+// or Enter on a tile, Escape and V; the rows show the view the switch is heading for.
+const treemapSwitch = chartSwitch("#treemap", { views: treemap.views, initial: "treemap", transition: morph(), announce: true });
+const drill = treemapDrill(document.getElementById("treemap")!, treemapSwitch, () => {
+  const { layout, position } = drill.pressed();
+  layoutPressed(layout);
+  positionPressed(position);
+});
+const layoutPressed = segmented("treemap-layout", (value) => drill.layout(value as TreemapPressed["layout"]));
+const positionPressed = segmented("treemap-position", (value) => drill.position(value as TreemapPressed["position"]));
 
 // The D3 charts draw at their container's width, so they draw again when it changes, and refresh()
 // reads their marks again. A switch playing keeps their new marks hidden (hostView()), and the resize

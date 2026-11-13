@@ -93,6 +93,12 @@
   #treemap .tile-defender, #treemap .bar-defender { fill: var(--ec-series-4, #c28409); }
   #treemap .treemap-labels .host-label { font-size: 12px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
   #treemap .treemap-labels .host-value { font-weight: 400; }
+  /* The positions' buttons, above the legend: five don't fit in one line on a phone, so they wrap. A tile of the whole treemap drills into its position on a click. */
+  .drill { margin-bottom: 12px; }
+  .drill .seg { flex-wrap: wrap; }
+  /* A whole number of pixels a line (the other rows' buttons are 29.5 px tall), and so is the row's name, which has a line of its own on a phone, so the row is too, wrapped or not, and the chart and the cards below stay on whole pixels. */
+  .drill .seg button, .drill .label { line-height: 20px; }
+  #treemap [data-view="treemap"] .tile { cursor: pointer; }
   /* The dumbbell and its bars: the first half in the first slot and the second half in the second, dots and bars alike, so nothing
      changes colour as it morphs (the charts page colours its rows by their change). The lines between the dots take the muted text
      colour with no fill: a <line>'s fill is black, and the adapter takes a mark's fill as its colour unless it's none. */
@@ -166,7 +172,7 @@
 
     <section class="card" aria-labelledby="treemap-title">
       <h2 id="treemap-title">The season's scorers, from a D3 treemap to bars</h2>
-      <p class="note">The season's 58 goals by scorer, the tiles grouped by position and laid out by <code>d3.treemap()</code>. Each tile turns into its scorer's bar, most goals first, in its position's colour. A tile with room for its scorer's name and goals has them, and they move to the bar; a small tile's bar's fade in.</p>
+      <p class="note">The season's 58 goals by scorer, the tiles grouped by position and laid out by <code>d3.treemap()</code>. Each tile turns into its scorer's bar, most goals first, in its position's colour. A tile with room for its scorer's name and goals has them, and they move to the bar; a small tile's bar's fade in. Pick a position, click a tile, or press <kbd>Enter</kbd> on one, to drill in: the other positions' tiles fade, then its own grow to fill the chart. All, or <kbd>Escape</kbd> on a tile, goes back.</p>
       <div class="bar">
         <span class="label" id="treemap-layout-label">Show</span>
         <div class="seg" id="treemap-layout" role="group" aria-labelledby="treemap-layout-label">
@@ -175,6 +181,16 @@
         </div>
       </div>
       <div class="box">
+        <div class="bar drill">
+          <span class="label" id="treemap-position-label">Position</span>
+          <div class="seg" id="treemap-position" role="group" aria-labelledby="treemap-position-label">
+            <button type="button" data-value="all" aria-pressed="true">All</button>
+            <button type="button" data-value="forward" aria-pressed="false">Forwards</button>
+            <button type="button" data-value="winger" aria-pressed="false">Wingers</button>
+            <button type="button" data-value="midfielder" aria-pressed="false">Midfielders</button>
+            <button type="button" data-value="defender" aria-pressed="false">Defenders</button>
+          </div>
+        </div>
         <div class="legend"><span><i class="swatch-1"></i>Forward</span><span><i class="swatch-2"></i>Winger</span><span><i class="swatch-3"></i>Midfielder</span><span><i class="swatch-4"></i>Defender</span></div>
         <div id="treemap" class="switch"></div>
       </div>
@@ -210,6 +226,7 @@
         <li>The page names each card's guides with <code>hostView()</code>'s <code>guides</code>: the bars' axis, keyed by its scale, the areas' weeks, each by its week, and the dumbbell's axis. A guide that both views draw the same stays where it is through the switch, and the rest of each view fades: the bars' axis at 100%, on another scale, fades too.</li>
         <li>The dumbbell is three attachments, each half's dots and the lines between them, linked by player, so any part of a row lights the whole row and its line shows the way it went. <code>hostView([first, second, lines])</code> makes them one view: each mark's key is its own across the three, and focus and colours go to the attachment with the key.</li>
         <li>Each card's views give a series, a position or a half the same colour, through the page's CSS, so nothing changes colour as it morphs. So the dumbbell here is coloured by half, not by each row's change as on the charts page.</li>
+        <li>The treemap's drill-down is a staged jump with the switch as it is. Each position has two views more, its tiles alone where the treemap has them and its tiles laid out to fill the chart, and <code>show(position, { via })</code> goes through the first: its tiles pair with themselves in the same places, so they stay put while the others, with no partner, fade, and then they grow. Two positions share no scorer, so from one to another the first fades out and the second in.</li>
         <li>Focus follows its mark's key into the next view, and the switch announces the view it lands on. The buttons are toggle buttons and keep focus; <kbd>V</kbd> on a focused mark goes to the next view.</li>
       </ul>
     </section>
@@ -224,6 +241,8 @@
         <li>Hover a dot on the dumbbell: its row lights up, and its line shows the way the player went. Tab to a dot and press <kbd>V</kbd>: focus follows it into its bar.</li>
         <li>Tab to a circle on the radar and press <kbd>V</kbd>: it grows into its bar, and focus stays on it there.</li>
         <li>Pick Analysis, then press Bars on the treemap: the tiles become bars in a fifth of a second.</li>
+        <li>Press Midfielders on the treemap, or click a midfielder's tile: the other positions' tiles fade, then the midfielders' grow to fill the chart. Press All to go back the same way, or Bars to see them grow into their bars.</li>
+        <li>Tab to a tile on the treemap and press <kbd>Enter</kbd>: focus stays on it as its position fills the chart. Press <kbd>Escape</kbd> to go back, and focus is on it still.</li>
         <li>Press 100% on the bars, then Side by side part way through: the bars go back from where they are.</li>
         <li>Turn on reduced motion and press any button: the new layout is there at once.</li>
       </ul>

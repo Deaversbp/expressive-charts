@@ -6,7 +6,9 @@
 // both views draw them the same (pixel for pixel, in every browser), the dumbbell's link and its lines'
 // colour, one announcement for a jump, the toggle buttons and focus, V with focus and the ring following
 // its key, a resize mid-switch, reduced motion and Off (part way through a jump too), and what can be
-// read. Names start with "layouts-", since screenshot names are shared across files.
+// read. And the treemap's drill-down: a position's view at rest, the jump in each leg, its two rows of
+// buttons, a click, Enter and Escape on a tile, a position from the bars and from another position.
+// Names start with "layouts-", since screenshot names are shared across files.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FRAME, layoutsDemo, openDemo, pickMode, pointerAway, REST, tabInto } from "./demo";
@@ -60,6 +62,8 @@ const CARDS: Readonly<Record<CardId, Card>> = {
   }
 };
 const IDS = Object.keys(CARDS) as CardId[];
+/** A viewport tall enough for the page in one column at 320 px: about 7,000 px. */
+const NARROW_HEIGHT = 7600;
 
 const card = (page: Page, id: CardId): Locator => page.locator(`section[aria-labelledby="${id}-title"]`);
 const chart = (page: Page, id: CardId): Locator => page.locator(`#${id}`);
@@ -72,6 +76,8 @@ const announcer = (page: Page, id: CardId): Locator => chart(page, id).getByRole
 const HOST_PARTS = "svg :is(rect.segment, rect.bar, rect.tile, path.band, circle.value, circle.dot, line.connector, text.axis-name, text.host-label, text.host-value, text.name, text.value)";
 /** A view's marks: the elements expressive() names. */
 const marks = (page: Page, id: CardId, name: string): Locator => view(page, id, name).locator('svg [role="img"]');
+/** The last button before a card's chart, where Tab goes into it: the treemap's positions come after its Treemap and Bars. */
+const lastButton = (page: Page, id: CardId): Locator => button(page, id, id === "treemap" ? "Defenders" : CARDS[id].views[CARDS[id].views.length - 1]!.button);
 
 /** The announcer's words, as a regular expression: it adds a no-break space every other time, so the same text twice is still a change. */
 const said = (name: string): RegExp => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\%]/g, "\\$&")}\\s?$`);
@@ -234,8 +240,7 @@ test.describe("each view at rest", () => {
 
   for (const id of IDS) {
     test(`at 320 px, the ${id} card's views each fit their card`, async ({ page }) => {
-      // Tall enough for the page in one column, about 6,300 px.
-      await page.setViewportSize({ width: 320, height: 7000 });
+      await page.setViewportSize({ width: 320, height: NARROW_HEIGHT });
       await openDemo(page, layoutsDemo);
       for (const [i, { view: name, button: label }] of CARDS[id].views.entries()) {
         if (i > 0) await show(page, id, label);
@@ -573,7 +578,7 @@ test.describe("the buttons and V", () => {
     test(`V on a focused mark of the ${id} switches, and focus and the ring follow its key, both ways`, async ({ page }) => {
       await openDemo(page, layoutsDemo);
       const [first, second] = CARDS[id].views;
-      await button(page, id, second!.button).focus();
+      await lastButton(page, id).focus();
       await page.keyboard.press("Tab");
       await page.keyboard.press("ArrowRight");
       const start = await focusedKey(page);
@@ -610,19 +615,399 @@ test.describe("the buttons and V", () => {
 
   test("after a button's switch, Tab from the buttons lands on the same key in the new view", async ({ page }) => {
     await openDemo(page, layoutsDemo);
-    await button(page, "treemap", "Bars").focus();
+    // The treemap's positions come between its Treemap and Bars and its chart.
+    await lastButton(page, "treemap").focus();
     await page.keyboard.press("Tab");
     await page.keyboard.press("End");
     const last = await focusedKey(page);
     expect(last.view).toBe("treemap");
     await page.keyboard.press("Shift+Tab");
-    await expect(button(page, "treemap", "Bars")).toBeFocused();
+    await expect(lastButton(page, "treemap")).toBeFocused();
+    await button(page, "treemap", "Bars").focus();
     await page.keyboard.press("Enter");
     await page.clock.runFor(REST);
     await expectLanded(page, "treemap", "bars");
     await expect(button(page, "treemap", "Bars")).toBeFocused();
+    await lastButton(page, "treemap").focus();
     await page.keyboard.press("Tab");
     expect(await focusedKey(page)).toMatchObject({ view: "bars", key: last.key });
+  });
+});
+
+/** The treemap card's positions: each one's view, its button, its view's name, which the switch announces, and its scorers. */
+const POSITIONS = [
+  { view: "forward", button: "Forwards", name: "The forwards' 26 goals by scorer on a D3 treemap", scorers: ["Okafor", "Lindqvist"] },
+  { view: "winger", button: "Wingers", name: "The wingers' 14 goals by scorer on a D3 treemap", scorers: ["Moreau", "Reyes", "Brennan"] },
+  { view: "midfielder", button: "Midfielders", name: "The midfielders' 12 goals by scorer on a D3 treemap", scorers: ["Tanaka", "Adeyemi", "Castillo", "Sousa"] },
+  { view: "defender", button: "Defenders", name: "The defenders' 6 goals by scorer on a D3 treemap", scorers: ["Novak", "Haddad", "Kowalski"] }
+] as const;
+const MIDFIELDERS = POSITIONS[2];
+/** The marks a switch on the treemap card fades because they have no partner. */
+const fading = (page: Page): Locator => chart(page, "treemap").locator(".ec-switch-overlay .ec-switch-fades > .ec-switch-fade");
+
+/**
+ * The treemap card at rest on `name`, the whole treemap, the bars or a position's view: that view alone
+ * shown of its ten, its marks and labels drawn, nothing in the overlay, and both rows of buttons pressed
+ * for it. A position is a treemap, and the bars are every position's.
+ */
+async function expectOn(page: Page, name: string): Promise<void> {
+  const containers = chart(page, "treemap").locator(".ec-switch-view");
+  await expect(containers).toHaveCount(10);
+  expect(await containers.evaluateAll((all) => all.filter((each) => !each.classList.contains("ec-switch-inactive")).map((each) => (each as HTMLElement).dataset.view))).toEqual([name]);
+  await expect(view(page, "treemap", name)).not.toHaveClass(/ec-switching/);
+  await expect(view(page, "treemap", name)).not.toHaveAttribute("inert");
+  await expect(runs(page, "treemap")).toHaveCount(0);
+  await expect(fading(page)).toHaveCount(0);
+  const parts = (await drawn(page, "treemap"))[name]!;
+  expect(parts.length).toBeGreaterThan(0);
+  expect(parts.every(Boolean), `${name}'s marks and labels drawn`).toBe(true);
+  await expectPressed(page, name);
+}
+
+/** Both rows of the treemap card's buttons, pressed for the view its switch is heading for. */
+async function expectPressed(page: Page, name: string): Promise<void> {
+  // By attribute: getByRole("button", { pressed: true }) after a role query has run crashes the page in
+  // Playwright 1.65.0's Firefox, on any card.
+  const pressed = (row: string): Promise<string[]> => page.locator(`#treemap-${row} button[aria-pressed="true"]`).allTextContents();
+  expect(await pressed("layout")).toEqual([name === "bars" ? "Bars" : "Treemap"]);
+  expect(await pressed("position")).toEqual([POSITIONS.find((position) => position.view === name)?.button ?? "All"]);
+}
+
+/** Each drawn box in the treemap's chart by scorer, to the pixel: a view's own tiles, or the overlay's runs. */
+async function boxes(page: Page, where: "runs" | string): Promise<Record<string, number[]>> {
+  const target = where === "runs" ? runs(page, "treemap").locator("path") : view(page, "treemap", where).locator("rect.tile");
+  return target.evaluateAll((elements) =>
+    Object.fromEntries(
+      elements.map((element) => {
+        const box = element.getBoundingClientRect();
+        const key = element.closest(".ec-run")?.getAttribute("data-key") ?? (element as unknown as { __data__: { data: { name: string } } }).__data__.data.name;
+        return [key, [box.x, box.y, box.width, box.height].map(Math.round)];
+      })
+    )
+  );
+}
+
+test.describe("the treemap's drill-down", () => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`a position's view at rest, its tiles filling the chart, announced, and back, ${colorScheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openDemo(page, layoutsDemo);
+      await expectOn(page, "treemap");
+      await show(page, "treemap", MIDFIELDERS.button);
+      await expectOn(page, MIDFIELDERS.view);
+      await expect(announcer(page, "treemap")).toHaveText(said(MIDFIELDERS.name));
+      // In the whole treemap only Tanaka's tile has room for his name; with the whole chart to share, more do.
+      await expect(view(page, "treemap", "midfielder-chosen").locator("text.host-label")).toHaveText(["Tanaka"]);
+      const named = await view(page, "treemap", MIDFIELDERS.view).locator("text.host-label").allTextContents();
+      expect(named).toEqual(expect.arrayContaining(["Tanaka", "Adeyemi"]));
+      expect(MIDFIELDERS.scorers).toEqual(expect.arrayContaining(named));
+      await expect(card(page, "treemap")).toHaveScreenshot(`layouts-treemap-midfielder-${colorScheme}.png`);
+      await show(page, "treemap", "All");
+      await expectOn(page, "treemap");
+      await expect(announcer(page, "treemap")).toHaveText(said(CARDS.treemap.views[0]!.name));
+    });
+  }
+
+  test("at 320 px, the positions' buttons wrap inside the card, and a position's view fits it", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: NARROW_HEIGHT });
+    await openDemo(page, layoutsDemo);
+    await show(page, "treemap", MIDFIELDERS.button);
+    await expectOn(page, MIDFIELDERS.view);
+    const sizes = await card(page, "treemap").evaluate((section) => {
+      const right = (element: Element): number => element.getBoundingClientRect().right;
+      return { card: right(section), buttons: [...section.querySelectorAll("button")].map(right), svg: right(section.querySelector('.ec-switch-view[data-view="midfielder"] svg')!) };
+    });
+    for (const right of [...sizes.buttons, sizes.svg]) expect(right).toBeLessThanOrEqual(sizes.card - 20);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+    await expect(card(page, "treemap")).toHaveScreenshot("layouts-treemap-midfielder-320.png");
+  });
+
+  test("a drill in is two legs of 950 ms: the others fade while the chosen stay where they were, then the chosen grow alone; announced once; and back the same way", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    await listen(page, "treemap");
+    const atRest = await boxes(page, "treemap");
+    const filled = await boxes(page, MIDFIELDERS.view);
+    await button(page, "treemap", MIDFIELDERS.button).click();
+    await pointerAway(page);
+    // The position is pressed from the start.
+    await expectPressed(page, MIDFIELDERS.view);
+    // 304 ms: the eight others part faded, and the four where the treemap has them.
+    await page.clock.runFor(304);
+    await expect(view(page, "treemap", "treemap")).toHaveClass(/ec-switching/);
+    await expect(view(page, "treemap", "midfielder-chosen")).toHaveClass(/ec-switching/);
+    await expect(view(page, "treemap", MIDFIELDERS.view)).toHaveClass(/ec-switch-inactive/);
+    await expect(runs(page, "treemap")).toHaveCount(4);
+    await expect(fading(page)).toHaveCount(8);
+    const opacities = await fading(page).evaluateAll((groups) => groups.map((group) => Number(group.getAttribute("opacity"))));
+    expect(new Set(opacities).size).toBe(1);
+    expect(opacities[0]!).toBeGreaterThan(0);
+    expect(opacities[0]!).toBeLessThan(1);
+    const chosen = Object.fromEntries(MIDFIELDERS.scorers.map((name) => [name, atRest[name]!]));
+    expect(await boxes(page, "runs")).toEqual(chosen);
+    const parts = await drawn(page, "treemap");
+    for (const name of ["treemap", "midfielder-chosen"]) expect(parts[name]!.some(Boolean), `${name}: a D3 part drawn`).toBe(false);
+    // 496 ms, just past a quarter of the way: the others gone, the four still in place.
+    await page.clock.runFor(192);
+    expect(await fading(page).evaluateAll((groups) => groups.map((group) => group.getAttribute("opacity")))).toEqual(Array(8).fill("0"));
+    expect(await boxes(page, "runs")).toEqual(chosen);
+    await expect(chart(page, "treemap")).toHaveScreenshot("layouts-treemap-drill-first.png");
+    // 1,440 ms, three quarters: the second leg half way, the four growing and nothing else drawn.
+    await page.clock.runFor(944);
+    await expect(view(page, "treemap", "treemap")).toHaveClass(/ec-switch-inactive/);
+    await expect(view(page, "treemap", "midfielder-chosen")).toHaveClass(/ec-switching/);
+    await expect(view(page, "treemap", MIDFIELDERS.view)).toHaveClass(/ec-switching/);
+    await expect(runs(page, "treemap")).toHaveCount(4);
+    await expect(fading(page)).toHaveCount(0);
+    const growing = await boxes(page, "runs");
+    for (const name of MIDFIELDERS.scorers) {
+      const area = (box: readonly number[]): number => box[2]! * box[3]!;
+      expect(area(growing[name]!), name).toBeGreaterThan(area(atRest[name]!));
+      expect(area(growing[name]!), name).toBeLessThan(area(filled[name]!));
+    }
+    await expect(chart(page, "treemap")).toHaveScreenshot("layouts-treemap-drill-second.png");
+    expect(await heard(page, "treemap")).toEqual([]);
+    await page.clock.runFor(REST);
+    await expectOn(page, MIDFIELDERS.view);
+    expect(await heard(page, "treemap")).toEqual([MIDFIELDERS.name]);
+
+    // Back: 1.9 s in all, announced once more.
+    await button(page, "treemap", "All").click();
+    await pointerAway(page);
+    await expectPressed(page, "treemap");
+    await page.clock.runFor(1904);
+    await expect(runs(page, "treemap")).toHaveCount(4);
+    await expect(fading(page)).toHaveCount(8);
+    await page.clock.runFor(2 * FRAME);
+    await expectOn(page, "treemap");
+    expect(await heard(page, "treemap")).toEqual([MIDFIELDERS.name, CARDS.treemap.views[0]!.name]);
+  });
+
+  test("the positions are toggle buttons in a named group; Bars from a position goes to every scorer's bars, and a position from the bars or from another goes straight there", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    await listen(page, "treemap");
+    await expect(card(page, "treemap").getByRole("group", { name: "Position" }).getByRole("button")).toHaveText(["All", ...POSITIONS.map((position) => position.button)]);
+    await show(page, "treemap", MIDFIELDERS.button);
+    await expectOn(page, MIDFIELDERS.view);
+    // Treemap on a position is already pressed, and does nothing.
+    await show(page, "treemap", "Treemap");
+    await expectOn(page, MIDFIELDERS.view);
+    // Bars: the four grow into their bars as the other eight fade in, and the positions go back to All.
+    await button(page, "treemap", "Bars").click();
+    await pointerAway(page);
+    await expectPressed(page, "bars");
+    await page.clock.runFor(475);
+    await expect(runs(page, "treemap")).toHaveCount(4);
+    await expect(fading(page)).toHaveCount(8);
+    await page.clock.runFor(REST);
+    await expectOn(page, "bars");
+    // All on the bars is already pressed, and does nothing.
+    await show(page, "treemap", "All");
+    await expectOn(page, "bars");
+    // A position from the bars: one switch, and Treemap is pressed again.
+    await button(page, "treemap", "Wingers").click();
+    await pointerAway(page);
+    await expectPressed(page, "winger");
+    await page.clock.runFor(475);
+    await expect(view(page, "treemap", "bars")).toHaveClass(/ec-switching/);
+    await expect(view(page, "treemap", "winger")).toHaveClass(/ec-switching/);
+    await expect(runs(page, "treemap")).toHaveCount(3);
+    await expect(fading(page)).toHaveCount(9);
+    await page.clock.runFor(REST);
+    await expectOn(page, "winger");
+    // One position to another: they share no scorer, so nothing morphs. The wingers fade out, then the forwards fade in.
+    await button(page, "treemap", "Forwards").click();
+    await pointerAway(page);
+    await expectPressed(page, "forward");
+    const opacities = (): Promise<Record<string, number>> => fading(page).evaluateAll((groups) => Object.fromEntries(groups.map((group) => [group.getAttribute("data-key")!, Number(group.getAttribute("opacity"))])));
+    await page.clock.runFor(304);
+    await expect(runs(page, "treemap")).toHaveCount(0);
+    let now = await opacities();
+    expect(Object.keys(now).sort()).toEqual(["Brennan", "Lindqvist", "Moreau", "Okafor", "Reyes"]);
+    expect(now.Moreau!).toBeGreaterThan(0);
+    expect(now.Moreau!).toBeLessThan(1);
+    expect(now.Okafor).toBe(0);
+    await page.clock.runFor(400);
+    now = await opacities();
+    expect(now.Moreau).toBe(0);
+    expect(now.Okafor!).toBeGreaterThan(0);
+    await page.clock.runFor(REST);
+    await expectOn(page, "forward");
+    expect(await heard(page, "treemap")).toEqual([MIDFIELDERS.name, CARDS.treemap.views[1]!.name, POSITIONS[1].name, POSITIONS[0].name]);
+  });
+
+  test("a click on a tile drills into its position, and a position's own tile goes no further", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    await expect(view(page, "treemap", "treemap").locator("rect.tile").first()).toHaveCSS("cursor", "pointer");
+    await view(page, "treemap", "treemap").locator("rect.tile-defender").first().click();
+    await expectPressed(page, "defender");
+    await expect(runs(page, "treemap")).toHaveCount(3);
+    await pointerAway(page);
+    await page.clock.runFor(REST);
+    await expectOn(page, "defender");
+    // Focus went to the tile with the click, and followed it in.
+    expect(await focusedKey(page)).toMatchObject({ view: "defender", key: "Novak", label: "Novak, defender: 3 goals, 50% of the defenders' 6" });
+    await expect(view(page, "treemap", "defender").locator("rect.tile").first()).not.toHaveCSS("cursor", "pointer");
+    await view(page, "treemap", "defender").locator("rect.tile").nth(1).click();
+    await pointerAway(page);
+    await page.clock.runFor(REST);
+    await expectOn(page, "defender");
+  });
+
+  test("Enter on a focused tile drills into its position and Escape goes back, focus and the ring following the tile both ways", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    await listen(page, "treemap");
+    await lastButton(page, "treemap").focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("End");
+    const start = await focusedKey(page);
+    // The last tile in the order the arrow keys go.
+    expect(start).toMatchObject({ view: "treemap", key: "Haddad", label: "Haddad, defender: 2 goals, 3% of 58" });
+    await page.keyboard.press("Enter");
+    await expectPressed(page, "defender");
+    await page.clock.runFor(REST);
+    await expectOn(page, "defender");
+    expect(await focusedKey(page)).toEqual({ view: "defender", key: "Haddad", label: "Haddad, defender: 2 goals, 33% of the defenders' 6" });
+    expect(await ringShown(view(page, "treemap", "defender"))).toBe(true);
+    await expect(card(page, "treemap")).toHaveScreenshot("layouts-treemap-focus-defender.png");
+    // Enter again goes no further.
+    await page.keyboard.press("Enter");
+    await page.clock.runFor(REST);
+    await expectOn(page, "defender");
+    // Escape: one press ends the tile's hover and goes back.
+    await page.keyboard.press("Escape");
+    await expectPressed(page, "treemap");
+    await expect(runs(page, "treemap")).toHaveCount(3);
+    await page.clock.runFor(REST);
+    await expectOn(page, "treemap");
+    expect(await focusedKey(page)).toMatchObject({ view: "treemap", key: "Haddad" });
+    expect(await ringShown(view(page, "treemap", "treemap"))).toBe(true);
+    // On the whole treemap, Escape is the hover's alone.
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await page.clock.runFor(REST);
+    await expectOn(page, "treemap");
+    expect(await heard(page, "treemap")).toEqual([POSITIONS[3].name, CARDS.treemap.views[0]!.name]);
+  });
+
+  test("V on a focused tile of a position goes to its bar, and V again to the whole treemap", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    await show(page, "treemap", "Forwards");
+    await lastButton(page, "treemap").focus();
+    await page.keyboard.press("Tab");
+    const { key } = await focusedKey(page);
+    for (const name of ["bars", "treemap"]) {
+      await page.keyboard.press("v");
+      await page.clock.runFor(REST);
+      await expectOn(page, name);
+      expect(await focusedKey(page)).toMatchObject({ view: name, key });
+    }
+  });
+
+  test("with reduced motion, a drill in, a drill back and a jump between positions each land at once, focus following", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openDemo(page, layoutsDemo);
+    await listen(page, "treemap");
+    await lastButton(page, "treemap").focus();
+    await page.keyboard.press("Tab");
+    const { key } = await focusedKey(page);
+    await page.keyboard.press("Enter");
+    // No time passes.
+    await expectOn(page, "forward");
+    expect(await focusedKey(page)).toMatchObject({ view: "forward", key });
+    await page.keyboard.press("Escape");
+    await expectOn(page, "treemap");
+    expect(await focusedKey(page)).toMatchObject({ view: "treemap", key });
+    await button(page, "treemap", MIDFIELDERS.button).click();
+    await expectOn(page, MIDFIELDERS.view);
+    await button(page, "treemap", "Defenders").click();
+    await expectOn(page, "defender");
+    await button(page, "treemap", "Bars").click();
+    await expectOn(page, "bars");
+    expect(await heard(page, "treemap")).toEqual([POSITIONS[0].name, CARDS.treemap.views[0]!.name, MIDFIELDERS.name, POSITIONS[3].name, CARDS.treemap.views[1]!.name]);
+  });
+
+  test("Off picked in either leg of a drill lands it on its position at once, announced once, and a drill back part way through each leg ends on the whole treemap", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    await listen(page, "treemap");
+    for (const at of [300, 960 + 300]) {
+      await button(page, "treemap", MIDFIELDERS.button).click();
+      await page.clock.runFor(at);
+      await expect(runs(page, "treemap")).toHaveCount(4);
+      await pickMode(page, "Off");
+      await expectOn(page, MIDFIELDERS.view);
+      await button(page, "treemap", "All").click();
+      await expectOn(page, "treemap");
+      await pickMode(page, "Presentation");
+    }
+    expect(await heard(page, "treemap")).toEqual([MIDFIELDERS.name, CARDS.treemap.views[0]!.name, MIDFIELDERS.name, CARDS.treemap.views[0]!.name]);
+    // All in the first leg plays it back from where it is: as long back as it had gone.
+    await button(page, "treemap", MIDFIELDERS.button).click();
+    await page.clock.runFor(304);
+    await button(page, "treemap", "All").click();
+    await pointerAway(page);
+    await expectPressed(page, "treemap");
+    await page.clock.runFor(288);
+    await expect(runs(page, "treemap")).toHaveCount(4);
+    await page.clock.runFor(2 * FRAME);
+    await expectOn(page, "treemap");
+    // All in the second leg: the switch lands on the position, then plays the whole jump back.
+    await button(page, "treemap", MIDFIELDERS.button).click();
+    await page.clock.runFor(960 + 304);
+    await button(page, "treemap", "All").click();
+    await pointerAway(page);
+    await expect(view(page, "treemap", MIDFIELDERS.view)).toHaveClass(/ec-switching/);
+    await expect(view(page, "treemap", "midfielder-chosen")).toHaveClass(/ec-switching/);
+    await page.clock.runFor(1904);
+    await expect(runs(page, "treemap")).toHaveCount(4);
+    await page.clock.runFor(2 * FRAME);
+    await expectOn(page, "treemap");
+  });
+
+  test("a resize in either leg of a drill draws every view again at the new width and lands on the position", async ({ page }) => {
+    await openDemo(page, layoutsDemo);
+    const widths = (): Promise<string[]> => chart(page, "treemap").locator(".ec-switch-view > svg").evaluateAll((svgs) => svgs.map((svg) => svg.getAttribute("width") ?? ""));
+    for (const [at, width] of [
+      [300, 700],
+      [960 + 300, 1000]
+    ] as const) {
+      const before = await widths();
+      await button(page, "treemap", MIDFIELDERS.button).click();
+      await pointerAway(page);
+      await page.clock.runFor(at);
+      await expect(runs(page, "treemap")).toHaveCount(4);
+      await page.setViewportSize({ width, height: 6000 });
+      await expect.poll(widths).not.toEqual(before);
+      await expect(runs(page, "treemap")).toHaveCount(0);
+      await page.clock.runFor(REST);
+      await expectOn(page, MIDFIELDERS.view);
+      expect(new Set(await widths()).size).toBe(1);
+      // In place, each tile is where the whole treemap has it at the new width.
+      const whole = await boxes(page, "treemap");
+      expect(await boxes(page, "midfielder-chosen")).toEqual(Object.fromEntries(MIDFIELDERS.scorers.map((name) => [name, whole[name]!])));
+      expect(await chart(page, "treemap").locator(HOST_PARTS).evaluateAll((parts) => parts.filter((part) => (part as SVGElement).style.visibility !== "").length)).toBe(0);
+      await show(page, "treemap", "All");
+      await expectOn(page, "treemap");
+    }
+  });
+
+  test("only the view shown can be read: a position's tiles, each named with its share of the position's goals, and nothing part way through a drill", async ({ page, browserName }) => {
+    test.skip(browserName !== "chromium", "It reads Chrome's accessibility tree, over CDP.");
+    const sorted = (lines: readonly string[]): string[] => [...lines].sort();
+    const goals: Readonly<Record<string, number>> = { Tanaka: 6, Adeyemi: 4, Castillo: 1, Sousa: 1 };
+    const position = sorted([`group: ${MIDFIELDERS.name}`, ...MIDFIELDERS.scorers.map((name) => `image: ${name}, midfielder: ${plural(goals[name]!, "goal")}, ${Math.round((goals[name]! / 12) * 100)}% of the midfielders' 12`)]);
+    await openDemo(page, layoutsDemo);
+    await button(page, "treemap", MIDFIELDERS.button).click();
+    for (let ms = 0; ms < 2000; ms += 250) {
+      await page.clock.runFor(250);
+      const now = await readable(page, ["#treemap"]);
+      // Never the view it's staged through, nor the whole treemap on the way.
+      if (now.length > 0) expect(sorted(now)).toEqual(position);
+      else expect(ms).toBeLessThan(1750);
+    }
+    expect(sorted(await readable(page, ["#treemap"]))).toEqual(position);
+    await button(page, "treemap", "All").click();
+    await page.clock.runFor(REST);
+    expect(sorted(await readable(page, ["#treemap"]))).toEqual(sorted([`group: ${CARDS.treemap.views[0]!.name}`, ...READ.treemap.treemap!]));
   });
 });
 

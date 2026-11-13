@@ -150,7 +150,8 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
       ...["Side by side", "Stacked", "100%", "Okafor: 16 goals"],
       ...["Stacked", "100%", "Shots on target: 177 in 38 matches"],
       ...["Radar", "Bars", "Okafor, goals: 0.50 per 90, 96th percentile"],
-      ...["Treemap", "Bars", "Okafor, forward: 16 goals, 28% of 58"],
+      // The treemap's two rows of buttons: its layouts, then All and each position, for its drill-down.
+      ...["Treemap", "Bars", "All", "Forwards", "Wingers", "Midfielders", "Defenders", "Okafor, forward: 16 goals, 28% of 58"],
       // The dumbbell's two tab stops, each half's dots, both in its first row.
       ...["Dumbbell", "Bars", "Lindqvist: 3 goals in the first half", "Lindqvist: 7 goals in the second half, up 4"]
     ],
@@ -320,6 +321,30 @@ test.describe("axe", () => {
     await page.clock.runFor(REST);
     await page.keyboard.press("Tab");
     await expect(page.locator('#bars .ec-switch-view[data-view="share"] rect.segment-goals').first()).toBeFocused();
+    expect(await axeViolations(page)).toEqual([]);
+  });
+
+  test("layouts.html's treemap in each leg of a drill into a position, then on the position with a tile focused", async ({ page }) => {
+    await openAtRest(page, layoutsDemo);
+    await page.locator('#treemap-position button[data-value="midfielder"]').click();
+    // In the first leg, the other positions' tiles part faded.
+    await page.clock.runFor(300);
+    const first = page.locator('#treemap .ec-switch-view:is([data-view="treemap"], [data-view="midfielder-chosen"])');
+    await expect(first).toHaveClass([/ec-switching/, /ec-switching/]);
+    await expect(page.locator("#treemap .ec-switch-fades > .ec-switch-fade")).toHaveCount(8);
+    expect(await axeViolations(page)).toEqual([]);
+    await expect(first).toHaveClass([/ec-switching/, /ec-switching/]);
+    // In the second, the midfielders' tiles growing.
+    await page.clock.runFor(900);
+    const second = page.locator('#treemap .ec-switch-view:is([data-view="midfielder"], [data-view="midfielder-chosen"])');
+    await expect(second).toHaveClass([/ec-switching/, /ec-switching/]);
+    expect(await axeViolations(page)).toEqual([]);
+    await expect(second).toHaveClass([/ec-switching/, /ec-switching/]);
+    await page.clock.runFor(REST);
+    await expect(page.locator('#treemap-position button[data-value="midfielder"]')).toHaveAttribute("aria-pressed", "true");
+    await page.locator('#treemap-position button[data-value="defender"]').focus();
+    await page.keyboard.press("Tab");
+    await expect(page.locator('#treemap .ec-switch-view[data-view="midfielder"] rect.tile').first()).toBeFocused();
     expect(await axeViolations(page)).toEqual([]);
   });
 

@@ -216,6 +216,29 @@ describe("the bullet chart", () => {
     expect(halos(svg)).toHaveLength(0);
   });
 
+  it("stops a flash part way when the measure changes and its marker is no longer passed, and lets the others play on", async () => {
+    const { e, svg, chart, fx } = bullet();
+    await run(e, 976);
+    expect(flashing(svg, bulletRows("goals"))).toEqual(["Okafor", "Lindqvist", "Tanaka", "Novak"]);
+    chart.set(bulletRows("assists"));
+    fx.refresh();
+    // At once: Okafor's and Novak's halos are gone, Lindqvist's and Tanaka's stay.
+    expect(flashing(svg, bulletRows("assists"))).toEqual(["Lindqvist", "Tanaka"]);
+    await run(e, 224);
+    // And the three newly passed have begun theirs.
+    expect(flashing(svg, bulletRows("assists"))).toEqual(["Lindqvist", "Tanaka", "Reyes", "Adeyemi", "Castillo"]);
+    await run(e, 2000);
+    expect(halos(svg)).toHaveLength(0);
+    expect(e.clock.idle).toBe(true);
+    // A marker stopped part way flashes again when it's next passed.
+    chart.set(bulletRows("goals"));
+    fx.refresh();
+    await run(e, 224);
+    expect(flashing(svg, bulletRows("goals"))).toEqual(["Okafor", "Novak"]);
+    await run(e, 2000);
+    expect(halos(svg)).toHaveLength(0);
+  });
+
   it("never reads, dims or moves the bands, through a hover, a change of measure and a Replay", async () => {
     const { e, svg, chart, fx, attach } = bullet();
     const before = bandsOf(svg);

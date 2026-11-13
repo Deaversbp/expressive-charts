@@ -72,7 +72,7 @@ The marks' figures are validated by `theme.test.ts`, which fails if any slot fal
 
 ## Browsers
 
-Every DOM check in the visual suite, this audit's included, runs in Chromium, Firefox and WebKit, in the Playwright image CI uses (Playwright 1.65.0, Linux): 445 tests in each since M17's map, bullet chart, funnel and drill-down (13 November 2026), 47 of which Firefox and WebKit skip. Screenshots are Chromium's only. Two kinds of check run in Chromium alone, and are the 47: the charts' and switches' accessibility trees, which are read over CDP, and forced colours, since Firefox's and WebKit's emulation only matches the media query and forces no colours.
+Every DOM check in the visual suite, this audit's included, runs in Chromium, Firefox and WebKit, in the Playwright image CI uses (Playwright 1.65.0, Linux): 446 tests in each since M17's map, bullet chart, funnel and drill-down (13 November 2026), 47 of which Firefox and WebKit skip. Screenshots are Chromium's only. Two kinds of check run in Chromium alone, and are the 47: the charts' and switches' accessibility trees, which are read over CDP, and forced colours, since Firefox's and WebKit's emulation only matches the media query and forces no colours.
 
 The first runs in Firefox and WebKit failed in four ways, and each was the test, not the library:
 

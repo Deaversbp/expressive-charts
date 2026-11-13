@@ -523,6 +523,18 @@ test.describe("the bullet chart", () => {
     expect(await flashing(page)).toEqual([]);
   });
 
+  test("Assists while the first flashes play stops those no longer passed, and the rest play on", async ({ page }) => {
+    await openLoading(page);
+    await page.clock.runFor(MID_FLASH);
+    expect(await flashing(page)).toEqual(["Okafor", "Lindqvist", "Tanaka", "Novak"]);
+    await measure(page, "Assists").click();
+    expect(await flashing(page)).toEqual(["Lindqvist", "Tanaka"]);
+    await page.clock.runFor(225);
+    expect(await flashing(page)).toEqual(["Lindqvist", "Tanaka", "Reyes", "Adeyemi", "Castillo"]);
+    await page.clock.runFor(REST);
+    expect(await flashing(page)).toEqual([]);
+  });
+
   test("hovering a bar dims the other rows, bar and marker, and never the bands; a marker lets the pointer through to its bar", async ({ page }) => {
     await openAtRest(page);
     const bands = await bandsOf(page);

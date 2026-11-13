@@ -4,7 +4,7 @@
 // knows nothing about expressive-charts; everything the adapter can't read from an element by its tag
 // is described here, from the points each module drew (CLAUDE.md rule 3: no effect knows a chart).
 
-import { defineEffect, describe, drawIn, expressive, flash, label, link, only, samplesAlong, sequence, threshold, travel, type Attachment, type ExpressiveOptions, type Link, type MarkSource } from "../src/index";
+import { defineEffect, describe, drawIn, expressive, flash, label, link, only, samplesAlong, sequence, threshold, travel, type Attachment, type EffectContext, type ExpressiveOptions, type Link, type MarkSource } from "../src/index";
 import { soccerBall } from "../src/icons/sport/index";
 import type { BulletRow, DrawnBullet, Measure, Range } from "./d3-bullet";
 import type { Band, DrawnButterfly, Half } from "./d3-butterfly";
@@ -401,6 +401,10 @@ const FILL = 750;
  * done, a change of measure flashes nothing, and when it ends the markers passed by then flash once.
  * With motion off its end state is the wait over, and flash's is nothing.
  *
+ * A flash says "this target is met", so one still playing stops when a change of measure leaves its
+ * marker unpassed: `blink` is `flash` with its tween kept, so `refresh()` can cancel it and take its halo
+ * away. A marker passed in both measures goes on flashing.
+ *
  * The bands aren't marks: the chart draws them, hidden, and nothing here reads them. The two
  * attachments are linked by player, so a hovered bar's marker stays lit as the other rows dim.
  */
@@ -419,6 +423,29 @@ export function attachBullet(chart: DrawnBullet, attach: Attach = expressive): B
       filled = true;
     }
   });
+  /** What stops each marker's flash while it plays, by key. */
+  const stops = new Map<string, () => void>();
+  const flashing = flash();
+  const blink = defineEffect({
+    async run(mark, ctx) {
+      const tweens: ReturnType<EffectContext["tween"]>[] = [];
+      const stop = (): void => {
+        for (const tween of tweens) tween.cancel();
+        ctx.mark.set({ halo: undefined });
+      };
+      stops.set(mark.key, stop);
+      await flashing.run(mark, {
+        ...ctx,
+        tween: (options) => {
+          const tween = ctx.tween(options);
+          tweens.push(tween);
+          return tween;
+        }
+      });
+      if (stops.get(mark.key) === stop) stops.delete(mark.key);
+    },
+    end() {}
+  });
   const bars = attach(chart.bars, {
     key: (d) => d.name,
     value: (d) => `${d.measure} ${d.value}`,
@@ -434,9 +461,9 @@ export function attachBullet(chart: DrawnBullet, attach: Attach = expressive): B
     on: {
       enter: sequence(
         filling,
-        only((mark) => passed(mark.key), flash())
+        only((mark) => passed(mark.key), blink)
       ),
-      update: only((mark) => filled && passed(mark.key), flash())
+      update: only((mark) => filled && passed(mark.key), blink)
     }
   });
   const linked = link([bars, markers], { by: ({ data }) => data.datum.name });
@@ -447,6 +474,8 @@ export function attachBullet(chart: DrawnBullet, attach: Attach = expressive): B
     refresh() {
       bars.refresh(chart.bars);
       markers.refresh(chart.markers);
+      // A flash still playing round a marker that's no longer passed stops.
+      for (const [key, stop] of [...stops]) if (!passed(key)) stop();
     },
     destroy() {
       linked.destroy();

@@ -34,6 +34,13 @@ expressive-charts is a TypeScript library of composable motion and expressive ef
 - Support light and dark themes through CSS custom properties.
 - Icons are swappable SVG assets in `src/icons`, never hard-coded inside an effect. The core set is neutral; domain icons (soccer ball, cleat) live in optional packs such as `src/icons/sport`.
 
+## Examples and demo data
+
+- The library is for general use. Examples in the docs, the demos and the tests do not all have to be about soccer.
+- For new examples, use common and varied use cases: business intelligence and analytics (revenue, a sales funnel, a KPI against its target), scientific and biological research (measurements, samples, experiments), and social media and website analytics (visitors, sessions, engagement).
+- Vary them across a page or a doc, so no single domain looks like what the library is for.
+- Existing soccer examples can stay until there is another reason to change them.
+
 ## Conventions
 
 - TypeScript, strict mode, ES modules. No runtime dependencies unless discussed first.

@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to a pull request cancels that pull request's run in progress: its result would be for
+# code nobody is waiting on. A push to main gets a group of its own (its commit), so every merge's
+# run finishes and none waits behind another.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -27,24 +34,90 @@ jobs:
       # Installs the packed tarball in a new project and uses it as ES modules and as CommonJS, with types.
       - run: npm run pack-check
 
+  changes:
+    # Decides whether the visual job below has anything to find. It's skipped by a condition on the
+    # job, not by `paths-ignore` on the workflow, so `check` still runs on a docs change (`npm test`
+    # type-checks README's and docs/api.md's examples), and a skipped job reports as skipped, where
+    # a workflow that never started would leave a required check pending.
+    runs-on: ubuntu-latest
+    outputs:
+      visual: ${{ steps.diff.outputs.visual }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # The files that changed: on a pull request, between its base and the merge commit CI checks
+      # out (the base is that commit's first parent); on a push, between main's last commit and this
+      # one. Visual is skipped only when every one of them is a file no demo page or visual test
+      # reads:
+      #   docs/**   the guides, the plan, README's pictures (docs/media) and the sketches, which
+      #             `check` type-checks and runs; no page or spec imports from docs/
+      #   /*.md     README, CHANGELOG, CONTRIBUTING and CLAUDE.md at the root; a .md under src/,
+      #             demo/ or tests/ still runs it
+      #   LICENSE
+      # Anything else runs it: src, demo, tests, scripts, package.json, the lockfile, every config
+      # and this workflow. So does a diff that can't be read (a force push, a branch's first push):
+      # when in doubt, the suite runs. A rename counts as both of its paths.
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before }}
+        run: |
+          visual=true
+          if files=$(git diff --name-only --no-renames "$BASE" HEAD --); then
+            visual=false
+            while IFS= read -r file; do
+              case "$file" in
+                docs/* | LICENSE) ;;
+                */*) visual=true ;;
+                *.md) ;;
+                *) visual=true ;;
+              esac
+            done <<< "$files"
+          fi
+          echo "Changed since $BASE:"
+          echo "$files"
+          echo "visual=$visual"
+          echo "visual=$visual" >> "$GITHUB_OUTPUT"
+
   visual:
     # Screenshots of the demo pages in Chromium, and the DOM checks beside them (axe among them) in
     # Chromium, Firefox and WebKit (playwright.config.ts). The job runs in the official Playwright
     # image, which comes with the three browsers and their fonts, so nothing is downloaded per run and
     # the pictures match baselines made locally with `npm run test:visual:update` in the same image.
     # The tag must match @playwright/test in package.json (Playwright says so if they differ).
+    #
+    # One job per browser, side by side, each on a runner of its own: in one job, on two workers, the
+    # three took 37 minutes. WebKit takes about twice as long as either of the others (19 of those
+    # minutes, to Chromium's 8 and Firefox's 10), so it's split in two with Playwright's --shard,
+    # which deals its tests out by count. One browser's failure leaves the others running (fail-fast
+    # is off), so a run shows everything that's broken, and each job uploads a report of its own.
+    needs: changes
+    if: needs.changes.outputs.visual == 'true'
+    name: visual (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: chromium
+            args: --project=chromium
+          - name: firefox
+            args: --project=firefox
+          - name: webkit-1
+            args: --project=webkit --shard=1/2
+          - name: webkit-2
+            args: --project=webkit --shard=2/2
     container:
       image: mcr.microsoft.com/playwright:v1.65.0-noble
       options: --user 1001
     steps:
       - uses: actions/checkout@v7
       - run: npm ci
-      - run: npm run test:visual
+      - run: npm run test:visual -- ${{ matrix.args }}
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: visual-report
+          name: visual-report-${{ matrix.name }}
           path: |
             playwright-report/
             test-results/

@@ -71,6 +71,8 @@ The DOM checks that measure text follow the fonts too, and Docker's run is the o
 
 The Docker image's tag follows `@playwright/test` in `package.json`. When you upgrade Playwright, pin the exact version, change the image tag in `.github/workflows/ci.yml` and `visual-baselines.yml` to match, and regenerate the baselines.
 
+CI (`.github/workflows/ci.yml`) runs the suite as four jobs side by side in that image, one for each browser, with WebKit, the slowest, split in two by Playwright's `--shard`: `visual (chromium)`, `visual (firefox)`, `visual (webkit-1)` and `visual (webkit-2)`. A job that fails uploads its report and its `test-results/` as an artifact named for it (`visual-report-chromium`, and so on), and leaves the others running. A new push to a pull request cancels that pull request's run in progress; runs on `main` are never cancelled. The visual jobs are skipped, and show as skipped, when a change touches only files no page or test reads: anything under `docs/`, a `.md` file at the repository's root, or `LICENSE`. Any other file runs them, and `check` runs on every change.
+
 ## README's pictures and the demo site
 
 README's four pictures are GIFs in `docs/media/`, captured from the demo pages by `scripts/media/capture.ts`. The arrow comes from `scripts/media/quick-start.html`, which is README's first example. Remake them after a change that shows in them:
@@ -122,7 +124,7 @@ A new import set goes in `importSets` in `scripts/size.mjs`, with its budget in 
 
 - Keep each pull request focused on one change.
 - Run `npm run typecheck && npm test && npm run build` before opening it, and `npm run size` after the build. CI runs the same checks, then `npm run pack-check`.
-- If the change affects how the demo looks or moves, run `npm run test:visual:docker` too, and commit updated baselines if the change is intended. CI runs the visual suite as a separate job.
+- If the change affects how the demo looks or moves, run `npm run test:visual:docker` too, and commit updated baselines if the change is intended. CI runs the visual suite in jobs of its own, one for each browser.
 - Update `README.md` and `docs/architecture.md` when the public API changes, and `docs/api.md`, the reference: `src/api-docs.test.ts` fails when an export has no entry there or an entry names no export, and type-checks every example in README and every example in `docs/api.md` that imports the package. An example uses the page's own names (`players`, `bars`), which the test declares in `PAGE`. README's links must be absolute (`https://github.com/Deaversbp/expressive-charts/blob/main/…`), since npm shows it away from the repository.
 - A name in the 0.x promise (in `CHANGELOG.md`) changes only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. `src/promise.test.ts` names every promised value and type, so renaming or removing one fails `typecheck`; a name added to the promise goes in both lists, and a test checks they match.
 

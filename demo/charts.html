@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Four charts drawn with D3 · expressive-charts</title>
+<title>Six charts drawn with D3 · expressive-charts</title>
 <style>
   /* Page chrome only, as on shapes.html. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
   :root {
@@ -103,14 +103,30 @@
   #butterfly .bar-scored { fill: var(--ec-series-1, #2a78d6); }
   #butterfly .band, #butterfly .count { font-size: 12.5px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
   #butterfly .heading, #butterfly .minutes { font-size: 11px; fill: var(--ec-text-muted, #7d7b75); }
+  /* The bullet chart: three bands in greys, the lowest range the darkest, light enough that a bar keeps 3:1 on each, which never take the pointer; each value in the first series colour, and its target a tick in the text colour. */
+  .legend .swatch-value { background: var(--ec-series-1, #2a78d6); }
+  .legend .swatch-target { width: 3px; border-radius: 0; background: var(--ink); }
+  .legend .swatch-band-1, #bullet .band-1 { --band: 26%; }
+  .legend .swatch-band-2, #bullet .band-2 { --band: 16%; }
+  .legend .swatch-band-3, #bullet .band-3 { --band: 8%; }
+  .legend [class^="swatch-band-"] { border-radius: 0; background: color-mix(in srgb, var(--ec-text-muted, #75736d) var(--band), transparent); }
+  #bullet .bands { pointer-events: none; }
+  #bullet .band { fill: color-mix(in srgb, var(--ec-text-muted, #75736d) var(--band), transparent); }
+  #bullet .name { font-size: 12.5px; fill: var(--ink-2); }
+  #bullet .value { fill: var(--ec-series-1, #2a78d6); }
+  /* The pointer goes through a target to the bar under it. */
+  #bullet .target { stroke: var(--ink); stroke-width: 3px; pointer-events: none; }
+  /* The funnel: every stage in the first series colour, its name and count in text colours either side. */
+  #funnel .stage { fill: var(--ec-series-1, #2a78d6); }
+  #funnel .name, #funnel .count { font-size: 12.5px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
 <main class="wrap">
   <header>
-    <p class="eyebrow">Four charts drawn with D3 · expressive()</p>
-    <h1>A waterfall, a dumbbell, a radar and a butterfly</h1>
-    <p class="lede">Four charts from the ideas doc, each drawn with D3 by code that knows nothing about expressive-charts, and given its effects through <code>expressive()</code>. Where a chart's marks aren't what the adapter reads from their tags, the page describes them with <code>describe</code>: the waterfall's floating steps, and the radar's outlines and values. The waterfall and the butterfly play at load; the dumbbell and the radar play when you hover or Tab into them.</p>
+    <p class="eyebrow">Six charts drawn with D3 · expressive()</p>
+    <h1>A waterfall, a radar, a funnel and three others</h1>
+    <p class="lede">Six charts from the ideas doc, each drawn with D3 by code that knows nothing about expressive-charts, and given its effects through <code>expressive()</code>. Where a chart's marks aren't what the adapter reads from their tags, the page describes them with <code>describe</code>: the waterfall's floating steps, and the radar's outlines and values. All but the dumbbell and the radar play at load; those two play when you hover or Tab into them.</p>
   </header>
 
   <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
@@ -174,6 +190,38 @@
     </section>
   </div>
 
+  <div class="pair charts">
+    <section class="card" aria-labelledby="bullet-title">
+      <h2 id="bullet-title">Each player against a target, on a D3 bullet chart</h2>
+      <p class="note">Each player's goals for the season against their target, over three bands that are the same in every row. The bars are <code>&lt;rect&gt;</code>s, which fill at load (<code>drawIn</code>). Each target is a <code>&lt;line&gt;</code> in an attachment of its own, and flashes once its bar has filled past it (<code>flash</code>). Switch to Assists: only the targets newly passed flash. Press Replay to see the bars fill again.</p>
+      <div class="bar">
+        <span class="label" id="bullet-measure-label">Measure</span>
+        <div class="seg" id="bullet-measure" role="group" aria-labelledby="bullet-measure-label">
+          <button type="button" data-value="goals" aria-pressed="true">Goals</button>
+          <button type="button" data-value="assists" aria-pressed="false">Assists</button>
+        </div>
+        <button type="button" class="replay" id="bullet-replay" aria-label="Replay the bullet chart">Replay</button>
+      </div>
+      <div class="box">
+        <div class="legend"><span><i class="swatch-value"></i>This season</span><span><i class="swatch-target"></i>Target</span><span><i class="swatch-band-1"></i>Under 5</span><span><i class="swatch-band-2"></i>5 to 9</span><span><i class="swatch-band-3"></i>10 or more</span></div>
+        <!-- A group, not an image, as the waterfall is. -->
+        <svg id="bullet" class="chart" role="group" aria-label="Each player's season against their target on a D3 bullet chart"></svg>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="funnel-title">
+      <h2 id="funnel-title">From shots to goals, on a D3 funnel</h2>
+      <p class="note">The season's shots, those on target, and its 58 goals. Each stage is a <code>&lt;path&gt;</code> that narrows into the next, which the page describes with <code>describe.shape</code>, so the drop from the stage before sits in the gap above it (<code>label</code>). The labels rise at load. Press Replay to see them again, or Tab to the stages.</p>
+      <div class="bar">
+        <button type="button" class="replay" id="funnel-replay" aria-label="Replay the funnel">Replay</button>
+      </div>
+      <div class="box">
+        <!-- A group, not an image, as the waterfall is. -->
+        <svg id="funnel" class="chart" role="group" aria-label="The season's shots, shots on target and goals on a D3 funnel"></svg>
+      </div>
+    </section>
+  </div>
+
   <div class="pair">
     <section class="card" aria-labelledby="notes-title">
       <h2 id="notes-title">Design notes</h2>
@@ -185,6 +233,9 @@
         <li>A link lights the marks in its other attachments, so the dumbbell's lines and each half's dots are three attachments linked by player: any part of a row lights the whole row. Only the lines take the keyboard, each naming both halves, so a row is read once.</li>
         <li>The dumbbell's change is staged as a bar chart's is: the values first, then the rows, in Presentation; both at once in Analysis; at once in Off. Its own transition reads the motion mode, and <code>watch</code> keeps the effects on the marks as they move.</li>
         <li>A linked hover lights the other marks and shows nothing else: no tooltip, and nothing announced.</li>
+        <li>A bullet chart's bands are context, not marks: the chart draws them, hidden from screen readers, and they never dim, move or take the pointer. Each bar's name says its value, its target and whether it's met, so nothing is told by a tick's place alone.</li>
+        <li>A target waits for its bar. The wait is an effect of the page's own, made with <code>defineEffect</code>: it draws nothing for as long as a bar takes to fill, in sequence before <code>flash</code>, so the motion mode scales both alike. A flash ends with nothing drawn: with reduced motion the bars are full and nothing blinks.</li>
+        <li>A funnel's stage is a closed shape, which has no direction and no labels the adapter can read. The page says where each stage's top edge and name are, so the drop stands in the gap above the stage. Each stage's name says its drop too, since an effect's text isn't read aloud.</li>
       </ul>
     </section>
 
@@ -195,7 +246,9 @@
         <li>Hover Okafor's line on the dumbbell: the arrow goes left, since he scored fewer in the second half. Then switch to Assists while hovering.</li>
         <li>Pick Analysis, then switch the dumbbell back to Goals: the dots and the rows move together, in a fifth of a second.</li>
         <li>Hover a value on the radar, or Tab to it and use the arrow keys: a dot travels out its spoke, and the league average lights on the same axis.</li>
-        <li>Turn on reduced motion and reload: the ball is on the total at once, the labels are in place, and the halves are drawn.</li>
+        <li>Press the bullet chart's Replay: the bars fill, then four targets flash, Okafor's, Lindqvist's, Tanaka's and Novak's. Switch to Assists: Reyes's, Adeyemi's and Castillo's flash, the three newly passed.</li>
+        <li>Tab to the funnel and press the down arrow: each stage's name says its count and its drop from the stage before.</li>
+        <li>Turn on reduced motion and reload: the ball is on the total at once, the labels are in place, the halves and the bullet chart's bars are drawn, and nothing flashes.</li>
       </ul>
     </section>
   </div>

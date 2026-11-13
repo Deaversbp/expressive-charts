@@ -110,11 +110,11 @@ export const shapesDemo: Demo = {
   }
 };
 
-/** demo/charts.html: a D3 waterfall, dumbbell, radar and butterfly, each through expressive(). */
+/** demo/charts.html: a D3 waterfall, dumbbell, radar, butterfly, bullet chart and funnel, each through expressive(). */
 export const chartsDemo: Demo = {
   path: "/charts.html",
-  // About 2,110 px at 1,000 px wide.
-  height: 2400,
+  // About 3,170 px at 1,000 px wide.
+  height: 3400,
   async ready(page) {
     // expressive() has named each chart's marks, so every attachment that takes the keyboard is attached.
     await expect(page.locator('#waterfall rect.step[role="img"]')).toHaveCount(11);
@@ -122,6 +122,8 @@ export const chartsDemo: Demo = {
     await expect(page.locator('#radar polygon.outline[role="img"]')).toHaveCount(2);
     await expect(page.locator('#radar circle.value[role="img"]')).toHaveCount(12);
     await expect(page.locator('#butterfly rect.bar[role="img"]')).toHaveCount(12);
+    await expect(page.locator('#bullet rect.value[role="img"]')).toHaveCount(8);
+    await expect(page.locator('#funnel path.stage[role="img"]')).toHaveCount(3);
   }
 };
 

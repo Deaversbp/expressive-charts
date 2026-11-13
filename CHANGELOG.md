@@ -27,6 +27,12 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 From 1.0, everything the package exports follows semantic versioning: the motion core, the charts, the adapters, the built-in effects and the controls, as well as the effect-author API.
 
+## Unreleased
+
+### Fixed
+
+- **`expressive()` reads a `<line>`'s colour from its stroke, whatever its fill.** A line has no inside, so its fill draws nothing; but the adapter took a mark's fill as its colour unless the fill was `none`, and a `<line>` that sets no `fill` computes as black. So a line D3 drew with `append("line")` was black to the library: its hover colour under `dim`, what effects draw in the mark's colour (`drawIn`'s stroke, `flash`, a halo), and its fade and colour in a chart switch. Now a `<line>`'s colour is its stroke, and one with no stroke, or `stroke: none`, has no colour. A `<line>` whose fill is `none` reads as before, so a page that set `fill: none` to get round this can keep it or take it out. Every other element reads as before, an open `<path>` or `<polyline>` too: a browser fills those, so give a line drawn as a path `fill="none"`, as D3 pages do.
+
 ## 0.11.0 (12 November 2026)
 
 Guides that stay put through a chart switch: a view names its axes, grids and ticks, and one that both views draw the same stays on screen, where it is, while the marks morph; and `hostView([a, b, c])`, one switch view of several attachments on one `<svg>`, so a chart drawn with more than one attachment, such as a dumbbell, switches as one chart. Nothing in the effect-author API changes. Every change is an addition outside the promise, and none needs anything written instead. The 0.x promise, above, now says what 1.0 will promise.

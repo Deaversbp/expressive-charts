@@ -93,6 +93,8 @@
   #treemap .tile-defender, #treemap .bar-defender { fill: var(--ec-series-4, #c28409); }
   #treemap .treemap-labels .host-label { font-size: 12px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
   #treemap .treemap-labels .host-value { font-weight: 400; }
+  /* A tile's name and goals are drawn above it, so they let the pointer through: a hover or a click on them is the tile's. */
+  #treemap .treemap-labels { pointer-events: none; }
   /* The positions' buttons, above the legend: five don't fit in one line on a phone, so they wrap. A tile of the whole treemap drills into its position on a click. */
   .drill { margin-bottom: 12px; }
   .drill .seg { flex-wrap: wrap; }

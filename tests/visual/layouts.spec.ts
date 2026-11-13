@@ -838,7 +838,12 @@ test.describe("the treemap's drill-down", () => {
   test("a click on a tile drills into its position, and a position's own tile goes no further", async ({ page }) => {
     await openDemo(page, layoutsDemo);
     await expect(view(page, "treemap", "treemap").locator("rect.tile").first()).toHaveCSS("cursor", "pointer");
-    await view(page, "treemap", "treemap").locator("rect.tile-defender").first().click();
+    // On its name, which is drawn above the tile and lets the pointer through: the hover and the click are the tile's.
+    const name = (await view(page, "treemap", "treemap").locator("text.host-label", { hasText: "Novak" }).boundingBox())!;
+    await page.mouse.move(name.x + name.width / 2, name.y + name.height / 2);
+    await page.clock.runFor(200);
+    await expect(view(page, "treemap", "treemap").locator("rect.tile.ec-dimmed")).toHaveCount(11);
+    await page.mouse.click(name.x + name.width / 2, name.y + name.height / 2);
     await expectPressed(page, "defender");
     await expect(runs(page, "treemap")).toHaveCount(3);
     await pointerAway(page);

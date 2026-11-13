@@ -157,6 +157,24 @@ export const layoutsDemo: Demo = {
   }
 };
 
+/**
+ * demo/map.html: a D3 map through expressive(): the squad's 13 countries, one attachment, the four
+ * signings' routes, another, and the rows as two tables.
+ */
+export const mapDemo: Demo = {
+  path: "/map.html",
+  // About 2,500 px at 1,000 px wide.
+  height: 2800,
+  async ready(page) {
+    // expressive() has named the countries and the routes, so both are attached, over the file's 177 countries.
+    await expect(page.locator("#map path.land")).toHaveCount(177);
+    await expect(page.locator('#map path.country[role="img"]')).toHaveCount(13);
+    await expect(page.locator('#map path.route[role="img"]')).toHaveCount(4);
+    await expect(page.locator("#countries-table tbody tr")).toHaveCount(13);
+    await expect(page.locator("#signings-table tbody tr")).toHaveCount(4);
+  }
+};
+
 /** demo/season.html: the three linked charts, the players' bars and the D3 slope chart, after matchweek 24. */
 export const seasonDemo: Demo = {
   path: "/season.html",

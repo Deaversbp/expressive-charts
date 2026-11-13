@@ -101,8 +101,8 @@
   #treemap [data-view="treemap"] .tile { cursor: pointer; }
   /* The dumbbell and its bars: the first half in the first slot and the second half in the second, dots and bars alike, so nothing
      changes colour as it morphs (the charts page colours its rows by their change). The lines between the dots take the muted text
-     colour with no fill: a <line>'s fill is black, and the adapter takes a mark's fill as its colour unless it's none. */
-  #dumbbell .connector { fill: none; stroke: var(--ec-text-muted, #75736d); stroke-width: 3px; stroke-linecap: round; }
+     colour: a <line>'s colour is its stroke, whatever its fill. */
+  #dumbbell .connector { stroke: var(--ec-text-muted, #75736d); stroke-width: 3px; stroke-linecap: round; }
   #dumbbell .dot-first, #dumbbell .bar-first { fill: var(--ec-series-1, #2a78d6); }
   #dumbbell .dot-second, #dumbbell .bar-second { fill: var(--ec-series-2, #eb6834); }
 </style>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A D3 map · expressive-charts</title>
+<style>
+  /* Page chrome only, as on layouts.html. The chart's --ec-* tokens, light and dark, come from the library's stylesheet. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d67;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6; --link: #226dc7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5; --link: #3987e5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+  .pair { display: grid; gap: 20px; min-width: 0; }
+  @media (min-width: 860px) { .pair { grid-template-columns: 1fr 1fr; } }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 20px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
+  .note { font-size: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+  .box { min-width: 0; }
+  .checklist { color: var(--ink-2); font-size: 14px; margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  kbd { font: inherit; font-size: 12px; border: 1px solid var(--ring); border-radius: 4px; padding: 0 4px; background: var(--page); }
+  a { color: var(--link); }
+  /* The motion switch sits on the page, darker than the chart's surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
+  #motion { --ec-text-muted: var(--muted); }
+  /* The rows as tables: each value can be read here without the pointer, however small its country is drawn. */
+  table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+  caption { text-align: left; font-weight: 600; padding-bottom: 6px; }
+  th, td { text-align: left; padding: 5px 12px 5px 0; border-bottom: 1px solid var(--ring); }
+  thead th { font-size: 12px; font-weight: 600; color: var(--muted); }
+  tbody th { font-weight: 400; }
+  .number { text-align: right; padding-right: 0; }
+  /* The map's own styles: it's someone else's chart, so the page styles it, not the library. The land is
+     a neutral step off the card's colour. The squad's countries take three shades of the library's first
+     palette slot, mixed toward the card's colour, so they follow the theme: the more players, the further
+     from the card. Each country's count is in its name, the legend and the table, so nothing is told by
+     shade alone. */
+  .chart { display: block; max-width: 100%; height: auto; overflow: visible; }
+  #map .sphere { fill: none; stroke: var(--ec-grid, #e1e0d9); }
+  #map .land { fill: color-mix(in oklab, var(--ink) 11%, var(--surface)); stroke: var(--surface); stroke-width: 0.5px; stroke-linejoin: round; }
+  #map .country { stroke: var(--surface); stroke-width: 0.5px; stroke-linejoin: round; }
+  #map .shade-1 { fill: color-mix(in oklab, var(--ec-series-1, #2a78d6) 45%, var(--surface)); }
+  #map .shade-2 { fill: color-mix(in oklab, var(--ec-series-1, #2a78d6) 72%, var(--surface)); }
+  #map .shade-3 { fill: var(--ec-series-1, #2a78d6); }
+  /* Under forced colours (Windows contrast themes), keep the swatches' colours, as the library's legend does: the marks keep theirs. */
+  #map .legend-swatch { forced-color-adjust: none; }
+  #map .legend-title, #map .legend-label { font-size: 11px; fill: var(--ink-2); }
+  #map .legend-title { font-weight: 600; }
+  /* The routes take the muted text colour, never a series colour: they aren't on the scale. The module sets their width, which shrinks with the map. */
+  #map .route { stroke: var(--muted); stroke-linecap: round; }
+  #map .club { fill: var(--surface); stroke: var(--ink); stroke-width: 1px; }
+  .credit { color: var(--ink-2); font-size: 13px; margin: 0; max-width: 80ch; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">A D3 map · expressive()</p>
+    <h1>Where the squad comes from</h1>
+    <p class="lede">A world map drawn with <code>d3-geo</code> by code that knows nothing about expressive-charts, with its effects attached through <code>expressive()</code>. Only the countries the squad comes from are marks; the rest is plain land. Nothing moves until you hover a mark or move to it with the keyboard, and the map never zooms or pans.</p>
+  </header>
+
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
+
+  <section class="card" aria-labelledby="map-title">
+    <h2 id="map-title">Harbor City FC's 25 players, by country, and the summer's signings</h2>
+    <p class="note">Each country is shaded by how many of the squad's players come from it. Hover one, or <kbd>Tab</kbd> to the map and use the arrow keys, which go through the countries by name: it's outlined and the others dim. Each line is one of the summer's four signings, from the city he came from to the club, the ring on England's north-west coast; an arrow travels it when you hover or focus it, and its country lights up with it.</p>
+    <div class="box">
+      <svg id="map" class="chart" role="group" aria-label="Where Harbor City FC's 25 players come from, and the summer's four signings, on a D3 map"></svg>
+    </div>
+    <p class="credit" id="credit">Borders: <a href="https://www.naturalearthdata.com/">Natural Earth</a>'s 1:110m countries, in the public domain, through <a href="https://github.com/topojson/world-atlas">world-atlas</a>. They are de facto borders: Natural Earth draws each place by who controls it, so Kosovo, Northern Cyprus, Somaliland, Western Sahara and Taiwan are shapes of their own. The page takes no position on any of them.</p>
+  </section>
+
+  <div class="pair">
+    <section class="card" aria-labelledby="countries-title">
+      <h2 id="countries-title">The squad by country</h2>
+      <p class="note">The map's rows. At a phone's width a country can be a few pixels across, so every count is here too.</p>
+      <table id="countries-table">
+        <thead><tr><th scope="col">Country</th><th scope="col" class="number">Players</th></tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><th scope="row">All</th><td class="number"></td></tr></tfoot>
+      </table>
+    </section>
+
+    <section class="card" aria-labelledby="signings-title">
+      <h2 id="signings-title">The summer's signings</h2>
+      <p class="note">A route each on the map, from the city to the club.</p>
+      <table id="signings-table">
+        <thead><tr><th scope="col">Player</th><th scope="col">From</th><th scope="col">Country</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </div>
+
+  <div class="pair">
+    <section class="card" aria-labelledby="notes-title">
+      <h2 id="notes-title">Design notes</h2>
+      <ul class="checklist">
+        <li>The map is drawn by a D3 module that knows nothing about expressive-charts: <code>world-atlas</code>'s borders, read with <code>topojson-client</code> and drawn with <code>geoPath()</code> on <code>geoEqualEarth()</code>, an equal-area projection, so a country's size on the page is its size on the ground.</li>
+        <li>Every country is drawn as plain land, hidden from screen readers. The 13 the rows name are drawn again on top, a <code>&lt;path&gt;</code> each, and only those are attached: the land is context, and never reacts.</li>
+        <li>A country's path is read by its tag as a closed shape, keyed by its name. The module draws them in name order, since the arrow keys follow the document's order.</li>
+        <li>The outline on hover is a small effect of the page's own, made with <code>defineEffect()</code>: it draws the mark's outline in the overlay in the text colour, at once, and it's gone on leave. Nothing moves under the pointer, and <code>dim</code> fades the other countries in a tenth of a second.</li>
+        <li>Each route is a <code>&lt;path&gt;</code> from a <code>LineString</code>, which <code>geoPath()</code> draws as a great circle. It's read as an open shape, so <code>travel("arrow")</code> rides it. No route crosses the 180° meridian, where the projection would cut it in two.</li>
+        <li>The countries and the routes are two attachments, linked by country with <code>link()</code>: a route lights the country it comes from, and a country sends the arrow along its route.</li>
+        <li>The shades are three steps of the theme's first colour, in light and dark. Each country's count is in its name, the legend and the table, so nothing is told by shade alone.</li>
+        <li>With reduced motion or Off, the outline is the same, and the arrow rests at the club's end of its route.</li>
+      </ul>
+    </section>
+
+    <section class="card" aria-labelledby="try-title">
+      <h2 id="try-title">Things to try</h2>
+      <ul class="checklist">
+        <li>Hover Nigeria: it's outlined, the other countries dim, and the arrow travels Adeyemi's route to the club.</li>
+        <li>Hover the line from Japan: the arrow travels it, and Japan lights up.</li>
+        <li>Hover the sea, or a country that isn't shaded: nothing happens.</li>
+        <li><kbd>Tab</kbd> to the map and press <kbd>→</kbd>: focus goes from Argentina to Czechia, then France, by name. <kbd>Home</kbd> and <kbd>End</kbd> go to the first and the last.</li>
+        <li><kbd>Tab</kbd> again to reach the routes, and use the arrow keys to go through the four signings.</li>
+        <li>Make the window narrower: the map draws again at the new width, and the outline follows its country.</li>
+        <li>Pick Off, or turn on reduced motion, and hover a route: the arrow is at the club's end at once.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+<script type="module" src="./map.ts"></script>
+</body>
+</html>

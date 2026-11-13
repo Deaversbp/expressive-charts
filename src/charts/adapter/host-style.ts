@@ -12,7 +12,7 @@ import { ownTransform } from "./space";
 
 /** The host's colours for an element, and the property they're from, which emphasis and the hover colour write. */
 export interface HostColors extends SeriesColors {
-  /** "stroke" when the fill is none, as on a line. */
+  /** "stroke" on a `<line>`, and on any element whose fill is none, as a D3 line's path. */
   readonly paint: "fill" | "stroke";
 }
 
@@ -97,8 +97,10 @@ export function hostMarkHandle(parts: () => readonly HostPart[], edits: HostEdit
 }
 
 /**
- * The host's colours for an element: its fill, or its stroke when the fill is none (a line). Each is
- * the computed value, as a browser draws it, even the initial one when the page's CSS sets it. jsdom
+ * The host's colours for an element: its fill, or its stroke when the fill is none (a D3 line's
+ * path). A `<line>`'s are its stroke's whatever its fill: a line has no inside, so its fill draws
+ * nothing, and one that nothing sets computes as black. An open `<path>` or `<polyline>` is filled by
+ * a browser, so its fill is its colour unless it's none. Each is the computed value, as a browser draws it, even the initial one when the page's CSS sets it. jsdom
  * computes styles but no presentation attributes (every fill is black and every stroke none), so
  * there a computed value that's the property's initial one gives way to the nearest value declared
  * on the element or above it. A gradient or pattern gives no colours.
@@ -108,7 +110,7 @@ export function hostMarkHandle(parts: () => readonly HostPart[], edits: HostEdit
  * Our palette's -strong colours sit 20% of the way in light and 29% in dark; a host's colour goes 25%.
  */
 export function hostColors(element: Element, root: Element): HostColors | undefined {
-  const fill = paintOf(element, root, "fill");
+  const fill = element.localName === "line" ? NONE : paintOf(element, root, "fill");
   const paint = fill === NONE ? "stroke" : "fill";
   const color = paint === "fill" ? fill : paintOf(element, root, "stroke");
   if (color === undefined || color === NONE) return undefined;

@@ -10,7 +10,7 @@
 
 import axe from "axe-core";
 import { expect, test, type Page } from "@playwright/test";
-import { barsDemo, chartsDemo, donutDemo, FRAME, hoverShape, layoutsDemo, lineDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, shapesDemo, stressDemo, tabInto, type Demo } from "./demo";
+import { barsDemo, chartsDemo, donutDemo, FRAME, hoverShape, layoutsDemo, lineDemo, mapDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, shapesDemo, stressDemo, tabInto, type Demo } from "./demo";
 
 /** axe's rules for WCAG 2.0, 2.1 and 2.2 at levels A and AA. */
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -165,6 +165,16 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
       { chart: "#treemap", shape: '.ec-switch-view[data-view="treemap"] rect.tile-winger >> nth=0' },
       { chart: "#dumbbell", shape: '.ec-switch-view[data-view="dumbbell"] circle.dot-second >> nth=7' }
     ]
+  },
+  {
+    name: "map",
+    demo: mapDemo,
+    // The countries' tab stop, in name order, then the routes', then the credit's two links. The tables aren't stops.
+    stops: [...MOTION, "Argentina: 1 player", "Adeyemi, from Nigeria", "Natural Earth", "world-atlas"],
+    // None: the map is two attachments, which draw no tooltip. A country's hover dims the others, so
+    // "contrast on hover" hovers one; map.spec.ts checks the rest.
+    charts: [],
+    hosts: [{ chart: "#map", shape: 'path.country[aria-label^="Nigeria:"]' }]
   },
   {
     name: "stress",
@@ -377,16 +387,19 @@ test.describe("forced colours", () => {
       // The bar chart has a legend only for a stack.
       if (demo === barsDemo) await pickMetric(page, "Goals + assists");
       const legends = await page.evaluate(() =>
-        [...document.querySelectorAll(".ec-legend, .legend")]
+        // The map's legend is in its <svg>, drawn by its D3 module: a <rect> a step, whose colour is its fill.
+        [...document.querySelectorAll(".ec-legend, .legend, .map-legend")]
           .filter((legend) => legend.getBoundingClientRect().width > 0)
           .map((legend) =>
-            [...legend.querySelectorAll(".ec-legend-swatch, i")].map((swatch) => {
+            [...legend.querySelectorAll(".ec-legend-swatch, i, rect.legend-swatch")].map((swatch) => {
               const style = getComputedStyle(swatch);
+              if (swatch instanceof SVGElement) return style.fill;
               return style.borderTopWidth === "0px" ? style.backgroundColor : style.borderTopColor;
             })
           )
       );
       expect(legends.length).toBeGreaterThan(0);
+      for (const colors of legends) expect(colors.length).toBeGreaterThan(0);
       for (const colors of legends) expect(new Set(colors).size, colors.join(", ")).toBe(colors.length);
     });
 

@@ -27,7 +27,9 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 From 1.0, everything the package exports follows semantic versioning: the motion core, the charts, the adapters, the built-in effects and the controls, as well as the effect-author API.
 
-## Unreleased
+## 0.12.0 (16 November 2026)
+
+One fix, and newer build tools: `expressive()` reads a `<line>`'s colour from its stroke, whatever its fill, so a line D3 drew is no longer black to the library. The rest of the published code is 0.11.0's, built with rolldown 1.3.2, which writes `Infinity` as `1e400` and names two chunks anew. The demo site gains four charts drawn with D3, each given its effects through `expressive()` as it is: a map, a bullet chart, a funnel and a treemap that drills into a position. Nothing in the effect-author API changes, nothing is exported that 0.11.0 doesn't export, and the fix needs nothing written instead.
 
 ### Fixed
 

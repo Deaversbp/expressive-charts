@@ -114,7 +114,7 @@ function lineOptions(svg: PlotSvg, rows: Week[] = season): ExpressiveOptions<Wee
   return {
     datum: (el) => bound<number[]>(el).filter((i) => i >= 0).map((i) => rows[i]!),
     key: (d) => d[0]!.series,
-    geometry: (_el, d, key) => build.line({ key, series: key, points: d.map((w) => ({ x: x(w.week), y: y(w.value) })), width: WIDTH }),
+    geometry: (d, _el, key) => build.line({ key, series: key, points: d.map((w) => ({ x: x(w.week), y: y(w.value) })), width: WIDTH }),
     samples: (d, mark) => samplesAlong(mark, d.map((w) => ({ x: x(w.week), y: y(w.value), value: w.value, at: w.week }))),
     keyboard: true,
     markLabel: (d) => `${LABELS[d[0]!.series]}: ${d[d.length - 1]!.value} by week ${d[d.length - 1]!.week}`

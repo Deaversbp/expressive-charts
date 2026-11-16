@@ -148,7 +148,7 @@ export function attachWaterfall(chart: DrawnWaterfall, attach: Attach = expressi
   const steps = attach(chart.steps, {
     key: (d) => d.name,
     value: (d) => d.value,
-    geometry: (element, d, key) => {
+    geometry: (d, element, key) => {
       const x = attr(element, "x");
       const y = attr(element, "y");
       const width = attr(element, "width");
@@ -279,7 +279,7 @@ export function attachRadar(chart: DrawnRadar, attach: Attach = expressive): Rad
     key: (d) => d.series,
     segment: (d) => d.series,
     value: (d) => d.percentiles.join(" "),
-    geometry: (_element, d, key) => {
+    geometry: (d, _element, key) => {
       const corners = chart.corners(d.series);
       return describe.line({ key, series: d.series, points: [...corners, corners[0]!], width: chart.widths.outline });
     },
@@ -314,7 +314,7 @@ export function attachRadar(chart: DrawnRadar, attach: Attach = expressive): Rad
   const valueOptions = (words: (d: Value) => string): ExpressiveOptions<Value> => ({
     key: (d) => d.label,
     value: (d) => d.percentile,
-    geometry: (element, _d, key) => spoke(element, key),
+    geometry: (_d, element, key) => spoke(element, key),
     keyboard: true,
     markLabel: words,
     dim: true,
@@ -509,7 +509,7 @@ export function attachFunnel(chart: DrawnFunnel<FunnelStage>, attach: Attach = e
   const stages = attach(chart.stages, {
     key: (d) => d.name,
     value: (d) => d.count,
-    geometry: (element, d, key) => {
+    geometry: (d, element, key) => {
       const at = chart.place(d.name);
       return describe.shape({ key, d: element.getAttribute("d") ?? "", labelBounds: [at.top, at.name] });
     },

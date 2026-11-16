@@ -1,4 +1,4 @@
-import { barChart, colorAssignment, donutChart, expressive, motion, motionSwitch, playback, playButton, registerPreset, travel } from "./index";
+import { barChart, colorAssignment, createMotion, donutChart, expressive, motion, motionSwitch, playback, playButton, registerPreset, travel, type Motion, type MotionSwitchOptions } from "./index";
 
 // VERSION is checked against package.json's version in package.test.ts.
 describe("expressive-charts", () => {
@@ -113,7 +113,77 @@ describe("motionSwitch from the composition root", () => {
     expect(motion.mode).toBe("analysis");
     control.destroy();
   });
+
+  /** A motion of its own in Analysis, which the page-wide one isn't, so the pressed button says whose the switch is. */
+  const own = (): Motion => createMotion({ mode: "analysis", reducedMotion: { matches: false, subscribe: () => () => {} } });
+  const more: MotionSwitchOptions = { label: "Animation", labels: { presentation: "Present", analysis: "Analyse" }, hints: { analysis: "Fast." } };
+  /** The switch's markup, with the counter in its ids taken out, hashed. */
+  const built = (make: (target: Element) => unknown): string => {
+    const target = document.body.appendChild(document.createElement("div"));
+    make(target);
+    return hash(target.innerHTML.replace(/ec-motion-\d+/g, "ec-motion"));
+  };
+  /** What main (3720f29) built for `(target)`, `(target, motion)`, `(target, motion, options)` and `(target, undefined, options)`. */
+  const MAIN = { page: "b534721dbb978f8f", own: "98ed2bdc7279eb5e", ownWithOptions: "80bdc1a04b47d514", pageWithOptions: "8c18845665367f51" };
+
+  it("takes its options second, the motion among them, and builds what main built", () => {
+    expect(built((target) => motionSwitch(target))).toBe(MAIN.page);
+    expect(built((target) => motionSwitch(target, {}))).toBe(MAIN.page);
+    expect(built((target) => motionSwitch(target, undefined))).toBe(MAIN.page);
+    expect(built((target) => motionSwitch(target, more))).toBe(MAIN.pageWithOptions);
+    expect(built((target) => motionSwitch(target, { motion: own() }))).toBe(MAIN.own);
+    expect(built((target) => motionSwitch(target, { ...more, motion: own() }))).toBe(MAIN.ownWithOptions);
+    expect(built((target) => motionSwitch(target, { ...more, motion: undefined }))).toBe(MAIN.pageWithOptions);
+  });
+
+  it("still takes the form before 0.13.0, a motion second and options third, and builds the same", () => {
+    expect(built((target) => motionSwitch(target, own()))).toBe(MAIN.own);
+    expect(built((target) => motionSwitch(target, own(), more))).toBe(MAIN.ownWithOptions);
+    expect(built((target) => motionSwitch(target, undefined, more))).toBe(MAIN.pageWithOptions);
+    expect(built((target) => motionSwitch(target, motion))).toBe(MAIN.page);
+    // The second argument is the old form's motion, over one among its options.
+    expect(built((target) => motionSwitch(target, own(), { ...more, motion }))).toBe(MAIN.ownWithOptions);
+    expect(built((target) => motionSwitch(target, undefined, { ...more, motion: own() }))).toBe(MAIN.ownWithOptions);
+  });
+
+  it("sets the motion it was given, in either form, and leaves the page-wide one alone", () => {
+    for (const make of [(target: Element, mine: Motion) => motionSwitch(target, { motion: mine }), (target: Element, mine: Motion) => motionSwitch(target, mine)]) {
+      const mine = own();
+      const control = make(document.body.appendChild(document.createElement("div")), mine);
+      control.element.querySelector<HTMLButtonElement>('button[data-mode="off"]')!.click();
+      expect(mine.viewerChoice).toBe("off");
+      expect(motion.viewerChoice).toBeUndefined();
+      control.destroy();
+    }
+  });
+
+  it("throws a TypeError for a second argument that is neither options nor a motion, and for a motion that isn't one", () => {
+    const target = document.body.appendChild(document.createElement("div"));
+    for (const second of [42, "analysis", null, true]) {
+      expect(() => motionSwitch(target, second as unknown as Motion)).toThrow(TypeError);
+      expect(() => motionSwitch(target, second as unknown as Motion)).toThrow(/needs a Motion/);
+    }
+    expect(() => motionSwitch(target, { motion: {} as Motion })).toThrow(/needs a Motion/);
+    expect(() => motionSwitch(target, { chooseMode: 1 } as unknown as Motion)).toThrow(/needs a Motion/);
+    expect(() => motionSwitch(target, {} as Motion, more)).toThrow(/needs a Motion/);
+    expect(() => motionSwitch(target, { persist: "" })).toThrow(/persist/);
+    expect(target.childElementCount).toBe(0);
+  });
 });
+
+/** A 64-bit hash of the text (cyrb53's mixing, both halves kept), as 16 hex digits. */
+function hash(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
 
 describe("playback and playButton from the composition root", () => {
   afterEach(() => {

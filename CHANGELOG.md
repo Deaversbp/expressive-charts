@@ -27,6 +27,36 @@ Everything else can still change in a minor release while the library is 0.x: th
 
 From 1.0, everything the package exports follows semantic versioning: the motion core, the charts, the adapters, the built-in effects and the controls, as well as the effect-author API.
 
+## Unreleased
+
+For 0.13.0, the last 0.x release: the API shaped for 1.0. Two changes need something written instead, and both are first below.
+
+### Changed
+
+- **`expressive()`'s `geometry` takes `(datum, element, key)`.** It took `(element, datum, key)`, and was the adapter's only callback with the element first: `key`, `segment`, `value` and `markLabel` take the row first.
+  - **What to write instead:** swap the first two arguments. `geometry: (element, d, key) => …` becomes `geometry: (d, element, key) => …`. A `geometry` that reads only its key needs no change.
+  - **In TypeScript** the old order is a type error on that line.
+  - **In JavaScript** nothing warns before the page runs. The function is handed the row where it expects the element, so it throws, or returns something that isn't the mark. Either way `expressive()` throws a `TypeError` that says "Since 0.13.0 geometry is called with (datum, element, key), not (element, datum, key)." A function that threw has its own message after that, and its error as the `cause`. The adapter can't tell the old order before the function runs, so the same sentence follows any error a `geometry` throws.
+  - `fromVegaView()` has no `geometry`, so nothing changes there. The adapters are outside the 0.x promise.
+- **`IconShape.linecap` and `Paint.linecap` gain `"square"`, and `IconShape.linejoin` gains `"bevel"`.** This is a breaking change to the effect-author API, for code that reads these fields and handles every case: a `Layer` of your own, a renderer, a `switch` over `linecap`. Code that only writes them is untouched: the defaults are still butt and miter, and every icon and path drawn before draws byte for byte as it did.
+  - **What to write instead:** add a case for each new value where your code reads them. On a canvas, `lineCap = "square"` and `lineJoin = "bevel"`; in SVG, `stroke-linecap="square"` and `stroke-linejoin="bevel"`. Where a `switch` ends in a `never` check, TypeScript reports the missing case; where it has a default, the new values fall to it.
+  - `Paint` gains no `linejoin`: an overlay path's joins stay round. `defineIcon` takes the new values, and still throws a `RangeError` for any other.
+
+### Fixed
+
+- **`iconFromSvg` keeps square caps and bevel joins.** It dropped `stroke-linecap="square"` and `stroke-linejoin="bevel"`, so an icon from a set that draws with them had butt caps and miter joins. Now it keeps them, from an attribute or `style`, inherited from groups as SVG inherits them, and the SVG layer draws them. An icon that has neither reads as it did, and the core icons and the sport pack are unchanged. SVG's `arcs` and `miter-clip` joins still aren't kept.
+
+### Added
+
+- **`motionSwitch(target, options?)`, with `motion` among its options.** [`MotionSwitchOptions`](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md#motionswitchoptions) gains `motion`, the motion the switch shows and sets, default the page-wide one. So a page that wants `persist` alone writes `motionSwitch("#motion", { persist: "site:motion" })`, with no `undefined` to step over. `motionSwitch(target)` is as it was.
+
+### Deprecated
+
+- **`motionSwitch(target, motion, options?)`,** the form with the motion as its second argument. It works in 0.13.0 as it did and builds the same control. It's marked `@deprecated` in the types, and nothing is logged when it runs. 1.0 takes it out.
+  - **What to write instead:** `motionSwitch(target, { motion, ...options })`, or `motionSwitch(target, options)` where the motion was `undefined`.
+  - The two forms are told apart by the second argument: a `Motion` (it has `chooseMode`), or anything with a third argument after it, is the old form. One call changes: `motionSwitch(target, {})` threw a `TypeError`, since `{}` isn't a `Motion`, and is now a switch with no options.
+  - The controls are outside the 0.x promise; the deprecation follows its rule all the same.
+
 ## 0.12.0 (16 November 2026)
 
 One fix, and newer build tools: `expressive()` reads a `<line>`'s colour from its stroke, whatever its fill, so a line D3 drew is no longer black to the library. The rest of the published code is 0.11.0's, built with rolldown 1.3.2, which writes `Infinity` as `1e400` and names two chunks anew. The demo site gains four charts drawn with D3, each given its effects through `expressive()` as it is: a map, a bullet chart, a funnel and a treemap that drills into a position. Nothing in the effect-author API changes, nothing is exported that 0.11.0 doesn't export, and the fix needs nothing written instead.

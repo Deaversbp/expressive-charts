@@ -14,9 +14,9 @@ export interface IconShape {
   /** Stroke width in icon units, so it scales with the icon. Default 1. */
   readonly width?: number;
   /** Default "butt". */
-  readonly linecap?: "butt" | "round";
+  readonly linecap?: "butt" | "round" | "square";
   /** Default "miter". */
-  readonly linejoin?: "miter" | "round";
+  readonly linejoin?: "miter" | "round" | "bevel";
   /** Path data, in icon units, that clips this shape (the ball's panel pattern). */
   readonly clip?: string;
   /** Default "nonzero". "evenodd" leaves a hole where the path's parts overlap, as solid icon sets draw them. */

@@ -144,7 +144,7 @@ function pieMarks(moved = false): readonly MarkGeometry[] {
   const fx = expressive(slices, {
     key: (d) => d.data.outcome,
     value: (d) => d.value,
-    geometry: (_el, d, key) => build.arc({ key, cx: 0, cy: 0, inner, outer, start: d.startAngle, end: d.endAngle })
+    geometry: (d, _el, key) => build.arc({ key, cx: 0, cy: 0, inner, outer, start: d.startAngle, end: d.endAngle })
   });
   return fx.marks();
 }
@@ -205,7 +205,7 @@ function d3LineSource(moved = false): { readonly marks: readonly MarkGeometry[];
   const data = new Map<string, MarkData>();
   const fx = expressive(paths, {
     key: (d) => d.series,
-    geometry: (_el, d, key) => build.line({ key, series: d.series, points: d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]) })), width: 2 }),
+    geometry: (d, _el, key) => build.line({ key, series: d.series, points: d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]) })), width: 2 }),
     samples: (d, mark) => samplesAlong(mark, d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]), value: w[d.series], at: w.week }))),
     on: { decorate: { kind: "data", run: async (mark, markData) => void data.set(mark.key, markData), end: () => {}, clear: () => {} } }
   });
@@ -251,7 +251,7 @@ function d3GappedSource(moved = false): { readonly marks: readonly MarkGeometry[
   const data = new Map<string, MarkData>();
   const fx = expressive(paths, {
     key: (d) => d.series,
-    geometry: (_el, d, key) => {
+    geometry: (d, _el, key) => {
       const { rows, breaks } = runsOf(d);
       return build.line({ key, series: d.series, points: rows.map((w) => ({ x: x(w.week), y: y(w[d.series]!) })), breaks, width: 2 });
     },
@@ -291,7 +291,7 @@ function plotLineSource(moved = false): { readonly marks: readonly MarkGeometry[
   const fx = expressive(document.body.appendChild(svg).querySelectorAll('g[aria-label="line"] > path'), {
     datum: (el) => plotBound<number[]>(el).filter((i) => i >= 0).map((i) => rows[i]!),
     key: (d) => d[0]!.series,
-    geometry: (_el, d, key) => build.line({ key, series: key, points: d.map((r) => ({ x: x(r.week), y: y(r.value) })), width: 2 }),
+    geometry: (d, _el, key) => build.line({ key, series: key, points: d.map((r) => ({ x: x(r.week), y: y(r.value) })), width: 2 }),
     samples: (d, mark) => samplesAlong(mark, d.map((r) => ({ x: x(r.week), y: y(r.value), value: r.value, at: r.week }))),
     on: { decorate: { kind: "data", run: async (mark, markData) => void data.set(mark.key, markData), end: () => {}, clear: () => {} } }
   });
@@ -328,7 +328,7 @@ function d3CurveSource(moved = false): { readonly marks: readonly MarkGeometry[]
   const data = new Map<string, MarkData>();
   const fx = expressive(paths, {
     key: (d) => d.series,
-    geometry: (el, d, key) => build.shape({ key, series: d.series, d: dOf(el), width: 2 }),
+    geometry: (d, el, key) => build.shape({ key, series: d.series, d: dOf(el), width: 2 }),
     samples: (d, mark) => samplesAlong(mark, d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]), value: w[d.series], at: w.week }))),
     on: { decorate: { kind: "data", run: async (mark, markData) => void data.set(mark.key, markData), end: () => {}, clear: () => {} } }
   });
@@ -362,7 +362,7 @@ function d3CurveGappedSource(moved = false): { readonly marks: readonly MarkGeom
   const data = new Map<string, MarkData>();
   const fx = expressive(paths, {
     key: (d) => d.series,
-    geometry: (el, d, key) => build.shape({ key, series: d.series, d: dOf(el), width: 2 }),
+    geometry: (d, el, key) => build.shape({ key, series: d.series, d: dOf(el), width: 2 }),
     samples: (d, mark) =>
       samplesAlong(
         mark,
@@ -431,7 +431,7 @@ function d3AreaMarks(moved = false): readonly MarkGeometry[] {
         .y1((w) => 200 - up * w[series])
         .curve(curveMonotoneX)(weeks)
     );
-  return expressive(areas, { key: (series) => series, geometry: (el, series, key) => build.shape({ key, series, d: dOf(el) }) }).marks();
+  return expressive(areas, { key: (series) => series, geometry: (series, el, key) => build.shape({ key, series, d: dOf(el) }) }).marks();
 }
 
 /**
@@ -451,7 +451,7 @@ function d3RingMarks(moved = false): readonly MarkGeometry[] {
     .join("path")
     .attr("transform", (d) => `translate(${d.cx},0)`)
     .attr("d", (d) => arc()({ innerRadius: d.inner, outerRadius: d.outer, startAngle: 0, endAngle: 2 * Math.PI }));
-  return expressive(rings, { key: (d) => d.series, geometry: (el, d, key) => build.shape({ key, series: d.series, d: dOf(el), matrix: matrix.translate(d.cx, 0) }) }).marks();
+  return expressive(rings, { key: (d) => d.series, geometry: (d, el, key) => build.shape({ key, series: d.series, d: dOf(el), matrix: matrix.translate(d.cx, 0) }) }).marks();
 }
 
 /** A D3 scatter read by tag: a circle a player, at goals across and assists up, each a point with its goals as its one sample. Closer and smaller when moved. */

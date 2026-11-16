@@ -23,7 +23,8 @@ export interface Paint {
   readonly stroke?: Color;
   readonly width?: number;
   readonly opacity?: number;
-  readonly linecap?: "butt" | "round";
+  /** Default "butt". A path's joins are always round. */
+  readonly linecap?: "butt" | "round" | "square";
   /**
    * The key of one of the mark's segments (`segment.key`). In this paint, "mark" and "mark-strong"
    * are that segment's colours. Unset, or a key the mark hasn't, they're the mark's own, as without it.

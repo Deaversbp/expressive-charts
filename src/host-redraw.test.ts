@@ -224,7 +224,7 @@ type Host = PieHost | ColumnsHost;
 
 /** The README's attachment for a D3 pie: by outcome, each slice described with describe.arc, with keyboard and a name per slice. */
 function attachPie(host: PieHost, e: ChartEnv, more: Partial<ExpressiveOptions<Slice>> = {}): Attachment<Slice> {
-  return expressive<Slice>(host.marks(), { key: (d) => d.data.outcome, geometry: (_el, d, key) => arcOf(key, d), keyboard: true, markLabel: (d) => `${d.data.outcome}: ${d.value} shots`, ...more }, e);
+  return expressive<Slice>(host.marks(), { key: (d) => d.data.outcome, geometry: (d, _el, key) => arcOf(key, d), keyboard: true, markLabel: (d) => `${d.data.outcome}: ${d.value} shots`, ...more }, e);
 }
 
 function attachColumns(host: ColumnsHost, e: ChartEnv, more: Partial<ExpressiveOptions<Outcome>> = {}): Attachment<Outcome> {

@@ -156,9 +156,20 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
 /**
  * The viewer's motion control in `target` (an element or a selector): Presentation, Analysis and Off
  * as buttons with `aria-pressed`, and a note on what the mode does. A click is the viewer's own
- * choice (`motion.chooseMode()`), so it overrides the device's reduced-motion setting. Default: the
- * page-wide `motion`. `persist: "key"` saves the choice in localStorage.
+ * choice (`motion.chooseMode()`), so it overrides the device's reduced-motion setting. `motion` is
+ * the motion it shows and sets, default the page-wide one. `persist: "key"` saves the choice in localStorage.
  */
-export function motionSwitch(target: string | Element, motion: Motion = pageMotion, options?: MotionSwitchOptions): MotionSwitch {
-  return buildMotionSwitch(target, motion, options);
+export function motionSwitch(target: string | Element, options?: MotionSwitchOptions): MotionSwitch;
+/**
+ * @deprecated Since 0.13.0, and gone in 1.0. Pass the motion among the options:
+ * `motionSwitch(target, { motion, ...options })`, or `motionSwitch(target, options)` for the page-wide one.
+ */
+export function motionSwitch(target: string | Element, motion: Motion | undefined, options?: MotionSwitchOptions): MotionSwitch;
+export function motionSwitch(target: string | Element, second?: Motion | MotionSwitchOptions, third?: MotionSwitchOptions): MotionSwitch {
+  // The form before 0.13.0 has a Motion second (it has chooseMode), or a third argument. A second that's no object is
+  // taken for a motion too, so it throws what it always threw.
+  const old = third !== undefined || (second !== undefined && (typeof second !== "object" || second === null || "chooseMode" in second));
+  const options = (old ? third : (second as MotionSwitchOptions | undefined)) ?? {};
+  const motion = old && second !== undefined ? (second as Motion) : (options.motion ?? pageMotion);
+  return buildMotionSwitch(target, { ...options, motion });
 }

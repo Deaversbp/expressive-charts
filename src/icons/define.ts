@@ -6,8 +6,8 @@ import type { Icon, IconShape, Point, Rect } from "../core";
 export type IconSpec = Omit<Icon, "footprint" | "pivot" | "size"> & Partial<Pick<Icon, "footprint" | "pivot" | "size">>;
 
 const GAITS: readonly string[] = ["roll", "step", "slide"];
-const LINECAPS: readonly string[] = ["butt", "round"];
-const LINEJOINS: readonly string[] = ["miter", "round"];
+const LINECAPS: readonly string[] = ["butt", "round", "square"];
+const LINEJOINS: readonly string[] = ["miter", "round", "bevel"];
 const FILL_RULES: readonly string[] = ["nonzero", "evenodd"];
 /** Path data: commands, numbers, separators. Anything else (markup, url(), quotes) is a mistake. */
 const PATH_DATA = /^\s*[Mm][MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]*$/;
@@ -77,8 +77,8 @@ function checkShape(
     if (value !== undefined && (typeof value !== "string" || value === "")) fail(`${field}.${paint}`, `must be a colour, got ${String(value)}`);
   }
   if (shape.width !== undefined && finite(`${field}.width`, shape.width) < 0) fail(`${field}.width`, `can't be negative, got ${shape.width}`);
-  if (shape.linecap !== undefined && !LINECAPS.includes(shape.linecap)) fail(`${field}.linecap`, `must be butt or round, got ${String(shape.linecap)}`);
-  if (shape.linejoin !== undefined && !LINEJOINS.includes(shape.linejoin)) fail(`${field}.linejoin`, `must be miter or round, got ${String(shape.linejoin)}`);
+  if (shape.linecap !== undefined && !LINECAPS.includes(shape.linecap)) fail(`${field}.linecap`, `must be butt, round or square, got ${String(shape.linecap)}`);
+  if (shape.linejoin !== undefined && !LINEJOINS.includes(shape.linejoin)) fail(`${field}.linejoin`, `must be miter, round or bevel, got ${String(shape.linejoin)}`);
   if (shape.fillRule !== undefined && !FILL_RULES.includes(shape.fillRule)) fail(`${field}.fillRule`, `must be nonzero or evenodd, got ${String(shape.fillRule)}`);
   for (const key of ["opacity", "fillOpacity", "strokeOpacity"] as const) {
     const opacity = shape[key] === undefined ? 1 : finite(`${field}.${key}`, shape[key]);

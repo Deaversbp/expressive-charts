@@ -120,6 +120,35 @@ describe("iconFromSvg", () => {
     ]);
   });
 
+  it("keeps square caps and bevel joins, from an attribute, an inline style and an ancestor", () => {
+    const icon = iconFromSvg(
+      svg(
+        `<path d="M0,0L4,4" stroke-linecap="square" stroke-linejoin="bevel"/>
+        <path d="M0,0L4,4" style="stroke-linecap: square; stroke-linejoin: bevel" stroke-linecap="round" stroke-linejoin="round"/>
+        <g stroke-linecap="square" stroke-linejoin="bevel">
+          <path d="M0,0L4,4"/>
+          <g><path d="M0,0L4,4" stroke-linejoin="miter"/></g>
+          <path d="M0,0L4,4" stroke-linecap="butt"/>
+          <path d="M0,0L4,4" stroke-linecap="arcs" stroke-linejoin="miter-clip"/>
+        </g>
+        <path d="M0,0L4,4"/>`,
+        'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+      ),
+      spec
+    );
+    const stroke = { d: "M0,0L4,4", stroke: "text", width: 2 };
+    expect(icon.shapes).toEqual([
+      { ...stroke, linecap: "square", linejoin: "bevel" },
+      { ...stroke, linecap: "square", linejoin: "bevel" },
+      { ...stroke, linecap: "square", linejoin: "bevel" },
+      { ...stroke, linecap: "square", linejoin: "miter" },
+      { ...stroke, linecap: "butt", linejoin: "bevel" },
+      // A value SVG has and an icon hasn't leaves the group's.
+      { ...stroke, linecap: "square", linejoin: "bevel" },
+      stroke
+    ]);
+  });
+
   it("inherits paint from groups and the root, with style beating attributes", () => {
     const icon = iconFromSvg(
       svg(

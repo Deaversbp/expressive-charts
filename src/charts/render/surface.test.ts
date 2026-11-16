@@ -247,6 +247,22 @@ describe("svgLayer icons", () => {
     expect(path.getAttribute("stroke-linejoin")).toBe("round");
   });
 
+  it("writes a shape's square cap and bevel join, and a path's square cap, its join still round", () => {
+    const { overlay, surface } = setup();
+    const group = surface.group("a", "hover", 1);
+    group.icon({ ...boot, shapes: [{ d: "M7,-3L12,-9.5L14,-3", stroke: "#ffffff", width: 1.4, linecap: "square", linejoin: "bevel" }] });
+    const shape = overlay.querySelector(".ec-icon path") as SVGPathElement;
+    expect(shape.getAttribute("stroke-linecap")).toBe("square");
+    expect(shape.getAttribute("stroke-linejoin")).toBe("bevel");
+    const path = group.path("M0,0L10,0L10,10", { stroke: "text", width: 3, linecap: "square" });
+    const element = overlay.querySelector("path.ec-path") as SVGPathElement;
+    expect(element.getAttribute("stroke-linecap")).toBe("square");
+    expect(element.getAttribute("stroke-linejoin")).toBe("round");
+    path.update("M0,0L10,0L10,10", { linecap: "butt" });
+    expect(element.getAttribute("stroke-linecap")).toBe("butt");
+    expect(element.getAttribute("stroke-linejoin")).toBe("round");
+  });
+
   it("draws a shape's fill rule and opacity, and leaves SVG's defaults where it has none", () => {
     const { overlay, surface } = setup();
     // An even-odd frame, and a duotone pair: a faded disc under a tick.

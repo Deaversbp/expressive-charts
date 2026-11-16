@@ -563,7 +563,7 @@ describe("delta and label on host marks", () => {
     const change = (data: MarkData<Slope>) => `+${data.datum.last - data.datum.first}`;
     const slope = expressive<Slope>([path], {
       key: (d) => d.name,
-      geometry: (_el, _d, key) => build.line({ key, points: [{ x: 20, y: 200 }, { x: 220, y: 200 }] }),
+      geometry: (_d, _el, key) => build.line({ key, points: [{ x: 20, y: 200 }, { x: 220, y: 200 }] }),
       motion: "off",
       on: { decorate: label(change) }
     });

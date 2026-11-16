@@ -297,7 +297,7 @@ describe("expressive(): labelBounds", () => {
       [path],
       {
         key: (d) => d.outcome,
-        geometry: (_el, _d, key) => build.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: 0, end: 1, labelBounds: [box] }),
+        geometry: (_d, _el, key) => build.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: 0, end: 1, labelBounds: [box] }),
         on: { decorate: decorate.effect }
       },
       environment()
@@ -461,7 +461,7 @@ describe("barChart and expressive(): nearbyLabels", () => {
     const nearby: Rect = { x: 120, y: -40, width: 30, height: 14 };
     const fx = expressive<{ outcome: string }>(
       [path],
-      { key: (d) => d.outcome, geometry: (_el, _d, key) => build.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: 0, end: 1, nearbyLabels: [nearby] }) },
+      { key: (d) => d.outcome, geometry: (_d, _el, key) => build.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: 0, end: 1, nearbyLabels: [nearby] }) },
       environment()
     );
     expect(fx.marks()[0]!.nearbyLabels).toEqual([nearby]);

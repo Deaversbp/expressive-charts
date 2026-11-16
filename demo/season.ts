@@ -277,7 +277,7 @@ const sinceFirst = (d: Slope): string => (d.now === d.first ? "" : signed(d.now 
 const slopeEffects = expressive(slopeChart.paths, {
   key: (d) => d.name,
   value: (d) => d.now,
-  geometry: (_element, d, key) =>
+  geometry: (d, _element, key) =>
     describe.line({ key, points: slopeChart.points(d.name), width: slopeChart.width, labelBounds: [slopeChart.nameBox(d.name)] }),
   keyboard: true,
   // Each line read once, with both ends and the change label() writes past its name.

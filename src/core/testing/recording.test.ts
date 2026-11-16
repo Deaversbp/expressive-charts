@@ -31,6 +31,17 @@ describe("recordingLayer", () => {
     expect(layer.drawn[0]).toEqual({ kind: "path", id: 1, d: "M0,0L20,0", paint: { stroke: "mark", opacity: 1 } });
   });
 
+  it("records a paint's square cap as it's given, in its calls, what's drawn and its picture", () => {
+    const layer = recordingLayer();
+    const paint = { stroke: "text", width: 3, linecap: "square" } as const;
+    const path = layer.path("M0,0L10,0", paint);
+    expect(layer.calls).toEqual([{ op: "path", id: 1, d: "M0,0L10,0", paint }]);
+    expect(layer.drawn).toEqual([{ kind: "path", id: 1, d: "M0,0L10,0", paint }]);
+    expect(layer.picture()).toEqual([{ kind: "path", d: "M0,0L10,0", paint }]);
+    path.update("M0,0L10,0", { linecap: "round" });
+    expect(layer.picture()).toEqual([{ kind: "path", d: "M0,0L10,0", paint: { ...paint, linecap: "round" } }]);
+  });
+
   it("keeps a paint's part in its calls, what's drawn and its picture, and an update to undefined takes it off", () => {
     const layer = recordingLayer();
     const paint = { stroke: "mark", width: 20, linecap: "butt", part: "Okafor/assists" } as const;

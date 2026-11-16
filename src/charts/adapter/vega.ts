@@ -135,7 +135,7 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
     {
       ...rest,
       datum: (element) => itemOf(element).datum as D,
-      geometry: (_element, _datum, key) => {
+      geometry: (_datum, _element, key) => {
         const geometry = current.geometry.get(key);
         if (!geometry) throw new TypeError(`fromVegaView: no geometry for "${key}". Its key must be the same for every item of a mark.`);
         return geometry;

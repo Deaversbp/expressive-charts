@@ -25,7 +25,29 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
-From 1.0, everything the package exports follows semantic versioning: the motion core, the charts, the adapters, the built-in effects and the controls, as well as the effect-author API.
+### What 1.0 will promise
+
+From 1.0 the whole package follows semantic versioning, not the effect-author API alone. A breaking change to anything promised below comes only in a major release, with a migration note, and a deprecated name is taken out only in a major release. 0.13.0 is the last 0.x: 1.0 takes out what 0.13.0 deprecates and changes nothing else.
+
+**Promised:**
+
+- **Every name the package exports,** from its three entries, `expressive-charts`, `expressive-charts/icons/sport` and `expressive-charts/testing`, and the stylesheet's entry, `expressive-charts/style.css`. That's the motion core, the charts, the adapters, the built-in effects, the icons and the controls, as well as the effect-author API. The low-level motion names are among them: `createClock`, `defaultClock`, `scaleDuration`, `defaultScaling`, `mediaReducedMotion` and `interpolateRecord`.
+- **Their types:** what each takes and gives back, and every type the entries export.
+- **What [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) says each does.** An option's default value is part of that where api.md states it: a `dim` that defaults to true, a `table` that's there unless it's turned off.
+- **The `--ec-*` custom properties** in [api.md's table](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md#expressive-chartsstylecss): their names, and what each colours.
+
+**Not promised,** so any release may change them:
+
+- the `ec-*` class names, and the elements a chart, an adapter or a control builds;
+- the exact pixels of anything drawn;
+- default durations and easings, and the numbers in the scaling table;
+- the words of a default name, tooltip or announcement;
+- the files the published package is split into, and their sizes;
+- anything api.md doesn't state.
+
+A page that needs one of these to stay as it is sets it itself: a duration or a scaling in its own options, its own words in `markLabel`, `tooltip` or a control's `labels`, and its own CSS on the custom properties, not on a class name.
+
+Additions can come in any minor release: a new export, a new optional field or option.
 
 ## Unreleased
 

@@ -7,6 +7,13 @@ Every export of every entry of `expressive-charts`, values and types: what each 
 - **Durations** are base values in ms, which the motion mode scales: a 500 ms base is 500 ms in Presentation, 175 ms in Analysis, and nothing with motion off ([`Timing`](#timing)).
 - **`D`** is the type of a chart's rows: `barChart<Player>` reads `Player` objects.
 - **The 0.x promise.** An entry marked *Under the 0.x promise.* is part of the effect-author API: from 0.1.0 it breaks only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. Everything else may still change in a minor release while the library is 0.x. [CHANGELOG.md](../CHANGELOG.md#the-0x-promise) has the promise.
+- **What 1.0 will promise.** From 1.0 every entry on this page is promised, marked or not: its name, its types, and what this page says it does, an option's default value among it where the page states one. So are the `--ec-*` custom properties in [the stylesheet's table](#expressive-chartsstylecss). Not promised: the `ec-*` class names and the elements a chart, an adapter or a control builds; the exact pixels of anything drawn; default durations and easings, and the scaling table's numbers; the words of a default name, tooltip or announcement; the files the package is split into, and their sizes; and anything this page doesn't state. [CHANGELOG.md](../CHANGELOG.md#what-10-will-promise) has it in full.
+- **Names that look alike.** A few names are close to another's, and each stays as it is for 1.0:
+  - `label` is a chart's accessible name, and a motion switch's visible one; `labels` are a line chart's end labels, a control's button text and a host view's own `<text>`s; and [`label()`](#label) is the effect that draws text by a mark.
+  - `at` on [`TextStyle`](#textstyle) is a point, where the text is drawn; `at` on [`Sample`](#sample) is the x behind a value, a week or a date.
+  - An `update` event has `from`, the geometry before it ([`MarkEvents`](#markeventsd)); an effect reads the same thing as `previous`, on [`EffectContext`](#effectcontext), and the data before as [`MarkData`](#markdatad)'s `previous`.
+  - [`fromVegaView()`](#fromvegaview) takes `sample`, one function from a row to its value; [`expressive()`](#expressive) takes `samples`, a mark's values along its walk.
+  - `table: "hidden"` on a chart and `hidden: true` in its [`TableOptions`](#tableoptionsd) are the same thing.
 - **Checked.** `src/api-docs.test.ts` fails when an export has no entry here or an entry names no export, and type-checks every example below that imports the package.
 
 ## `expressive-charts`

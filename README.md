@@ -217,7 +217,9 @@ The first draw of 1,000 static bars takes about 90 ms, and of 10,000 about a sec
 
 ## The 0.x promise
 
-From 0.1.0 the library follows semantic versioning. While it's 0.x, the effect-author API (`defineEffect`, `defineDataEffect`, `describe`, `matrix`, `offset`, the effect contracts and `expressive-charts/testing`) breaks only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. The charts, adapters, built-in effects, controls and motion core can still change in a minor release, and [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#the-0x-promise) lists every change. [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) marks each promised name. From 1.0, everything the package exports follows semantic versioning.
+From 0.1.0 the library follows semantic versioning. While it's 0.x, the effect-author API (`defineEffect`, `defineDataEffect`, `describe`, `matrix`, `offset`, the effect contracts and `expressive-charts/testing`) breaks only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. The charts, adapters, built-in effects, controls and motion core can still change in a minor release, and [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#the-0x-promise) lists every change. [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) marks each promised name.
+
+From 1.0 the whole package will follow semantic versioning: every name it exports, their types, what docs/api.md says each does, and the `--ec-*` custom properties. It won't promise the `ec-*` class names, the elements a chart builds, exact pixels, default durations or the words of a default announcement. [What 1.0 will promise](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#what-10-will-promise) has the list.
 
 ## Links
 

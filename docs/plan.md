@@ -5916,11 +5916,20 @@ Each wave names the files it owns. Waves 1 and 2 run one after the other; wave 3
      - **In the old form the second argument wins** over a `motion` among the third's options, and with the second `undefined` the options' `motion` is used.
      - **The overloads are at the composition root,** not in the control's own file, which stays a function of a target and its options.
      - **api.md's links to CHANGELOG's new notes go to the file,** not to `#unreleased`, which the release renames.
-3. **What 1.0 will promise** (decisions 8, 9, 21 and 24). Owns CHANGELOG's promise, README's and api.md's opening.
+3. ✅ **What 1.0 will promise** (decisions 8, 9, 21 and 24). Owns CHANGELOG's promise, README's and api.md's opening.
    - **First, the text, shown to you.**
    - api.md also says where two names might be taken for each other (decision 21).
    - **Done when** you've approved the text, the test that imports every promised name still passes, and `src/api-docs.test.ts` does.
    - Budgets: none.
+   - **Built** (16 November 2026) as decision 24 describes, in the words you approved that day:
+     - **CHANGELOG** has "What 1.0 will promise", a heading of its own under "The 0.x promise", in place of the one sentence. Promised: every name the three entries and the stylesheet's entry export, the six low-level motion names among them (decision 9); their types; what api.md says each does, an option's default value among it; and the `--ec-*` custom properties in api.md's table. Not promised: the `ec-*` class names and the elements built; exact pixels; default durations, easings and the scaling table's numbers; the words of a default name, tooltip or announcement; the published files and their sizes; and anything api.md doesn't state.
+     - **README's promise** says it in two sentences and points to CHANGELOG's section.
+     - **api.md's opening** gains two bullets: the promise, and "Names that look alike", with decision 21's five pairs: `label`, `labels` and `label()`; `at` on `TextStyle` and on `Sample`; an `update` event's `from` beside `previous`; `sample` beside `samples`; and `table: "hidden"` beside `TableOptions.hidden`.
+     - **Checks:** `src/promise.test.ts`, `src/package.test.ts` and `src/api-docs.test.ts` pass. The promise test reads CHANGELOG's names up to "From 0.1.0:", and the new section comes after it, so the names it mentions aren't taken for the 0.x list. Nothing a page runs changes.
+   - **Decisions beyond the plan,** each a sentence of the text you approved:
+     - **After 1.0 a deprecated name is taken out only in a major release.**
+     - **A page that needs something unpromised to stay as it is sets it itself:** a duration or a scaling in its options, its own words, and its CSS on the custom properties, not on a class name.
+     - **Additions can come in any minor release.**
 
 **Wave 2** (after wave 1 lands; one PR):
 

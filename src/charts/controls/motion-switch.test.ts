@@ -41,7 +41,7 @@ afterEach(() => {
 describe("motionSwitch", () => {
   it("builds a labelled group of real toggle buttons in the target, with a note on the mode", () => {
     const { motion, target } = setup();
-    const { element } = motionSwitch(target, motion);
+    const { element } = motionSwitch(target, { motion });
     expect(element.parentElement).toBe(target);
     expect(element.getAttribute("role")).toBe("group");
     const label = document.getElementById(element.getAttribute("aria-labelledby")!);
@@ -61,8 +61,8 @@ describe("motionSwitch", () => {
   it("finds its target by selector, and gives every switch its own ids", () => {
     const { motion, target } = setup();
     target.id = "controls";
-    const first = motionSwitch("#controls", motion).element;
-    const second = motionSwitch(target, motion).element;
+    const first = motionSwitch("#controls", { motion }).element;
+    const second = motionSwitch(target, { motion }).element;
     expect(first.parentElement).toBe(target);
     expect(first.getAttribute("aria-labelledby")).not.toBe(second.getAttribute("aria-labelledby"));
     expect(first.getAttribute("aria-describedby")).not.toBe(second.getAttribute("aria-describedby"));
@@ -70,7 +70,7 @@ describe("motionSwitch", () => {
 
   it("makes a click the viewer's choice, and shows it", () => {
     const { motion, target } = setup();
-    const { element } = motionSwitch(target, motion);
+    const { element } = motionSwitch(target, { motion });
     button(element, "Analysis").click();
     expect(motion.viewerChoice).toBe("analysis");
     expect(pressed(element)).toEqual(["Analysis"]);
@@ -83,7 +83,7 @@ describe("motionSwitch", () => {
 
   it("shows Off and says why while the device asks for reduced motion, until the viewer picks a mode", () => {
     const { motion, target } = setup({ reduced: true });
-    const { element } = motionSwitch(target, motion);
+    const { element } = motionSwitch(target, { motion });
     expect(pressed(element)).toEqual(["Off"]);
     expect(hint(element)).toBe("Your device asks for reduced motion, so motion is off. Picking a mode here overrides it.");
 
@@ -100,7 +100,7 @@ describe("motionSwitch", () => {
 
   it("follows the motion, whoever changes it: the author, the device or another control", () => {
     const { motion, reduced, target } = setup();
-    const { element } = motionSwitch(target, motion);
+    const { element } = motionSwitch(target, { motion });
     motion.setMode("analysis");
     expect(pressed(element)).toEqual(["Analysis"]);
     reduced.set(true);
@@ -116,7 +116,8 @@ describe("motionSwitch", () => {
 
   it("takes its own label, button text and notes", () => {
     const { motion, target } = setup({ reduced: true });
-    const { element } = motionSwitch(target, motion, {
+    const { element } = motionSwitch(target, {
+      motion,
       label: "Animation",
       labels: { presentation: "Present", analysis: "Analyse" },
       hints: { reduced: "Reduced motion is on.", analysis: "Fast." }
@@ -130,7 +131,7 @@ describe("motionSwitch", () => {
 
   it("removes itself on destroy, keeping the viewer's choice, and stops following the motion", () => {
     const { motion, target } = setup();
-    const control = motionSwitch(target, motion);
+    const control = motionSwitch(target, { motion });
     button(control.element, "Analysis").click();
     control.destroy();
     control.destroy();
@@ -143,18 +144,18 @@ describe("motionSwitch", () => {
   describe("persist", () => {
     it("is off by default: nothing is stored", () => {
       const { motion, target } = setup();
-      button(motionSwitch(target, motion).element, "Off").click();
+      button(motionSwitch(target, { motion }).element, "Off").click();
       expect(localStorage.length).toBe(0);
     });
 
     it("saves the viewer's choice under the key, and restores it the next time", () => {
       const first = setup();
-      button(motionSwitch(first.target, first.motion, { persist: "demo-motion" }).element, "Analysis").click();
+      button(motionSwitch(first.target, { motion: first.motion, persist: "demo-motion" }).element, "Analysis").click();
       expect(localStorage.getItem("demo-motion")).toBe("analysis");
 
       // A new page: the stored choice is the viewer's, so it overrides reduced motion too.
       const next = setup({ reduced: true });
-      const { element } = motionSwitch(next.target, next.motion, { persist: "demo-motion" });
+      const { element } = motionSwitch(next.target, { motion: next.motion, persist: "demo-motion" });
       expect(next.motion.viewerChoice).toBe("analysis");
       expect(pressed(element)).toEqual(["Analysis"]);
 
@@ -167,7 +168,7 @@ describe("motionSwitch", () => {
     it("ignores a stored value that isn't a mode", () => {
       localStorage.setItem("demo-motion", "warp");
       const { motion, target } = setup();
-      motionSwitch(target, motion, { persist: "demo-motion" });
+      motionSwitch(target, { motion, persist: "demo-motion" });
       expect(motion.viewerChoice).toBeUndefined();
     });
 
@@ -179,7 +180,7 @@ describe("motionSwitch", () => {
         throw new DOMException("full", "QuotaExceededError");
       });
       const { motion, target } = setup();
-      const { element } = motionSwitch(target, motion, { persist: "demo-motion" });
+      const { element } = motionSwitch(target, { motion, persist: "demo-motion" });
       button(element, "Off").click();
       expect(motion.mode).toBe("off");
       expect(pressed(element)).toEqual(["Off"]);
@@ -188,11 +189,11 @@ describe("motionSwitch", () => {
 
   it("checks what it's given", () => {
     const { motion, target } = setup();
-    expect(() => motionSwitch("#nowhere", motion)).toThrow(/no element matches "#nowhere"/);
-    expect(() => motionSwitch(42 as unknown as Element, motion)).toThrow(TypeError);
-    expect(() => motionSwitch(target, {} as typeof motion)).toThrow(/needs a Motion/);
-    expect(() => motionSwitch(target, motion, { persist: "" })).toThrow(/persist/);
-    expect(() => motionSwitch(target, motion, { labels: { off: 3 as unknown as string } })).toThrow(/labels.off/);
+    expect(() => motionSwitch("#nowhere", { motion })).toThrow(/no element matches "#nowhere"/);
+    expect(() => motionSwitch(42 as unknown as Element, { motion })).toThrow(TypeError);
+    expect(() => motionSwitch(target, { motion: {} as typeof motion })).toThrow(/needs a Motion/);
+    expect(() => motionSwitch(target, { motion, persist: "" })).toThrow(/persist/);
+    expect(() => motionSwitch(target, { motion, labels: { off: 3 as unknown as string } })).toThrow(/labels.off/);
     expect(target.childElementCount).toBe(0);
   });
 });

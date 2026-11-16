@@ -15,7 +15,7 @@ declare const slices: Selection<SVGPathElement, PieArc<Outcome>>;
 
 expressive(slices, {
   key: (d) => d.data.outcome,
-  geometry: (_el, d, key) => describe.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle }),
+  geometry: (d, _el, key) => describe.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle }),
   on: {
     hover: travel(soccerBall),
     enter: stagger(flash(), { delay: 60 }) // opt-in stagger; it collapses to 0 in analysis and off
@@ -35,7 +35,7 @@ declare const y: (value: number) => number;
 
 expressive(lines, {
   key: (_weeks, el) => el.getAttribute("data-series") ?? "", // "goals" or "xg"
-  geometry: (el, weeks, key) =>
+  geometry: (weeks, _el, key) =>
     describe.line({ key, series: key, points: weeks.map((w) => ({ x: x(w.week), y: y(w[key as "goals" | "xg"]) })) }),
   // Data effects need values along the walk. samplesAlong projects each data point onto it.
   samples: (weeks, mark) =>

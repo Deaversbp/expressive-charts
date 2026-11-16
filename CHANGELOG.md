@@ -25,7 +25,59 @@ From 0.1.0:
 
 Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
 
-From 1.0, everything the package exports follows semantic versioning: the motion core, the charts, the adapters, the built-in effects and the controls, as well as the effect-author API.
+### What 1.0 will promise
+
+From 1.0 the whole package follows semantic versioning, not the effect-author API alone. A breaking change to anything promised below comes only in a major release, with a migration note, and a deprecated name is taken out only in a major release. 0.13.0 is the last 0.x: 1.0 takes out what 0.13.0 deprecates and changes nothing else.
+
+**Promised:**
+
+- **Every name the package exports,** from its three entries, `expressive-charts`, `expressive-charts/icons/sport` and `expressive-charts/testing`, and the stylesheet's entry, `expressive-charts/style.css`. That's the motion core, the charts, the adapters, the built-in effects, the icons and the controls, as well as the effect-author API. The low-level motion names are among them: `createClock`, `defaultClock`, `scaleDuration`, `defaultScaling`, `mediaReducedMotion` and `interpolateRecord`.
+- **Their types:** what each takes and gives back, and every type the entries export.
+- **What [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) says each does.** An option's default value is part of that where api.md states it: a `dim` that defaults to true, a `table` that's there unless it's turned off.
+- **The `--ec-*` custom properties** in [api.md's table](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md#expressive-chartsstylecss): their names, and what each colours.
+
+**Not promised,** so any release may change them:
+
+- the `ec-*` class names, and the elements a chart, an adapter or a control builds;
+- the exact pixels of anything drawn;
+- default durations and easings, and the numbers in the scaling table;
+- the words of a default name, tooltip or announcement;
+- the files the published package is split into, and their sizes;
+- anything api.md doesn't state.
+
+A page that needs one of these to stay as it is sets it itself: a duration or a scaling in its own options, its own words in `markLabel`, `tooltip` or a control's `labels`, and its own CSS on the custom properties, not on a class name.
+
+Additions can come in any minor release: a new export, a new optional field or option.
+
+## Unreleased
+
+For 0.13.0, the last 0.x release: the API shaped for 1.0. Two changes need something written instead, and both are first below.
+
+### Changed
+
+- **`expressive()`'s `geometry` takes `(datum, element, key)`.** It took `(element, datum, key)`, and was the adapter's only callback with the element first: `key`, `segment`, `value` and `markLabel` take the row first.
+  - **What to write instead:** swap the first two arguments. `geometry: (element, d, key) => …` becomes `geometry: (d, element, key) => …`. A `geometry` that reads only its key needs no change.
+  - **In TypeScript** the old order is a type error on that line.
+  - **In JavaScript** nothing warns before the page runs. The function is handed the row where it expects the element, so it throws, or returns something that isn't the mark. Either way `expressive()` throws a `TypeError` that says "Since 0.13.0 geometry is called with (datum, element, key), not (element, datum, key)." A function that threw has its own message after that, and its error as the `cause`. The adapter can't tell the old order before the function runs, so the same sentence follows any error a `geometry` throws.
+  - `fromVegaView()` has no `geometry`, so nothing changes there. The adapters are outside the 0.x promise.
+- **`IconShape.linecap` and `Paint.linecap` gain `"square"`, and `IconShape.linejoin` gains `"bevel"`.** This is a breaking change to the effect-author API, for code that reads these fields and handles every case: a `Layer` of your own, a renderer, a `switch` over `linecap`. Code that only writes them is untouched: the defaults are still butt and miter, and every icon and path drawn before draws byte for byte as it did.
+  - **What to write instead:** add a case for each new value where your code reads them. On a canvas, `lineCap = "square"` and `lineJoin = "bevel"`; in SVG, `stroke-linecap="square"` and `stroke-linejoin="bevel"`. Where a `switch` ends in a `never` check, TypeScript reports the missing case; where it has a default, the new values fall to it.
+  - `Paint` gains no `linejoin`: an overlay path's joins stay round. `defineIcon` takes the new values, and still throws a `RangeError` for any other.
+
+### Fixed
+
+- **`iconFromSvg` keeps square caps and bevel joins.** It dropped `stroke-linecap="square"` and `stroke-linejoin="bevel"`, so an icon from a set that draws with them had butt caps and miter joins. Now it keeps them, from an attribute or `style`, inherited from groups as SVG inherits them, and the SVG layer draws them. An icon that has neither reads as it did, and the core icons and the sport pack are unchanged. SVG's `arcs` and `miter-clip` joins still aren't kept.
+
+### Added
+
+- **`motionSwitch(target, options?)`, with `motion` among its options.** [`MotionSwitchOptions`](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md#motionswitchoptions) gains `motion`, the motion the switch shows and sets, default the page-wide one. So a page that wants `persist` alone writes `motionSwitch("#motion", { persist: "site:motion" })`, with no `undefined` to step over. `motionSwitch(target)` is as it was.
+
+### Deprecated
+
+- **`motionSwitch(target, motion, options?)`,** the form with the motion as its second argument. It works in 0.13.0 as it did and builds the same control. It's marked `@deprecated` in the types, and nothing is logged when it runs. 1.0 takes it out.
+  - **What to write instead:** `motionSwitch(target, { motion, ...options })`, or `motionSwitch(target, options)` where the motion was `undefined`.
+  - The two forms are told apart by the second argument: a `Motion` (it has `chooseMode`), or anything with a third argument after it, is the old form. One call changes: `motionSwitch(target, {})` threw a `TypeError`, since `{}` isn't a `Motion`, and is now a switch with no options.
+  - The controls are outside the 0.x promise; the deprecation follows its rule all the same.
 
 ## 0.12.0 (16 November 2026)
 

@@ -189,8 +189,8 @@ function inherit(parent: Inherited, attributes: Map<string, string>): Inherited 
     fill: paint("fill", parent.fill),
     stroke: paint("stroke", parent.stroke),
     width: width >= 0 ? width : parent.width,
-    linecap: linecap === "butt" || linecap === "round" ? linecap : parent.linecap,
-    linejoin: linejoin === "miter" || linejoin === "round" ? linejoin : parent.linejoin,
+    linecap: linecap === "butt" || linecap === "round" || linecap === "square" ? linecap : parent.linecap,
+    linejoin: linejoin === "miter" || linejoin === "round" || linejoin === "bevel" ? linejoin : parent.linejoin,
     fillRule: fillRule === "nonzero" || fillRule === "evenodd" ? fillRule : parent.fillRule,
     // Opacity isn't inherited in SVG: a group is drawn and then faded. Multiplying is the same unless its shapes overlap.
     // One that can't be read counts as 1.

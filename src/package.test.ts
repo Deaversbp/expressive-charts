@@ -158,3 +158,15 @@ describe("package.json", () => {
     expect(hasSideEffects(["**/*.css"], "./dist/icons/sport.js")).toBe(false);
   });
 });
+
+// The first deprecation in src (M18 step 2). TypeScript reports no error for a deprecated call, so the tag is read from the source.
+describe("motionSwitch's deprecated form", () => {
+  it("marks the three-argument form deprecated in its types, with what to write instead, and the new form not", async () => {
+    const fs = (await import("node:fs/promises" as string)) as { readFile(path: URL, encoding: "utf8"): Promise<string> };
+    const source = (await fs.readFile(new URL("./index.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+    const overloads = [...source.matchAll(/\/\*\*((?:(?!\*\/)[^])*)\*\/\nexport function motionSwitch\(([^)]*)\): MotionSwitch;/g)];
+    expect(overloads.map((m) => m[2])).toEqual(["target: string | Element, options?: MotionSwitchOptions", "target: string | Element, motion: Motion | undefined, options?: MotionSwitchOptions"]);
+    expect(overloads[0]![1]).not.toContain("@deprecated");
+    expect(overloads[1]![1]).toMatch(/@deprecated Since 0\.13\.0, and gone in 1\.0\. Pass the motion among the options:\n \* `motionSwitch\(target, \{ motion, \.\.\.options \}\)`/);
+  });
+});

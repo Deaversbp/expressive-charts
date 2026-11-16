@@ -147,7 +147,7 @@ Each run gets its own context. Everything an effect touches goes through it.
 
 **The overlay** (`ctx.layer`):
 
-- `layer.path(d, paint)` draws a path, unfilled unless `paint.fill` is given. `paint` is `{ fill, stroke, width, opacity, linecap, part }`. The handle's `update(d, paint?)` replaces the path and merges the paint fields given.
+- `layer.path(d, paint)` draws a path, unfilled unless `paint.fill` is given. `paint` is `{ fill, stroke, width, opacity, linecap, part }`, with `linecap` `"butt"`, `"round"` or `"square"`; a path's joins are always round. The handle's `update(d, paint?)` replaces the path and merges the paint fields given.
 - `layer.text(content, { at, anchor, color, opacity })` draws text with `at` on its baseline, in the theme's text colour by default. `update(style, content?)` merges the style fields given.
 - `layer.icon(icon, { size })` draws an icon, hidden until its first `place(transform)`. The icon is scaled by `size / icon.size` about its anchor before `place()`, so build the transform as if the icon were its natural size.
 - Every handle has `remove()`.

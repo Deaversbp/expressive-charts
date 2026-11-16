@@ -6,6 +6,8 @@ import type { Motion, MotionMode } from "../../core";
 import { injectStyles } from "../render/theme";
 
 export interface MotionSwitchOptions {
+  /** The motion the switch shows and sets. Default: the page-wide `motion`. */
+  readonly motion?: Motion;
   /** The group's visible label, which is also its accessible name. Default "Motion". */
   readonly label?: string;
   /** Button text by mode. Default "Presentation", "Analysis", "Off". */
@@ -51,9 +53,11 @@ let switches = 0;
  * `aria-pressed`, one per mode, and a note on what the mode does. The pressed button is the effective
  * mode, so while the device asks for reduced motion and the viewer hasn't picked, Off is pressed and
  * the note says why. It follows `motion.subscribe`, so it stays right whoever changes the mode.
+ * Here `motion` is required: the composition root (src/index.ts) fills in the page-wide one.
  */
-export function motionSwitch(target: string | Element, motion: Motion, options: MotionSwitchOptions = {}): MotionSwitch {
+export function motionSwitch(target: string | Element, options: MotionSwitchOptions & { readonly motion: Motion }): MotionSwitch {
   const parent = resolveTarget(target);
+  const motion = options?.motion;
   checkMotion(motion);
   checkOptions(options);
   const labels = { ...LABELS, ...options.labels };

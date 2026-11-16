@@ -7,6 +7,13 @@ Every export of every entry of `expressive-charts`, values and types: what each 
 - **Durations** are base values in ms, which the motion mode scales: a 500 ms base is 500 ms in Presentation, 175 ms in Analysis, and nothing with motion off ([`Timing`](#timing)).
 - **`D`** is the type of a chart's rows: `barChart<Player>` reads `Player` objects.
 - **The 0.x promise.** An entry marked *Under the 0.x promise.* is part of the effect-author API: from 0.1.0 it breaks only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. Everything else may still change in a minor release while the library is 0.x. [CHANGELOG.md](../CHANGELOG.md#the-0x-promise) has the promise.
+- **What 1.0 will promise.** From 1.0 every entry on this page is promised, marked or not: its name, its types, and what this page says it does, an option's default value among it where the page states one. So are the `--ec-*` custom properties in [the stylesheet's table](#expressive-chartsstylecss). Not promised: the `ec-*` class names and the elements a chart, an adapter or a control builds; the exact pixels of anything drawn; default durations and easings, and the scaling table's numbers; the words of a default name, tooltip or announcement; the files the package is split into, and their sizes; and anything this page doesn't state. [CHANGELOG.md](../CHANGELOG.md#what-10-will-promise) has it in full.
+- **Names that look alike.** A few names are close to another's, and each stays as it is for 1.0:
+  - `label` is a chart's accessible name, and a motion switch's visible one; `labels` are a line chart's end labels, a control's button text and a host view's own `<text>`s; and [`label()`](#label) is the effect that draws text by a mark.
+  - `at` on [`TextStyle`](#textstyle) is a point, where the text is drawn; `at` on [`Sample`](#sample) is the x behind a value, a week or a date.
+  - An `update` event has `from`, the geometry before it ([`MarkEvents`](#markeventsd)); an effect reads the same thing as `previous`, on [`EffectContext`](#effectcontext), and the data before as [`MarkData`](#markdatad)'s `previous`.
+  - [`fromVegaView()`](#fromvegaview) takes `sample`, one function from a row to its value; [`expressive()`](#expressive) takes `samples`, a mark's values along its walk.
+  - `table: "hidden"` on a chart and `hidden: true` in its [`TableOptions`](#tableoptionsd) are the same thing.
 - **Checked.** `src/api-docs.test.ts` fails when an export has no entry here or an entry names no export, and type-checks every example below that imports the package.
 
 ## `expressive-charts`
@@ -792,12 +799,14 @@ interface Paint {
   readonly stroke?: Color;
   readonly width?: number;
   readonly opacity?: number;
-  readonly linecap?: "butt" | "round";
+  readonly linecap?: "butt" | "round" | "square";
   readonly part?: string;
 }
 ```
 
 How a layer's path is drawn.
+
+- `linecap`: `"butt"` (default), `"round"` or `"square"`, which ends the stroke half its width past the path's end. `"square"` is new in 0.13.0, so code that handles every case has one more ([CHANGELOG](../CHANGELOG.md)). A path's joins are always round: `Paint` has no `linejoin`.
 
 - `part`: the key of one of the mark's segments (`segment.key`, such as `"Okafor/assists"`). In this paint, `"mark"` and `"mark-strong"` are that segment's colours, so an effect can draw a stack part by part, each in its own colour, as [`drawIn`](#drawin) does. Unset, or a key the mark hasn't, they're the mark's own, its first segment's for a stack, as without it. Our charts give each segment's colours: a bar's by its series, and `expressive()`'s from each part's own fill or stroke. A mark with one part, a line or a slice, has its own.
 
@@ -1673,7 +1682,7 @@ What `defineIcon()` takes: an [`Icon`](#icon) whose `pivot`, `footprint` and `si
 iconFromSvg(markup: string, spec: SvgIconSpec): Icon
 ```
 
-An icon from SVG markup, read as text with no DOM. It keeps only `path`, `circle`, `rect`, `ellipse`, `line`, `polyline` and `polygon`, with their fill, stroke, stroke width, caps and joins, fill rule, opacity, fill opacity and stroke opacity (as attributes or in `style`, inherited from groups, whose opacity is multiplied into their shapes', while a shape's own fill or stroke opacity replaces its group's, as in SVG), and applies their transforms. A shape with an opacity of 0 is dropped, and so is a fill or stroke with one of 0. `currentColor`, in any case, becomes the `text` token. Everything else is dropped: scripts, event handlers, `<use>`, text, images, and the contents of `<defs>` and `<clipPath>`. Colours must be plain colours or theme tokens, and path data is written again from its numbers, so nothing from the markup passes through. Markup that isn't a string throws a `TypeError`, and a bad field a `RangeError`. [An icon from an icon set](#an-icon-from-an-icon-set) shows how to pick its spec.
+An icon from SVG markup, read as text with no DOM. It keeps only `path`, `circle`, `rect`, `ellipse`, `line`, `polyline` and `polygon`, with their fill, stroke, stroke width, caps (butt, round and square) and joins (miter, round and bevel), fill rule, opacity, fill opacity and stroke opacity (as attributes or in `style`, inherited from groups, whose opacity is multiplied into their shapes', while a shape's own fill or stroke opacity replaces its group's, as in SVG), and applies their transforms. A shape with an opacity of 0 is dropped, and so is a fill or stroke with one of 0. `currentColor`, in any case, becomes the `text` token. Everything else is dropped: scripts, event handlers, `<use>`, text, images, and the contents of `<defs>` and `<clipPath>`. Colours must be plain colours or theme tokens, and path data is written again from its numbers, so nothing from the markup passes through. Markup that isn't a string throws a `TypeError`, and a bad field a `RangeError`. [An icon from an icon set](#an-icon-from-an-icon-set) shows how to pick its spec.
 
 #### `SvgIconSpec`
 
@@ -1710,7 +1719,7 @@ interface Icon
 interface IconShape
 ```
 
-One path of an icon. `d`: path data in icon units. `fill`, `stroke`: `Color`; unset draws none (unlike SVG, where an unset fill is black). `width`: the stroke's width in icon units, default 1, so it scales with the icon. `linecap`: `"butt"` (default) or `"round"`. `linejoin`: `"miter"` (default) or `"round"`. `clip`: path data in icon units that clips the shape. `fillRule`: `"nonzero"` (default) or `"evenodd"`, which leaves a hole where the path's parts overlap, as solid icon sets draw them. `opacity`: from 0 to 1, default 1, for the whole shape, its fill and stroke together, as a duotone set fades its lighter part. `fillOpacity`, `strokeOpacity`: from 0 to 1, default 1, the fill's and the stroke's own, inside `opacity`, as a set fades a part's fill inside its full outline.
+One path of an icon. `d`: path data in icon units. `fill`, `stroke`: `Color`; unset draws none (unlike SVG, where an unset fill is black). `width`: the stroke's width in icon units, default 1, so it scales with the icon. `linecap`: `"butt"` (default), `"round"` or `"square"`. `linejoin`: `"miter"` (default), `"round"` or `"bevel"`. `"square"` and `"bevel"` are new in 0.13.0, so code that reads a shape and handles every case has one more of each ([CHANGELOG](../CHANGELOG.md)); [`defineIcon()`](#defineicon) throws a `RangeError` for any other. `clip`: path data in icon units that clips the shape. `fillRule`: `"nonzero"` (default) or `"evenodd"`, which leaves a hole where the path's parts overlap, as solid icon sets draw them. `opacity`: from 0 to 1, default 1, for the whole shape, its fill and stroke together, as a duotone set fades its lighter part. `fillOpacity`, `strokeOpacity`: from 0 to 1, default 1, the fill's and the stroke's own, inside `opacity`, as a set fades a part's fill inside its full outline.
 
 #### `IconSource`
 
@@ -2419,7 +2428,7 @@ expressive(slices, {
 const points = (d: SeriesRows) => d.rows.map((r) => ({ x: x(r.week), y: y(r.value), value: r.value, at: r.week }));
 expressive(lines, {
   key: (d) => d.series,
-  geometry: (_el, d, key) => describe.line({ key, series: d.series, points: points(d), width: 2 }),
+  geometry: (d, _el, key) => describe.line({ key, series: d.series, points: points(d), width: 2 }),
   samples: (d, mark) => samplesAlong(mark, points(d)), // values along the line, for threshold
   dim: true,                                         // the other line fades
   watch: true,                                       // follows a reveal that gives each path its rows every frame
@@ -2481,7 +2490,7 @@ interface ExpressiveOptions<D>
 - `datum`: `(element: Element) => D`. The element's row. Default: a selection's `data()`, else `element.__data__`, D3's convention.
 - `segment`: `(datum: D, element: Element) => string`. Names the parts of a mark that share a key: a stack's series. They're ordered from the baseline. On a circle or another shape it names the mark's `series`, so a data effect reads it through `related`.
 - `value`: `(datum: D, element: Element) => number | string | boolean | null | undefined`. What an element shows, so `refresh()` can tell a change in values from a new layout: given, an update means a value changed, as on our charts; without it, a length changed, so a resize updates every bar. Return a number or a string.
-- `geometry`: `(element: Element, datum: D, key: string) => MarkGeometry`. Describes every mark yourself, with `describe`, in the coordinates of the marks' nearest common ancestor, instead of the adapter reading `<rect>`s as bars, `<circle>`s as points and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements as shapes. Give it for anything else (`<text>`, `<g>`, `<use>` and `<image>` throw, naming the tag), or to say more or other than an element shows: a padded donut's slices with `describe.arc`, which go round its centre, or a pie's slices as the shapes their paths draw, with `describe.shape`. Called once per mark with its first element.
+- `geometry`: `(datum: D, element: Element, key: string) => MarkGeometry`. Describes every mark yourself, with `describe`, in the coordinates of the marks' nearest common ancestor, instead of the adapter reading `<rect>`s as bars, `<circle>`s as points and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements as shapes. Give it for anything else (`<text>`, `<g>`, `<use>` and `<image>` throw, naming the tag), or to say more or other than an element shows: a padded donut's slices with `describe.arc`, which go round its centre, or a pie's slices as the shapes their paths draw, with `describe.shape`. Called once per mark with its row and its first element, as `key` is, and then its key. Until 0.13.0 the element came first, `(element, datum, key)`: a function still written that way throws or describes no mark, and the `TypeError` names the new order ([CHANGELOG](../CHANGELOG.md)).
 - `samples`: `(datum: D, mark: MarkGeometry) => readonly Sample[]`. Data effects' values along the mark. Default: rects with a numeric `value` get the bar chart's samples, and circles with one get it as their one sample, `{ t: 0, value }`; other marks get none. Bad samples throw.
 - `baseline`: `Baseline | "auto"`. Default `"auto"`: the line every rect has an edge on. A rect whose other edge is on it grows the other way, as a negative bar.
 - `motion`: `Motion | MotionMode`. As on a chart.
@@ -2811,19 +2820,26 @@ interface Link {
 On-page controls the viewer operates ([architecture.md](architecture.md#controls)). Their styles are in the shared stylesheet, so `configure()` and `style.css` cover them.
 
 ```ts
-import { motion, motionSwitch } from "expressive-charts";
+import { createMotion, motionSwitch } from "expressive-charts";
 
-const control = motionSwitch("#motion", motion, { persist: "site:motion" }); // the viewer's choice, kept across pages
-control.destroy();                                                            // removes it; the choice stays
+const control = motionSwitch("#motion", { persist: "site:motion" }); // the viewer's choice, kept across pages
+control.destroy();                                                    // removes it; the choice stays
+
+const dashboard = createMotion({ mode: "analysis" });
+motionSwitch("#dashboard-motion", { motion: dashboard }); // a switch for a motion of its own
 ```
 
 #### `motionSwitch()`
 
 ```ts
-motionSwitch(target: string | Element, motion?: Motion, options?: MotionSwitchOptions): MotionSwitch
+motionSwitch(target: string | Element, options?: MotionSwitchOptions): MotionSwitch
+/** @deprecated */
+motionSwitch(target: string | Element, motion: Motion | undefined, options?: MotionSwitchOptions): MotionSwitch
 ```
 
-The viewer's motion control in `target`: Presentation, Analysis and Off as real buttons with `aria-pressed`, in a `role="group"` named by its visible label, and a note on what the mode does, which a screen reader hears after a click ([architecture.md](architecture.md#motion-switch)). A click is the viewer's own choice (`motion.chooseMode()`), so it overrides the device's reduced-motion setting; until then, Off is pressed while the device asks for reduced motion, and the note says why. It follows `motion` (default: the page-wide one), so it stays right whoever changes the mode. A target that isn't an element, or options of the wrong type, throw a `TypeError`. Returns [`MotionSwitch`](#motionswitch-type).
+The viewer's motion control in `target`: Presentation, Analysis and Off as real buttons with `aria-pressed`, in a `role="group"` named by its visible label, and a note on what the mode does, which a screen reader hears after a click ([architecture.md](architecture.md#motion-switch)). A click is the viewer's own choice (`motion.chooseMode()`), so it overrides the device's reduced-motion setting; until then, Off is pressed while the device asks for reduced motion, and the note says why. It follows its `motion`, one of its options (default: the page-wide one), so it stays right whoever changes the mode. A target that isn't an element, or options of the wrong type, throw a `TypeError`. Returns [`MotionSwitch`](#motionswitch-type).
+
+**Deprecated: the motion as the second argument.** Until 0.13.0 the motion came before the options: `motionSwitch(target, motion?, options?)`. That form still works in 0.13.0 and builds the same control. It's marked `@deprecated` in the types, nothing is logged when it runs, and 1.0 takes it out. Write `motionSwitch(target, { motion, ...options })` instead, or `motionSwitch(target, options)` where the motion was `undefined`. The two are told apart by the second argument: a `Motion` (it has `chooseMode`), or anything with a third argument after it, is the old form. A second argument that is neither options nor a `Motion` throws a `TypeError`.
 
 #### `MotionSwitch` (type)
 
@@ -2842,6 +2858,7 @@ interface MotionSwitch {
 interface MotionSwitchOptions
 ```
 
+- `motion`: [`Motion`](#motion-type). Default: the page-wide [`motion`](#motion). The motion the switch shows and sets. New in 0.13.0.
 - `label`: `string`. Default "Motion". The group's visible label and accessible name.
 - `labels`: `Partial<Readonly<Record<MotionMode, string>>>`. Each button's text. Default "Presentation", "Analysis" and "Off".
 - `hints`: `Partial<Readonly<Record<MotionMode | "reduced", string>>>`. The note for each effective mode, and `reduced` for while the device asks for reduced motion and the viewer hasn't picked. The defaults are in English.

@@ -154,6 +154,8 @@ interface Hovered {
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+/** Said with either error a `geometry` written for 0.12's order gives. */
+const GEOMETRY_ORDER = "Since 0.13.0 geometry is called with (datum, element, key), not (element, datum, key).";
 /** Elements that are each a mark of their own: a circle is a point, and the others are read through describe.shape. */
 const SHAPES = new Set(["circle", "ellipse", "line", "path", "polygon", "polyline"]);
 /**
@@ -272,9 +274,17 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
   /** A mark described with `geometry`, from its elements in source order. */
   function givenMark(key: string, pieces: readonly Piece<D>[], index: number, at: ReadContext): Unnamed<D> {
     const first = pieces[0]!;
-    const geometry = options.geometry!(first.element, first.datum, key);
+    // Until 0.13.0 the element came first. A page that still takes it there reads its row off an element, so its
+    // function throws or gives no mark; both errors name the order, since the two can't be told apart from here.
+    let geometry: MarkGeometry;
+    try {
+      geometry = options.geometry!(first.datum, first.element, key);
+    } catch (error) {
+      // The page's own error rides along as `cause`, set by hand: the build's target has no option for it.
+      throw Object.assign(new TypeError(`expressive: geometry for "${key}" threw. ${GEOMETRY_ORDER} Its error: ${error instanceof Error ? error.message : String(error)}`), { cause: error });
+    }
     if (typeof geometry !== "object" || geometry === null || geometry.key !== key) {
-      throw new TypeError(`expressive: geometry for "${key}" must be a MarkGeometry with the key "${key}". Build it with describe and the key passed in.`);
+      throw new TypeError(`expressive: geometry for "${key}" must be a MarkGeometry with the key "${key}". Build it with describe and the key passed in. ${GEOMETRY_ORDER}`);
     }
     const parts = pieces.map((p) => part(p, outlineOf(geometry, p.series, pieces.length), at));
     return { key, geometry, parts, index };

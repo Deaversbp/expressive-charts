@@ -123,7 +123,7 @@ const d3Effects = expressive(host.paths, {
   // What the line shows at its revealed end, so a refresh() after a resize isn't taken for a change.
   value: (d) => d.rows[d.rows.length - 1]![d.series],
   // The rows on __data__ are the ones drawn this frame, so the geometry follows the reveal.
-  geometry: (_element, d, key) =>
+  geometry: (d, _element, key) =>
     describe.line({ key, series: d.series, points: d.rows.map((w) => ({ x: host.x(w.week), y: host.y(w[d.series]) })), width: host.width }),
   // Sampled at the points that drew the line, with each week as `at`, so threshold matches xG by week.
   samples: (d, mark) =>
@@ -226,7 +226,7 @@ const gapsEffects = expressive(gapsHost.paths, {
     const { points } = runsOf(d);
     return points[points.length - 1]!.value;
   },
-  geometry: (_element, d, key) => {
+  geometry: (d, _element, key) => {
     const { points, breaks } = runsOf(d);
     return describe.line({ key, series: d.series, points, breaks, width: gapsHost.width });
   },

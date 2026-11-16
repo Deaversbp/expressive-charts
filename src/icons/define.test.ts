@@ -95,6 +95,19 @@ describe("defineIcon", () => {
     expect(Object.isFrozen(icon.anchor)).toBe(true);
   });
 
+  it("takes every cap and join: butt, round and square, and miter, round and bevel", () => {
+    const caps = ["butt", "round", "square"] as const;
+    const joins = ["miter", "round", "bevel"] as const;
+    const icon = defineIcon({ ...spec, shapes: caps.map((linecap, i) => ({ d: "M0,0L4,0L4,4", stroke: "text", linecap, linejoin: joins[i]! })) });
+    expect(icon.shapes.map((shape) => [shape.linecap, shape.linejoin])).toEqual([
+      ["butt", "miter"],
+      ["round", "round"],
+      ["square", "bevel"]
+    ]);
+    // Unset stays unset: the defaults, butt and miter, are the renderer's.
+    expect(defineIcon({ ...spec, shapes: [{ d: "M0,0L4,0", stroke: "text" }] }).shapes[0]).toEqual({ d: "M0,0L4,0", stroke: "text" });
+  });
+
   it("names the field when the input is bad", () => {
     expect(() => defineIcon({ ...spec, name: "" })).toThrow(TypeError);
     const bad: [Partial<IconSpec>, RegExp][] = [
@@ -104,7 +117,8 @@ describe("defineIcon", () => {
       [{ shapes: [{ d: "M0,0", clip: "url(#x)" }] }, /shapes\[0\]\.clip/],
       [{ shapes: [{ d: "M0,0", fill: "" }] }, /shapes\[0\]\.fill must be a colour/],
       [{ shapes: [{ d: "M0,0", width: -1 }] }, /shapes\[0\]\.width can't be negative/],
-      [{ shapes: [{ d: "M0,0", linecap: "square" as "round" }] }, /linecap/],
+      [{ shapes: [{ d: "M0,0", linecap: "flat" as "round" }] }, /shapes\[0\]\.linecap must be butt, round or square, got flat/],
+      [{ shapes: [{ d: "M0,0", linejoin: "arcs" as "round" }] }, /shapes\[0\]\.linejoin must be miter, round or bevel, got arcs/],
       [{ box: { x: 0, y: 0, width: 0, height: 4 } }, /box\.width must be more than 0/],
       [{ anchor: { x: Number.NaN, y: 0 } }, /anchor\.x must be a finite number/],
       [{ footprint: [-1, 4] }, /footprint\[0\] can't be negative/],

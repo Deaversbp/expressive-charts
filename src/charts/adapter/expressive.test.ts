@@ -205,7 +205,7 @@ function d3Lines(rows: Week[] = season) {
 /** What a D3 line page passes: each path described from the points that drew it, and its samples from the same points. */
 const traced: ExpressiveOptions<Trace> = {
   key: (d) => d.name,
-  geometry: (_el, d, key) => build.line({ key, series: d.name, points: vertices(d), width: 2 }),
+  geometry: (d, _el, key) => build.line({ key, series: d.name, points: vertices(d), width: 2 }),
   samples: (d, mark) => samplesAlong(mark, d.rows.map((row) => ({ x: lineX(row.week), y: lineY(row[d.name]), value: row[d.name], at: row.week })))
 };
 
@@ -326,10 +326,95 @@ describe("expressive: keys and segments", () => {
     Object.assign(slice, { __data__: { outcome: "Saved", startAngle: 0, endAngle: 2 } });
     const { fx } = setup<{ outcome: string; startAngle: number; endAngle: number }>([slice], {
       key: (d) => d.outcome,
-      geometry: (_el, d, k) => build.arc({ key: k, cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle })
+      geometry: (d, _el, k) => build.arc({ key: k, cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle })
     });
     expect(fx.marks()[0]!.key).toBe("Saved");
-    expect(() => setup([slice], { key: () => "a", geometry: (_el, _d) => build.point({ key: "b", x: 0, y: 0, r: 2 }) })).toThrow(/with the key "a"/);
+    expect(() => setup([slice], { key: () => "a", geometry: (_d, _el) => build.point({ key: "b", x: 0, y: 0, r: 2 }) })).toThrow(/with the key "a"/);
+  });
+
+  describe("geometry's arguments", () => {
+    type Row = { outcome: string; startAngle: number; endAngle: number };
+    const rows: Row[] = [
+      { outcome: "Saved", startAngle: 0, endAngle: 2 },
+      { outcome: "Blocked", startAngle: 2, endAngle: 4 }
+    ];
+    const slices = (bind: boolean): SVGPathElement[] => {
+      const host = d3Stack();
+      return rows.map((row) => {
+        const path = el("path", { d: "M0,-116A116,116,0,0,1,100,58L0,0Z" }, host.plot);
+        if (bind) Object.assign(path, { __data__: row });
+        return path;
+      });
+    };
+    const arc = (d: Row, key: string): MarkGeometry => build.arc({ key, cx: 0, cy: 0, inner: 70, outer: 116, start: d.startAngle, end: d.endAngle });
+
+    it("gives the row, then the element, then the key, as key, segment and value take the row and the element", () => {
+      const paths = slices(true);
+      const calls: Record<string, unknown[][]> = { key: [], segment: [], value: [], geometry: [] };
+      setup<Row>(paths, {
+        key: (...args) => (calls.key!.push(args), args[0].outcome),
+        segment: (...args) => (calls.segment!.push(args), "shots"),
+        value: (...args) => (calls.value!.push(args), args[0].endAngle),
+        geometry: (...args) => (calls.geometry!.push(args), arc(args[0], args[2]))
+      });
+      const each = rows.map((row, i) => [row, paths[i]]);
+      expect(calls.key).toEqual(each);
+      expect(calls.segment).toEqual(each);
+      expect(calls.value).toEqual(each);
+      expect(calls.geometry).toEqual(rows.map((row, i) => [row, paths[i], row.outcome]));
+      expect(calls.geometry!.every(([row, element], i) => row === rows[i] && element === paths[i])).toBe(true);
+    });
+
+    it("gets its row from a selection's data(), from the element's __data__ and from the datum option", () => {
+      const given = (source: MarkSource<Row>, more: Partial<ExpressiveOptions<Row>> = {}): unknown[] => {
+        const seen: unknown[] = [];
+        setup<Row>(source, { key: (d) => d.outcome, geometry: (d, element, key) => (seen.push(d, element.localName, key), arc(d, key)), ...more });
+        return seen;
+      };
+      const expected = [rows[0], "path", "Saved", rows[1], "path", "Blocked"];
+      const unbound = slices(false);
+      expect(given({ nodes: () => unbound, data: () => rows })).toEqual(expected);
+      expect(given(slices(true))).toEqual(expected);
+      const byElement = slices(false);
+      expect(given(byElement, { datum: (element) => rows[byElement.indexOf(element as SVGPathElement)]! })).toEqual(expected);
+    });
+
+    it("names the new order when a geometry written for the old one throws, and keeps its error as the cause", () => {
+      // 0.12's order, as a page in JavaScript would still have it: the row is read off the element.
+      const old = ((element: Element, d: Row, key: string) => build.shape({ key, d: element.getAttribute("d") ?? "" })) as unknown as NonNullable<ExpressiveOptions<Row>["geometry"]>;
+      let thrown: (TypeError & { cause?: unknown }) | undefined;
+      try {
+        setup<Row>(slices(true), { key: (d) => d.outcome, geometry: old });
+      } catch (error) {
+        thrown = error as TypeError;
+      }
+      expect(thrown).toBeInstanceOf(TypeError);
+      expect(thrown!.message).toMatch(/^expressive: geometry for "Saved" threw\. Since 0\.13\.0 geometry is called with \(datum, element, key\), not \(element, datum, key\)\. Its error: .*getAttribute is not a function/);
+      expect(thrown!.cause).toBeInstanceOf(TypeError);
+      expect((thrown!.cause as Error).message).toMatch(/getAttribute is not a function/);
+    });
+
+    it("names the new order when what a geometry gives is no mark, as one reading its row off the element does", () => {
+      const order = /must be a MarkGeometry with the key "Saved"\. Build it with describe and the key passed in\. Since 0\.13\.0 geometry is called with \(datum, element, key\), not \(element, datum, key\)\.$/;
+      // The old order with a row that has the element's own fields: nothing throws, and nothing is described.
+      const old = ((_element: Element, d: { marks?: MarkGeometry }) => d.marks) as unknown as NonNullable<ExpressiveOptions<Row>["geometry"]>;
+      expect(() => setup<Row>(slices(true), { key: (d) => d.outcome, geometry: old })).toThrow(order);
+      expect(() => setup<Row>(slices(true), { key: (d) => d.outcome, geometry: (d) => arc(d, "another") })).toThrow(order);
+      expect(() => setup<Row>(slices(true), { key: (d) => d.outcome, geometry: () => null as unknown as MarkGeometry })).toThrow(TypeError);
+    });
+
+    it("says a page's own error after the order, and attaches nothing", () => {
+      const paths = slices(true);
+      expect(() =>
+        setup<Row>(paths, {
+          key: (d) => d.outcome,
+          geometry: () => {
+            throw new RangeError("no such stage");
+          }
+        })
+      ).toThrow(/geometry for "Saved" threw\. Since 0\.13\.0 .* Its error: no such stage$/);
+      expect(paths[0]!.ownerSVGElement!.querySelector(".ec-overlay")).toBeNull();
+    });
   });
 
   it("orders marks around one pivot clockwise from 12 o'clock, and others in document order", () => {
@@ -342,7 +427,7 @@ describe("expressive: keys and segments", () => {
     const options: ExpressiveOptions<Slice> = {
       key: (d) => d.outcome,
       keyboard: true,
-      geometry: (_el, d, k) => build.arc({ key: k, cx: d.cx, cy: 0, inner: 70, outer: 116, start: d.start, end: d.end })
+      geometry: (d, _el, k) => build.arc({ key: k, cx: d.cx, cy: 0, inner: 70, outer: 116, start: d.start, end: d.end })
     };
     // In data order, as d3.pie() returns them. Off target starts at a negative angle and is centred at
     // about 10:40, so it comes last. Saved's pivot is 0.4 px off, which still counts as the same.
@@ -383,7 +468,7 @@ describe("expressive: keys and segments", () => {
     };
     const host = d3Stack();
     const traces = Object.keys(series).map((name) => Object.assign(el("path", { d: "M0,0L1,1" }, host.plot), { __data__: { name } }));
-    const { fx } = setup<{ name: string }>(traces, { key: (d) => d.name, keyboard: true, geometry: (_el, d, k) => build.line({ key: k, points: series[d.name]! }) });
+    const { fx } = setup<{ name: string }>(traces, { key: (d) => d.name, keyboard: true, geometry: (d, _el, k) => build.line({ key: k, points: series[d.name]! }) });
     expect(fx.marks().map((m) => [m.key, m.pivot])).toEqual([
       ["goals", { x: 0, y: 100 }],
       ["xG", { x: 0, y: 100 }]
@@ -605,7 +690,7 @@ describe("expressive: refresh", () => {
     const { fx } = setup(host.paths, {
       ...traced,
       // The page reads each line's width from its element.
-      geometry: (el, d, key) => build.line({ key, series: d.name, points: vertices(d), width: Number(el.getAttribute("stroke-width")) }),
+      geometry: (d, el, key) => build.line({ key, series: d.name, points: vertices(d), width: Number(el.getAttribute("stroke-width")) }),
       on: {
         decorate: {
           ...story.effect,
@@ -932,7 +1017,7 @@ describe("expressive: data on host marks", () => {
     const { fx } = setup<Trace>(host.paths, { ...traced, on: { decorate: needsXg.effect } });
 
     // Lines whose geometry names no series have none to find.
-    const unnamed: ExpressiveOptions<Trace> = { ...traced, geometry: (_el, d, key) => build.line({ key, points: vertices(d) }), on: { decorate: needsXg.effect } };
+    const unnamed: ExpressiveOptions<Trace> = { ...traced, geometry: (d, _el, key) => build.line({ key, points: vertices(d) }), on: { decorate: needsXg.effect } };
     expect(() => setup<Trace>(d3Lines().paths, unnamed)).toThrow(/^expressive: on\.decorate needs the series "xg", but the marks have no series\. Name each mark's series/);
     // A stack's series are its parts'.
     expect(() => setup(d3Stack().selection(), { ...stacked, on: { hover: dataRecorder(["xg"]).effect } })).toThrow(
@@ -1244,7 +1329,7 @@ describe("expressive: keyboard", () => {
     const { fx } = setup<{ name: string }>([trace], {
       key: (d) => d.name,
       keyboard: true,
-      geometry: (_el, _d, k) => build.line({ key: k, points, width: 3 })
+      geometry: (_d, _el, k) => build.line({ key: k, points, width: 3 })
     });
     fx.focus("xG");
     const ring = overlayOf(host.svg).querySelector(".ec-focus-ring")!;
@@ -1544,7 +1629,7 @@ describe("expressive: markLabel", () => {
     );
     setup<{ outcome: string; start: number; end: number }>(slices, {
       key: (d) => d.outcome,
-      geometry: (_el, d, k) => build.arc({ key: k, cx: 0, cy: 0, inner: 70, outer: 116, start: d.start, end: d.end }),
+      geometry: (d, _el, k) => build.arc({ key: k, cx: 0, cy: 0, inner: 70, outer: 116, start: d.start, end: d.end }),
       markLabel: (d) => `${d.outcome}: 4 shots`
     });
     expect(slices.map(aria)).toEqual(["role=img aria-label=Saved: 4 shots aria-hidden=-", "role=img aria-label=Scored: 4 shots aria-hidden=-"]);
@@ -1813,9 +1898,9 @@ describe("expressive: watch", () => {
     const story = recorder();
     const { fx, clock } = setup<Trace>(host.paths, {
       key: traced.key,
-      geometry: (element, d, key) => {
+      geometry: (d, element, key) => {
         reads.push(`geometry ${key}`);
-        return traced.geometry!(element, d, key);
+        return traced.geometry!(d, element, key);
       },
       samples: (d, mark) => {
         reads.push(`samples ${mark.key}`);
@@ -2256,7 +2341,7 @@ describe("expressive: update({ on })", () => {
     const { fx } = setup<Slice>(paths, {
       key: (d) => d.outcome,
       keyboard: true,
-      geometry: (_el, d, k) => build.arc({ key: k, cx: 0, cy: 0, inner: 70, outer: 116, start: d.start, end: d.end }),
+      geometry: (d, _el, k) => build.arc({ key: k, cx: 0, cy: 0, inner: 70, outer: 116, start: d.start, end: d.end }),
       on: { hover: hover.effect }
     });
     fx.focus("Off target");
@@ -2648,7 +2733,7 @@ describe("expressive: circles and shapes", () => {
       ["name", el("text", { x: 50, y: 50 }, plot)],
       ["bar", el("rect", { x: 0, y: 100, width: 50, height: 20 }, plot)]
     ]);
-    const { fx } = setup<string>(elements, { ...named, geometry: (_el, _d, key) => build.point({ key, x: 1, y: 2, r: 3 }) });
+    const { fx } = setup<string>(elements, { ...named, geometry: (_d, _el, key) => build.point({ key, x: 1, y: 2, r: 3 }) });
     expect(fx.marks().map(seen)).toEqual(["dot", "name", "bar"].map((key) => seen(build.point({ key, x: 1, y: 2, r: 3 }))));
   });
 

@@ -156,7 +156,7 @@ type Columns = ReturnType<typeof drawColumns>;
 
 /** The README's attachment for a D3 pie: by outcome, each slice described with describe.arc, with keyboard and a name per slice. */
 function attachPie(pie: Pie, e: ChartEnv, more: Partial<ExpressiveOptions<Slice>> = {}): Attachment<Slice> {
-  return expressive<Slice>(pie.slices, { key: (d) => d.data.outcome, geometry: (_el, d, key) => arcOf(key, d), keyboard: true, markLabel: (d) => `${d.data.outcome}: ${d.value} shots`, ...more }, e);
+  return expressive<Slice>(pie.slices, { key: (d) => d.data.outcome, geometry: (d, _el, key) => arcOf(key, d), keyboard: true, markLabel: (d) => `${d.data.outcome}: ${d.value} shots`, ...more }, e);
 }
 
 function attachColumns(columns: Columns, e: ChartEnv, more: Partial<ExpressiveOptions<Outcome>> = {}): Attachment<Outcome> {

@@ -48,10 +48,11 @@ export interface ExpressiveOptions<D> {
    * other element (`<text>`, `<g>`, `<use>`, `<image>`) throws, naming its tag. Use this for those,
    * or to say more or other than an element shows: a padded donut's slice as `describe.arc`, which
    * goes round the donut's centre, or a line by its points.
-   * Called once per mark, with its first element in document order, in the coordinates of the marks'
-   * nearest common ancestor. Build it with `describe` and give it the key passed in.
+   * Called once per mark, with its row and its first element in document order, as `key` is, and then
+   * its key, in the coordinates of the marks' nearest common ancestor. Build it with `describe` and
+   * give it the key passed in. Until 0.13.0 the element came first: `(element, datum, key)`.
    */
-  readonly geometry?: (element: Element, datum: D, key: string) => MarkGeometry;
+  readonly geometry?: (datum: D, element: Element, key: string) => MarkGeometry;
   /**
    * Data effects' samples: values along the mark's walk, `{ t, value, at? }`, with `t` in [0, 1] and
    * never decreasing, and finite values. Called on every read for each mark, with its row (its first

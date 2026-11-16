@@ -208,7 +208,7 @@ const labelsOf = (host: Host) => (): HostLabel[] => [
 /** Each host as the page attaches it: by outcome, with keyboard and a name per mark; the pie's slices described with describe.arc. */
 function attach(host: Host, e: ChartEnv): Attachment<unknown> {
   if (host.kind === "pie") {
-    return expressive<Slice>(host.marks, { key: (d) => d.data.outcome, geometry: (_el, d, key) => arcOf(key, d), keyboard: true, markLabel: (d) => `${d.data.outcome}: ${d.value} shots` }, e) as Attachment<unknown>;
+    return expressive<Slice>(host.marks, { key: (d) => d.data.outcome, geometry: (d, _el, key) => arcOf(key, d), keyboard: true, markLabel: (d) => `${d.data.outcome}: ${d.value} shots` }, e) as Attachment<unknown>;
   }
   return expressive<Outcome>(host.marks, { key: (d) => d.outcome, value: (d) => d.shots, keyboard: true, markLabel: (d) => `${d.outcome}: ${d.shots} shots` }, e) as Attachment<unknown>;
 }

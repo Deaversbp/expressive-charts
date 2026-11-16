@@ -73,7 +73,7 @@ function attach(host: ReturnType<typeof d3Pie>, more: Partial<ExpressiveOptions<
     {
       key: (d) => d.data.outcome,
       value: (d) => d.value,
-      geometry: (_el, d, key) => build.arc({ key, cx: 0, cy: 0, inner: INNER, outer: OUTER, start: d.startAngle, end: d.endAngle }),
+      geometry: (d, _el, key) => build.arc({ key, cx: 0, cy: 0, inner: INNER, outer: OUTER, start: d.startAngle, end: d.endAngle }),
       keyboard: true,
       markLabel: (d) => `${d.data.outcome}: ${d.value} shots`,
       ...more
@@ -115,7 +115,7 @@ describe("a D3 pie through expressive()", () => {
     // No type argument: the selection's types give the callbacks their row.
     const fx = expressive(
       host.slices(),
-      { key: (d) => d.data.outcome, geometry: (_el, d, key) => build.arc({ key, cx: 0, cy: 0, inner: INNER, outer: OUTER, start: d.startAngle, end: d.endAngle }) },
+      { key: (d) => d.data.outcome, geometry: (d, _el, key) => build.arc({ key, cx: 0, cy: 0, inner: INNER, outer: OUTER, start: d.startAngle, end: d.endAngle }) },
       env()
     );
     // Document order is data order; the marks go round the ring.
@@ -498,7 +498,7 @@ describe("a D3 pie read by tag, with no geometry", () => {
             .join("path")
             .attr("class", "slice")
             .attr("d", arc<Slice>().innerRadius(inner).outerRadius(outer));
-          const given = expressive<Slice>(paths, { key: (d) => d.data.outcome, geometry: (_el, d, key) => build.arc({ key, cx: 0, cy: 0, inner, outer, start: d.startAngle, end: d.endAngle }) }, env());
+          const given = expressive<Slice>(paths, { key: (d) => d.data.outcome, geometry: (d, _el, key) => build.arc({ key, cx: 0, cy: 0, inner, outer, start: d.startAngle, end: d.endAngle }) }, env());
           expectSlices(byTag(paths).marks(), given.marks());
           document.body.replaceChildren();
         }

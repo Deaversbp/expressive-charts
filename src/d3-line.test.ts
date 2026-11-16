@@ -102,7 +102,7 @@ const points = (d: Trace): Point[] => d.rows.map((w) => ({ x: x(w.week), y: y(w[
 /** What the page passes: each path described from the points that drew it, sampled at the same points, and a name per line. */
 const described: ExpressiveOptions<Trace> = {
   key: (d) => d.series,
-  geometry: (_el, d, key) => build.line({ key, series: d.series, points: points(d), width: WIDTH }),
+  geometry: (d, _el, key) => build.line({ key, series: d.series, points: points(d), width: WIDTH }),
   samples: (d, mark) => samplesAlong(mark, d.rows.map((w) => ({ x: x(w.week), y: y(w[d.series]), value: w[d.series], at: w.week }))),
   keyboard: true,
   markLabel: (d) => `${LABELS[d.series]}: ${d.rows[d.rows.length - 1]![d.series]} by week ${d.rows[d.rows.length - 1]!.week}`

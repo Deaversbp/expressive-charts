@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M17 are complete (§9). M17 added four charts drawn with D3, each given its effects through the adapter as it is: a map on a new page, `map.html`, a bullet chart and a funnel on charts.html, and a drill-down on `layouts.html`'s treemap; it fixed the adapter to read a `<line>`'s colour from its stroke; and it caught the build tools up, vite 8.3.8, rolldown 1.3.2 and rolldown-plugin-dts 0.30.2. **0.12.0 is on npm**, published from CI through npm's trusted publishing with provenance on 16 November 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.12.0)), after 0.11.0 on 12 November, 0.10.0 on 11 November, 0.9.0 on 3 November, 0.8.0 on 2 November, 0.7.0 on 1 November, 0.6.0 on 30 October, 0.5.0 on 29 October, 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M17 are complete (§9). M17 added four charts drawn with D3, each given its effects through the adapter as it is: a map on a new page, `map.html`, a bullet chart and a funnel on charts.html, and a drill-down on `layouts.html`'s treemap; it fixed the adapter to read a `<line>`'s colour from its stroke; and it caught the build tools up, vite 8.3.8, rolldown 1.3.2 and rolldown-plugin-dts 0.30.2. **0.12.0 is on npm**, published from CI through npm's trusted publishing with provenance on 16 November 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.12.0)), after 0.11.0 on 12 November, 0.10.0 on 11 November, 0.9.0 on 3 November, 0.8.0 on 2 November, 0.7.0 on 1 November, 0.6.0 on 30 October, 0.5.0 on 29 October, 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. M18, for 0.13.0, the last 0.x, is planned in §9: the API shaped for 1.0, with square caps and bevel joins, one argument order for `expressive()`'s `geometry`, `motionSwitch()`'s options and what 1.0 will promise; `labelBounds` on `expressive()`, `outline()` and `wait()`; a fix for Safari's text spacing; and examples for general use, with a new page, `examples.html`. Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -5652,6 +5652,312 @@ Each step names the files it owns, so steps in the same wave can run in parallel
 - **0.12.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M17 is done.
 
 **Status: complete (16 November 2026).** Every item on the list holds. Five things differ from the decisions by your choice: rolldown-plugin-dts was moved by deleting its entry from the lockfile for `npm install` to write back, since `npm update` keeps the old one (step 1); each position has its own pair of views for the drill-down, drawn once, where decision 25 drew one pair again before each jump, since a redraw while a jump plays snaps the tiles (step 4); from one position to another is a crossfade (step 4); the bullet's bands are the same for every player, and the funnel has three stages (step 5); and the release is dated 16 November, three days after its edits (step 6). Nine are the steps' own, each in its Built list: two chunks were renamed, not one, and `npm ls` lists five extraneous packages on Windows (step 1); the hovered connector's arrow is the text colour, as it was, though the mark colour its run carries is now the stroke's, and the waterfall's four pictures part way through its load moved too, since its connectors are `<line>`s (step 2); the map's outline is made with `defineEffect()`, since `defineGeometryEffect` doesn't exist, its routes and ring shrink to half size at 320 px, and France's shape includes French Guiana (step 3); a position picked from the bars goes straight there (step 4); the funnel's boxes are each stage's top edge and its name's, not its count's, which would turn the label aside (step 5); the bullet's markers are linked to its bars and dim with them, and its toggle is named Measure (step 5); and a flash stops when a change of measure leaves its marker unpassed, from a review (step 5). Steps 1 to 5 built and checked the first eight items and their docs, script R passed with NVDA + Chrome, and step 6 published 0.12.0 to npm through trusted publishing with provenance, with its release on GitHub.
+
+### M18: The API shaped for 1.0: square caps and bevel joins, one order for `geometry`, `outline()` and `wait()`, a fix for Safari's text spacing, and examples for general use (0.13.0)
+
+The last 0.x release. Everything that would be a breaking change after 1.0 goes in now, while a minor release may carry it: square caps and bevel joins, one argument order for `expressive()`'s callbacks, and `motionSwitch()`'s options. Then the small additions M17's demos had to work round, a fix for text spacing in Safari, and examples that aren't all about soccer: the docs' examples, and one new demo page. Last, 0.13.0 on npm. 1.0 is M19: it takes out what 0.13.0 deprecates and changes nothing else.
+
+**Demo:** a new page, `examples.html`, has three cards on the library's own charts, a domain each: revenue by region against its target on bars, a measurement over time on a line, coloured where it falls below its control, and traffic by source on a donut that switches to bars. `map.html`'s hover outline is the built-in `outline()`, charts.html's bullet markers wait with `wait()`, and its funnel says where its own text is with `labelBounds`; each draws as it did.
+
+**Where M18 starts** (checked against main at `26c209f` while planning, 16 November 2026):
+
+- **Already built.**
+  - **0.12.0** is npm's `latest`, published through trusted publishing with provenance. GitHub has no open issues or pull requests. Main is 0.12.0's code, with M17 marked complete; its CI and Pages are green on `26c209f`.
+  - **What's exported.** The main entry has 57 names and 139 types; `expressive-charts/testing` has 6 names and 16 types; `expressive-charts/icons/sport` has 3 names.
+    - **The main entry's 57:** `VERSION`, a string; seven objects, `motion`, `defaultClock`, `defaultScaling`, `describe` (`bar`, `arc`, `line`, `point`, `shape`), `matrix` (`translate`, `rotate`, `scale`, `multiply`, `apply`), `gaits` (`roll`, `step`, `slide`) and `icons` (`dot`, `arrow`, `chevron`); and 49 functions:
+      - the motion core: `createMotion`, `createClock`, `manualClock`, `mediaReducedMotion`, `scaleDuration`, `tween`, `animated`, `playback`, `linear`, `easeInOutCubic`, `easeOutCubic`, `interpolateNumber`, `interpolatePoint` and `interpolateRecord`;
+      - geometry: `offset` and `samplesAlong`;
+      - the effects: `travel`, `flash`, `wiggle`, `pulse`, `trace`, `drawIn`, `delta`, `label`, `threshold` and `morph`; the combinators `sequence`, `parallel`, `stagger` and `only`; and `defineEffect` and `defineDataEffect`;
+      - icons and settings: `defineIcon`, `iconFromSvg`, `registerIcon`, `registerIcons`, `registerPreset` and `configure`;
+      - the charts: `barChart`, `donutChart`, `lineChart`, `chartSwitch` and `colorAssignment`;
+      - the adapters: `expressive`, `fromVegaView`, `hostView` and `link`;
+      - the controls: `motionSwitch` and `playButton`.
+    - **`testing`'s 6:** `checkEffect`, `checkTransition`, `play` and `testContext`, functions, and `fixtures` and `fixturePairs`, objects. **`icons/sport`'s 3:** `soccerBall` and `cleat`, icons, and `sport`, the two in a list.
+  - **What reads oddly, found by reading every declaration** (`dist/*.d.ts`):
+    - **Caps and joins.** `IconShape.linecap` is `"butt" | "round"` and `linejoin` `"miter" | "round"`, and `Paint.linecap` is `"butt" | "round"` (`src/core/contracts/icon.ts:17`, `drawing.ts:26`). `defineIcon` refuses anything else (`src/icons/define.ts:9`, `:80`), so an icon set's square caps and bevel joins are lost. An overlay path's join is always round (`src/charts/render/layer.ts:130`): `Paint` has no `linejoin`.
+    - **`expressive()`'s callbacks.** `key`, `segment`, `value` and `markLabel` take `(datum, element)`; `geometry` takes `(element, datum, key)` (`src/charts/adapter/types.ts:54`). Of its seven uses in the demos, five ignore the element.
+    - **`motionSwitch(target, motion?, options?)`** has an optional `motion` before its options, so a page that wants `persist` alone writes `motionSwitch(el, undefined, { persist })`. Every demo page calls `motionSwitch("#motion")`; api.md's example passes all three.
+    - **Six low-level names no README, guide or demo uses,** only api.md: `createClock`, `defaultClock`, `scaleDuration`, `defaultScaling`, `mediaReducedMotion` and `interpolateRecord`.
+    - **Smaller things,** each left as it is (decision 21): `label` is a chart's accessible name, a line chart's `labels` are its end labels, and `label()` is an effect; `at` is a point on `TextStyle` and an x on `Sample`; an `update` event has `from` where `MarkData` and `EffectContext` have `previous`; `fromVegaView()`'s `sample` beside `expressive()`'s `samples`; `table: "hidden"` beside `TableOptions.hidden`; only `trace` and `drawIn` take a `duration`; and `Icon.gait` names three gaits, not any `Gait`.
+    - **No name is deprecated** anywhere in `src`, so 0.13.0's is the first.
+  - **What the promise says now.** CHANGELOG's "The 0.x promise" lists the effect-author API name by name, and ends "From 1.0, everything the package exports follows semantic versioning". It doesn't say whether that covers the `ec-*` class names, the DOM a chart builds, pixels, default durations or an announcement's words. api.md marks 76 entries *Under the 0.x promise.*
+  - **`expressive()` and a host mark's own labels.** The adapter gives a mark it reads no `labelBounds`: nothing in `src/charts/adapter/` names them but `types.ts`'s comments. M17's funnel describes each whole stage with `geometry` and `describe.shape()` to say where its text is.
+  - **M17's page effects that 0.13.0 makes built-ins.** `map.html`'s `outline()`, 12 lines with `defineEffect()` (`demo/map-effects.ts`); and charts.html's `filling`, which draws nothing for 750 ms (`demo/charts-effects.ts`).
+  - **A refresh and a hover.** `refresh()` on an attachment starts a hovered mark's effects again, so after a resize `map.html`'s arrow travels its route once more. A test in `src/map.test.ts` pins it.
+  - **Text measured in WebKit.** `textMeasure` reads `getComputedTextLength()` (`src/charts/render/text.ts:54`), which in WebKit leaves letter and word spacing out (M13 step 1): "Ag 0" at 12.5 px measures 24.49 px with WCAG 1.4.12's spacing and without, while its box grows to 31 px.
+  - **`stress.html`** has no table in a11y-audit.md; axe and the DOM checks run on it.
+  - **The examples.** Most are one soccer club's season: README names goals 17 times, api.md 78, architecture.md 54 and the effects guide 7, and 41 of the 130 test files and 32 of `demo/`'s 49 files tell it. Business is there already: README's quick start, its first GIF and four more examples in README, api.md and the effects guide are revenue by region, and the line page has a card of ticket sales. Nothing is science or web analytics. Three of README's four GIFs are soccer demos. `expressive-charts/testing`'s fixtures are a bar keyed `"Okafor"` with the series `"goals"` and `"assists"` (`src/testing/fixtures.ts:39`). The core icons are neutral, and the ball and boot are in their own entry.
+  - **"Examples and demo data"** for `CLAUDE.md` (your note of 12 November) is commit `e54295f` on the local branch `claude/examples-general-use`, not on main. M18 follows it either way.
+  - **The build.** tsdown 0.23.7, with rolldown 1.3.2 and rolldown-plugin-dts 0.30.2, and vite 8.3.8, with rolldown 1.2.19; vitest 5.1.0, jsdom 31.0.0, Playwright 1.65.0 and axe-core 4.14.0; TypeScript 7.0.2 runs `typecheck`. This machine has Node 24.22.2.
+  - **npm on 16 November.** jsdom 31.0.1, Playwright 1.65.1 and axe-core 4.14.1 are out. vite, rolldown, rolldown-plugin-dts, tsdown, vitest, TypeScript (7.1 is still a beta), `get-tsconfig` (5 is still a beta), the D3 packages, Plot, Vega and Vega-Lite have nothing newer.
+  - **The patches, tried on main,** uncommitted, and put back (the build is byte for byte main's again, 33 files of 33):
+    - **jsdom 31.0.1:** `typecheck` passes, all 3,431 tests pass, and the build is byte for byte main's.
+    - **axe-core 4.14.1,** whose notes say it places absolutely positioned elements anew, which can change contrast and target-size results: `a11y.spec.ts` passes in Docker's Chromium, 157 tests of 157. Firefox and WebKit weren't run.
+    - **Playwright 1.65.1** wasn't installed in Docker. Its `browsers.json` has the same Firefox (159.0, build 1572) and WebKit (27.2, build 2388) as 1.65.0's, so the Firefox crash on `getByRole("button", { pressed: true })` (M17 step 4) is likely still there. Its Chromium is new, 159.0.8154.6 where 1.65.0 has 158.0.8127.18, and all 206 baselines are Chromium's. Its two fixes, for decorated classes and for Bun, don't touch this project.
+  - **CI since #187.** A code PR's run takes 10 to 12 minutes (four runs: 11 min 32 s, 11 min 22 s, 11 min 38 s and 10 min 1 s), where M17's took 31 to 40. `check` takes 1 to 2 minutes on each Node; the four visual jobs run side by side and take 7 to 11.5 minutes each, with no one of them always the longest. A docs-only change skips them: #189's run took 1 min 28 s, and main's on `26c209f` 1 min 11 s.
+  - **Sizes** (gzip, in bytes, with the room left in each budget, on 0.12.0's code): the stylesheet 2,491 (69), `motion` and `animated` 1,709 (339), `describe` and `matrix` 6,735 (945), `dist/testing.js` 24,059 (1,029), `chartSwitch`, `expressive` and `hostView` 45,202 (1,390), the switch's set 49,712 (1,488), `barChart` 32,536 (2,280), the line page's set 43,571 (3,021), `expressive` and `travel` 35,285 (3,115), everything 93,958 (3,322), `dist/index.js` 134,857 (5,431), the script-tag bundle 93,618 (6,734) and `dist/index.cjs` 132,817 (7,471). The size check passes, 16 rows.
+  - **The tests.** 3,431 unit tests in 130 files pass, in 21 to 26 s here with a quarter of the workers. The visual suite is 446 tests a browser, with 206 baselines, all Chromium's: 51 are `layouts.html`'s, 31 charts.html's, 31 the line page's and 9 `map.html`'s. a11y-check.md has sections A to R, so M18's script is S.
+- **Gaps.**
+  - An icon can't have square caps or bevel joins.
+  - `geometry` takes its arguments in another order than the adapter's other callbacks.
+  - `motionSwitch()` takes `motion` before its options.
+  - The promise for 1.0 doesn't say what it covers beyond names.
+  - `expressive()` has no way to say where a host mark's own labels are, short of `geometry`; no built-in keeps a closed shape's outline on a hover; and nothing waits before an effect.
+  - A refresh starts a hover's effects again.
+  - In Safari a chart lays its text out without a viewer's letter and word spacing.
+  - `stress.html` has no audit table.
+  - Nearly every example is about soccer, none is science or web analytics, and no demo page is anything else.
+  - jsdom and axe-core are a patch behind each.
+- **What planning found to plan round.**
+  - **Playwright 1.65.1 gives nothing here and could move every baseline,** so it waits (decision 4).
+  - **`expressive-charts/testing`'s fixtures are published, and under the promise.** A neutral name for `"Okafor"` or `"goals"` would break an author's test that names one (decision 12).
+  - **A deprecated name needs a release to be deprecated in.** The promise gives it one minor release, so 1.0 can't both introduce a new form and drop the old one (decision 1).
+  - **The stylesheet has 69 bytes of room.** M18 plans no rule in it.
+  - **Not measured:** what each change adds to each size; 1.65.1's Chromium against the baselines; axe-core 4.14.1 in Firefox and WebKit; and Firefox's and Chromium's own measure with spacing, against WebKit's.
+- **Out of date:** nothing found.
+
+**What M18 takes from the backlog and the notes, and what stays:**
+
+| Item | Goes to |
+| --- | --- |
+| A review of every exported name and option for 1.0 (M16 decision 3) | Decisions 5–9 and 21, steps 2 and 3 |
+| Square caps and bevel joins (the backlog, M8 decision 8) | Decisions 5 and 22, step 2 |
+| What 1.0's promise covers | Decisions 8 and 24, step 3 |
+| A way to give `expressive()` a host mark's `labelBounds` (M17 planning and step 5) | Decisions 13 and 25, step 4 |
+| A built-in hover outline for a closed shape (M17 step 3) | Decisions 14 and 26, step 4 |
+| A wait before an effect (M17 step 5) | Decisions 15 and 27, step 4 |
+| A refresh starting a hover's effects again (M17 step 3) | Decisions 16 and 28, step 4 |
+| Spacing in WebKit's measure (the backlog, M13 step 1) | Decisions 2 and 29, step 5 |
+| A written audit table for `stress.html` (the backlog, M6 step 8) | Decisions 2 and 29, step 5 |
+| Examples for general use (your note of 12 November) | Decisions 10–12, 17, 19 and 30, step 6 |
+| jsdom 31.0.1 and axe-core 4.14.1 | Decisions 4 and 20, step 1 |
+| Playwright 1.65.1 | Stays: your choice in planning (decision 4) |
+| VoiceOver + Safari on every section (the backlog, M6 decision 2) | Stays: your choice in planning (decision 18). A step of M19, before 1.0 |
+| A bar's per-frame cost, and fewer attribute writes per frame (the backlog) | Stay: your choice in planning (decision 2). No API changes with them, so they can follow 1.0 |
+| A view of several keeping its attachments' tab stops on one row, a guide's copy taking its ancestors' opacity, clip, mask or filter, and an `enter` effect that stops when its reason goes (M16's and M17's steps) | Stay: your choice in planning (decision 16). In the notes |
+| A guide drawn anew mid-switch, the Tab leftover on the dumbbell card, a pair mid-switch in one colour reading as one shape, one treemap tile into its children, and a map's time playback | Stay: in the notes |
+| "Pour", a transition effect reporting its progress, and M15's smaller items | Stay: in the backlog and the notes |
+| Taking out `motionSwitch()`'s old form, and 1.0 itself | Stay: M19 |
+| `get-tsconfig` 5 stable, TypeScript 7.1, and `api-docs.test.ts` on TypeScript 7's API | Stay: all betas |
+| Colours crossing over in a switch, a rotated label keeping its turn, the two Vega items, framework wrappers and Canvas | Stay: left out on purpose |
+| npm's package page looked at in a browser, deprecating `0.0.0-stage` on npm, and deleting the old branches on origin | Stay: yours |
+
+Three of M18's items are backlog entries: square caps and bevel joins (under "More of the icon sets' SVG"), "Spacing in WebKit's measure" and "A written audit table for `stress.html`". Steps 2 and 5 mark them built when they are.
+
+**Decided while planning M18 (16 November 2026):** decisions 1–19 are yours, and 20–31 follow from them and the code.
+
+1. **M18 is 0.13.0, the last 0.x.** It makes the breaking changes and the deprecations, and 1.0 is M19, which takes out what 0.13.0 deprecates and changes nothing else. Not 1.0 now, and no release candidate.
+2. **Four things join the review of the API:** M17's follow-ups as library additions; examples for general use; and the accessibility leftovers, Safari's text spacing and `stress.html`'s audit table. Not a bar's per-frame cost, which changes no API and can follow 1.0.
+3. **One PR a wave.** A wave's steps share one branch and one PR, with no docs-only PR for a step's results. Not one a step, as M17 had, and not everything in one.
+4. **jsdom 31.0.1 and axe-core 4.14.1.** Playwright stays 1.65.0: 1.65.1 has the same Firefox, so its crash is likely unfixed, and a new Chromium that could move any baseline. Not all three, and not none.
+5. **Square caps and bevel joins go in:** `linecap` gains `"square"` and `linejoin` gains `"bevel"`. The unions widen, which is a breaking change to the effect-author API, so CHANGELOG has a migration note. Not left out for good.
+6. **`geometry` takes `(datum, element, key)`,** as the adapter's other callbacks take `(datum, element)`. A page in TypeScript gets an error to fix; one in plain JavaScript breaks until it swaps the two, so CHANGELOG says it first. Not left as the odd one out.
+7. **`motionSwitch(target, options?)`, with `motion` among the options.** The three-argument form keeps working in 0.13.0, marked `@deprecated`, and goes in 1.0. Not gone at once, and not left.
+8. **1.0 will promise the names, their types, what api.md says each does, and the `--ec-*` custom properties.** Not the `ec-*` class names, the DOM a chart builds, exact pixels, default durations or an announcement's words. M18 writes it down for you to approve. Not class names too, and not names and types alone.
+9. **The six low-level motion names stay,** and 1.0 promises them: `createClock`, `defaultClock`, `scaleDuration`, `defaultScaling`, `mediaReducedMotion` and `interpolateRecord`. Not taken out.
+10. **The docs' examples, and one new demo page.** README's and api.md's examples are spread across business, science and web analytics, and one new page shows the library's own charts on such data. The pages there are stay as they are. Not the docs alone, not M17's three charts on new data, and not every page.
+11. **The new page has three cards, a domain each:** revenue by region against its target on bars, with change labels; a measurement over time on a line, coloured where it falls below a control series; and traffic by source on a donut that switches to bars. Not one dashboard, and not two cards.
+12. **`expressive-charts/testing`'s fixtures keep their names,** `"Okafor"`, `"goals"` and `"assists"`: they're test data under the promise, not examples. Not renamed.
+13. **`expressive()` gains `labelBounds`:** `(datum, element) => Rect[]`, the boxes of the host's own text for a mark, the name and shape `describe.bar()` and the rest take. Not the host's `<text>` elements for the adapter to measure.
+14. **`outline()` is a new built-in effect:** it draws the mark's outline in the overlay, at once, and takes it away on leave. Not left to each page.
+15. **`wait(ms)` is a new built-in effect:** it draws nothing for a base duration, for `sequence(wait(750), flash())`. Not a `delay` option on `sequence`, and not left to each page.
+16. **A refresh keeps a hover's effects.** Not the three other fixes: a view of several's tab stops, a guide's copy and its ancestors, and an `enter` effect that stops with its reason.
+17. **README's four GIFs stay:** three of soccer demos, and the quick start's revenue by region. Not two captured again from the new page, and no fifth.
+18. **VoiceOver + Safari is run before 1.0, in M19.** Not in M18, and not left out of 1.0.
+19. **A deprecated form says so in its types alone:** `@deprecated`, with its replacement, and CHANGELOG's note. Nothing is logged at run time.
+20. **The tool patches** (decision 4).
+    - **What moves.** The lockfile, for jsdom 31.0.1, whose range in `package.json` goes to `^31.0.1`; and `package.json`'s pin and the lockfile, for axe-core 4.14.1. Nothing else. If npm has a newer patch of either when the step starts, it asks you which to take.
+    - **Checked** as planning's trial was, and further: the build byte for byte main's; the suite in its order and shuffled; and `a11y.spec.ts` in Docker in Chromium, Firefox and WebKit. **If axe-core 4.14.1 reports anything 4.14.0 didn't, the step stops and shows you.**
+    - **The rest waits:** Playwright 1.65.1 (CI's image and `docker.mjs` follow the pin, so both stay `v1.65.0-noble`), TypeScript 7.1 and `get-tsconfig` 5.
+21. **The review, and what it leaves** (decisions 5–9).
+    - **Three changes:** caps and joins (decision 22), `geometry`'s order and `motionSwitch()`'s options (decision 23).
+    - **Left as they are,** since each would cost a rename everywhere for a small gain, or can be added to later without breaking anything: a chart's `label`, a line chart's `labels` and the `label()` effect; `at` on `TextStyle` and on `Sample`; `from` on an `update` event; `sample` on `fromVegaView()`; `table: "hidden"`; a `duration` on `trace` and `drawIn` alone; `Icon.gait`'s three names; `fromVegaView()`'s own name; and the fixtures' names (decision 12). api.md says where two of them might be taken for each other.
+    - **Nothing is taken out** of any entry (decision 9). `src/package.test.ts` and `pack-check` go on checking the 57, 6 and 3 names, plus M18's two.
+22. **Square caps and bevel joins** (decision 5).
+    - **The types.** `IconShape.linecap` is `"butt" | "round" | "square"`, `IconShape.linejoin` is `"miter" | "round" | "bevel"`, and `Paint.linecap` is `"butt" | "round" | "square"`. The defaults stay butt and miter. `Paint` gains no `linejoin`: an overlay path's join stays round, as every effect draws now.
+    - **What reads them.** `defineIcon` accepts the new values and still refuses any other; `iconFromSvg` keeps `stroke-linecap="square"` and `stroke-linejoin="bevel"`, attribute or inline style, inherited as SVG inherits them, where it dropped them; and the SVG layer writes them. `testContext()`'s recording layer records a paint as it's given, so `Picture` carries them.
+    - **Why it's breaking.** Code that reads these types and handles every case, a renderer of its own or a switch over `linecap`, no longer does. Code that only writes them is untouched. The migration note says so, with what to add.
+    - **Byte for byte:** every icon and path drawn now, since none has the new values. The core icons and the sport pack don't change.
+23. **`geometry`'s order, and `motionSwitch()`'s options** (decisions 6, 7 and 19).
+    - **`geometry: (datum, element, key) => MarkGeometry`** on `ExpressiveOptions` (`src/charts/adapter/types.ts`). `fromVegaView()` has no `geometry`, so nothing changes there. The seven uses in `demo/`, and api.md's and architecture.md's examples, change with it.
+    - **A page that still passes the old order** gets, in JavaScript, an element where its row was. The adapter already checks what `geometry` returns; where the step can tell the old order from that (a throw inside the page's function, or a result that's no mark), the error names the new order. If it can't tell without guessing, it says so in the PR and the note stands alone.
+    - **`motionSwitch(target, options?)`,** with `motion?: Motion` on `MotionSwitchOptions`, default the page-wide `motion`. The old form is told apart by its second argument being a `Motion` (it has `chooseMode`), and by a third argument; both overloads are declared, the old one `@deprecated` with its replacement. A second argument that is neither throws the `TypeError` it throws now.
+    - **CHANGELOG** lists the order under Changed, first, with what to write instead, and the old form under Deprecated. These two are outside the 0.x promise (the adapters and the controls); the deprecation follows its rule anyway.
+24. **What 1.0 will promise** (decision 8).
+    - **Written in CHANGELOG,** under "The 0.x promise", as a section of its own, "What 1.0 will promise", in place of the one sentence there now; README's promise points to it, and api.md's opening says it.
+    - **Promised:** every name the three entries export and the stylesheet's entry; their types; what api.md says each does, its defaults among it where api.md states them as part of what a name does (an option's default value); and the `--ec-*` custom properties api.md's table lists.
+    - **Not promised:** the `ec-*` class names and the elements a chart, an adapter or a control builds; the exact pixels of anything drawn; default durations, easings and the scaling table's numbers; the words of a default name, tooltip or announcement; what the published files are split into, and their sizes; and anything api.md doesn't state.
+    - **The step shows you the text before its PR,** and it changes nothing a page runs. M19 moves it from "will promise" to "promises".
+25. **`labelBounds` on `expressive()`** (decision 13).
+    - **The option.** `labelBounds?: (datum: D, element: Element) => readonly Rect[]` on `ExpressiveOptions`, in the marks' px, read when the marks are and again on each `refresh()`. Its boxes become the mark's `labelBounds`, so `delta` and `label` keep clear of them. `fromVegaView()` takes it too, since its options are `expressive()`'s.
+    - **With `geometry`,** the page's own description wins, as it does for everything else: `labelBounds` is for marks the adapter reads. With a `segment`, the boxes are the whole mark's, given once, for its first element.
+    - **No `nearbyLabels` option.** A page that needs its neighbours' boxes still describes the mark. If the funnel can't draw as it does without one, the step shows you.
+    - **charts.html's funnel** drops its `geometry` for `labelBounds`, with the two boxes a stage it has now. **Its pictures don't move;** if one does, the step shows you before it changes anything.
+26. **`outline()`** (decision 14).
+    - **`outline(options?: OutlineOptions): GeometryEffect`,** with `color`, a theme token or any CSS colour, default `"text"`, and `width`, px, default 2. It draws `mark.outline.d` as a path in the run's layer, unfilled, in `run` and in `end` alike, with no tween, and follows the mark through `onChange`. A leave clears it, as the runner clears any hover's layer.
+    - **For a hover on a closed shape,** where the built-ins that draw along a mark have no direction to follow. On an open shape it strokes the line. It works in any slot; in `decorate` it stays.
+    - **Nothing moves, and no data is covered:** a stroke on the mark's own edge. With reduced motion or Off it's the same picture.
+    - **Not a preset name:** the presets stay `wiggle`, `pulse` and `flash`.
+    - **`map.html`** uses it in place of its own. **Its pictures don't move;** the step sets the page's `width` to what its own effect drew, and shows you if a picture still moves.
+27. **`wait()`** (decision 15).
+    - **`wait(duration: number): GeometryEffect`:** it draws nothing for `duration` base ms on effect timing, scaled by the motion mode as `drawIn`'s is, and resolves; cancelled, it resolves at once. `end` draws nothing. With motion off it takes no time, so `sequence(wait(750), flash())` is `flash()`'s end state. A `duration` that isn't a number of 0 or more throws a `RangeError`.
+    - **Under `checkEffect`,** as every built-in is.
+    - **charts.html's bullet** uses it in place of `filling`. Its flag that holds an `update` flash back while the bars fill stays the page's. **Its pictures don't move.**
+28. **A refresh keeps a hover's effects** (decision 16).
+    - **The rule.** After `refresh()`, a mark that is hovered or focused, is still there by its key, and has no `update` (its `value` is as it was, or it has none and its geometry is) keeps its hover run: the run hears the new geometry through `onChange`, as it does while `watch` follows a host. A mark whose values changed plays its hover again once the change is drawn, as a chart's does after a data transition. A mark that's gone ends its hover, as now.
+    - **`map.html`'s arrow** stays at its route's end through a resize. The test that pins the second trip changes to pin this.
+    - **The charts are untouched:** this is the adapters' `refresh()`.
+    - **If it can't be done inside the adapter,** without a change to the runner's contract or to what an effect is given, the step stops and shows you.
+29. **Safari's text spacing, and `stress.html`'s audit** (decision 2).
+    - **The fix.** Where the browser's `getComputedTextLength()` leaves letter and word spacing out, `textMeasure` adds them itself: the computed `letter-spacing` a character and `word-spacing` a space. Whether it does is found by measuring, once a document, not by the browser's name. Where the browser counts them, as planning takes Chromium to, nothing changes. The adapter's own measure follows the same rule.
+    - **First, the step measures** all three browsers in Docker: the length with and without spacing, against the box. If Chromium or Firefox leave spacing out too, or count part of it, **it stops and shows you,** since a fix there moves baselines.
+    - **Chromium's 206 baselines don't move.** In WebKit a chart with a viewer's spacing lays out with it: a test adds WCAG 1.4.12's spacing before a chart draws and after, in WebKit, and checks no text overlaps or leaves its card, and that the measure equals the box within a pixel.
+    - **`stress.html`'s table** in a11y-audit.md: its criteria written up as the other pages' are, from what axe, the DOM checks and scripts G, I and N already found, with its judgement calls (100 bars' names thinned, ten years of days by Page Up and Page Down, the end state drawn where a trip would last minutes). The audit's opening stops saying it has none.
+30. **Examples for general use** (decisions 10–12 and 17).
+    - **The docs.** README's examples and api.md's are spread across three domains, so no one domain looks like what the library is for: revenue, a sales funnel and a KPI against its target; measurements, samples and experiments; and visitors, sessions and engagement. README's quick start is revenue by region already, and stays; the examples beside its three soccer GIFs stay too, since the pictures are theirs, and the ball and boot's says the sport pack is optional. What changes is the rest: the examples that are soccer for no reason of their own go to science and web analytics first, which have none. `docs/sketches`, which `typecheck` and the tests run, change with the examples they hold. architecture.md and the effects guide change only where an example is rewritten for another reason.
+    - **The new page, `examples.html`,** on `barChart`, `lineChart`, `donutChart` and `chartSwitch`, with the page's motion switch:
+      - **Business:** revenue by region against its target, on bars, with `delta` on `update` and a control that plays the next quarter.
+      - **Science:** a measurement over time, on a line, with `threshold` against a control series, and a hover on the nearest point.
+      - **Web analytics:** traffic by source, on a donut that switches to bars.
+    - **First, the rows,** made up, shown to you before anything is drawn, with each card's words: names, units and labels.
+    - **At load** everything is at rest, and nothing plays by itself: the quarter plays on a click. With reduced motion or Off every card is in its end state, the change labels in place.
+    - **Colour and text** as CLAUDE.md's Visual defaults have them: the palette in its fixed order, by entity; text in the theme's text colours; light and dark.
+    - **No sport icon** on the page: `travel`, if a card uses it, takes a core icon.
+    - **The rest stays soccer:** the other ten pages, their pictures, their scripts and the tests' rows.
+    - **`CLAUDE.md`'s "Examples and demo data"** is another session's PR. If it hasn't landed when step 6 starts, the step works to it as written in `e54295f` all the same.
+31. **The waves, the PRs** (decision 3) and **the rest.**
+    - **Four PRs, and a fifth, docs-only, after the release.** Wave 1's is the tools, the breaking changes and the promise's text. Wave 2's is the additions and the fixes. Wave 3's is the examples. Wave 4's is the release. The fifth marks M18 done in this plan once 0.13.0 is on npm; it skips the visual jobs, so it takes about a minute and a half. M17 had eight after its plan's.
+    - **A wave is one session, or sessions one after another on one branch,** never two at once. Its steps are commits; a step that must show you something does, and goes on once you've answered. Wave 3 may run beside wave 2, in its own session, once wave 1 has landed.
+    - **No results PR.** You run script S on wave 3's branch before its PR merges (`npm run dev`), and its results go in that PR. If you'd sooner run it on the deployed site, they go in the release's PR.
+    - **Unit tests** for each change sit beside its code; a test that brings a chart, an adapter and an effect together sits beside `src/index.ts`, as `src/host-line.test.ts` does.
+    - **Accessibility.** One script, S, for NVDA + Chrome, for `examples.html`: every mark read once with its name, the buttons with their state, the quarter's change announced once, the switch announced once, focus following its key, and each label's words in a name. `map.html`, the bullet chart and the funnel draw and read as they did, so script R isn't run again; the unit tests and the pictures say so.
+    - **Shaped for 1.0.** M18 adds two names, `outline` and `wait`, one type, `OutlineOptions`, and two options, `labelBounds` and `MotionSwitchOptions.motion`. Each has its explicit type and its entry in api.md, or `typecheck` and `src/api-docs.test.ts` fail. A step that finds it needs any other stops and shows you.
+    - **Docs.** Step 2 adds `## Unreleased` to CHANGELOG, above 0.12.0. Each change's step writes its entry there, and its lines in api.md, architecture.md and README. The effects guide gains `outline()`'s twelve lines' worth as a pointer to the built-in.
+    - **Sizes.**
+      - On 0.12.0 the tight ones are the stylesheet (69 bytes left), `motion` and `animated` (339), `describe` and `matrix` (945), `dist/testing.js` (1,029), `chartSwitch`, `expressive` and `hostView` (1,390) and the switch's set (1,488).
+      - Step 2 adds a few bytes wherever icons are checked and drawn: every set with a chart or an adapter, everything, the script-tag bundle and the two `dist/index` files; and `motionSwitch()`'s old form adds to the last four. Step 4's `labelBounds` and its refresh add to `expressive` and `travel` and to `chartSwitch`, `expressive` and `hostView`, the tightest it touches; `outline` and `wait` add only to everything, the script-tag bundle and the two `dist/index` files, since a page's bundler drops them otherwise. Step 5 adds to every set with a chart. No step touches the stylesheet, `motion` and `animated`, or `describe` and `matrix`.
+      - Each step measures every size in bytes against main's built beside it, and says them in the PR. No budget should need raising. A step that takes a size past its budget raises it in the same PR, to its size plus 10% rounded up to 0.5 KB, says why (CONTRIBUTING's Bundle size), and adds a sentence to architecture.md's Bundle size. **A step that would need a rule in the stylesheet stops and shows you.**
+      - The budgets aren't part of the promise (decision 24). M19 looks at them once more before 1.0.
+    - **Visual checks.** CI's visual jobs run the whole suite on every PR that isn't docs-only, in the `v1.65.0-noble` image. A wave that changes what a page draws runs its pages' specs in Docker before its PR, makes only the baselines its change moves or adds, and **shows you each one, main's beside the new, before it commits them.** Waves 1 and 2 expect none to move. Run one Playwright container at a time across all sessions, with 2 to 4 workers: check `docker ps` first. **Ask before starting Docker Desktop:** starting it brings up another project's containers.
+    - **A taller heading, lede or button row moves every card below it by half a pixel.** Step 4 changes no page's top. Step 6's page is new, and its entry in the demo index is one more line at the end.
+    - **You merge before the visual jobs end,** so each wave checks main's CI before it starts, and the release checks it too.
+    - **Byte-for-byte tests** round their numbers first and strip the counters in ids. Pin each digest on main's code before the change it guards: icons and paths before step 2, host views before step 4, and charts' layouts before step 5. New digest tests run shuffled and on one worker with their neighbours.
+    - **Timeouts.** Vitest gives a test 15 s. Under load a heavy test can time out: run it again, or the suite at `--maxWorkers=25%`, before treating it as a failure.
+    - **Line numbers drift.** Each brief names a test by its title as well as its line.
+    - **Reviews.** Expect review comments on each PR. Plan what Off and reduced motion do part way through every interaction: a refresh mid-hover, a refresh mid-trip, a wait cancelled, the quarter mid-play, a switch mid-morph.
+    - **Notes.** Each wave's session reads the hand-over notes first, `plan-0-13.md` from planning, beside `plan-0-12.md`, and its siblings' notes, and writes its own: commits, files, decisions beyond the brief, where the plan and the code differ, and follow-ups. Each brief is saved as a file in the planning session's notes folder, and names that folder.
+    - **Check GitHub, not the word.** Before a wave starts, the session starting it checks on GitHub that the PRs it waits for are merged. A wave pushes every commit before you merge its PR.
+    - **Dates** are the local day, Pacific time (PST), as CHANGELOG has them, checked when CHANGELOG's heading is written and again just before the release.
+    - **The release** goes as CONTRIBUTING's Releasing says, through trusted publishing. Nothing is published, tagged or released without your go-ahead in that session.
+
+What's an addition and what isn't (the 0.x promise). 0.13.0 is a minor release, with one breaking change to the effect-author API, which the promise allows in a minor release with a migration note.
+
+| Change | Under the promise? | Kind |
+| --- | --- | --- |
+| `"square"` on `IconShape.linecap` and `Paint.linecap`, and `"bevel"` on `IconShape.linejoin` | Yes: `IconShape` and `Paint` | **Breaking** for code that reads them and handles every case; nothing changes for code that writes them. Listed under Changed, with a migration note |
+| `iconFromSvg` keeping square caps and bevel joins | No: the icons | A fix: an icon that has them draws with them. Listed under Fixed |
+| `geometry: (datum, element, key)` on `expressive()` | No: the adapters | **Breaking:** the first two arguments swap. Listed under Changed, first, with what to write instead |
+| `motionSwitch(target, options?)`, and `motion` on `MotionSwitchOptions` | No: the controls | An addition, and a deprecation: the three-argument form works in 0.13.0 and goes in 1.0. Listed under Added and Deprecated |
+| `labelBounds` on `expressive()` and `fromVegaView()` | No: the adapters | An addition: an optional option |
+| `outline()`, with `OutlineOptions`, and `wait()` | No: the built-in effects | Additions: two new exports. Nothing in the effect-author API changes for them |
+| A refresh keeping a hover's effects | No: the adapters | A change of behaviour: a hover no longer plays again after a refresh that leaves its mark's values alone. Listed under Changed; nothing to write instead |
+| Letter and word spacing in a text's measure where the browser leaves them out | No: the charts and the adapters | A fix, in Safari. Listed under Fixed |
+| "What 1.0 will promise" | The promise's own text | Words: nothing a page runs changes |
+| jsdom 31.0.1 and axe-core 4.14.1 | No: the repository | The tests. The build is byte for byte |
+| `examples.html`, the docs' examples, `stress.html`'s audit table and script S | No: the demos and the docs | Not published to npm, but README |
+
+Each wave names the files it owns. Waves 1 and 2 run one after the other; wave 3 may run beside wave 2. Files shared by several steps get small edits only, and whichever lands second merges main first: `package.json`, the lockfile, `CHANGELOG.md`, `README.md`, `CONTRIBUTING.md`, `docs/architecture.md`, `docs/api.md`, `docs/effects-guide.md`, `demo/index.html`, `tests/visual/demo.ts`, `tests/visual/a11y.spec.ts`, `docs/a11y-audit.md`, `docs/a11y-check.md` and this plan.
+
+- **Wave 1 alone** changes the lockfile and `package.json`; `src/core/contracts/icon.ts` and `drawing.ts`, `src/icons/define.ts` and `svg.ts`, `src/charts/render/layer.ts`; `geometry`'s type in `src/charts/adapter/types.ts` and its call in `expressive.ts`; `src/charts/controls/motion-switch.ts` and `motionSwitch()` in `src/index.ts`; the seven `geometry` callbacks in `demo/`; and the promise's text in CHANGELOG, README and api.md.
+- **Wave 2 alone** changes `src/effects/outline.ts` and `wait.ts`, new, and `src/effects/index.ts`; `labelBounds` and the refresh in `src/charts/adapter/`; `src/charts/render/text.ts` and the adapter's measure; `demo/map-effects.ts` and `demo/charts-effects.ts`; and `stress.html`'s table in a11y-audit.md. It starts after wave 1 has landed, since both change `src/charts/adapter/expressive.ts` and `demo/charts-effects.ts`.
+- **Wave 3 alone** changes `demo/examples.*`, new, with its unit tests, `tests/visual/examples.spec.ts` and its baselines; `examplesDemo` in `tests/visual/demo.ts` and the page's entry in `a11y.spec.ts`; the examples in README and api.md, and `docs/sketches`; the page's table in a11y-audit.md and section S of a11y-check.md; and the page's lines in the demo index, README and CONTRIBUTING.
+- **api.md:** wave 2 adds entries, wave 3 rewrites examples. Wave 3 leaves the entries wave 2 adds alone, and whichever lands second merges main first.
+- **CHANGELOG:** wave 1 adds `## Unreleased` and its entries; wave 2 its own. Wave 3 adds none, since nothing a page runs changes.
+- `typecheck` requires an explicit type on every new export: `outline`, `wait` and `OutlineOptions`.
+
+**Wave 1** (alone; one PR):
+
+1. **The tool patches** (decisions 4 and 20). Owns the lockfile, jsdom's range and axe-core's pin.
+   - Checks: `npm ls`; `typecheck`; the suite in its order and shuffled; the build, byte for byte main's; and `a11y.spec.ts` in Docker in Chromium, Firefox and WebKit.
+   - **Done when** all of them pass, and axe-core 4.14.1 reports nothing 4.14.0 didn't.
+   - Docs: CONTRIBUTING, where it names a version that moved. No CHANGELOG entry.
+   - Budgets: none.
+2. **The breaking changes** (decisions 5–7, 19, 22 and 23). Owns the icon and drawing contracts, `defineIcon`, `iconFromSvg`, the SVG layer, `geometry`'s order and `motionSwitch()`.
+   - Tests:
+     - Caps and joins: `defineIcon` taking `"square"` and `"bevel"` and refusing any other; `iconFromSvg` keeping each from an attribute, an inline style and an ancestor; the layer writing them on an icon's shape and on a path; the recording layer's `Picture` carrying them; and digests of every core and sport icon, and of each built-in effect's drawing on the fixtures, byte for byte as on main, pinned first.
+     - `geometry`: each callback given `(datum, element, key)`; a selection's data, `__data__` and `datum` each reaching it; and what a page that passes the old order sees.
+     - `motionSwitch()`: `(target)`, `(target, options)`, `(target, { motion })`, and the old `(target, motion)` and `(target, motion, options)`, each building the same control as now, digest for digest; a second argument that is neither throwing; and the types, the old overload marked `@deprecated` (`docs/sketches`, which `typecheck` runs).
+   - The visual suite is CI's: nothing a page draws changes, so **the step stops if a picture moves.**
+   - **Done when** every existing test passes, but those that called `geometry` or `motionSwitch()` the old way, each changed and listed in the PR, and every size is said in bytes against main's.
+   - Docs: api.md (`IconShape`, `Paint`, `iconFromSvg`, `expressive()`'s options, `motionSwitch()` and `MotionSwitchOptions`), architecture.md (icons, the adapter's `geometry`, the motion switch), README where it shows either call, and CHANGELOG's `## Unreleased`: Changed, with the two migration notes, Fixed, Added and Deprecated. The backlog's "Left: square caps and bevel joins" is marked built.
+   - Budgets it may raise: any set with a chart or an adapter, everything, the script-tag bundle and the two `dist/index` files.
+3. **What 1.0 will promise** (decisions 8, 9, 21 and 24). Owns CHANGELOG's promise, README's and api.md's opening.
+   - **First, the text, shown to you.**
+   - api.md also says where two names might be taken for each other (decision 21).
+   - **Done when** you've approved the text, the test that imports every promised name still passes, and `src/api-docs.test.ts` does.
+   - Budgets: none.
+
+**Wave 2** (after wave 1 lands; one PR):
+
+4. **`labelBounds`, `outline()`, `wait()`, and a refresh that keeps a hover** (decisions 13–16 and 25–28). Owns the two new effects, the adapter's option and its refresh, and the two demo files that take them up.
+   - Tests:
+     - `labelBounds`: a host bar, a closed shape and a line each carrying the boxes as its `labelBounds`; `label` and `delta` keeping clear of them; the boxes read again on a refresh; `geometry` winning over it; a stack's boxes given once; and through `fromVegaView()`.
+     - `outline()`: under `checkEffect` on every fixture; the path its mark's `outline.d`, in the text colour and in `color`, at `width`; drawn at once and the same in `end`; following a geometry change; gone on leave; and nothing drawn on the mark itself.
+     - `wait()`: under `checkEffect`; nothing drawn; its time by mode, none with Off; in a `sequence`, the next part starting after it; cancelled part way; and its `RangeError`.
+     - The refresh: a hovered mark's run alive through a refresh that leaves its value alone, hearing the new geometry; `travel`'s icon staying at its end; a changed value playing the hover again; a mark gone ending it; focus as the pointer; a link's hover; and with `watch`.
+     - The pages: `src/map.test.ts` and `src/host-bullet-funnel.test.ts` passing with the built-ins in place of the pages' own, the funnel's labels where they were to the pixel.
+     - Digests of host views with no hover, byte for byte as on main.
+   - `map.spec.ts` and `charts.spec.ts` in Docker: every picture as it was. **If one moves, the step shows you before it changes anything.**
+   - **Done when** the three pages' files have no effect of their own left that a built-in now is, their pictures haven't moved, and every size is said in bytes.
+   - Docs: api.md (`outline()`, `OutlineOptions`, `wait()`, `labelBounds`, `refresh()`), architecture.md (the effects' table, the adapter's labels and its refresh), the effects guide, README's list of effects, and CHANGELOG (Added and Changed).
+   - Budgets it may raise: `expressive` and `travel`, `chartSwitch`, `expressive` and `hostView`, everything, the script-tag bundle and the two `dist/index` files.
+5. **Safari's text spacing, and `stress.html`'s audit table** (decisions 2 and 29). Owns `src/charts/render/text.ts`, the adapter's measure, and the table.
+   - **First, the three browsers' measures,** in Docker (decision 29).
+   - Tests: unit tests of the measure with a stand-in that leaves spacing out and one that counts it; the charts' layouts' digests byte for byte where spacing is counted or there's none; and in `a11y.spec.ts`, WebKit's text spacing before a chart draws and after.
+   - **Done when** WebKit's spacing tests pass in Docker, Chromium's 206 baselines are as they were, and `stress.html` has its table.
+   - Docs: architecture.md (how text is measured), a11y-audit.md (the table, the spacing check's lines and the Browsers count), CHANGELOG (Fixed), and the backlog's two entries marked built.
+   - Budgets it may raise: any set with a chart, everything, the script-tag bundle and the two `dist/index` files.
+
+**Wave 3** (after wave 1 lands; beside wave 2 or after it; one PR):
+
+6. **Examples for general use** (decisions 10–12, 17 and 30). Owns `demo/examples.html`, `demo/examples.ts`, its unit tests, `tests/visual/examples.spec.ts` and its baselines, `examplesDemo`, the page's entry in `a11y.spec.ts`, the docs' examples and `docs/sketches`, the page's audit table and section S.
+   - **First, the rows and the words,** shown to you. Then the docs' examples, as a list of which example goes to which domain, shown to you before they're rewritten.
+   - Tests:
+     - Unit tests, on a clock the test controls: each card's marks, names and table; the quarter's play, its `delta`s and its announcement; the line's `threshold` runs where the measurement is below its control, and none where it isn't; the donut's switch and back, focus following its key; and every card in its end state with Off and with reduced motion.
+     - `examples.spec.ts`: the page at load in light and dark and at 320 px; a bar hovered; the quarter half way and at rest, its labels in place; the line's point hovered; the switch half way and at rest; a focus ring on each card; and reduced motion.
+     - `a11y.spec.ts`: axe in light and dark, at 320 px and under forced colours, contrast on hover, text spacing, the page's tab stops, and nothing moving 5 s after load.
+     - The docs: `src/api-docs.test.ts` and the sketches' `typecheck`, which run every example.
+   - **Script S,** for NVDA + Chrome. You run it on the branch, and its results go in the PR (decision 31).
+   - **The walk:** you look at the page at full width and at 320 px.
+   - **Done when** `examples.spec.ts` and the page's a11y tests pass in Docker in Chromium, Firefox and WebKit, with its baselines shown to you before they're committed and every other picture as it was; no domain has most of README's or api.md's examples; and script S has passed.
+   - Docs: README (its examples, its demo list and Development lines), api.md (its examples), the demo index, CONTRIBUTING's visual tests (the page's bullet and its height), a11y-audit.md (the page's table and the Browsers count) and a11y-check.md (section S and its results). No CHANGELOG entry: nothing a page runs changes.
+   - Budgets: none. If the step finds a library gap, it stops and shows you.
+
+**Wave 4** (one PR, then the docs-only one):
+
+7. **Publish 0.13.0** (decision 1). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 0.13.0 entry, README's status, its CHANGELOG link (`#0130-…`), its script tag (`@0.13`, and api.md's) and its sizes, architecture.md's sizes, measured again on 0.13.0's code, and this plan's status line and M18's ✅.
+   - **The scripts** M17 step 6 kept, in `release-scripts-0.12.0/` in its planning's notes folder, match versions with `\d+`; the step copies them, writes 0.13.0 in, and checks each pattern again.
+   - **CHANGELOG's entry** opens with what breaks: the caps and joins' note, then `geometry`'s order, then what's deprecated, each with what to write instead; and it says 0.13.0 is the last 0.x, with 1.0 to take the deprecated form out.
+   - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check` (59 names in the main entry), `npm pack` (its list and sizes shown to you, compared with 0.12.0's, from an LF copy as CI builds it) and `npm publish --dry-run`. The PR has their results.
+   - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com, and the step checks main's CI.
+   - **Then, on your go-ahead in that session:** the `v0.13.0` release is created, and the workflow publishes it with provenance, through trusted publishing.
+   - **After:** check npm (the version, README, provenance), install 0.13.0 in a fresh project and load each entry as an ES module and as CommonJS, with `outline` and `wait` among the names and the old `motionSwitch()` form still working, and check jsDelivr's `@0.13`. You look at npm's page in a browser, which 0.12.0's wasn't.
+   - **The date** is the release's local day, Pacific time.
+   - **Then the docs-only PR:** M18's ✅, its status and this plan's status line.
+
+**Done when:**
+- **An icon** can have square caps and bevel joins, and `iconFromSvg` keeps them.
+- **`expressive()`'s `geometry`** takes `(datum, element, key)`, and **`motionSwitch()`** takes its `motion` among its options, the old form still working, marked `@deprecated`.
+- **CHANGELOG says what 1.0 will promise,** in words you approved.
+- **`expressive()`** takes `labelBounds`, **`outline()` and `wait()`** are built-in effects, and `map.html`, charts.html's bullet chart and its funnel use them and draw as they did.
+- **A refresh** leaves a hover's effects as they are when it leaves the mark's values alone.
+- **In Safari** a chart lays its text out with a viewer's letter and word spacing, and Chromium's pictures haven't moved.
+- **`stress.html`** has its audit table.
+- **`examples.html`** has its three cards, a domain each, with its screenshots and its audit, and script S passed with NVDA + Chrome. README's and api.md's examples are spread across domains.
+- **jsdom is 31.0.1 and axe-core 4.14.1.**
+- **Nothing moves 5 s after load** on the new page, and with reduced motion or Off every card is in its end state.
+- **Docs.** api.md, architecture.md, README and CHANGELOG cover every change, with a migration note for each breaking one.
+- **0.13.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M18 is done, and that 1.0 is M19.
 
 ### Backlog (after 0.1)
 

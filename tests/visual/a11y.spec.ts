@@ -10,7 +10,7 @@
 
 import axe from "axe-core";
 import { expect, test, type Page } from "@playwright/test";
-import { barsDemo, chartsDemo, donutDemo, FRAME, hoverShape, layoutsDemo, lineDemo, mapDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, shapesDemo, stressDemo, tabInto, type Demo } from "./demo";
+import { barsDemo, chartsDemo, donutDemo, examplesDemo, FRAME, hoverShape, layoutsDemo, lineDemo, mapDemo, morphDemo, openDemo, pickMetric, REST, seasonDemo, shapesDemo, stressDemo, tabInto, type Demo } from "./demo";
 
 /** axe's rules for WCAG 2.0, 2.1 and 2.2 at levels A and AA. */
 const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -180,6 +180,25 @@ const demos: { readonly name: string; readonly demo: Demo; readonly stops: reado
     // "contrast on hover" hovers one; map.spec.ts checks the rest.
     charts: [],
     hosts: [{ chart: "#map", shape: 'path.country[aria-label^="Nigeria:"]' }]
+  },
+  {
+    name: "examples",
+    demo: examplesDemo,
+    stops: [
+      ...MOTION,
+      ...["Play Q4", "North: $4.2M revenue, 105% of its $4.0M target", "Data table"],
+      ...["Day 0: 2.0 cm, Drought", "Data table"],
+      ...["Show as bars", "Search: 18,400 sessions, 45%", "Data table"]
+    ],
+    // Not #height: with hover: "point" its tooltip sits above the point, which examples.spec.ts shows.
+    charts: [
+      { chart: "#revenue", shape: '.ec-mark[data-key="East"] .ec-segment', other: '.ec-mark[data-key="Central"] .ec-segment' },
+      {
+        chart: "#sessions",
+        shape: '.ec-switch-view[data-view="donut"] .ec-mark[data-key="Direct"] .ec-slice',
+        other: '.ec-switch-view[data-view="donut"] .ec-mark[data-key="Email"] .ec-slice'
+      }
+    ]
   },
   {
     name: "stress",

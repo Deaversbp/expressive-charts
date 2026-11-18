@@ -5954,7 +5954,7 @@ Each wave names the files it owns. Waves 1 and 2 run one after the other; wave 3
 
 **Wave 3** (after wave 1 lands; beside wave 2 or after it; one PR):
 
-6. **Examples for general use** (decisions 10–12, 17 and 30). Owns `demo/examples.html`, `demo/examples.ts`, its unit tests, `tests/visual/examples.spec.ts` and its baselines, `examplesDemo`, the page's entry in `a11y.spec.ts`, the docs' examples and `docs/sketches`, the page's audit table and section S.
+6. ✅ **Examples for general use** (decisions 10–12, 17 and 30). Owns `demo/examples.html`, `demo/examples.ts`, its unit tests, `tests/visual/examples.spec.ts` and its baselines, `examplesDemo`, the page's entry in `a11y.spec.ts`, the docs' examples and `docs/sketches`, the page's audit table and section S.
    - **First, the rows and the words,** shown to you. Then the docs' examples, as a list of which example goes to which domain, shown to you before they're rewritten.
    - Tests:
      - Unit tests, on a clock the test controls: each card's marks, names and table; the quarter's play, its `delta`s and its announcement; the line's `threshold` runs where the measurement is below its control, and none where it isn't; the donut's switch and back, focus following its key; and every card in its end state with Off and with reduced motion.
@@ -5966,6 +5966,23 @@ Each wave names the files it owns. Waves 1 and 2 run one after the other; wave 3
    - **Done when** `examples.spec.ts` and the page's a11y tests pass in Docker in Chromium, Firefox and WebKit, with its baselines shown to you before they're committed and every other picture as it was; no domain has most of README's or api.md's examples; and script S has passed.
    - Docs: README (its examples, its demo list and Development lines), api.md (its examples), the demo index, CONTRIBUTING's visual tests (the page's bullet and its height), a11y-audit.md (the page's table and the Browsers count) and a11y-check.md (section S and its results). No CHANGELOG entry: nothing a page runs changes.
    - Budgets: none. If the step finds a library gap, it stops and shows you.
+   - **Built** (18 November 2026) as decision 30 describes, on the rows, the words and the list of examples you approved that day:
+     - **The page,** `demo/examples.html`, with its cards in `demo/examples-cards.ts` and its buttons in `demo/examples.ts`. Every number is made up.
+       - **Business.** Revenue by region, $M, for Q3 and Q4 2026, on `barChart`, sorted by value. `label()` in `decorate` writes each bar's share of its target past its value ("105% of target"), `delta()` in `update` its change ("+$0.4M"), and `trace()` highlights a hovered bar. "Play Q4" plays the quarter, and then says "Back to Q3": West passes South, so Presentation moves the values, then the rows; Central doesn't change and gets no label. It announces "Q4 2026: North, East, West and South changed".
+       - **Science.** Mean seedling height by day, cm, for 13 days, on `lineChart` with `hover: "point"`: a group whose watering stops on day 5, and a watered control, dashed and grey. `threshold({ compareTo: "control" })` colours the drought line from where it crosses below, between days 5 and 6, to its end, and a hovered point pulses.
+       - **Web analytics.** Sessions by source over 30 days, 41,000 in five sources, on `donutChart` in a `chartSwitch` to bars, one colour a source in both. "Show as bars" switches, and V on a focused slice or bar, with focus following its source. `travel(icons.arrow)` runs round or along the hovered mark.
+       - **At load** everything is at rest. With reduced motion or Off the quarter and the switch land at once, the labels in place.
+     - **Tests.** 22 unit tests in `src/examples.test.ts`, on a clock the test controls, so 3,471 in 132 files. `tests/visual/examples.spec.ts` has 17 tests and 14 baselines, and the page's entry in `a11y.spec.ts` adds 17: 480 tests a browser, 51 of them skipped in Firefox and WebKit, and 220 baselines. In Docker the page's 34 pass in Chromium, Firefox and WebKit (94 passed, 8 skipped by the spec's own conditions). axe reports nothing on the page. No other page's picture is touched; the whole suite is CI's.
+     - **The docs' examples.** README: the script tag's is sessions by source, and the D3 stacked bars are a lab's water samples by site with core icons; the quick start, the two beside the soccer GIFs and the underline stay, so business 2, soccer 2, web 1 and science 1. api.md's 31 worked examples: science 10, web 9, business 8 and soccer 4 (the D3 bars, pie and line, linked hover, the sport pack and the presets that register it). The option descriptions beside a rewritten example follow it. `docs/sketches`: 04 is the water samples, 05 a pie of sessions and a line of seedling heights; 01 to 03 stay the prototype's stories. `src/api-docs.test.ts` declares the new rows.
+     - **The audit:** the page's table in a11y-audit.md, and **script S** in a11y-check.md, 26 steps in three parts. **Script S passed** with NVDA + Chrome on 18 November 2026, run by you on the branch, all three parts, and you walked the page at full width and at 320 px the same day.
+     - **No library file changes,** so every size is main's to the byte, and there's no CHANGELOG entry.
+   - **Decisions beyond the plan:**
+     - **The target is text.** `barChart` has no target marker, and a tick would land on a bar's value label where the bar is just short of its target. You chose the text when you approved the rows.
+     - **Short words where the card is narrow.** Below 480 px of chart the labels say "105%" and "+0.4", with 76 px of room where the long ones have 150: at 320 px the long ones left the bars 8 px. The page tells its card the width from a `ResizeObserver`.
+     - **"Search", not "Organic search".** At 320 px the donut leaves the longer name's label out.
+     - **The announcement lists the regions in the chart's new order,** West before South, and the page words it from `ChartChange.changed`: the chart's own text would name the chart's label, which changes with the quarter.
+     - **One decimal on every revenue value,** the axis's ticks too ("$2.0M"), so a value counting past a whole million reads as its neighbours do.
+     - **A second module,** `demo/examples-cards.ts`, so the test builds the cards the page builds, as `demo/map-effects.ts` does for the map.
 
 **Wave 4** (one PR, then the docs-only one):
 

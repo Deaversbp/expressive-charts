@@ -39,10 +39,23 @@ interface Outcome { outcome: string; shots: number }
 interface Week { week: number; goals: number; xg: number }
 interface Day { date: Date; visits: number; average: number }
 interface Region { region: string; revenue: number }
+interface Product { product: string; revenue: number }
+interface Source { source: string; sessions: number }
+interface Channel { source: string; new: number; returning: number; medium: string }
+interface Reading { day: number; drought: number; control: number }
+interface Site { site: string; passed: number; failed: number; river: string }
+interface Plant { plant: string }
 /** A d3.stack() point, with its series' key copied on (.data(D => D.map(d => (d.key = D.key, d))), a common D3 idiom). */
 type Stacked = import("d3-shape").SeriesPoint<Player> & { key: "goals" | "assists" };
 /** A d3.pie() arc of an outcome. */
 type Slice = import("d3-shape").PieArcDatum<Outcome>;
+/** A d3.stack() point of a channel or a site, with its series' key copied on. */
+type StackedChannel = import("d3-shape").SeriesPoint<Channel> & { key: "new" | "returning" };
+type StackedSite = import("d3-shape").SeriesPoint<Site> & { key: "passed" | "failed" };
+/** A d3.pie() arc of a product line. */
+type ProductSlice = import("d3-shape").PieArcDatum<Product>;
+/** One D3 curve's datum: its group and its rows. */
+interface GroupRows { series: "drought" | "control"; rows: { day: number; value: number }[] }
 /** One D3 line path's datum: its series and its rows so far. */
 interface SeriesRows { series: "goals" | "xg"; rows: { week: number; value: number }[] }
 type D3Selection<E extends Element, D> = import("d3-selection").Selection<E, D, Element, unknown>;
@@ -56,14 +69,26 @@ declare const nextWeek: Week;
 declare const days: Day[];
 declare const regions: Region[];
 declare const nextQuarter: Region[];
+declare const products: Product[];
+declare const nextQuarterProducts: Product[];
+declare const sources: Source[];
+declare const lastMonth: Source[];
+declare const channels: Channel[];
+declare const afterLaunch: Channel[];
+declare const readings: Reading[];
+declare const nextReading: Reading;
+declare const sites: Site[];
 /** Plot's rows, which its marks bind by index. */
-declare const rows: Player[];
+declare const rows: Region[];
 declare const svg: SVGSVGElement;
 declare const range: HTMLInputElement;
 declare const button: HTMLButtonElement;
 declare const bars: D3Selection<SVGRectElement, Stacked>;
 declare const slices: D3Selection<SVGPathElement, Slice>;
 declare const lines: D3Selection<SVGPathElement, SeriesRows>;
+declare const curves: D3Selection<SVGPathElement, GroupRows>;
+/** README's D3 stacked bars: samples passed and failed by site. */
+declare const rects: D3Selection<SVGRectElement, StackedSite>;
 /** The scales the page drew its D3 line with. */
 declare const x: (week: number) => number;
 declare const y: (value: number) => number;

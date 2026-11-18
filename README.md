@@ -33,15 +33,15 @@ It has no runtime dependencies. It's an ES module and CommonJS, each with its ow
 On a page with no bundler, the script-tag bundle defines one global, `ExpressiveCharts`, holding the main entry:
 
 ```html
-<div id="sales"></div>
+<div id="traffic"></div>
 <script src="https://cdn.jsdelivr.net/npm/expressive-charts@0.12/dist/expressive-charts.global.js"></script>
 <script>
   const { barChart } = ExpressiveCharts;
-  barChart("#sales", {
-    label: "Revenue by region",
-    data: [{ region: "North", revenue: 42 }, { region: "South", revenue: 35 }],
-    y: "region",
-    x: "revenue",
+  barChart("#traffic", {
+    label: "Sessions by source",
+    data: [{ source: "Search", sessions: 18400 }, { source: "Direct", sessions: 9200 }],
+    y: "source",
+    x: "sessions",
     on: { hover: "wiggle" }
   });
 </script>
@@ -83,23 +83,22 @@ barChart("#goals", {
 });
 ```
 
-The same story on bars you already draw with D3:
+The same kind of story on bars you already draw with D3, here a lab's water samples, passed and failed, by site, with core icons:
 
 ```js
-import { expressive, sequence, travel } from "expressive-charts";
-import { cleat, soccerBall } from "expressive-charts/icons/sport";
+import { expressive, icons, sequence, travel } from "expressive-charts";
 
-// bars: your D3 selection of the stacked <rect>s. d3.stack() keeps a series' key on its <g>, so copy it onto each point:
+// rects: your D3 selection of the stacked <rect>s. d3.stack() keeps a series' key on its <g>, so copy it onto each point:
 // .data((series) => series.map((d) => Object.assign(d, { key: series.key }))).
-const fx = expressive(bars, {
-  key: (d) => d.data.name,               // a player's rects are one bar...
+const fx = expressive(rects, {
+  key: (d) => d.data.site,               // a site's rects are one bar...
   segment: (d) => d.key,                 // ...and its series are the bar's segments
   value: (d) => d[1] - d[0],             // what each rect shows, so a resize isn't an update
   keyboard: true,                        // one tab stop; the arrow keys move between bars
-  markLabel: (d) => `${d.data.name}: ${d.data.goals} goals, ${d.data.assists} assists`,
-  on: { hover: sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" })) }
+  markLabel: (d) => `${d.data.site}: ${d.data.passed} samples passed, ${d.data.failed} failed`,
+  on: { hover: sequence(travel(icons.arrow, { along: "passed" }), travel(icons.chevron, { along: "failed" })) }
 });
-fx.refresh(bars);                        // after your chart redraws
+fx.refresh(rects);                       // after your chart redraws
 ```
 
 A line that turns red where goals fall below expected goals, with a ball riding its tip, and a season played with a pause control:
@@ -192,7 +191,7 @@ The package lists its CSS under `sideEffects`, so bundlers keep that import. Cha
 
 ## Accessibility
 
-- **Names.** Each chart is a `role="group"` named by its `label`, and each mark one image named by what it shows: "Okafor: 16 goals, 4 assists", or a slice's "Saved: 112 shots, 28%". `markLabel` words the names ("1 goal") and `markDescription` adds what they don't say.
+- **Names.** Each chart is a `role="group"` named by its `label`, and each mark one image named by what it shows: "Okafor: 16 goals, 4 assists", or a slice's "Search: 18,400 sessions, 45%". `markLabel` words the names ("1 goal") and `markDescription` adds what they don't say.
 - **Keyboard.** A chart is one tab stop: the arrow keys move between its marks, Page Up and Page Down by a page (a month on a line's time axis), Home and End go to the ends, and focus shows a ring and plays the same effects as hover. Escape ends a hover, and so does `leave()`.
 - **Fallbacks.** A data table after every chart, which every screen reader can read, and with `announce: true` a polite live region that says what each update changed.
 - **Motion.** Reduced motion jumps every animation to its end state unless the viewer picks a mode on the page, with `motionSwitch()`. Nothing plays by itself, and a playback has its pause control in `playButton()` (WCAG 2.2.2).
@@ -226,10 +225,10 @@ From 1.0 the whole package will follow semantic versioning: every name it export
 - [API reference](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md): every export of every entry.
 - [Architecture](https://github.com/Deaversbp/expressive-charts/blob/main/docs/architecture.md): how the layers fit together, and how each part behaves.
 - [Writing effects](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md): the guide for effect authors.
-- [Examples](https://github.com/Deaversbp/expressive-charts/tree/main/docs/sketches/examples): pages written against the API, which `npm run typecheck` checks: ball-and-cleat bars, a goals vs xG line with playback, a donut that morphs into columns, D3 charts, effects of your own and presets.
+- [Examples](https://github.com/Deaversbp/expressive-charts/tree/main/docs/sketches/examples): pages written against the API, which `npm run typecheck` checks: ball-and-cleat bars, a goals vs xG line with playback, a donut that morphs into columns, D3 stacked bars of water samples, a D3 pie of sessions and a D3 line of seedling heights, effects of your own and presets.
 - [Changelog](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md), and [the development log](https://github.com/Deaversbp/expressive-charts/blob/main/docs/plan.md): the plan the library was built to, milestone by milestone, with the reasoning behind each decision.
 - [Accessibility audit](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-audit.md) and [screen-reader scripts](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-check.md).
-- [Demos](https://github.com/Deaversbp/expressive-charts/tree/main/demo), on [the demo site](https://deaversbp.github.io/expressive-charts/), or served by `npm run dev`. `bars.html`, `donut.html`, `line.html` and `morph.html` put the library's charts beside D3, Vega-Lite and hand-written ones, with the same effects on each; `season.html` links three charts by matchweek and labels each change with `delta()` and `label()`; `shapes.html` and `charts.html` attach the effects to circles, curves and areas, and to a waterfall, a dumbbell, a radar, a butterfly, a bullet chart and a funnel, drawn with D3 and Observable Plot; `layouts.html` switches D3 charts between layouts with `hostView()` and `morph()`: bars side by side, stacked and at 100%, areas stacked and at 100%, a radar into bars, a treemap into bars, which also drills into a position (the other positions' tiles fade, then its own grow to fill the chart), and the charts page's dumbbell, three attachments as one view, into bars, with the axes both layouts draw the same kept on screen; `map.html` draws a world map with `d3-geo`, the countries a squad comes from shaded, the one hovered outlined and the rest dimmed, and an arrow travelling each signing's route; `stress.html` is the limits above; and `lab.html` is the single-file prototype the library grew out of.
+- [Demos](https://github.com/Deaversbp/expressive-charts/tree/main/demo), on [the demo site](https://deaversbp.github.io/expressive-charts/), or served by `npm run dev`. `bars.html`, `donut.html`, `line.html` and `morph.html` put the library's charts beside D3, Vega-Lite and hand-written ones, with the same effects on each; `season.html` links three charts by matchweek and labels each change with `delta()` and `label()`; `shapes.html` and `charts.html` attach the effects to circles, curves and areas, and to a waterfall, a dumbbell, a radar, a butterfly, a bullet chart and a funnel, drawn with D3 and Observable Plot; `layouts.html` switches D3 charts between layouts with `hostView()` and `morph()`: bars side by side, stacked and at 100%, areas stacked and at 100%, a radar into bars, a treemap into bars, which also drills into a position (the other positions' tiles fade, then its own grow to fill the chart), and the charts page's dumbbell, three attachments as one view, into bars, with the axes both layouts draw the same kept on screen; `map.html` draws a world map with `d3-geo`, the countries a squad comes from shaded, the one hovered outlined and the rest dimmed, and an arrow travelling each signing's route; `examples.html` has the library's own charts on business, research and web data: revenue by region against its target, seedling height under drought against a control, and sessions by source on a donut that switches to bars; `stress.html` is the limits above; and `lab.html` is the single-file prototype the library grew out of.
 - [Contributing](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md) and [issues](https://github.com/Deaversbp/expressive-charts/issues).
 
 ## Development
@@ -241,7 +240,7 @@ From 1.0 the whole package will follow semantic versioning: every name it export
 | `npm run size` | Measures the built package and fails when a size is over its budget in `scripts/size-budget.json` (see [CONTRIBUTING.md](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md#bundle-size)) |
 | `npm run pack-check` | After a build: packs the package, installs it in a new project and checks every entry as ESM and CommonJS, with its types (see [CONTRIBUTING.md](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md#setup)) |
 | `npm test` | Runs the test suite, which also checks [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) against the exports and type-checks this README's examples |
-| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html`, `donut.html`, `line.html`, `morph.html`, `season.html`, `shapes.html`, `charts.html`, `layouts.html`, `map.html` and `stress.html` in Chromium, and their DOM checks and the accessibility checks (axe) in Chromium, Firefox and WebKit, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md#visual-tests)) |
+| `npm run test:visual:docker` | Runs the screenshot tests of `demo/bars.html`, `donut.html`, `line.html`, `morph.html`, `season.html`, `shapes.html`, `charts.html`, `layouts.html`, `map.html`, `examples.html` and `stress.html` in Chromium, and their DOM checks and the accessibility checks (axe) in Chromium, Firefox and WebKit, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md#visual-tests)) |
 | `npm run build:site` | Builds the demo pages into `site/`, which `.github/workflows/pages.yml` publishes as [the demo site](https://deaversbp.github.io/expressive-charts/) |
 | `npm run media` | Captures README's pictures (`docs/media/*.gif`) from the demo pages, frame by frame, in Playwright's Linux image (needs Docker; see [CONTRIBUTING.md](https://github.com/Deaversbp/expressive-charts/blob/main/CONTRIBUTING.md#readmes-pictures-and-the-demo-site)) |
 | `npm run bench` | Measures the stress page's cases in headless Chromium against `npm run dev`, unthrottled and at 4×, about 47 minutes; not in CI |

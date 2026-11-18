@@ -10,8 +10,8 @@ Pages written against the library's public API, the code a user would write. The
 | `examples/01-ball-and-cleat.ts` | Ball and cleat hover on the reference bar chart, with a metric switch, staged sorting and a flash on the bars that change. |
 | `examples/02-goals-vs-xg.ts` | Goals against expected goals on the reference line chart, red below xG, with playback and a pause button. |
 | `examples/03-donut-morph.ts` | A donut that morphs into columns and back, in a chart switch. |
-| `examples/04-d3-stacked-bars.ts` | The ball-and-cleat story on a D3 stacked bar chart through `expressive()`. |
-| `examples/05-d3-donut-and-line.ts` | D3 pie arcs and a D3 line with `threshold`, using the public geometry builders. |
+| `examples/04-d3-stacked-bars.ts` | A story on a D3 stacked bar chart through `expressive()`: a lab's water samples by site, an arrow along those that passed and a chevron along those that failed. |
+| `examples/05-d3-donut-and-line.ts` | D3 pie arcs of sessions by source, and a D3 line of seedling height with `threshold` against its control, using the public geometry builders. |
 | `examples/06-custom-effects.ts` | Two effects written outside the project, `trace` and `delta`, on a bar chart and on another library's bars, with the row-type checks and `checkEffect`. |
 | `examples/effects/` | `trace.ts` and `delta.ts` themselves: the worked examples in [effects-guide.md](../effects-guide.md), which `src/effects-guide.test.ts` also runs through `checkEffect`. |
 | `examples/07-presets.ts` | One-line presets and a registered house style. |

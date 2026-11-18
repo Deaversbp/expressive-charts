@@ -148,7 +148,7 @@ What a duration is for, which decides how each mode scales it ([`defaultScaling`
 | --- | --- | --- | --- | --- |
 | `feedback` | hover colour and dimming | base | base | 0 |
 | `transition` | data changes (the default) | base | base × 0.35, at most 200 ms | 0 |
-| `effect` | `travel`, `wiggle`, `flash`, `pulse`, `trace`, `drawIn` | base | base × 0.35, from 140 to 300 ms | 0 |
+| `effect` | `travel`, `wiggle`, `flash`, `pulse`, `trace`, `drawIn`, `wait` | base | base × 0.35, from 140 to 300 ms | 0 |
 | `playback` | a play, such as a season's | base | base × 0.3 | 0 |
 | `stagger` | the wait before each mark of a `stagger` | base | 0 | 0 |
 
@@ -537,7 +537,7 @@ One mark, described the same way whoever drew it. In chart pixels, with y pointi
   - `bounds`: [`Rect`](#rect).
   - `center`: `Point`. Its visual centre, for tooltips, rings and labels.
   - `pivot`: `Point`. Where it's attached to the chart: a bar's baseline, a donut's centre, a line's first point.
-  - `labelBounds`: `readonly Rect[] | undefined`. The boxes of the text the chart draws for the mark, so an effect's own text can keep clear of them: a bar's category and value labels, the two lines of a slice's label outside the ring, a line's end label. An empty list when the mark has none drawn now. Unset on segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#the-marks-own-labels)).
+  - `labelBounds`: `readonly Rect[] | undefined`. The boxes of the text the chart draws for the mark, so an effect's own text can keep clear of them: a bar's category and value labels, the two lines of a slice's label outside the ring, a line's end label. An empty list when the mark has none drawn now. Unset on segments, points, a line with `labels: false`, and marks the library didn't draw unless the page gives them, through `expressive()`'s [`labelBounds`](#expressiveoptionsd) or its `geometry` ([architecture.md](architecture.md#the-marks-own-labels)).
   - `nearbyLabels`: `readonly Rect[] | undefined`. The boxes of other marks' text near this one, which an effect's text should keep clear of too: on a line, every other line's end label; on a slice, every other slice's label, in the slices' order. `labelBounds` stays the mark's own. An empty list when none is near; unset when none is known: on bars, segments, points, a line with `labels: false`, and marks the library didn't draw unless the page's `geometry` gives them ([architecture.md](architecture.md#other-marks-labels-nearby)).
   - `segments`: `readonly MarkGeometry[] | undefined`. A bar's parts, from the baseline; every bar has at least one.
 
@@ -1348,6 +1348,50 @@ interface TraceOptions
 - `width`: `number`. Default 3. The stroke's width in px; 0 or more.
 - `opacity`: `number`. Default 0.5. From 0 to 1.
 - `duration`: `number`. Default 500. Base ms to draw the stroke, before the motion mode scales it; 0 or more.
+
+#### `outline()`
+
+```ts
+outline(options?: OutlineOptions): GeometryEffect
+```
+
+The mark's outline, stroked in the overlay at once ([architecture.md](architecture.md#outline)). New in 0.13.0. It's for a hover on a closed shape, such as a map's region or a treemap's tile, which has no direction for `travel` or `trace` to follow. There's no tween: a run draws what `end()` draws, so nothing moves or fades under the pointer, and reduced motion and Off show the same picture. The stroke is unfilled, on the mark's own edge, so it covers no data, and the mark itself is untouched. On an open shape, a line, it strokes the line. It follows the mark when the mark moves, and goes when its run is cleared: on leave in the `hover` slot, and with the mark in `decorate`, where it stays. It isn't a preset.
+
+```ts
+import { expressive, outline } from "expressive-charts";
+
+// A D3 map's regions, each a closed path: the hovered one is outlined, and the rest dim.
+expressive("#map path.region", { key: (d: { name: string }) => d.name, dim: true, on: { hover: outline() } });
+```
+
+#### `OutlineOptions`
+
+```ts
+interface OutlineOptions
+```
+
+- `color`: `Color`. Default `"text"`. A theme token or any CSS colour.
+- `width`: `number`. Default 2. The stroke's width in px; more than 0.
+
+Anything else throws a `RangeError`.
+
+#### `wait()`
+
+```ts
+wait(duration: number): GeometryEffect
+```
+
+Draws nothing for `duration` base ms, so the next part of a [`sequence()`](#sequence) starts later ([architecture.md](architecture.md#wait)). New in 0.13.0. Its time has `"effect"` timing, which the motion mode scales as it scales `drawIn`'s: all of it in Presentation, 0.35 of it in Analysis (from 140 to 300 ms), and none with Off or reduced motion. Cancelled, it resolves at once, and the sequence stops there. Its end state is nothing drawn, so `sequence(wait(750), flash())` with motion off is `flash()`'s end state. A `duration` that isn't a number of 0 or more throws a `RangeError`. It isn't a preset.
+
+```ts
+import { barChart, drawIn, flash, parallel, sequence, wait } from "expressive-charts";
+
+// Each bar draws itself in over 750 ms, and blinks once when it's done.
+barChart("#sales", {
+  label: "Revenue by region", data: regions, y: "region", x: "revenue",
+  on: { enter: parallel(drawIn(), sequence(wait(750), flash())) }
+});
+```
 
 #### `drawIn()`
 
@@ -2487,6 +2531,7 @@ interface ExpressiveOptions<D>
 - `segment`: `(datum: D, element: Element) => string`. Names the parts of a mark that share a key: a stack's series. They're ordered from the baseline. On a circle or another shape it names the mark's `series`, so a data effect reads it through `related`.
 - `value`: `(datum: D, element: Element) => number | string | boolean | null | undefined`. What an element shows, so `refresh()` can tell a change in values from a new layout: given, an update means a value changed, as on our charts; without it, a length changed, so a resize updates every bar. Return a number or a string.
 - `geometry`: `(datum: D, element: Element, key: string) => MarkGeometry`. Describes every mark yourself, with `describe`, in the coordinates of the marks' nearest common ancestor, instead of the adapter reading `<rect>`s as bars, `<circle>`s as points and `<path>`, `<line>`, `<polyline>`, `<polygon>` and `<ellipse>` elements as shapes. Give it for anything else (`<text>`, `<g>`, `<use>` and `<image>` throw, naming the tag), or to say more or other than an element shows: a padded donut's slices with `describe.arc`, which go round its centre, or a pie's slices as the shapes their paths draw, with `describe.shape`. Called once per mark with its row and its first element, as `key` is, and then its key. Until 0.13.0 the element came first, `(element, datum, key)`: a function still written that way throws or describes no mark, and the `TypeError` names the new order ([CHANGELOG](../CHANGELOG.md)).
+- `labelBounds`: `(datum: D, element: Element) => readonly Rect[]`. New in 0.13.0. Where the host's own text for a mark is: its boxes, in the marks' px (the coordinates of their nearest common ancestor), as [`describe`](#describe)'s `labelBounds` takes them. They become the mark's [`labelBounds`](#markgeometry), so an effect's text ([`label()`](#label), [`delta()`](#delta)) keeps clear of them. It's for marks the adapter reads: with `geometry`, the page's own description says where its text is, and this isn't called. Called once per mark on every read (and with `watch`, on each frame a mark changes), with the row and the element of its first part, as `markLabel`'s row is, so a stack's boxes are given once, for the whole mark. An empty list is a mark with no text. The boxes are copied. A result that isn't a list throws a `TypeError`, and a box that isn't finite, or has a negative size, a `RangeError`, changing nothing. There's no option for other marks' text nearby (`nearbyLabels`): a page that needs it describes the mark with `geometry`.
 - `samples`: `(datum: D, mark: MarkGeometry) => readonly Sample[]`. Data effects' values along the mark. Default: rects with a numeric `value` get the bar chart's samples, and circles with one get it as their one sample, `{ t: 0, value }`; other marks get none. Bad samples throw.
 - `baseline`: `Baseline | "auto"`. Default `"auto"`: the line every rect has an edge on. A rect whose other edge is on it grows the other way, as a negative bar.
 - `motion`: `Motion | MotionMode`. As on a chart.
@@ -2510,7 +2555,7 @@ What `expressive()` reads marks from: a selector, an element, a list of elements
 interface Attachment<D>
 ```
 
-- `refresh(source?)`: reads the marks again, from `source` if it's given and from then on, and fires `enter`, `update` and `exit` by key. A mark that only moved follows without an event. A read that finds a new row, a new value, or a mark entering or leaving is an update, which ends the last one's `update` effects (a `delta`) on the marks it leaves alone; one that finds none keeps them. It throws, changing nothing, on marks it can't read.
+- `refresh(source?)`: reads the marks again, from `source` if it's given and from then on, and fires `enter`, `update` and `exit` by key. A mark that only moved follows without an event. A read that finds a new row, a new value, or a mark entering or leaving is an update, which ends the last one's `update` effects (a `delta`) on the marks it leaves alone; one that finds none keeps them. **A hover goes on through it** (since 0.13.0): a hovered or focused mark with no `update` of its own keeps its hover effects as they are, following its new geometry, so an icon that travelled stays at its end and one part way goes on from there. A mark with an `update` plays its hover effects again, once the update's have started; before 0.13.0 every hovered mark's did. No `hover` or `leave` fires for either. A hovered mark that's gone ends its hover. It throws, changing nothing, on marks it can't read.
 - `update({ on })`: `Promise<void>`. Swaps the effects for a new `on`, as a chart's `update({ on })` does ([architecture.md](architecture.md#adapters)): a slot given the same effect or preset name keeps its runs, and a slot left out is emptied. A changed slot's new effect starts where the old one's runs were: `decorate` again on every mark, a held hover replayed with the new hover effect, and `enter`, `update` and `exit` at their end state, so nothing enters again. Focus and the tab stop stay, nothing fires, and a data effect finds the series it reads (`needs`), following them from then on. It resolves once that's done, at once. It rejects, changing nothing, on an `on` it can't resolve (an unknown preset name), a series a data effect needs that the marks don't have, or any other option, which can't change yet.
 - `on(type, listener)`: listens for [`MarkEvents`](#markeventsd), and returns a function that stops it.
 - `marks()`: `readonly MarkGeometry[]`. The marks in visual order: bars top to bottom, columns left to right, a pie's slices, read by tag or described with `describe.arc`, clockwise from 12 o'clock, and other marks in document order: circles, shapes, marks described with `geometry`, and bars among circles or shapes.
@@ -2557,7 +2602,7 @@ fromVegaView<VisitRow>(view, {
 interface VegaOptions<D> extends Omit<ExpressiveOptions<D>, "datum" | "geometry" | "watch">
 ```
 
-[`ExpressiveOptions`](#expressiveoptionsd) without `datum`, `geometry` and `watch`, which the View gives, and:
+[`ExpressiveOptions`](#expressiveoptionsd) without `datum`, `geometry` and `watch`, which the View gives, so with `labelBounds` (its `element` is the one Vega drew, and its boxes are in the px of the marks' group), and:
 
 - `mark`: `string`. Default `"marks"`, the name Vega-Lite gives a chart's data mark. The Vega mark to read, by name.
 - `sample`: `(row: D) => VegaSample`. Data effects' values: a line gets a sample at each point it draws, with `gapBefore` after each gap, a bar from 0 at its baseline to its value, a slice from 0 to its value, a point its value. Unless `value` is given, it's also what each element shows, so a resize isn't an update. `samples` replaces it.

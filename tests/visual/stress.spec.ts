@@ -264,7 +264,7 @@ test("text spacing added after load lays the bar charts out as the spacing does 
   const after = await drawnNames(page);
   expect(after).toEqual(spaced);
   // Never more names with the spacing: on Windows, Segoe UI's 10 in 100 go to 5. Docker's wider font
-  // draws 5 either way, and WebKit's measure leaves the spacing out.
+  // draws 5 either way. Since M18 WebKit's measure has the spacing too, both ways.
   for (const chart of BAR_CHARTS) expect(after[chart]!.length, chart).toBeLessThanOrEqual(before[chart]!.length);
   // And every bar keeps its name and its value in its accessible name.
   await expect(page.locator('#hover-chart .ec-mark[data-key="Bar 37"]')).toHaveAttribute("aria-label", /^Bar 37: \d+ points$/);

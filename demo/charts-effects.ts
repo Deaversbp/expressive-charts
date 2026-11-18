@@ -4,7 +4,7 @@
 // knows nothing about expressive-charts; everything the adapter can't read from an element by its tag
 // is described here, from the points each module drew (CLAUDE.md rule 3: no effect knows a chart).
 
-import { defineEffect, describe, drawIn, expressive, flash, label, link, only, samplesAlong, sequence, threshold, travel, type Attachment, type EffectContext, type ExpressiveOptions, type Link, type MarkSource } from "../src/index";
+import { defineEffect, describe, drawIn, expressive, flash, label, link, only, samplesAlong, sequence, threshold, travel, wait, type Attachment, type EffectContext, type ExpressiveOptions, type Link, type MarkSource } from "../src/index";
 import { soccerBall } from "../src/icons/sport/index";
 import type { BulletRow, DrawnBullet, Measure, Range } from "./d3-bullet";
 import type { Band, DrawnButterfly, Half } from "./d3-butterfly";
@@ -396,10 +396,10 @@ const FILL = 750;
  * player as the bars are, with no keyboard or names: a marker's `value` is whether its bar has passed
  * it, so a refresh that changes that is an update, and `flash` blinks round the markers now passed.
  *
- * At load a marker waits for its bar: `filling` is an effect of the page's own, which draws nothing for
- * as long as a bar takes to fill, on the same timing, so the motion mode scales both alike. Until it's
- * done, a change of measure flashes nothing, and when it ends the markers passed by then flash once.
- * With motion off its end state is the wait over, and flash's is nothing.
+ * At load a marker waits for its bar: the library's `wait()` draws nothing for as long as a bar takes
+ * to fill, on the same timing, so the motion mode scales both alike. Then `ready`, the page's own,
+ * notes that the bars have filled, and the markers passed by then flash once. Until it has, a change of
+ * measure flashes nothing. With motion off the wait takes no time, and flash's end state is nothing.
  *
  * A flash says "this target is met", so one still playing stops when a change of measure leaves its
  * marker unpassed: `blink` is `flash` with its tween kept, so `refresh()` can cancel it and take its halo
@@ -414,9 +414,8 @@ export function attachBullet(chart: DrawnBullet, attach: Attach = expressive): B
   const passed = (key: string): boolean => chart.rows.some((row) => row.name === key && met(row));
   /** Whether the bars have filled: until then the markers wait. */
   let filled = false;
-  const filling = defineEffect({
+  const ready = defineEffect({
     async run(_mark, ctx) {
-      await ctx.tween({ duration: FILL, timing: "effect", update: () => {} }).finished;
       if (!ctx.signal.aborted) filled = true;
     },
     end() {
@@ -460,7 +459,8 @@ export function attachBullet(chart: DrawnBullet, attach: Attach = expressive): B
     dim: true,
     on: {
       enter: sequence(
-        filling,
+        wait(FILL),
+        ready,
         only((mark) => passed(mark.key), blink)
       ),
       update: only((mark) => filled && passed(mark.key), blink)
@@ -496,9 +496,9 @@ export interface FunnelEffects {
 export const dropLabel = (stage: FunnelStage): string | undefined => (stage.drop === undefined ? undefined : `−${stage.drop}%`);
 
 /**
- * Each stage is a closed <path>, which the adapter reads as a shape with no labels of its own, so
- * `label` would put its text inside it. The page describes each stage instead, from its path and from
- * where the chart says its text is: its name's box, and its top edge as a box of no height, which is
+ * Each stage is a closed <path>, which the adapter reads as a shape. Alone that's a shape with no labels
+ * of its own, and `label` would put its text inside it, so the page says where the chart's text for
+ * each stage is (`labelBounds`): its name's box, and its top edge as a box of no height, which is
  * what sends the label up from the stage's centre to stand 6 px above it, in the gap, centred. The
  * count's box is left out: a closed shape's label heads right from its centre first, and would go past
  * the count instead. The label is the drop from the stage before; the first stage has none.
@@ -509,9 +509,9 @@ export function attachFunnel(chart: DrawnFunnel<FunnelStage>, attach: Attach = e
   const stages = attach(chart.stages, {
     key: (d) => d.name,
     value: (d) => d.count,
-    geometry: (d, element, key) => {
+    labelBounds: (d) => {
       const at = chart.place(d.name);
-      return describe.shape({ key, d: element.getAttribute("d") ?? "", labelBounds: [at.top, at.name] });
+      return [at.top, at.name];
     },
     keyboard: true,
     markLabel: (d) => `${d.name}: ${d.unit ? count(d.count, d.unit) : d.count}${d.drop === undefined ? "" : `, down ${d.drop}% from ${d.from}`}`,

@@ -4,7 +4,7 @@
 // nothing about expressive-charts; everything the adapter can't read from an element by its tag is said
 // here (CLAUDE.md rule 3: no effect knows a chart).
 
-import { defineEffect, expressive, link, travel, type Attachment, type GeometryEffect, type Link } from "../src/index";
+import { expressive, link, outline, travel, type Attachment, type Link } from "../src/index";
 import { count, type Attach } from "./charts-effects";
 import type { Country, CountryRow, DrawnMap, MapRows, Place, Route, Shade, Signing } from "./d3-map";
 
@@ -70,27 +70,8 @@ export const routeWords = (signing: Signing): string => `${signing.player}, from
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
-/** The outline's width, px. */
-const OUTLINE = 1.5;
-
-/**
- * The page's own hover effect: the mark's outline, drawn in the overlay in the text colour, at once.
- * Nothing moves or fades under the pointer, and the runner takes it away on leave. Its end state is
- * the outline, so reduced motion and Off show the same thing. It reads only the mark's outline, so it
- * works on any mark; the library's effects that draw along a mark do nothing on a closed shape, which
- * has no direction.
- */
-export const outline = (): GeometryEffect => {
-  const draw: GeometryEffect["end"] = (mark, ctx) => {
-    const path = ctx.layer.path(mark.outline.d, { stroke: "text", width: OUTLINE });
-    // A resize draws the map again: the outline follows its mark.
-    ctx.onChange((next) => path.update(next.outline.d));
-  };
-  return defineEffect({
-    run: async (mark, ctx) => draw(mark, ctx),
-    end: draw
-  });
-};
+/** The hover outline's width, px: thinner than outline()'s 2, since the countries are small. */
+export const OUTLINE = 1.5;
 
 export interface MapEffects {
   readonly countries: Attachment<Country>;
@@ -103,11 +84,12 @@ export interface MapEffects {
 
 /**
  * The squad's countries, read by their tags as closed shapes and keyed by name, are one attachment: the
- * keyboard goes through them in name order, a hover outlines one and dims the rest, and each is named
- * with its count. The land under them isn't attached, so it never reacts.
+ * keyboard goes through them in name order, a hover outlines one (the library's `outline()`, in the
+ * text colour, at once) and dims the rest, and each is named with its count. The land under them isn't attached, so it never reacts.
  *
  * The routes, open paths, are a second: each is named with its player and the country he came from,
- * and on hover or focus an arrow travels it, from the city to the club, and rests there.
+ * and on hover or focus an arrow travels it, from the city to the club, and rests there, through a
+ * resize too.
  *
  * The two are linked by country, so a route lights the country it comes from, and a country its route.
  */
@@ -118,7 +100,7 @@ export function attachMap(chart: DrawnMap, attach: Attach = expressive): MapEffe
     keyboard: true,
     markLabel: countryWords,
     dim: true,
-    on: { hover: outline() }
+    on: { hover: outline({ width: OUTLINE }) }
   });
   const routes = attach(chart.routes, {
     key: (d) => d.player,

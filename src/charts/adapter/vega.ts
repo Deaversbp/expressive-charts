@@ -17,7 +17,7 @@ import { report } from "../../core/report";
 import { linkable, portOf } from "../link";
 import type { ChartEnv } from "../shell/setup";
 import { baselines, describeRects, union, visualOrder, type RectPart } from "./bars";
-import { expressive } from "./expressive";
+import { expressive, withLabels } from "./expressive";
 import { commonAncestor, rootOf } from "./source";
 import { between, boxIn, screenMatrices } from "./space";
 import type { Attachment, ExpressiveOptions } from "./types";
@@ -66,6 +66,7 @@ export interface VegaItem {
 export type VegaSample = number | { readonly value: number; readonly at?: string | number | Date };
 
 export interface VegaOptions<D> extends Omit<ExpressiveOptions<D>, "datum" | "geometry" | "watch"> {
+  // `labelBounds` is expressive()'s: the boxes of the text Vega drew for a mark, in the px of the marks' group.
   /** The Vega mark to read, by name. Default "marks", the name Vega-Lite gives a chart's data mark. */
   readonly mark?: string;
   /**
@@ -130,17 +131,23 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
 
   let current = readView();
   const { mark: _mark, sample: _sample, ...rest } = options;
+  /** A mark given the page's `labelBounds` is a copy: the read's own, which its samples are kept by. */
+  const read = new WeakMap<MarkGeometry, MarkGeometry>();
   const attachment = expressive<D>(
     current.elements,
     {
       ...rest,
       datum: (element) => itemOf(element).datum as D,
-      geometry: (_datum, _element, key) => {
+      geometry: (datum, element, key) => {
         const geometry = current.geometry.get(key);
         if (!geometry) throw new TypeError(`fromVegaView: no geometry for "${key}". Its key must be the same for every item of a mark.`);
-        return geometry;
+        // expressive() leaves a described mark's labels to its description, which here is this one.
+        if (!options.labelBounds) return geometry;
+        const labelled = withLabels(geometry, options.labelBounds(datum, element));
+        read.set(labelled, geometry);
+        return labelled;
       },
-      ...(options.samples || !options.sample ? {} : { samples: (_datum: D, mark: MarkGeometry) => current.samples.get(mark) ?? [] }),
+      ...(options.samples || !options.sample ? {} : { samples: (_datum: D, mark: MarkGeometry) => current.samples.get(read.get(mark) ?? mark) ?? [] }),
       ...(options.value || !options.sample ? {} : { value: (_datum: D, element: Element) => current.values.get(element) })
     },
     env

@@ -36,6 +36,7 @@ import { describePoint } from "../../core/geometry/describe/point";
 import { describeShape } from "../../core/geometry/describe/shape";
 import { formatPath, shapeOutline } from "../../core/geometry/path";
 import { goesRound } from "../../core/geometry/ring";
+import { labelBoxes } from "../../core/geometry/describe/mark";
 import { EFFECT_SLOTS, resolveEffects } from "../../core/registry";
 import { report } from "../../core/report";
 import { createRunner, type RunInput, type SlotEffects } from "../../core/runner";
@@ -321,7 +322,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       const segment = segments[n];
       return part(pieces[j]!, segment && segment.length >= 0.5 ? { d: segment.outline.d } : undefined, at);
     });
-    return { key, geometry, parts, index, rect: { edge, box: union(pieces.map((p) => p.rect.box)) } };
+    return { key, geometry: labelled(geometry, parts[0]!), parts, index, rect: { edge, box: union(pieces.map((p) => p.rect.box)) } };
   }
 
   /**
@@ -365,7 +366,16 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       }
     }
     const parts = [{ ...part(piece, outlineOf(geometry, series, 1), at), stroke }];
-    return { key, geometry, parts, index, ...(tag === "circle" ? { circle: true as const } : {}) };
+    return { key, geometry: labelled(geometry, piece), parts, index, ...(tag === "circle" ? { circle: true as const } : {}) };
+  }
+
+  /**
+   * A mark the adapter read, with the page's boxes of the host's own text for it (`labelBounds`) as
+   * its `labelBounds`: copied, and checked as describe checks them. Given the mark's first part, so
+   * a stack's are asked for once. A mark described with `geometry` says its own.
+   */
+  function labelled(geometry: MarkGeometry, first: Pick<Piece<D>, "datum" | "element">): MarkGeometry {
+    return options.labelBounds ? withLabels(geometry, options.labelBounds(first.datum, first.element)) : geometry;
   }
 
   /**
@@ -1082,11 +1092,15 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
       const reading = read(next ?? source);
       if (next !== undefined) source = next;
 
-      // The order the runner expects: interrupt, then exit / update / enter, then change, then settle.
-      runner.interrupt();
+      // The order the runner expects: exit / update / enter, then change. There's no interrupt() and
+      // settle() round them, which would start every hover's effects again: a hovered mark the read
+      // leaves alone keeps its hover run, which follows it through change(), as with `watch`. One whose
+      // values changed ends its run here and plays it again below, once the update's have started.
       const diff = apply(reading);
       watchMarks();
       dropGone();
+      const again = hovered?.effects ? diff.changed.flatMap(({ record }) => (hovered!.keys.includes(record.key) ? [record] : [])) : [];
+      runner.leave(again.map((record) => record.key));
       const exited = runner.exit(diff.exiting.map(input));
       emitEach("exit", diff.exiting);
       // A new row, a new value, or a mark come or gone is an update: it ends the update runs of the
@@ -1105,7 +1119,8 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
         for (const record of order) if (!entering.has(record)) following.add(record);
       }
       for (const record of following) runner.change(record.mark.geometry, record.mark.data);
-      runner.settle();
+      // A listener above may have ended the hover, or moved it on.
+      runner.hover(again.filter((record) => hovered?.effects && hovered.keys.includes(record.key) && records.get(record.key) === record).map(input));
       // Focus stays with its key, on the mark's new element if the host replaced it (Vega does). If the
       // mark left, focus moves to its nearest neighbour. Every mark's tabindex is set again.
       keyboard?.sync();
@@ -1181,7 +1196,7 @@ export function expressive<D>(target: MarkSource<D>, options: ExpressiveOptions<
 function checkOptions<D>(options: ExpressiveOptions<D>): void {
   if (typeof options !== "object" || options === null) throw new TypeError("expressive needs options, with at least a key: { key: (d) => d.name }.");
   if (typeof options.key !== "function") throw new TypeError("expressive needs a key function, for example key: (d) => d.name. Marks are matched by key.");
-  for (const name of ["datum", "segment", "value", "geometry", "markLabel"] as const) {
+  for (const name of ["datum", "segment", "value", "geometry", "labelBounds", "markLabel"] as const) {
     if (options[name] !== undefined && typeof options[name] !== "function") throw new TypeError(`expressive: ${name} must be a function.`);
   }
   if (options.baseline !== undefined && options.baseline !== "auto" && !isBaseline(options.baseline)) {
@@ -1198,6 +1213,17 @@ function partOf<D>(mark: ReadMark<D> | undefined, key: string | undefined): Part
   if (key === undefined) return mark?.parts[0];
   const segment = mark?.geometry.segments?.find((s) => s.key === key);
   return segment && mark!.parts.find((p) => p.series === segment.series);
+}
+
+/**
+ * The geometry with the page's boxes as its `labelBounds`, each copied, so a list the page changes
+ * later isn't the mark's. fromVegaView() gives its own marks theirs with it. Throws on a result
+ * that's no list, or a box that isn't finite.
+ */
+export function withLabels(geometry: MarkGeometry, boxes: readonly Rect[]): MarkGeometry {
+  if (!Array.isArray(boxes)) throw new TypeError(`expressive: labelBounds for "${geometry.key}" must return a list of boxes { x, y, width, height }, got ${describeValue(boxes)}.`);
+  const copies = (boxes as readonly Rect[]).map((box) => ({ x: box?.x, y: box?.y, width: box?.width, height: box?.height }));
+  return { ...geometry, labelBounds: labelBoxes(`shape, for expressive's labelBounds for "${geometry.key}"`, copies)! };
 }
 
 /** The series a mark has of its own: its segments' and its parts'. */

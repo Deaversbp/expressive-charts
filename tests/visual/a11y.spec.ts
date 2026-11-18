@@ -847,12 +847,50 @@ test.describe("text spacing", () => {
   // WCAG 1.4.12's spacing, as a viewer's own stylesheet would set it after the page has loaded.
   const SPACING = "* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; } p { margin-bottom: 2em !important; }";
 
-  for (const { name, demo } of demos) {
-    test(`${name}.html: no chart's text overlaps other text or leaves its card`, async ({ page }) => {
-      await openAtRest(page, demo);
-      await page.addStyleTag({ content: SPACING });
-      await page.clock.runFor(REST);
-      const problems = await page.evaluate(() => {
+  /** The spacing as a stylesheet that's there before any chart draws: added as each document starts. */
+  const spacedFromTheStart = async (page: Page): Promise<void> => {
+    await page.addInitScript((css) => {
+      const add = (): void => {
+        const style = document.createElement("style");
+        style.textContent = css;
+        (document.head ?? document.documentElement).append(style);
+      };
+      if (document.documentElement) add();
+      else {
+        const observer = new MutationObserver(() => {
+          if (!document.documentElement) return;
+          observer.disconnect();
+          add();
+        });
+        observer.observe(document, { childList: true });
+      }
+    }, SPACING);
+  };
+
+  /**
+   * Waits until the browser has rendered once more, and so told every ResizeObserver what changed size: a chart's
+   * own, which watches its text, among them. The page's clock is stopped, and a chart lays out again on its next
+   * frame, so the clock is run on only after this. On a page 9,000 px tall, Chromium can take longer to render
+   * than the test takes to reach its next line.
+   */
+  const rendered = (page: Page): Promise<void> =>
+    page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          const observer = new ResizeObserver(() => {
+            observer.disconnect();
+            resolve();
+          });
+          observer.observe(document.body);
+        })
+    );
+
+  /** The page with room for its taller lines: with the spacing in from the start, the line page is about 4,800 px. */
+  const tall = (demo: Demo): Demo => ({ ...demo, height: 9000 });
+
+  /** Each chart text that overlaps another, or leaves its card. */
+  const problemsOn = (page: Page): Promise<string[]> =>
+      page.evaluate(() => {
         const found: string[] = [];
         for (const svg of document.querySelectorAll("svg")) {
           const card = svg.closest(".card")?.getBoundingClientRect();
@@ -874,7 +912,60 @@ test.describe("text spacing", () => {
         }
         return found;
       });
-      expect(problems).toEqual([]);
+
+  for (const { name, demo } of demos) {
+    test(`${name}.html: no chart's text overlaps other text or leaves its card`, async ({ page }) => {
+      await openAtRest(page, demo);
+      await page.addStyleTag({ content: SPACING });
+      await page.clock.runFor(REST);
+      expect(await problemsOn(page)).toEqual([]);
+    });
+
+    // Since M18 a chart's measure has the spacing in it in WebKit too, where the browser's own text length leaves it
+    // out, so a chart that draws with the spacing already there lays out with it, as one that hears of it later does.
+    test(`${name}.html: nor with the spacing there before a chart draws`, async ({ page }) => {
+      if (demo === stressDemo) test.setTimeout(60_000);
+      await spacedFromTheStart(page);
+      await openAtRest(page, tall(demo));
+      expect(await problemsOn(page)).toEqual([]);
+    });
+  }
+
+  // The bars' names are anchored by their ends in a column as wide as the longest is measured to be. So the measure is
+  // the text's own box, within a pixel, when the longest name starts where it started with no spacing: a measure
+  // without the spacing, as WebKit's own length is, would start it 15 px further left.
+  for (const when of ["after the chart drew", "before the chart drew"] as const) {
+    test(`bars.html: a name's measure is its box within a pixel, with the spacing added ${when}`, async ({ page }) => {
+      const names = (): Promise<{ left: number; width: number }> =>
+        page.evaluate(() => {
+          const svg = document.querySelector("#chart svg")!.getBoundingClientRect();
+          const boxes = [...document.querySelectorAll("#chart .ec-mark .ec-label")].map((label) => label.getBoundingClientRect());
+          const longest = boxes.reduce((a, b) => (b.width > a.width ? b : a));
+          return { left: longest.left - svg.left, width: longest.width };
+        });
+      let plain: { left: number; width: number };
+      let spaced: { left: number; width: number };
+      if (when === "after the chart drew") {
+        await openAtRest(page, barsDemo);
+        plain = await names();
+        await page.addStyleTag({ content: SPACING });
+        await rendered(page);
+        await page.clock.runFor(REST);
+        spaced = await names();
+      } else {
+        // The other way round, on one page and one clock: drawn with the spacing, which a later stylesheet then
+        // takes away, and the chart lays out again without it.
+        await spacedFromTheStart(page);
+        await openAtRest(page, tall(barsDemo));
+        spaced = await names();
+        await page.addStyleTag({ content: "* { letter-spacing: normal !important; word-spacing: normal !important; }" });
+        await rendered(page);
+        await page.clock.runFor(REST);
+        plain = await names();
+      }
+      // The spacing is on: the longest name is wider than it was, by 0.12 em a character at least.
+      expect(spaced.width).toBeGreaterThan(plain.width + 5);
+      expect(Math.abs(spaced.left - plain.left)).toBeLessThanOrEqual(1);
     });
   }
 });

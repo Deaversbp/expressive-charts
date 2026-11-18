@@ -2,16 +2,18 @@
 // demo/map-effects.ts, on a clock the test controls. These pin what the page promises: only the
 // countries the rows name are marks, each a closed shape keyed by its name, in name order, and the land
 // under them never one; every country in the file can attach, as a check of scale; each route is an open
-// shape of one subpath, clear of the 180° meridian, that an arrow travels on hover; the page's own
-// outline is drawn at once and gone on leave, with the other countries dimmed; a route lights its
+// shape of one subpath, clear of the 180° meridian, that an arrow travels on hover; the library's
+// outline() is drawn at once and gone on leave, with the other countries dimmed; a route lights its
 // country through the link, and a country its route; a resize draws the map again and each mark follows
-// with no event; each mark's name; and reduced motion and Off. It brings a chart and effects together,
+// with no event, a hover's outline and arrow staying as they are; each mark's name; and reduced motion
+// and Off. It brings a chart and effects together,
 // so it lives beside src/index.ts, the only module allowed to.
 
 import { drawMap, world, type Country, type DrawnMap, type Route } from "../demo/d3-map";
-import { attachMap, club, mapRows, outline, shades, signings, squad, squadSize, type Attach, type MapEffects } from "../demo/map-effects";
+import { attachMap, club, mapRows, OUTLINE, shades, signings, squad, squadSize, type Attach, type MapEffects } from "../demo/map-effects";
 import { expressive, type ChartEnv } from "./charts";
 import { createMotion, manualClock, type MarkGeometry, type MotionMode } from "./core";
+import { outline } from "./effects";
 import { iconRegistry, presetRegistry } from "./registries";
 
 type Env = ChartEnv & { readonly clock: ReturnType<typeof manualClock> };
@@ -86,7 +88,7 @@ const lit = (chart: DrawnMap): string[] =>
     .filter((node) => !node.classList.contains("ec-dimmed"))
     .map((node) => (node as unknown as { __data__: Country }).__data__.name);
 
-/** The outlines the page's effect has drawn, by country: each one's path data and its stroke. */
+/** The outlines outline() has drawn, by country: each one's path data and its stroke. */
 function outlines(svg: SVGSVGElement): Map<string, { readonly d: string; readonly stroke: string; readonly width: string | null }> {
   return new Map(
     Array.from(svg.querySelectorAll<SVGGElement>('.ec-overlay .ec-run[data-slot="hover"]'), (group) => [group, group.querySelector<SVGPathElement>("path.ec-path")] as const)
@@ -192,10 +194,10 @@ describe("the countries", () => {
 });
 
 describe("the hover outline", () => {
-  it("is a geometry effect of the page's own, frozen, with an end state", () => {
-    const effect = outline();
+  it("is the library's outline(), at the page's own width, and no effect of the page's", () => {
+    expect(OUTLINE).toBe(1.5);
+    const effect = outline({ width: OUTLINE });
     expect(effect.kind).toBe("geometry");
-    expect(Object.isFrozen(effect)).toBe(true);
     expect(typeof effect.end).toBe("function");
   });
 
@@ -449,16 +451,51 @@ describe("a resize", () => {
     expect([...outlines(svg).keys()]).toEqual(["Nigeria"]);
     expect(outlines(svg).get("Nigeria")!.d).toBe(markOf(fx.countries.marks(), "Nigeria").outline.d);
     expect(lit(chart)).toEqual(["Nigeria"]);
-    // refresh() starts a hover's effects again on the marks as they are now, as on every attachment:
-    // the arrow is on the route at its new place, and travels it again to the club.
+    // refresh() leaves a hover's effects as they are where no value changed: the arrow stays at the
+    // club's end of its route, at the route's new place, and doesn't travel it again.
     const adeyemi = markOf(fx.routes.marks(), "Adeyemi");
     expect([...arrows(svg).keys()]).toEqual(["Adeyemi"]);
-    expect(distance(arrows(svg).get("Adeyemi")!, adeyemi.start)).toBeLessThan(10);
-    await run(e, 4000);
     const narrow = arrows(svg).get("Adeyemi")!;
     expect(narrow.x / wide.x).toBeCloseTo(0.5, 1);
     expect(distance(narrow, adeyemi.end)).toBeLessThan(10);
+    // Nothing is left to play.
+    expect(e.clock.idle).toBe(true);
+    await run(e, 4000);
+    expect(arrows(svg).get("Adeyemi")).toEqual(narrow);
     expect(lit(chart)).toEqual(["Nigeria"]);
+  });
+
+  it("an arrow part way along its route goes on from where it is, on the route as it is now", async () => {
+    const { e, svg, chart, fx, resize } = setup();
+    hover(route(chart, "Tanaka"));
+    await run(e, 300);
+    const before = markOf(fx.routes.marks(), "Tanaka");
+    const part = arrows(svg).get("Tanaka")!;
+    // Under way: past the city, short of the club.
+    expect(distance(part, before.start)).toBeGreaterThan(10);
+    expect(distance(part, before.end)).toBeGreaterThan(10);
+    resize(320);
+    await settle(e);
+    // Still under way, not back at the city: half as far across, as the map is.
+    const tanaka = markOf(fx.routes.marks(), "Tanaka");
+    const moved = arrows(svg).get("Tanaka")!;
+    expect(moved.x / part.x).toBeCloseTo(0.5, 1);
+    expect(distance(moved, tanaka.start)).toBeGreaterThan(5);
+    expect(e.clock.idle).toBe(false);
+    await run(e, 4000);
+    expect(distance(arrows(svg).get("Tanaka")!, tanaka.end)).toBeLessThan(10);
+    expect([...outlines(svg).keys()]).toEqual(["Japan"]);
+  });
+
+  it("with Off, a resize keeps each end state on its mark", async () => {
+    const { e, svg, chart, fx, resize } = setup("off");
+    hover(route(chart, "Castillo"));
+    await settle(e);
+    resize(320);
+    await settle(e);
+    expect(e.clock.idle).toBe(true);
+    expect(distance(arrows(svg).get("Castillo")!, markOf(fx.routes.marks(), "Castillo").end)).toBeLessThan(10);
+    expect(outlines(svg).get("Argentina")!.d).toBe(markOf(fx.countries.marks(), "Argentina").outline.d);
   });
 });
 

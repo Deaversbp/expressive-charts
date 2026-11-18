@@ -5964,7 +5964,7 @@ Each wave names the files it owns. Waves 1 and 2 run one after the other; wave 3
      - **`fromVegaView()` applies the option itself.** It describes its marks with `geometry`, which wins over `labelBounds` in `expressive()`, so its options being `expressive()`'s wasn't enough: it puts the boxes on a copy of each mark its read made.
      - **A mark played again has its own batch:** the marks whose values changed, not every hovered mark, as `settle()` gave.
      - **Without `value`, "no update" is the adapter's own rule:** a length as it was. A mark that only moved keeps its hover.
-     - **The pages' words aren't changed.** `map.html`'s and charts.html's notes still call the outline and the wait effects of the page's own, and the demo index says so of the map. New words move the pages' full-page pictures, so they wait for your word.
+     - **The pages' words, and nine pictures.** `map.html`'s and charts.html's notes called the outline and the wait effects of the page's own, the demo index said so of the map, and `stress.html`'s said Safari's measure leaves the spacing out. On your word (18 November 2026) each says what's so now, and nine full-page baselines were made again, shown to you first, main's beside the new: `map-load`, `map-load-dark`, `map-load-320`, the four `charts-page` pictures and the two `stress-page` ones. Each differs from main's code, drawn that day, only in its sentence's lines: the map's and charts.html's sentences are worded to wrap as the old ones did, so nothing below them moves. The other 197 are as they were.
 5. ✅ **Safari's text spacing, and `stress.html`'s audit table** (decisions 2 and 29). Owns `src/charts/render/text.ts`, the adapter's measure, and the table.
    - **First, the three browsers' measures,** in Docker (decision 29).
    - Tests: unit tests of the measure with a stand-in that leaves spacing out and one that counts it; the charts' layouts' digests byte for byte where spacing is counted or there's none; and in `a11y.spec.ts`, WebKit's text spacing before a chart draws and after.
@@ -5995,7 +5995,7 @@ Each wave names the files it owns. Waves 1 and 2 run one after the other; wave 3
      - **Found from where the second character ends,** not from two lengths, so one test text is enough, and a viewer's stylesheet that overrides the test's spacing can't hide the answer.
      - **A no-break space counts as a space.**
      - **The spacing-before-draw check runs in all three browsers,** not WebKit alone, on every page.
-     - **`stress.html`'s own note still says "Safari's measure leaves the spacing out".** New words move its two full-page pictures, so it waits for your word, with step 4's.
+     - **Main's four `charts-page` baselines were a little stale.** Main's own code, drawn in Docker that day, differs from them by up to 16 levels across the bullet chart's bands, about 46,000 pixels at full width: under the suite's tolerance, so CI passed. The four made again for the pages' words have that too. Which earlier change brought it wasn't looked for.
      - **The demo's own D3 code measures its text itself** (`demo/d3-funnel.ts`, `demo/d3-slope.ts`), with the browser's length, so in Safari those pages' own labels are still placed without the spacing. That's the page's code, not the library's, and is left.
 
 **Wave 3** (after wave 1 lands; beside wave 2 or after it; one PR):

@@ -234,7 +234,7 @@
         <li>The dumbbell's change is staged as a bar chart's is: the values first, then the rows, in Presentation; both at once in Analysis; at once in Off. Its own transition reads the motion mode, and <code>watch</code> keeps the effects on the marks as they move.</li>
         <li>A linked hover lights the other marks and shows nothing else: no tooltip, and nothing announced.</li>
         <li>A bullet chart's bands are context, not marks: the chart draws them, hidden from screen readers, and they never dim, move or take the pointer. Each bar's name says its value, its target and whether it's met, so nothing is told by a tick's place alone.</li>
-        <li>A target waits for its bar. The wait is an effect of the page's own, made with <code>defineEffect</code>: it draws nothing for as long as a bar takes to fill, in sequence before <code>flash</code>, so the motion mode scales both alike. A flash ends with nothing drawn: with reduced motion the bars are full and nothing blinks.</li>
+        <li>A target waits for its bar. The wait is <code>wait()</code>, one of the library's built-in effects since 0.13.0: it draws nothing for as long as a bar takes to fill, in sequence before <code>flash</code>, so the motion mode scales both alike. A flash ends with nothing drawn: with reduced motion the bars are full and nothing blinks.</li>
         <li>A funnel's stage is a closed shape, which has no direction and no labels the adapter can read. The page says where each stage's top edge and name are, so the drop stands in the gap above the stage. Each stage's name says its drop too, since an effect's text isn't read aloud.</li>
       </ul>
     </section>

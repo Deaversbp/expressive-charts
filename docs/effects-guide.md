@@ -313,6 +313,8 @@ only("revenue", underline);           // on marks whose key or series is "revenu
 stagger(pulse({ times: 1 }));         // each mark of a batch a little after the one before
 ```
 
+To start a part later, put the built-in [`wait(ms)`](api.md#wait) before it: `sequence(wait(750), flash())`. It draws nothing for that long, on `"effect"` timing, so the motion mode scales the wait with the rest, and with motion off it takes no time.
+
 - Parts share the run's context: one overlay group, one mark handle (whose `set()` merges fields) and one signal. A sequence starts each part on the mark's geometry and data as they are by then. A part with nothing to do should finish at once, so one `sequence` tells the whole story whatever the chart shows.
 - A combination is a data effect if any part is one, and it needs every part's rows and related series.
 - `stagger` is never a default: research finds it helps little and can hurt. Its waits use `"stagger"` timing, so nothing waits in Analysis or Off.
@@ -409,6 +411,7 @@ test("trace works on curves and areas", async () => {
 - **A curve** is flattened into straight pieces within 0.1 px of it, so an effect sees it as a line with many short legs: `angle(t)` turns a little at each.
 - **An open shape with more than one move**, such as the curve drawn with `.defined()`, has a gap at each later move, which your effect should leave alone, as on the `gapped line` fixture ([above](#drawing-along-a-walk-with-gaps)).
 - **An area is closed** and has no direction, like a point: its walk has length 0, at its centre. So `trace` and `travel`, which go along the walk, draw nothing on it, and an effect that works on the outline, as `pulse` does, follows its whole path, holes too.
+- **For a hover on a closed shape,** the built-in [`outline()`](api.md#outline) strokes `mark.outline.d` in the overlay, at once, and follows `onChange`. It's a dozen lines, and the pattern for any effect with nothing to animate: `run` draws what `end` draws and resolves, so every motion mode shows the same picture.
 
 ## Transition effects and `checkTransition`
 

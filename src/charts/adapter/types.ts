@@ -1,6 +1,6 @@
 // What expressive() takes and returns: effects on SVG marks drawn by other code.
 
-import type { Baseline, EffectSlots, MarkGeometry, Motion, MotionMode, Sample } from "../../core";
+import type { Baseline, EffectSlots, MarkGeometry, Motion, MotionMode, Rect, Sample } from "../../core";
 import type { MarkEvents } from "../types";
 
 /**
@@ -53,6 +53,16 @@ export interface ExpressiveOptions<D> {
    * give it the key passed in. Until 0.13.0 the element came first: `(element, datum, key)`.
    */
   readonly geometry?: (datum: D, element: Element, key: string) => MarkGeometry;
+  /**
+   * Where the host's own text for a mark is: its boxes, in the marks' px (the coordinates of their
+   * nearest common ancestor), as `describe`'s `labelBounds` takes them. They become the mark's
+   * `labelBounds`, so an effect's text (`label`, `delta`) keeps clear of them. For marks the adapter
+   * reads: with `geometry` the page's own description says where its text is, and this isn't called.
+   * Called once per mark on every read, with the row and the element of its first part, as
+   * `markLabel`'s row is, so a stack's boxes are given once, for the whole mark. An empty list is a
+   * mark with no text. Boxes that aren't finite, or a result that's no list, throw, changing nothing.
+   */
+  readonly labelBounds?: (datum: D, element: Element) => readonly Rect[];
   /**
    * Data effects' samples: values along the mark's walk, `{ t, value, at? }`, with `t` in [0, 1] and
    * never decreasing, and finite values. Called on every read for each mark, with its row (its first
@@ -124,7 +134,9 @@ export interface Attachment<D> {
    * Call after the host re-renders: re-reads the marks (from `source` if given, and from then on) and
    * fires enter, update and exit by key. An update means a part's `value` changed, or without `value`
    * the mark's length; either way, gaining or losing a segment. A mark that only moved follows without
-   * one. Throws, changing nothing, on marks it can't read.
+   * one. A hovered or focused mark with no update keeps its hover effects as they are, following its
+   * new geometry: an icon that travelled stays at its end. One with an update plays its hover effects
+   * again, once the update's have started. Throws, changing nothing, on marks it can't read.
    */
   refresh(source?: MarkSource<D>): void;
   /**

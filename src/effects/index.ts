@@ -10,6 +10,8 @@ export { drawIn, type DrawInOptions } from "./draw-in";
 export { delta, type DeltaOptions } from "./delta";
 export { label, type LabelOptions } from "./label";
 export { threshold, type ThresholdOptions } from "./threshold";
+export { outline, type OutlineOptions } from "./outline";
+export { wait } from "./wait";
 export { morph, type MorphAlign, type MorphOptions } from "./morph";
 export { gaits, type Gait, type GaitName, type GaitPose, type GaitState, type StepOptions } from "./gaits";
 export { only, parallel, sequence, stagger, type StaggerOptions } from "./combinators";

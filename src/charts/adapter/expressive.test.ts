@@ -791,6 +791,310 @@ describe("expressive: refresh", () => {
   });
 });
 
+describe("expressive: a refresh and a hover", () => {
+  /** A stack point's value: its own goals or assists. */
+  const value = (d: StackPoint): number => d[1] - d[0];
+
+  /** A hover effect and an update effect that write to one log, so their order shows. */
+  function story() {
+    const log: string[] = [];
+    const part = (name: string): GeometryEffect => ({
+      kind: "geometry",
+      run(mark, ctx) {
+        log.push(`${name} run ${mark.key}`);
+        ctx.onChange((moved) => log.push(`${name} change ${moved.key} ${moved.length}`));
+        return Promise.resolve();
+      },
+      end(mark, ctx) {
+        log.push(`${name} end ${mark.key}`);
+        ctx.onChange((moved) => log.push(`${name} change ${moved.key} ${moved.length}`));
+      },
+      clear() {
+        log.push(`${name} clear`);
+      }
+    });
+    return { log, hover: part("hover"), update: part("update") };
+  }
+
+  it("keeps a hovered mark's run through a refresh that leaves its value alone, and the run hears the new geometry", () => {
+    const host = d3Stack();
+    const { log, hover, update } = story();
+    const { fx } = setup(host.selection(), { ...stacked, value, on: { hover, update } });
+    const events = hoverLog(fx);
+    pointer("pointerover", host.rect("Tanaka", "goals"));
+    expect(log).toEqual(["hover run Tanaka"]);
+    // The window narrows: 8 px a goal instead of 10, the same values.
+    host.redraw(players, 8);
+    fx.refresh(host.selection());
+    // Not cleared and not run again: the same run, told where its mark is now.
+    expect(log).toEqual(["hover run Tanaka", "hover change Tanaka 128"]);
+    fx.refresh(host.selection());
+    expect(log).toEqual(["hover run Tanaka", "hover change Tanaka 128"]);
+    // No hover or leave event for a hover that went on.
+    expect(events).toEqual(["hover Tanaka pointer"]);
+    pointer("pointerleave", host.svg);
+    expect(log).toEqual(["hover run Tanaka", "hover change Tanaka 128", "hover clear"]);
+    expect(events).toEqual(["hover Tanaka pointer", "leave Tanaka"]);
+  });
+
+  it("without value, a mark whose length is as it was keeps its run, and one whose length changed plays it again", () => {
+    const host = d3Stack();
+    const { log, hover } = story();
+    const { fx } = setup(host.selection(), { ...stacked, on: { hover } });
+    pointer("pointerover", host.rect("Tanaka", "goals"));
+    // Okafor's row alone changes: Tanaka's bar is where it was, the length it was, with a new row, which its run hears.
+    host.redraw(players.map((p) => (p.name === "Okafor" ? { ...p, goals: 20 } : p)));
+    fx.refresh(host.selection());
+    expect(log).toEqual(["hover run Tanaka", "hover change Tanaka 160"]);
+    host.redraw(players, 8);
+    fx.refresh(host.selection());
+    expect(log).toEqual(["hover run Tanaka", "hover change Tanaka 160", "hover clear", "hover run Tanaka"]);
+  });
+
+  it("plays the hover again on a mark whose value changed, once its update has started, and keeps the others'", () => {
+    const first = d3Stack();
+    const second = d3Stack();
+    const a = setup(first.selection(), stacked).fx;
+    const { log, hover, update } = story();
+    const b = setup(second.selection(), { ...stacked, value, on: { hover, update } }).fx;
+    // Linked by series, so one hover lights every mark of the other.
+    link([a, b], { by: () => "all" });
+    pointer("pointerover", first.rect("Tanaka", "goals"));
+    expect(log).toEqual(["hover run Okafor", "hover run Tanaka", "hover run Lindqvist"]);
+    log.length = 0;
+    second.redraw(players.map((p) => (p.name === "Tanaka" ? { ...p, goals: 7 } : p)));
+    b.refresh(second.selection());
+    // Tanaka's hover run ends, its update runs, and its hover plays again, last; the other two go on, each told of its new row.
+    expect(log).toEqual(["hover clear", "update run Tanaka", "update change Tanaka 170", "hover change Okafor 200", "hover change Lindqvist 170", "hover run Tanaka"]);
+    log.length = 0;
+    pointer("pointerleave", first.svg);
+    expect(log.filter((entry) => entry === "hover clear")).toHaveLength(3);
+  });
+
+  it("starts no hover run on a refresh for a link's hover with effects: false", () => {
+    const first = d3Stack();
+    const second = d3Stack();
+    const a = setup(first.selection(), stacked).fx;
+    const { log, hover } = story();
+    const b = setup(second.selection(), { ...stacked, value, dim: true, on: { hover } }).fx;
+    link([a, b], { effects: false });
+    pointer("pointerover", first.rect("Tanaka", "goals"));
+    second.redraw(players.map((p) => (p.name === "Tanaka" ? { ...p, goals: 7 } : p)));
+    b.refresh(second.selection());
+    expect(log).toEqual([]);
+    // Still lit, the others dimmed.
+    expect(second.rect("Tanaka", "goals").classList.contains("ec-dimmed")).toBe(false);
+    expect(second.rect("Okafor", "goals").classList.contains("ec-dimmed")).toBe(true);
+  });
+
+  it("keeps a focused mark's run as it keeps a pointer's", () => {
+    const host = d3Stack();
+    const { log, hover } = story();
+    const { fx } = setup(host.selection(), { ...stacked, value, keyboard: true, on: { hover } });
+    const events = hoverLog(fx);
+    fx.focus("Lindqvist");
+    host.redraw(players, 8);
+    fx.refresh(host.selection());
+    expect(log).toEqual(["hover run Lindqvist", "hover change Lindqvist 136"]);
+    expect(events).toEqual(["hover Lindqvist keyboard"]);
+    expect(document.activeElement).toBe(host.rect("Lindqvist", "goals"));
+  });
+
+  it("keeps the run when the host draws the mark's elements anew", () => {
+    const host = d3Stack();
+    const { log, hover } = story();
+    const { fx } = setup(host.selection(), { ...stacked, value, dim: true, on: { hover } });
+    pointer("pointerover", host.rect("Okafor", "goals"));
+    replaceRect(host.rect("Okafor", "goals"));
+    replaceRect(host.rect("Okafor", "assists"));
+    fx.refresh(host.selection());
+    expect(log).toEqual(["hover run Okafor"]);
+    expect(host.rect("Tanaka", "goals").classList.contains("ec-dimmed")).toBe(true);
+  });
+
+  it("ends the run of a hovered mark that's gone, and keeps a link's hover on the marks still there", () => {
+    const first = d3Stack();
+    const second = d3Stack();
+    const a = setup(first.selection(), stacked).fx;
+    const { log, hover } = story();
+    const b = setup(second.selection(), { ...stacked, value, on: { hover } }).fx;
+    link([a, b], { by: () => "all" });
+    const events = hoverLog(b);
+    pointer("pointerover", first.rect("Tanaka", "goals"));
+    log.length = 0;
+    events.length = 0;
+    second.redraw(players.slice(0, 2));
+    b.refresh(second.selection());
+    // One run ends; the other two go on, each told of its new row.
+    expect(log).toEqual(["hover clear", "hover change Okafor 200", "hover change Tanaka 160"]);
+    expect(events).toEqual(["leave Lindqvist"]);
+  });
+
+  it("with Off, a kept hover's end state follows its mark, and a changed one is drawn again", () => {
+    const host = d3Stack();
+    const { log, hover } = story();
+    const { fx } = setup(host.selection(), { ...stacked, value, on: { hover } }, { motion: quietMotion("off") });
+    pointer("pointerover", host.rect("Tanaka", "goals"));
+    host.redraw(players, 8);
+    fx.refresh(host.selection());
+    expect(log).toEqual(["hover end Tanaka", "hover change Tanaka 128"]);
+    host.redraw(players.map((p) => (p.name === "Tanaka" ? { ...p, goals: 7 } : p)), 8);
+    fx.refresh(host.selection());
+    expect(log).toEqual(["hover end Tanaka", "hover change Tanaka 128", "hover clear", "hover end Tanaka"]);
+  });
+
+  it("with watch, a refresh keeps the run that the host's frames were moving", async () => {
+    const host = d3Lines();
+    const { log, hover } = story();
+    const { fx, clock } = setup<Trace>(host.paths, { ...traced, value: (d) => d.rows.map((row) => row[d.name]).join(" "), watch: true, on: { hover } });
+    pointer("pointerover", host.paths[0]!);
+    log.length = 0;
+    // The host draws a frame, which watch follows, and then the page refreshes: no value changed.
+    host.paths[0]!.setAttribute("stroke-width", "4");
+    fx.refresh(host.paths);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    clock.advance(16);
+    expect(log.some((entry) => entry.startsWith("hover run") || entry === "hover clear")).toBe(false);
+  });
+
+  it("a listener that ends the hover during the refresh stops it playing again", () => {
+    const host = d3Stack();
+    const { log, hover } = story();
+    const { fx } = setup(host.selection(), { ...stacked, value, on: { hover } });
+    fx.on("update", () => fx.leave());
+    pointer("pointerover", host.rect("Tanaka", "goals"));
+    host.redraw(players.map((p) => (p.name === "Tanaka" ? { ...p, goals: 7 } : p)));
+    fx.refresh(host.selection());
+    expect(log).toEqual(["hover run Tanaka", "hover clear"]);
+  });
+});
+
+describe("expressive: labelBounds", () => {
+  const box = (x: number, y: number, width = 40, height = 16) => ({ x, y, width, height });
+
+  it("gives a host bar the page's boxes as its labelBounds, asked for once a mark, with its first part's row and element", () => {
+    const host = d3Stack();
+    const asked: string[] = [];
+    const { fx } = setup(host.selection(), {
+      ...stacked,
+      labelBounds: (d, element) => {
+        asked.push(`${d.data.name} ${(element.parentElement as unknown as { __data__: { key: string } }).__data__.key}`);
+        return [box(-50, Number(element.getAttribute("y")) + 2)];
+      }
+    });
+    // A stack's boxes are given once, for the whole mark, by its part at the baseline.
+    expect(asked).toEqual(["Okafor goals", "Tanaka goals", "Lindqvist goals"]);
+    expect(fx.marks().map((mark) => mark.labelBounds)).toEqual([[box(-50, 9)], [box(-50, 43)], [box(-50, 77)]]);
+    // The segments have none, as describe.bar's haven't.
+    expect(fx.marks()[0]!.segments!.every((segment) => segment.labelBounds === undefined)).toBe(true);
+  });
+
+  it("gives them to a closed shape, a line, a circle and a slice the adapter reads", () => {
+    const svg = el("svg", { width: 300, height: 200 }, document.body);
+    const plot = el("g", { transform: "translate(10,10)" }, svg);
+    const marks = [
+      el("path", { d: "M0,0L60,0L40,30L20,30Z", fill: "#2a78d6" }, plot),
+      el("path", { d: "M0,100L50,60L100,90", fill: "none", stroke: "#2a78d6", "stroke-width": 2 }, plot),
+      el("circle", { cx: 150, cy: 50, r: 5 }, plot),
+      el("path", { d: "M200,50A30,30 0 0 1 230,80L200,80Z", fill: "#eb6834" }, plot)
+    ];
+    marks.forEach((mark, i) => Object.assign(mark, { __data__: { name: `m${i}` } }));
+    const { fx } = setup<{ name: string }>(marks, { key: (d) => d.name, labelBounds: (d) => [box(0, 120), box(Number(d.name.slice(1)) * 10, 140)] });
+    expect(fx.marks().map((mark) => mark.key).sort()).toEqual(["m0", "m1", "m2", "m3"]);
+    for (const mark of fx.marks()) expect(mark.labelBounds, mark.key).toEqual([box(0, 120), box(Number(mark.key.slice(1)) * 10, 140)]);
+  });
+
+  it("leaves a mark with no option as it was, and takes an empty list as a mark with no text", () => {
+    const host = d3Stack();
+    expect(setup(host.selection(), stacked).fx.marks().every((mark) => !("labelBounds" in mark))).toBe(true);
+    const other = d3Stack();
+    expect(setup(other.selection(), { ...stacked, labelBounds: () => [] }).fx.marks().map((mark) => mark.labelBounds)).toEqual([[], [], []]);
+  });
+
+  it("copies the boxes, so a list the page goes on changing isn't the mark's", () => {
+    const host = d3Stack();
+    const shared = [{ x: 0, y: 0, width: 10, height: 10 }];
+    const { fx } = setup(host.selection(), { ...stacked, labelBounds: () => shared });
+    shared[0]!.x = 99;
+    expect(fx.marks()[0]!.labelBounds).toEqual([box(0, 0, 10, 10)]);
+  });
+
+  it("reads them again on a refresh: a mark whose text moved follows, with no update", () => {
+    const host = d3Stack();
+    const decoration = recorder();
+    let left = -50;
+    const { fx } = setup(host.selection(), { ...stacked, value: (d) => d[1] - d[0], labelBounds: () => [box(left, 0)], on: { decorate: decoration.effect } });
+    const updates: string[] = [];
+    fx.on("update", (e) => updates.push(e.mark.key));
+    decoration.log.length = 0;
+    fx.refresh();
+    // Nothing moved: nothing to tell.
+    expect(decoration.log).toEqual([]);
+    left = -60;
+    fx.refresh();
+    expect(fx.marks().map((mark) => mark.labelBounds![0]!.x)).toEqual([-60, -60, -60]);
+    expect(decoration.log).toEqual(["change Okafor", "change Tanaka", "change Lindqvist"]);
+    expect(updates).toEqual([]);
+  });
+
+  it("with geometry, the page's own description wins, and labelBounds isn't called", () => {
+    const host = d3Lines();
+    const labelBounds = vi.fn(() => [box(0, 0)]);
+    const own = [box(260, 40)];
+    const { fx } = setup<Trace>(host.paths, {
+      ...traced,
+      geometry: (d, _el, key) => build.line({ key, series: d.name, points: vertices(d), width: 2, ...(d.name === "goals" ? { labelBounds: own } : {}) }),
+      labelBounds
+    });
+    expect(labelBounds).not.toHaveBeenCalled();
+    expect(fx.marks().map((mark) => mark.labelBounds)).toEqual([own, undefined]);
+  });
+
+  it("with watch, reads them again for the marks a frame changes", async () => {
+    const svg = el("svg", { width: 300, height: 200 }, document.body);
+    const dot = Object.assign(el("circle", { cx: 50, cy: 50, r: 5 }, svg), { __data__: { name: "a" } });
+    const still = Object.assign(el("circle", { cx: 150, cy: 50, r: 5 }, svg), { __data__: { name: "b" } });
+    const asked: string[] = [];
+    const { fx, clock } = setup<{ name: string }>([dot, still], {
+      key: (d) => d.name,
+      watch: true,
+      labelBounds: (d, element) => {
+        asked.push(d.name);
+        return [box(Number(element.getAttribute("cx")) + 8, 42)];
+      }
+    });
+    asked.length = 0;
+    dot.setAttribute("cx", "70");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    clock.advance(16);
+    expect(asked).toEqual(["a"]);
+    expect(fx.marks().map((mark) => mark.labelBounds![0]!.x)).toEqual([78, 158]);
+  });
+
+  it.each([
+    ["no function", { labelBounds: [] as unknown as () => [] }, "expressive: labelBounds must be a function."],
+    ["no list", { labelBounds: () => ({ x: 0, y: 0, width: 1, height: 1 }) as unknown as [] }, 'expressive: labelBounds for "Okafor" must return a list of boxes { x, y, width, height }, got [object Object].'],
+    ["nothing", { labelBounds: () => undefined as unknown as [] }, 'expressive: labelBounds for "Okafor" must return a list of boxes { x, y, width, height }, got undefined.'],
+    ["a box with no width", { labelBounds: () => [{ x: 0, y: 0, height: 1 }] as unknown as [] }, /labelBounds for "Okafor": labelBounds\[0\]\.width must be a finite number ≥ 0, got undefined/],
+    ["a box that isn't one", { labelBounds: () => [null] as unknown as [] }, /labelBounds for "Okafor": labelBounds\[0\]\.x must be a finite number, got undefined/]
+  ])("throws on %s, changing nothing", (_case, more, message) => {
+    const host = d3Stack();
+    const before = host.svg.outerHTML;
+    expect(() => setup(host.selection(), { ...stacked, ...more })).toThrow(message);
+    expect(host.svg.outerHTML).toBe(before);
+  });
+
+  it("a refresh that reads a bad box throws, changing nothing", () => {
+    const host = d3Stack();
+    let bad = false;
+    const { fx } = setup(host.selection(), { ...stacked, labelBounds: () => [box(bad ? NaN : 0, 0)] });
+    bad = true;
+    const before = fx.marks();
+    expect(() => fx.refresh()).toThrow(RangeError);
+    expect(fx.marks()).toEqual(before);
+  });
+});
+
 describe("expressive: value", () => {
   /** A stack point's value: its own goals or assists. */
   const value = (d: StackPoint): number => d[1] - d[0];

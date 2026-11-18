@@ -25,7 +25,7 @@ import {
 } from "./core";
 import { parseTransform } from "./core/geometry";
 import { drawnInGaps, measurePath, type Drawn } from "./core/testing";
-import { flash, only, parallel, pulse, stagger, threshold, travel, wiggle } from "./effects";
+import { flash, label, only, parallel, pulse, stagger, threshold, travel, wiggle } from "./effects";
 import { cleat, soccerBall, sport } from "./icons/sport";
 import { iconRegistry, presetRegistry, registerIcons } from "./registries";
 import { checkEffect } from "./testing";
@@ -981,6 +981,55 @@ describe("fromVegaView: bars, a stack, slices and points", () => {
     // Past 10 goals: Okafor and Lindqvist, not Tanaka.
     const coloured = ["Okafor", "Lindqvist", "Tanaka"].map((name) => overlayOf(svg).querySelectorAll(`.ec-run[data-key="${name}"] path`).length);
     expect(coloured).toEqual([1, 1, 0]);
+  });
+
+  it("takes labelBounds, as expressive() does: each bar carries the page's boxes, its samples as before, and label keeps clear", async () => {
+    const { view, svg } = await render({
+      width: 300,
+      data: { values: players },
+      mark: "bar",
+      encoding: { y: { field: "name", type: "nominal", sort: null }, x: { field: "goals", type: "quantitative", scale: { domain: [0, 20], nice: false } } }
+    });
+    const seen = new Map<string, MarkData>();
+    const asked: string[] = [];
+    /** Where the page would write each bar's value: just past its end, in the px of the marks' group. */
+    const boxOf = (d: (typeof players)[number], element: Element) => {
+      const { x, y, width, height } = (element as unknown as { __data__: { x: number; y: number; width: number; height: number } }).__data__;
+      return { x: x + width + 4, y, width: 30, height };
+    };
+    const e = env("off");
+    const fx = fromVegaView<(typeof players)[number]>(
+      view,
+      {
+        key: (d) => d.name,
+        sample: (d) => d.goals,
+        labelBounds: (d, element) => {
+          asked.push(d.name);
+          return [boxOf(d, element)];
+        },
+        on: { decorate: parallel(recorder(seen), label<(typeof players)[number]>((data) => `${data.datum.goals} goals`)) }
+      },
+      e
+    );
+    expect(asked).toEqual(["Okafor", "Lindqvist", "Tanaka"]);
+    const bars = Array.from(svg.querySelectorAll<SVGPathElement>(".mark-rect.role-mark path"));
+    for (const [i, mark] of fx.marks().entries()) {
+      const own = boxOf(players[i]!, bars[i]!);
+      expect(mark.labelBounds).toEqual([own]);
+      // The samples `sample` gives are still the mark's, though it's a copy of the one the View's read made.
+      expect(seen.get(mark.key)!.samples).toEqual([{ t: 0, value: 0 }, { t: 1, value: players[i]!.goals }]);
+      const text = overlayOf(svg).querySelector<SVGTextElement>(`.ec-run[data-key="${mark.key}"] text`)!;
+      expect(Number(text.getAttribute("x"))).toBeGreaterThanOrEqual(own.x + own.width + 6);
+    }
+    // A render that moves the bars reads the boxes again.
+    asked.length = 0;
+    view.width(150);
+    await view.runAsync();
+    await delivered();
+    e.clock.advance(16);
+    expect(asked).toEqual(["Okafor", "Lindqvist", "Tanaka"]);
+    expect(fx.marks()[0]!.labelBounds![0]!.x).toBeCloseTo(7.5 * 16 + 4, 3);
+    fx.destroy();
   });
 
   it("reads a stack's parts as one bar's segments, ordered from the baseline, whatever order Vega-Lite stacks in", async () => {

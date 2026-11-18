@@ -13,10 +13,12 @@ import { delta } from "./delta";
 import { flash } from "./flash";
 import { label } from "./label";
 import { morph } from "./morph";
+import { outline } from "./outline";
 import { pulse } from "./pulse";
 import { threshold } from "./threshold";
 import { trace } from "./trace";
 import { travel } from "./travel";
+import { wait } from "./wait";
 import { wiggle } from "./wiggle";
 
 // Test icons, written out so the effect tests don't depend on src/icons.
@@ -74,7 +76,13 @@ const effects: Record<string, AnyMarkEffect> = {
   "delta with a flash": parallel(flash(), delta()),
   label: label((data) => `${data.samples.length} samples`),
   "label with no text": label(() => undefined),
-  "label in a colour, and a trace": parallel(trace(), label((data) => `+${data.samples[data.samples.length - 1]?.value ?? 0}`, { color: "series-2" }))
+  "label in a colour, and a trace": parallel(trace(), label((data) => `+${data.samples[data.samples.length - 1]?.value ?? 0}`, { color: "series-2" })),
+  outline: outline(),
+  "outline in a colour, thinner": outline({ color: "series-3", width: 1.5 }),
+  "outline while the ball rolls": parallel(outline(), travel(ball)),
+  wait: wait(750),
+  "wait of no time": wait(0),
+  "wait, then a flash": sequence(wait(200), flash())
 };
 
 /** Week by week along any walk: goals cross xG four times, so threshold draws several runs. */

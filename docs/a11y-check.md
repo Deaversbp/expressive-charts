@@ -2,7 +2,7 @@
 
 These scripts check what a screen reader hears on the demo pages. Sections [A](#a-nvda--chrome-windows) and [B](#b-voiceover--safari-macos) check the ARIA roles of the reference bar chart on `demo/bars.html`, its data table and its live region. [Section C](#c-the-second-chart-expressive-on-the-pages-own-svg) checks the demo's second chart, which `expressive()` names the same way. [Section D](#d-the-donut-page-donutchart-and-a-d3-pie) checks `donutChart` and a D3 pie on `demo/donut.html`, [section E](#e-the-line-page-linechart-and-a-d3-line) checks `lineChart` and a D3 line on `demo/line.html`, [section F](#f-the-morph-page-a-chart-switch) checks the chart switch on `demo/morph.html`, [section G](#g-the-stress-pages-date-line-linechart-on-dates) checks a line on dates on `demo/stress.html`, [section H](#h-the-season-page-linked-hover-and-change-labels) checks linked hover and the change labels on `demo/season.html`, and [section I](#i-missing-values-page-up-and-page-down-and-the-season-page-again) checks what M8 adds: a line with missing values on `demo/line.html`, Page Up and Page Down on `demo/stress.html`, and the season page without its workarounds. [Section J](#j-circles-and-shapes-an-attachments-picker-and-a-link-across-a-switch) checks what M9 adds: the dots, curves and areas that `expressive()` reads by their tags on `demo/shapes.html`, the D3 pie's effect picker on `demo/donut.html`, and the link across the switch on `demo/morph.html`. [Section K](#k-curved-lines-a-hover-on-one-point-and-the-season-pages-line) checks what M10 adds: the line page's toggles, Straight or Curved and Each week or Nearest point, a hover on the nearest point by the keys, and the goals line's change on `demo/season.html`. [Section L](#l-lines-in-a-switch-both-lines-changes-and-the-d3-pie-read-by-tag) checks what M11 adds: the morph page's second switch, of two line charts and columns, both lines' changes on `demo/season.html`, and the D3 pie read from its own paths on `demo/donut.html`. [Section M](#m-bars-that-draw-themselves-in-a-tab-stop-that-follows-the-week-and-room-above-the-seasons-line) checks what M12 adds: the bars drawing themselves in on `demo/bars.html`, Tab after a pick landing on the week in the morph page's second switch, and room above the season page's line. [Section N](#n-ticket-sales-in-londons-time-zone-the-goals-point-above-the-red-and-text-spacing-after-load) checks what M13 adds: the line page's ticket sales by the hour in London's time zone, with a toggle for UTC, its goals point at matchweek 12 above the red, and text spacing added after load on `demo/stress.html`. [Section O](#o-a-d3-pie-that-morphs-into-d3-columns-and-four-charts-drawn-with-d3) checks what M14 adds: the morph page's switch of a D3 pie and D3 columns, through `hostView()`, and the waterfall, the dumbbell, the radar and the butterfly drawn with D3 on `demo/charts.html`. [Section P](#p-layout-morphs-on-d3-charts) checks what M15 adds: `demo/layouts.html`'s four switches of D3 charts, bars side by side, stacked and at 100%, areas stacked and at 100%, a radar into bars and a treemap into bars, with toggle buttons and a jump of two announced once. [Section Q](#q-a-dumbbell-of-three-attachments-and-guides-that-stay-put) checks what M16 adds to that page: a fifth card, the charts page's dumbbell, its three attachments one view, into bars side by side, and the axes and weeks that stay on screen through a switch. [Section R](#r-a-map-a-bullet-chart-and-a-funnel-and-a-treemap-that-drills-down) checks what M17 adds, in three parts, a page each: the map on `demo/map.html`, the bullet chart and the funnel on `demo/charts.html`, and the treemap's drill into a position on `demo/layouts.html`. Run them with one or both of NVDA + Chrome and VoiceOver + Safari. If something reads differently from what a script expects, or reads badly, [open an issue](https://github.com/Deaversbp/expressive-charts/issues) with what you heard, and the roles and labels can be adjusted to match.
 
-**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026, and section H, the season page, on 26 October 2026. Section I, for 0.3.0, passed with NVDA + Chrome on 27 October 2026. Section J, for 0.4.0, passed with NVDA + Chrome on 27 October 2026. Section K, for 0.5.0, passed with NVDA + Chrome on 28 October 2026. Section L, for 0.6.0, passed with NVDA + Chrome on 30 October 2026. Section M, for 0.7.0, passed with NVDA + Chrome on 31 October 2026. Section N, for 0.8.0, passed with NVDA + Chrome on 1 November 2026. Section O, for 0.9.0, passed with NVDA + Chrome on 2 November 2026. Section P, for 0.10.0, passed with NVDA + Chrome on 11 November 2026. Section Q, for 0.11.0, passed with NVDA + Chrome on 12 November 2026. Section R, for 0.12.0, passed with NVDA + Chrome on 13 November 2026. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
+**Result (October 2026): passed with NVDA + Chrome.** All 13 steps read as expected, so the roles stay as built. VoiceOver + Safari hasn't been run yet; see [Results](#results). **The donut page (section D) and the line page (section E) passed with NVDA + Chrome too (22 October 2026), and so did the morph page (section F, 23 October 2026).** Section C, section E's steps 13 and 14, and section G passed with NVDA + Chrome on 24 October 2026, and section H, the season page, on 26 October 2026. Section I, for 0.3.0, passed with NVDA + Chrome on 27 October 2026. Section J, for 0.4.0, passed with NVDA + Chrome on 27 October 2026. Section K, for 0.5.0, passed with NVDA + Chrome on 28 October 2026. Section L, for 0.6.0, passed with NVDA + Chrome on 30 October 2026. Section M, for 0.7.0, passed with NVDA + Chrome on 31 October 2026. Section N, for 0.8.0, passed with NVDA + Chrome on 1 November 2026. Section O, for 0.9.0, passed with NVDA + Chrome on 2 November 2026. Section P, for 0.10.0, passed with NVDA + Chrome on 11 November 2026. Section Q, for 0.11.0, passed with NVDA + Chrome on 12 November 2026. Section R, for 0.12.0, passed with NVDA + Chrome on 13 November 2026. Section S, for 0.13.0's examples page, passed with NVDA + Chrome on 18 November 2026. The WCAG 2.2 AA audit, which these runs feed, is [a11y-audit.md](a11y-audit.md).
 
 A screen reader reads the page aloud, so "hear" means real speech. You don't need the sound on, though: NVDA's Speech Viewer shows everything it says as text, and that text is the easiest thing to paste into an issue.
 
@@ -953,6 +953,69 @@ M17 (0.12.0) adds four charts drawn with D3, each given its effects through `exp
 
 If a country, route, bar, stage or tile reads in pieces or twice, the land, the legend, a band, a tick, a flash or "minus 60 percent" is read, a button's state isn't read, a drill isn't announced, is announced twice or half way, or focus doesn't follow its tile, say so: the names, the hidden parts, the buttons or the switch may need to change.
 
+## S. Three everyday charts: revenue, seedlings and sessions
+
+M18 (0.13.0) adds one page, `examples.html`: three cards on the library's own charts, on made-up numbers.
+
+- **Revenue by region.** "Revenue by region, Q3 2026, against target", one tab stop: five bars, largest first, each named with its revenue and its target ("North: $4.2M revenue, 105% of its $4.0M target"). Past each bar the chart writes "105% of target" in an overlay, which isn't read: the bar's name says it. A button above, "Play Q4", plays the next quarter: the bars change, West moves above South, and each change is written past its bar ("+$0.4M"), unread. The quarter is announced once, with the regions that changed. The button then says "Back to Q3".
+- **Seedling height under drought.** "Seedling height by day, drought against control", one tab stop, on a point: Left and Right go along its line, Up and Down across to the other group's point on the same day. Each point is named with its day, its height and its group ("Day 9: 8.3 cm, Drought"). The drought line is red where it's below the control, which isn't read: the heights say it, and so does the table's Difference column.
+- **Sessions by source.** A donut, "Sessions by source, share of total", one tab stop: five slices, clockwise, each named with its sessions and its share ("Search: 18,400 sessions, 45%"). A button above, "Show as bars", switches it to bars, "Sessions by source, counts", announced once as it lands; the button then says "Show as donut". With a slice or a bar focused, V switches too, and focus follows its source.
+
+**Setup.** Run `npm run dev` and open `examples.html` at the address Vite prints, for example `http://localhost:5173/examples.html`. **Reload before you start**, so the page is fresh: Q3, the donut, in Presentation. The page's tab order: the three motion buttons, "Play Q4", the revenue chart (one stop), its "Data table", the height chart (one stop), its "Data table", "Show as bars", the sessions chart (one stop), then its "Data table". Use NVDA + Chrome, with the setup from [A](#a-nvda--chrome-windows), and keep the pointer off the charts. Letter keys reach the page only in focus mode.
+
+**Listen for:**
+
+1. Each bar, point and slice is read **once, as one item**, with its name. A region, a value, "105% of target" or an axis number drawn on a chart is never read on its own.
+2. Each of the two buttons is read as a button, with a name that says what a press does, and the other name after a press. Neither is a toggle, so neither has "pressed".
+3. The quarter is announced once, with the regions that changed. The change labels ("+$0.4M") are never read.
+4. Each switch is announced once, as it lands, with the new view's name.
+5. After V, the same source is read in the new view: focus follows it.
+6. Each label's words are in a name: a bar's share of its target, a point's height, a slice's share.
+7. Nothing is read at load, and nothing that's only drawn: no target or change label, no red on the line, no arrow, highlighter or pulse.
+
+**Known, no need to report:** NVDA may read "$4.2M" as "4.2 M dollars" or "dollar 4.2 M", and "−$0.1M" in this script as "minus"; on the page a change label should never be read at all. It may read a view's name twice after V: once as the group focus moves into, and once as the announcement. After a press, NVDA may or may not say a button's new name by itself; NVDA+Tab reads it. The donut's total, "41,000 sessions", is its group's description, so NVDA may read it after the chart's name.
+
+**Part 1: revenue by region.**
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Open `examples.html` and reload. Wait three seconds, touching nothing. | The page's title, "Three everyday charts · expressive-charts", and nothing after it: nothing plays at load. | |
+| 2 | Press 2 until "Revenue by region, heading, level 2". Then Tab once. | The heading, then "Play Q4, button". | |
+| 3 | Tab once, into the chart. | "Revenue by region, Q3 2026, against target, grouping", then "North: $4.2M revenue, 105% of its $4.0M target, graphic". | |
+| 4 | NVDA+Space (focus mode), then Down arrow 4 times. | "East: $3.8M revenue, 106% of its $3.6M target", "South: $3.1M revenue, 89% of its $3.5M target", "West: $2.6M revenue, 87% of its $3.0M target", "Central: $1.9M revenue, 95% of its $2.0M target", each "graphic", each once. Never "105% of target", "$4.2M" or "North" on its own. | |
+| 5 | Escape, then NVDA+Space (browse mode). Shift+Tab once, to the button, and press Space. | "Play Q4, button". Then, as the bars start to change, one announcement: "Q4 2026: North, East, West and South changed". **Nothing else**: on screen the bars change length, West moves above South, and a change rises past four bars, unread. | |
+| 6 | NVDA+Tab. | "Back to Q3, button": focus stayed on it, and its name says what a press does now. | |
+| 7 | Tab once. | "Revenue by region, Q4 2026, against target, grouping", then "Central: $1.9M revenue, 90% of its $2.1M target, graphic": the bar you left, named for Q4. | |
+| 8 | NVDA+Space (focus mode), then Home, then Down arrow twice. | "North: $4.6M revenue, 105% of its $4.4M target", "East: $3.7M revenue, 97% of its $3.8M target", "West: $3.5M revenue, 113% of its $3.1M target", each "graphic": West is third now. | |
+| 9 | Escape, then NVDA+Space (browse mode). Tab once, to "Data table", and press Space. | "Data table, button, collapsed", then "expanded". | |
+| 10 | Press T, then Ctrl+Alt+Down arrow, then Ctrl+Alt+Right arrow 3 times. | "Revenue by region, Q4 2026, against target, table with 6 rows and 4 columns", "Region". Then "North", then "Revenue, $4.6M", "Target, $4.4M", "Of target, 105%": each cell read with its column's header. | |
+
+**Part 2: seedling height.**
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 11 | Press 2 until "Seedling height under drought, heading, level 2". Then Tab once. | The heading, then "Seedling height by day, drought against control, grouping", "Day 0: 2.0 cm, Drought, graphic". | |
+| 12 | NVDA+Space (focus mode), then Right arrow twice. | "Day 1: 2.7 cm, Drought, graphic", "Day 2: 3.5 cm, Drought, graphic": along the drought line, each once. | |
+| 13 | End. | "Day 12: 8.6 cm, Drought, graphic". **Nothing** of the red the line has there. | |
+| 14 | Up arrow. | "Day 12: 13.9 cm, Control (watered), graphic": the other group's point on the same day. | |
+| 15 | Left arrow 3 times. | "Day 11: 12.8 cm", "Day 10: 11.7 cm", "Day 9: 10.5 cm", each "Control (watered), graphic". | |
+| 16 | Down arrow. | "Day 9: 8.3 cm, Drought, graphic". | |
+| 17 | Escape, then NVDA+Space (browse mode). Press Shift+2 once, to the card's heading, then Down arrow until "Data table". | The note, the legend ("Drought", "Control (watered)", "Drought below control"), the chart's name, and the points, each once with its day, height and group. **Never** an axis number or an end label ("8.6 cm") on its own. | |
+
+**Part 3: sessions by source.**
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 18 | Press 2 until "Sessions by source, heading, level 2". Then Tab once. | The heading, then "Show as bars, button". | |
+| 19 | Tab once, into the chart. | "Sessions by source, share of total, grouping", then "Search: 18,400 sessions, 45%, graphic". | |
+| 20 | NVDA+Space (focus mode), then Right arrow twice. | "Direct: 9,200 sessions, 22%, graphic", "Social: 6,100 sessions, 15%, graphic": clockwise, each once. | |
+| 21 | Press V. | Nothing for about a second while the slices turn into bars. Then "Sessions by source, counts, grouping", "Social: 6,100 sessions, graphic", and the announcement "Sessions by source, counts". The focus ring is on Social's bar. | |
+| 22 | Down arrow twice. | "Referral: 4,300 sessions, graphic", "Email: 3,000 sessions, graphic". | |
+| 23 | Press V. | About a second of nothing. Then "Sessions by source, share of total, grouping", "Email: 3,000 sessions, 7%, graphic", and one announcement of that view's name. | |
+| 24 | Escape, then NVDA+Space (browse mode). Shift+Tab once, to the button, and press Space. | "Show as bars, button". About a second later, one announcement: "Sessions by source, counts". | |
+| 25 | NVDA+Tab, then Tab once. | "Show as donut, button". Then "Sessions by source, counts, grouping", "Email: 3,000 sessions, graphic": the tab stop followed the source. | |
+| 26 | Press Shift+2 once, to the card's heading, then Down arrow until "Data table". | The note, the button, the legend's five sources, the chart's name and its five bars, Search's to Email's, each once. **Never** a slice, "41,000" or a share: only the view on show is read. | |
+
 ## Re-check: each bar's description
 
 Each bar of the library's chart has a description: the player's position, added after section A had passed. The roles, names, table and announcements are unchanged, so only these need hearing again:
@@ -1117,6 +1180,17 @@ So the dumbbell card's views, names, buttons, keys, tab stops and announcements,
 - nothing was read that can't be seen, and nothing that's only drawn: no land, legend or ring on the map, no band or tick on the bullet chart, no flash, and no "−60%" between the funnel's stages.
 
 So the map's names, hidden parts and tables, the bullet chart's and the funnel's names, hidden parts and toggle, and the drill-down's views, names, buttons, keys and announcements stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on these pages.
+
+**Three everyday charts (section S), NVDA + Chrome on Windows, 18 November 2026: passed.** The tester reported that script S passed, all three parts, so every "Listen for" item passed:
+- each bar, point and slice was read once, as one item, with its name;
+- the two buttons were read as buttons, each with the name of what a press does, and the other name after a press;
+- the quarter was announced once, with the regions that changed, and no change label was read;
+- each switch was announced once, as it landed, with the new view's name;
+- after V, the same source was read in the new view: focus followed it;
+- each label's words were in a name: a bar's share of its target, a point's height and a slice's share;
+- nothing was read at load, and nothing that's only drawn: no target or change label, no red on the line, no arrow, highlighter or pulse.
+
+So the page's names, buttons, keys, tab stops and announcements stay as built. Versions weren't noted. VoiceOver + Safari hasn't been run on this page.
 
 Template for the next run:
 

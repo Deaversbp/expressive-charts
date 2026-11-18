@@ -207,6 +207,23 @@ export const stressDemo: Demo = {
   }
 };
 
+/**
+ * demo/examples.html: three cards on the library's own charts, a domain each: revenue by region on
+ * barChart, seedling height on lineChart, and sessions by source on a donutChart in a chartSwitch to bars.
+ */
+export const examplesDemo: Demo = {
+  path: "/examples.html",
+  // About 1,150 px at 1,000 px wide, so the config's viewport holds it.
+  async ready(page) {
+    await expect(page.locator("#revenue .ec-mark")).toHaveCount(5);
+    await expect(page.locator("#height .ec-line")).toHaveCount(2);
+    // A stop a day and group: the line hovers its nearest point.
+    await expect(page.locator("#height .ec-stop")).toHaveCount(26);
+    await expect(page.locator('#sessions .ec-switch-view[data-view="donut"] .ec-mark')).toHaveCount(5);
+    await expect(page.locator('#sessions .ec-switch-view[data-view="bars"] .ec-mark')).toHaveCount(5);
+  }
+};
+
 /** Opens a demo, bars.html unless another is given, with time stopped at START. */
 export async function openDemo(page: Page, demo: Demo = barsDemo): Promise<void> {
   const viewport = page.viewportSize();

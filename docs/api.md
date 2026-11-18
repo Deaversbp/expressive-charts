@@ -31,7 +31,7 @@ It's an ES module and CommonJS (`require("expressive-charts")`), each with its o
 `dist/expressive-charts.global.js` is this entry as one minified script, for a page with no bundler. It defines `window.ExpressiveCharts`, holding every value below:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/expressive-charts@0.12/dist/expressive-charts.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/expressive-charts@0.13/dist/expressive-charts.global.js"></script>
 <script>
   const { barChart } = ExpressiveCharts;
 </script>

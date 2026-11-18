@@ -49,9 +49,9 @@ A page that needs one of these to stay as it is sets it itself: a duration or a 
 
 Additions can come in any minor release: a new export, a new optional field or option.
 
-## Unreleased
+## 0.13.0 (18 November 2026)
 
-For 0.13.0, the last 0.x release: the API shaped for 1.0. Two changes need something written instead, and both are first below.
+The last 0.x release: the API shaped for 1.0. Two changes can break a page or an effect, and one form is deprecated; they come first below, each with what to write instead. `expressive()`'s `geometry` takes `(datum, element, key)`: swap its first two arguments. `IconShape.linecap` and `Paint.linecap` gain `"square"`, and `IconShape.linejoin` gains `"bevel"`, a breaking change to the effect-author API for code that reads them and handles every case: add a case for each. And `motionSwitch(target, motion, options)` is deprecated: write `motionSwitch(target, { motion, ...options })`. The old form works in 0.13.0 as it did. 1.0 takes it out and changes nothing else; [what 1.0 will promise](#what-10-will-promise) is above. The rest needs nothing written instead: two built-in effects, `outline()` and `wait()`; `labelBounds` on `expressive()` and `fromVegaView()`; a refresh that keeps a hover's effects; `iconFromSvg` keeping square caps and bevel joins; and, in Safari, a chart's text laid out with a viewer's letter and word spacing. The demo site gains a page of examples on the library's own charts: revenue against its target, a measurement against its control, and traffic by source.
 
 ### Changed
 
@@ -65,25 +65,24 @@ For 0.13.0, the last 0.x release: the API shaped for 1.0. Two changes need somet
   - `Paint` gains no `linejoin`: an overlay path's joins stay round. `defineIcon` takes the new values, and still throws a `RangeError` for any other.
 - **An attachment's `refresh()` keeps a hover's effects.** A hovered or focused mark whose values the refresh leaves alone keeps its hover effects as they are, following its new geometry: after a resize, an icon that travelled its mark stays at its end, where it used to travel again, and one part way goes on from there. A mark whose values changed still plays its hover again, once its update's effects have started. This is `expressive()`'s and `fromVegaView()`'s `refresh()`, and `fromVegaView()`'s own after a Vega render; the charts are untouched. There's nothing to write instead. The adapters are outside the 0.x promise.
 
-### Fixed
-
-- **`iconFromSvg` keeps square caps and bevel joins.** It dropped `stroke-linecap="square"` and `stroke-linejoin="bevel"`, so an icon from a set that draws with them had butt caps and miter joins. Now it keeps them, from an attribute or `style`, inherited from groups as SVG inherits them, and the SVG layer draws them. An icon that has neither reads as it did, and the core icons and the sport pack are unchanged. SVG's `arcs` and `miter-clip` joins still aren't kept.
-- **In Safari, a chart lays its text out with a viewer's letter and word spacing.** WebKit's `getComputedTextLength()`, which the charts and the adapters measure text with, leaves letter and word spacing out, so with WCAG 1.4.12's spacing a chart's margins, its thinned names and its effects' text were placed for narrower text than was drawn. Now the measure finds out, once a document and by measuring, whether the browser's length leaves spacing out, and where it does, adds the text's computed `letter-spacing` between its characters and its `word-spacing` a space. In Chrome, Edge and Firefox, whose lengths count spacing already, nothing changes.
-
-### Added
-
-- **`motionSwitch(target, options?)`, with `motion` among its options.** [`MotionSwitchOptions`](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md#motionswitchoptions) gains `motion`, the motion the switch shows and sets, default the page-wide one. So a page that wants `persist` alone writes `motionSwitch("#motion", { persist: "site:motion" })`, with no `undefined` to step over. `motionSwitch(target)` is as it was.
-
-- **`outline()`, with `OutlineOptions`:** a built-in effect that strokes a mark's outline in the overlay, at once, in the text colour at 2 px, or in its `color` at its `width`. It's for a hover on a closed shape, a map's region or a treemap's tile, where `travel` and `trace` have no direction to follow. There's no tween, so every motion mode shows the same picture, and the stroke goes on leave. Not a preset.
-- **`wait(ms)`:** a built-in effect that draws nothing for a base duration, so the next part of a sequence starts later: `sequence(wait(750), flash())`. Its time is scaled by the motion mode as `drawIn`'s is, and with Off or reduced motion it takes none. Not a preset.
-- **`labelBounds` on `expressive()` and `fromVegaView()`:** `(datum, element) => Rect[]`, the boxes of the host's own text for a mark, in the marks' px. They become the mark's `labelBounds`, so `label` and `delta` keep clear of the host's text, with no need to describe the whole mark with `geometry`. A stack's boxes are given once, and a mark described with `geometry` says its own.
-
 ### Deprecated
 
 - **`motionSwitch(target, motion, options?)`,** the form with the motion as its second argument. It works in 0.13.0 as it did and builds the same control. It's marked `@deprecated` in the types, and nothing is logged when it runs. 1.0 takes it out.
   - **What to write instead:** `motionSwitch(target, { motion, ...options })`, or `motionSwitch(target, options)` where the motion was `undefined`.
   - The two forms are told apart by the second argument: a `Motion` (it has `chooseMode`), or anything with a third argument after it, is the old form. One call changes: `motionSwitch(target, {})` threw a `TypeError`, since `{}` isn't a `Motion`, and is now a switch with no options.
   - The controls are outside the 0.x promise; the deprecation follows its rule all the same.
+
+### Added
+
+- **`motionSwitch(target, options?)`, with `motion` among its options.** [`MotionSwitchOptions`](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md#motionswitchoptions) gains `motion`, the motion the switch shows and sets, default the page-wide one. So a page that wants `persist` alone writes `motionSwitch("#motion", { persist: "site:motion" })`, with no `undefined` to step over. `motionSwitch(target)` is as it was.
+- **`outline()`, with `OutlineOptions`:** a built-in effect that strokes a mark's outline in the overlay, at once, in the text colour at 2 px, or in its `color` at its `width`. It's for a hover on a closed shape, a map's region or a treemap's tile, where `travel` and `trace` have no direction to follow. There's no tween, so every motion mode shows the same picture, and the stroke goes on leave. Not a preset.
+- **`wait(ms)`:** a built-in effect that draws nothing for a base duration, so the next part of a sequence starts later: `sequence(wait(750), flash())`. Its time is scaled by the motion mode as `drawIn`'s is, and with Off or reduced motion it takes none. Not a preset.
+- **`labelBounds` on `expressive()` and `fromVegaView()`:** `(datum, element) => Rect[]`, the boxes of the host's own text for a mark, in the marks' px. They become the mark's `labelBounds`, so `label` and `delta` keep clear of the host's text, with no need to describe the whole mark with `geometry`. A stack's boxes are given once, and a mark described with `geometry` says its own.
+
+### Fixed
+
+- **`iconFromSvg` keeps square caps and bevel joins.** It dropped `stroke-linecap="square"` and `stroke-linejoin="bevel"`, so an icon from a set that draws with them had butt caps and miter joins. Now it keeps them, from an attribute or `style`, inherited from groups as SVG inherits them, and the SVG layer draws them. An icon that has neither reads as it did, and the core icons and the sport pack are unchanged. SVG's `arcs` and `miter-clip` joins still aren't kept.
+- **In Safari, a chart lays its text out with a viewer's letter and word spacing.** WebKit's `getComputedTextLength()`, which the charts and the adapters measure text with, leaves letter and word spacing out, so with WCAG 1.4.12's spacing a chart's margins, its thinned names and its effects' text were placed for narrower text than was drawn. Now the measure finds out, once a document and by measuring, whether the browser's length leaves spacing out, and where it does, adds the text's computed `letter-spacing` between its characters and its `word-spacing` a space. In Chrome, Edge and Firefox, whose lengths count spacing already, nothing changes.
 
 ## 0.12.0 (16 November 2026)
 

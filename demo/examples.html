@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three everyday charts · expressive-charts</title>
+<style>
+  /* Page chrome only, as on bars.html. The charts' --ec-* tokens, light and dark, come from the library's stylesheet. */
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d67;
+    --ring: rgba(11,11,11,0.10); --wash: rgba(42,120,214,0.10); --accent: #2a78d6; --link: #226dc7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0f0f0e; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8d86;
+      --ring: rgba(255,255,255,0.10); --wash: rgba(57,135,229,0.16); --accent: #3987e5; --link: #3987e5;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+  .pair { display: grid; gap: 20px; min-width: 0; }
+  @media (min-width: 860px) { .pair { grid-template-columns: 1fr 1fr; } }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 0; }
+  h2 { font-size: 20px; margin: 0; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .lede, .note { color: var(--ink-2); margin: 0; max-width: 64ch; }
+  .note { font-size: 14px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* Wide enough for either name, so the bar doesn't shift when it changes. */
+  .btn { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); padding: 6px 12px; border-radius: 8px; cursor: pointer; min-width: 15ch; }
+  .btn:hover { background: var(--wash); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+  #revenue, #height, #sessions { min-width: 0; }
+  kbd { font: inherit; font-size: 12px; font-weight: 600; padding: 0 5px; border: 1px solid var(--ring); border-radius: 4px; background: var(--page); }
+  a { color: var(--link); }
+  /* The motion switch sits on the page, darker than the charts' surface, so its hint takes the page's muted colour, which has 4.5:1 there. */
+  #motion { --ec-text-muted: var(--muted); }
+  /* The tooltip functions' text is plain; its first line, the region or the day, is bold. */
+  #revenue .ec-tooltip::first-line, #height .ec-tooltip::first-line { font-weight: 600; }
+  /* The control is a dashed grey: it's what the drought group is read against. Its palette slot is the
+     second, so its end dot and legend swatch follow. */
+  #height { --ec-series-2: var(--ec-text-muted, #75736d); --ec-series-2-strong: var(--ink-2); }
+  #height .ec-line[data-key="control"] .ec-stroke { stroke-dasharray: 6 4; }
+  /* Legend swatches as short lines, so the control's shows its dash. */
+  #height .ec-legend-swatch { width: 16px; height: 0; border-radius: 0; background: none; border-top: 3px solid var(--ec-mark); }
+  #height .ec-legend-item[data-series="control"] .ec-legend-swatch { border-top-style: dashed; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">expressive-charts · examples</p>
+    <h1>Three everyday charts</h1>
+    <p class="lede">The library's own charts on business, research and web data. Every number is made up.</p>
+  </header>
+
+  <!-- The library's motionSwitch() builds the Presentation / Analysis / Off control here. -->
+  <div id="motion"></div>
+
+  <section class="card" aria-labelledby="revenue-title">
+    <p class="eyebrow">Business</p>
+    <h2 id="revenue-title">Revenue by region</h2>
+    <p class="note">A quarter's revenue on <code>barChart</code>, each bar labelled with its share of its target by <code>label()</code>. Play the next quarter, and <code>delta()</code> labels each change: the values move first, then the rows.</p>
+    <div class="bar">
+      <!-- Its name is what a click does; the chart announces the quarter and which bars changed (announce). -->
+      <button type="button" class="btn" id="quarter">Play Q4</button>
+      <span class="status" id="quarter-status">Q3 2026</span>
+    </div>
+    <div id="revenue"></div>
+  </section>
+
+  <div class="pair">
+    <section class="card" aria-labelledby="height-title">
+      <p class="eyebrow">Science</p>
+      <h2 id="height-title">Seedling height under drought</h2>
+      <p class="note">Mean height by day on <code>lineChart</code>, for seedlings whose watering stopped on day 5 and for a watered control. <code>threshold()</code> colours the drought line wherever it's below the control. Hover a point, or Tab in and use the arrow keys.</p>
+      <div id="height"></div>
+    </section>
+
+    <section class="card" aria-labelledby="sessions-title">
+      <p class="eyebrow">Web analytics</p>
+      <h2 id="sessions-title">Sessions by source</h2>
+      <p class="note">The last 30 days on <code>donutChart</code>, in a <code>chartSwitch</code> to bars: each slice turns into its own bar and back. With a slice or a bar focused, <kbd>V</kbd> switches too, and focus follows its source.</p>
+      <div class="bar">
+        <!-- Its name is the view a click goes to; the switch announces the new view when it lands (announce). -->
+        <button type="button" class="btn" id="view">Show as bars</button>
+      </div>
+      <!-- chartSwitch() builds both views here, one shown at a time. -->
+      <div id="sessions"></div>
+    </section>
+  </div>
+</main>
+<script type="module" src="./examples.ts"></script>
+</body>
+</html>

@@ -953,6 +953,69 @@ M17 (0.12.0) adds four charts drawn with D3, each given its effects through `exp
 
 If a country, route, bar, stage or tile reads in pieces or twice, the land, the legend, a band, a tick, a flash or "minus 60 percent" is read, a button's state isn't read, a drill isn't announced, is announced twice or half way, or focus doesn't follow its tile, say so: the names, the hidden parts, the buttons or the switch may need to change.
 
+## S. Three everyday charts: revenue, seedlings and sessions
+
+M18 (0.13.0) adds one page, `examples.html`: three cards on the library's own charts, on made-up numbers.
+
+- **Revenue by region.** "Revenue by region, Q3 2026, against target", one tab stop: five bars, largest first, each named with its revenue and its target ("North: $4.2M revenue, 105% of its $4.0M target"). Past each bar the chart writes "105% of target" in an overlay, which isn't read: the bar's name says it. A button above, "Play Q4", plays the next quarter: the bars change, West moves above South, and each change is written past its bar ("+$0.4M"), unread. The quarter is announced once, with the regions that changed. The button then says "Back to Q3".
+- **Seedling height under drought.** "Seedling height by day, drought against control", one tab stop, on a point: Left and Right go along its line, Up and Down across to the other group's point on the same day. Each point is named with its day, its height and its group ("Day 9: 8.3 cm, Drought"). The drought line is red where it's below the control, which isn't read: the heights say it, and so does the table's Difference column.
+- **Sessions by source.** A donut, "Sessions by source, share of total", one tab stop: five slices, clockwise, each named with its sessions and its share ("Search: 18,400 sessions, 45%"). A button above, "Show as bars", switches it to bars, "Sessions by source, counts", announced once as it lands; the button then says "Show as donut". With a slice or a bar focused, V switches too, and focus follows its source.
+
+**Setup.** Run `npm run dev` and open `examples.html` at the address Vite prints, for example `http://localhost:5173/examples.html`. **Reload before you start**, so the page is fresh: Q3, the donut, in Presentation. The page's tab order: the three motion buttons, "Play Q4", the revenue chart (one stop), its "Data table", the height chart (one stop), its "Data table", "Show as bars", the sessions chart (one stop), then its "Data table". Use NVDA + Chrome, with the setup from [A](#a-nvda--chrome-windows), and keep the pointer off the charts. Letter keys reach the page only in focus mode.
+
+**Listen for:**
+
+1. Each bar, point and slice is read **once, as one item**, with its name. A region, a value, "105% of target" or an axis number drawn on a chart is never read on its own.
+2. Each of the two buttons is read as a button, with a name that says what a press does, and the other name after a press. Neither is a toggle, so neither has "pressed".
+3. The quarter is announced once, with the regions that changed. The change labels ("+$0.4M") are never read.
+4. Each switch is announced once, as it lands, with the new view's name.
+5. After V, the same source is read in the new view: focus follows it.
+6. Each label's words are in a name: a bar's share of its target, a point's height, a slice's share.
+7. Nothing is read at load, and nothing that's only drawn: no target or change label, no red on the line, no arrow, highlighter or pulse.
+
+**Known, no need to report:** NVDA may read "$4.2M" as "4.2 M dollars" or "dollar 4.2 M", and "−$0.1M" in this script as "minus"; on the page a change label should never be read at all. It may read a view's name twice after V: once as the group focus moves into, and once as the announcement. After a press, NVDA may or may not say a button's new name by itself; NVDA+Tab reads it. The donut's total, "41,000 sessions", is its group's description, so NVDA may read it after the chart's name.
+
+**Part 1: revenue by region.**
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Open `examples.html` and reload. Wait three seconds, touching nothing. | The page's title, "Three everyday charts · expressive-charts", and nothing after it: nothing plays at load. | |
+| 2 | Press 2 until "Revenue by region, heading, level 2". Then Tab once. | The heading, then "Play Q4, button". | |
+| 3 | Tab once, into the chart. | "Revenue by region, Q3 2026, against target, grouping", then "North: $4.2M revenue, 105% of its $4.0M target, graphic". | |
+| 4 | NVDA+Space (focus mode), then Down arrow 4 times. | "East: $3.8M revenue, 106% of its $3.6M target", "South: $3.1M revenue, 89% of its $3.5M target", "West: $2.6M revenue, 87% of its $3.0M target", "Central: $1.9M revenue, 95% of its $2.0M target", each "graphic", each once. Never "105% of target", "$4.2M" or "North" on its own. | |
+| 5 | Escape, then NVDA+Space (browse mode). Shift+Tab once, to the button, and press Space. | "Play Q4, button". Then, as the bars start to change, one announcement: "Q4 2026: North, East, West and South changed". **Nothing else**: on screen the bars change length, West moves above South, and a change rises past four bars, unread. | |
+| 6 | NVDA+Tab. | "Back to Q3, button": focus stayed on it, and its name says what a press does now. | |
+| 7 | Tab once. | "Revenue by region, Q4 2026, against target, grouping", then "Central: $1.9M revenue, 90% of its $2.1M target, graphic": the bar you left, named for Q4. | |
+| 8 | NVDA+Space (focus mode), then Home, then Down arrow twice. | "North: $4.6M revenue, 105% of its $4.4M target", "East: $3.7M revenue, 97% of its $3.8M target", "West: $3.5M revenue, 113% of its $3.1M target", each "graphic": West is third now. | |
+| 9 | Escape, then NVDA+Space (browse mode). Tab once, to "Data table", and press Space. | "Data table, button, collapsed", then "expanded". | |
+| 10 | Press T, then Ctrl+Alt+Down arrow, then Ctrl+Alt+Right arrow 3 times. | "Revenue by region, Q4 2026, against target, table with 6 rows and 4 columns", "Region". Then "North", then "Revenue, $4.6M", "Target, $4.4M", "Of target, 105%": each cell read with its column's header. | |
+
+**Part 2: seedling height.**
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 11 | Press 2 until "Seedling height under drought, heading, level 2". Then Tab once. | The heading, then "Seedling height by day, drought against control, grouping", "Day 0: 2.0 cm, Drought, graphic". | |
+| 12 | NVDA+Space (focus mode), then Right arrow twice. | "Day 1: 2.7 cm, Drought, graphic", "Day 2: 3.5 cm, Drought, graphic": along the drought line, each once. | |
+| 13 | End. | "Day 12: 8.6 cm, Drought, graphic". **Nothing** of the red the line has there. | |
+| 14 | Up arrow. | "Day 12: 13.9 cm, Control (watered), graphic": the other group's point on the same day. | |
+| 15 | Left arrow 3 times. | "Day 11: 12.8 cm", "Day 10: 11.7 cm", "Day 9: 10.5 cm", each "Control (watered), graphic". | |
+| 16 | Down arrow. | "Day 9: 8.3 cm, Drought, graphic". | |
+| 17 | Escape, then NVDA+Space (browse mode). Press Shift+2 once, to the card's heading, then Down arrow until "Data table". | The note, the legend ("Drought", "Control (watered)", "Drought below control"), the chart's name, and the points, each once with its day, height and group. **Never** an axis number or an end label ("8.6 cm") on its own. | |
+
+**Part 3: sessions by source.**
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 18 | Press 2 until "Sessions by source, heading, level 2". Then Tab once. | The heading, then "Show as bars, button". | |
+| 19 | Tab once, into the chart. | "Sessions by source, share of total, grouping", then "Search: 18,400 sessions, 45%, graphic". | |
+| 20 | NVDA+Space (focus mode), then Right arrow twice. | "Direct: 9,200 sessions, 22%, graphic", "Social: 6,100 sessions, 15%, graphic": clockwise, each once. | |
+| 21 | Press V. | Nothing for about a second while the slices turn into bars. Then "Sessions by source, counts, grouping", "Social: 6,100 sessions, graphic", and the announcement "Sessions by source, counts". The focus ring is on Social's bar. | |
+| 22 | Down arrow twice. | "Referral: 4,300 sessions, graphic", "Email: 3,000 sessions, graphic". | |
+| 23 | Press V. | About a second of nothing. Then "Sessions by source, share of total, grouping", "Email: 3,000 sessions, 7%, graphic", and one announcement of that view's name. | |
+| 24 | Escape, then NVDA+Space (browse mode). Shift+Tab once, to the button, and press Space. | "Show as bars, button". About a second later, one announcement: "Sessions by source, counts". | |
+| 25 | NVDA+Tab, then Tab once. | "Show as donut, button". Then "Sessions by source, counts, grouping", "Email: 3,000 sessions, graphic": the tab stop followed the source. | |
+| 26 | Press Shift+2 once, to the card's heading, then Down arrow until "Data table". | The note, the button, the legend's five sources, the chart's name and its five bars, Search's to Email's, each once. **Never** a slice, "41,000" or a share: only the view on show is read. | |
+
 ## Re-check: each bar's description
 
 Each bar of the library's chart has a description: the player's position, added after section A had passed. The roles, names, table and announcements are unchanged, so only these need hearing again:

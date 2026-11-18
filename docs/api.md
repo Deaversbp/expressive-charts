@@ -449,15 +449,15 @@ Starts at speed and settles gently: `travel`, and animations retargeted mid-flig
 playback(options: PlaybackOptions): Playback
 ```
 
-Plays a value through a range on the clock, such as a season revealed week by week, and calls `onFrame` with each position ([architecture.md](architecture.md#playback)). It has no DOM: [`playButton()`](#playbutton) is its Play/Pause button, and a page's own scrubber calls `seek()`. It starts at rest at `to`, the way a chart shows all its data until something reveals less, and nothing plays by itself. A play takes its share of the scaled `duration` from wherever it starts, at constant speed; with motion off it jumps to the end. Bad options throw: a `RangeError` for `from`, `to`, `duration` or `timing`, and a `TypeError` for the rest. Returns a [`Playback`](#playback-type).
+Plays a value through a range on the clock, such as an experiment revealed day by day, and calls `onFrame` with each position ([architecture.md](architecture.md#playback)). It has no DOM: [`playButton()`](#playbutton) is its Play/Pause button, and a page's own scrubber calls `seek()`. It starts at rest at `to`, the way a chart shows all its data until something reveals less, and nothing plays by itself. A play takes its share of the scaled `duration` from wherever it starts, at constant speed; with motion off it jumps to the end. Bad options throw: a `RangeError` for `from`, `to`, `duration` or `timing`, and a `TypeError` for the rest. Returns a [`Playback`](#playback-type).
 
 ```ts
 import { lineChart, playButton, playback } from "expressive-charts";
 
-const chart = lineChart("#xg", { label: "Goals vs expected goals", data: weeks, x: "week", series: ["goals", "xg"] });
-const season = playback({ from: 1, to: 38, duration: 6500, onFrame: (week) => chart.reveal(week) }); // 6.5 s; 1.95 s in Analysis
-playButton("#play", season, { labels: { play: "Play season" } });
-range.addEventListener("input", () => season.seek(Number(range.value)));
+const chart = lineChart("#height", { label: "Seedling height, drought against control", data: readings, x: "day", series: ["drought", "control"] });
+const experiment = playback({ from: 0, to: 12, duration: 6500, onFrame: (day) => chart.reveal(day) }); // 6.5 s; 1.95 s in Analysis
+playButton("#play", experiment, { labels: { play: "Play experiment" } });
+range.addEventListener("input", () => experiment.seek(Number(range.value)));
 ```
 
 #### `Playback` (type)
@@ -940,16 +940,16 @@ The builders that describe a mark, and the helpers effects draw with ([architect
 import { describe, matrix, offset } from "expressive-charts";
 
 const bar = describe.bar({
-  key: "Okafor", x: 0, y: 0, width: 220, height: 22, baseline: "left", radius: 4, gap: 2,
-  segments: [{ series: "goals", size: 160 }, { series: "assists", size: 60 }]
+  key: "Search", x: 0, y: 0, width: 220, height: 22, baseline: "left", radius: 4, gap: 2,
+  segments: [{ series: "new", size: 160 }, { series: "returning", size: 60 }]
 });
 bar.path(0.5);                                    // halfway along the bar, on screen
-bar.segments?.[1]?.slice(0, 1);                   // path data along the assists segment
+bar.segments?.[1]?.slice(0, 1);                   // path data along the returning segment
 offset(bar.end, bar.angle(1) - Math.PI / 2, 8);   // 8 px to the up side of the tip
 matrix.rotate(Math.PI / 12, bar.pivot);           // 15° clockwise about the baseline
 
-const slice = describe.arc({ key: "Saved", cx: 0, cy: 0, inner: 70, outer: 116, start: 0, end: Math.PI / 2 }); // d3.pie() angles
-const curve = describe.shape({ key: "goals", d: "M0,170C40,160 40,150 80,140", width: 2 }); // any path data: a d3 curve, an area
+const slice = describe.arc({ key: "Direct", cx: 0, cy: 0, inner: 70, outer: 116, start: 0, end: Math.PI / 2 }); // d3.pie() angles
+const curve = describe.shape({ key: "visits", d: "M0,170C40,160 40,150 80,140", width: 2 }); // any path data: a d3 curve, an area
 ```
 
 #### `describe`
@@ -1108,11 +1108,11 @@ Path data with nothing to draw throws a `RangeError` naming `d`, and so do path 
 import { area, curveMonotoneX, line } from "d3-shape";
 import { describe, matrix } from "expressive-charts";
 
-const weeks = [{ week: 1, goals: 0 }, { week: 2, goals: 1 }, { week: 3, goals: 4 }];
-const x = (w: (typeof weeks)[number]): number => 80 * (w.week - 1);
-const y = (w: (typeof weeks)[number]): number => 200 - 30 * w.goals;
-const goals = describe.shape({ key: "goals", d: line(x, y).curve(curveMonotoneX)(weeks)!, width: 2 }); // open: a line
-const under = describe.shape({ key: "goals", d: area(x, 200, y).curve(curveMonotoneX)(weeks)!, matrix: matrix.translate(40, 20) }); // closed: an area
+const days = [{ day: 0, height: 2.0 }, { day: 1, height: 2.7 }, { day: 2, height: 3.5 }];
+const x = (d: (typeof days)[number]): number => 80 * d.day;
+const y = (d: (typeof days)[number]): number => 200 - 30 * d.height;
+const height = describe.shape({ key: "height", d: line(x, y).curve(curveMonotoneX)(days)!, width: 2 }); // open: a line
+const under = describe.shape({ key: "height", d: area(x, 200, y).curve(curveMonotoneX)(days)!, matrix: matrix.translate(40, 20) }); // closed: an area
 ```
 
 #### `matrix`
@@ -1167,20 +1167,19 @@ A data point where the page drew it, with its value and, optionally, the x behin
 The built-in effects and the combinators that put effects together ([architecture.md](architecture.md#effects)). Each is a function that returns an effect, for an effect slot (`on`) of a chart or an adapter; `morph()` is for a [`chartSwitch`](#chartswitch). Each checks its options when it's made, and throws a `RangeError` for a bad one. Every effect has an end state, which is what reduced motion shows.
 
 ```ts
-import { barChart, lineChart, only, parallel, sequence, stagger, pulse, threshold, travel } from "expressive-charts";
-import { cleat, soccerBall } from "expressive-charts/icons/sport";
+import { barChart, icons, lineChart, only, parallel, sequence, stagger, pulse, threshold, travel } from "expressive-charts";
 
-barChart("#goals", {
-  label: "Goals and assists by player", data: players, y: "name", stack: ["goals", "assists"],
+barChart("#sessions", {
+  label: "New and returning sessions by source", data: channels, y: "source", stack: ["new", "returning"],
   on: {
-    hover: sequence(travel(soccerBall, { along: "goals" }), travel(cleat, { along: "assists" })), // the ball, then the boot
-    update: "flash",                                                                              // a preset, by name
-    enter: stagger(pulse({ times: 1 }))                                                           // each bar a little after the last
+    hover: sequence(travel(icons.arrow, { along: "new" }), travel(icons.chevron, { along: "returning" })), // an arrow, then a chevron
+    update: "flash",                                                                                        // a preset, by name
+    enter: stagger(pulse({ times: 1 }))                                                                     // each bar a little after the last
   }
 });
-lineChart("#xg", {
-  label: "Goals vs expected goals", data: weeks, x: "week", series: ["goals", "xg"],
-  on: { decorate: only("goals", parallel(threshold({ compareTo: "xg" }), travel(soccerBall, { ride: "on" }))) }
+lineChart("#height", {
+  label: "Seedling height, drought against control", data: readings, x: "day", series: ["drought", "control"],
+  on: { decorate: only("drought", parallel(threshold({ compareTo: "control" }), travel(icons.dot, { ride: "on" }))) }
 });
 ```
 
@@ -1336,7 +1335,7 @@ A highlighter: a stroke drawn along the mark's walk, from its start to its end, 
 ```ts
 import { barChart, trace } from "expressive-charts";
 
-barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { hover: trace({ width: 4 }) } });
+barChart("#sales", { label: "Revenue by region", data: regions, y: "region", x: "revenue", on: { hover: trace({ width: 4 }) } });
 ```
 
 #### `TraceOptions`
@@ -1368,7 +1367,7 @@ It's for `enter`, not `hover`: in the hover slot it would make the mark being re
 ```ts
 import { barChart, drawIn } from "expressive-charts";
 
-barChart("#goals", { label: "Goals and assists", data: players, y: "name", stack: ["goals", "assists"], on: { enter: drawIn() } });
+barChart("#sessions", { label: "New and returning sessions", data: channels, y: "source", stack: ["new", "returning"], on: { enter: drawIn() } });
 ```
 
 #### `DrawInOptions`
@@ -1395,9 +1394,9 @@ The text goes in the overlay, which screen readers don't read: a page that relie
 ```ts
 import { barChart, delta, flash, lineChart, only, parallel } from "expressive-charts";
 
-barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { update: parallel(flash(), delta()) } });
-lineChart("#xg", {
-  label: "Goals vs expected goals", data: weeks, x: "week", series: ["goals", "xg"],
+barChart("#sales", { label: "Revenue by region", data: regions, y: "region", x: "revenue", on: { update: parallel(flash(), delta()) } });
+lineChart("#height", {
+  label: "Seedling height, drought against control", data: readings, x: "day", series: ["drought", "control"],
   on: { update: only((mark) => mark.length > 0, delta()) } // the lines, not their points
 });
 ```
@@ -1427,9 +1426,9 @@ As with `delta`, the text isn't read by screen readers, and on a line chart `dec
 ```ts
 import { label, lineChart, only } from "expressive-charts";
 
-lineChart("#xg", {
-  label: "Goals vs expected goals", data: weeks, x: "week", series: ["goals", "xg"],
-  on: { decorate: only((mark) => mark.length > 0, label((data) => `${data.samples.length} weeks`)) }
+lineChart("#height", {
+  label: "Seedling height, drought against control", data: readings, x: "day", series: ["drought", "control"],
+  on: { decorate: only((mark) => mark.length > 0, label((data) => `${data.samples.length} readings`)) }
 });
 ```
 
@@ -1511,7 +1510,7 @@ Runs the effects together, and finishes when they all have, or rejects with the 
 only<E extends AnyMarkEffect>(filter: string | ((mark: MarkGeometry) => boolean), effect: E): E extends DataEffect<infer D> ? DataEffect<D> : GeometryEffect
 ```
 
-Runs `effect` only on the marks whose key or series equals `filter`, or for which `filter(mark)` is true, and does nothing on the others. It keeps the effect's kind and `needs`. On a line chart, `only("goals", …)` matches the goals line and its points, and an effect meant for a line does nothing on a point. A `filter` that's neither throws a `TypeError`.
+Runs `effect` only on the marks whose key or series equals `filter`, or for which `filter(mark)` is true, and does nothing on the others. It keeps the effect's kind and `needs`. On a line chart, `only("drought", …)` matches the drought line and its points, and an effect meant for a line does nothing on a point. A `filter` that's neither throws a `TypeError`.
 
 #### `stagger()`
 
@@ -1586,13 +1585,13 @@ A data effect of your own, whose `run` and `end` also get the mark's [`MarkData<
 ```ts
 import { barChart, defineDataEffect, type EffectContext, type MarkData, type MarkGeometry } from "expressive-charts";
 
-// The player's position at the end of the bar: it reads the rows, so it's typed for them.
-function position(mark: MarkGeometry, data: MarkData<Player>, ctx: EffectContext): void {
-  const text = ctx.layer.text(data.datum.pos, { at: mark.end, anchor: "start", color: "text-muted" });
+// The river each site is on, at the end of its bar: it reads the rows, so it's typed for them.
+function river(mark: MarkGeometry, data: MarkData<Site>, ctx: EffectContext): void {
+  const text = ctx.layer.text(data.datum.river, { at: mark.end, anchor: "start", color: "text-muted" });
   ctx.onChange((next) => text.update({ at: next.end }));
 }
-const pos = defineDataEffect<Player>({ run: async (mark, data, ctx) => position(mark, data, ctx), end: position });
-barChart("#goals", { label: "Goals by player", data: players, y: "name", x: "goals", on: { decorate: pos } });
+const named = defineDataEffect<Site>({ run: async (mark, data, ctx) => river(mark, data, ctx), end: river });
+barChart("#samples", { label: "Samples passed by site", data: sites, y: "site", x: "passed", on: { decorate: named } });
 ```
 
 #### `DataEffectSpec<D>`
@@ -1808,26 +1807,25 @@ A bar chart in `target`, an element or a selector: horizontal bars or columns, p
 ```ts
 import { barChart } from "expressive-charts";
 
-const singular: Record<string, string> = { goals: "goal", assists: "assist" };
-const chart = barChart("#goals", {
-  label: "Goals by player",                          // the accessible name, required
-  data: players,
-  y: "name",                                         // not numbers, so it's the category
-  stack: ["goals"],
+const chart = barChart("#sessions", {
+  label: "Sessions by source",                       // the accessible name, required
+  data: channels,
+  y: "source",                                       // not numbers, so it's the category
+  stack: ["new"],
   sort: "value",                                     // the largest total first
-  colors: { goals: 1, assists: 4 },                  // palette slots that follow the series, never the rank
-  seriesLabels: { goals: "Goals", assists: "Assists" },
-  tooltip: (d) => `${d.name}\n${d.goals} goals`,     // text, never HTML
-  markLabel: (d, mark) =>                            // each bar's accessible name, so it can say "1 goal"
-    `${d.name}: ${mark.values.map((v) => `${mark.format(v.value)} ${v.value === 1 ? singular[v.series] : v.series}`).join(", ")}`,
-  markDescription: (d) => d.pos,                     // what the name doesn't say
-  table: { columns: [{ label: "Position", field: "pos" }] },
-  announce: true,                                    // after an update: "Okafor and Tanaka changed"
+  colors: { new: 1, returning: 4 },                  // palette slots that follow the series, never the rank
+  seriesLabels: { new: "New", returning: "Returning" },
+  tooltip: (d) => `${d.source}\n${d.new} new sessions`, // text, never HTML
+  markLabel: (d, mark) =>                            // each bar's accessible name, so it can say "1 new session"
+    `${d.source}: ${mark.values.map((v) => `${mark.format(v.value)} ${v.series} ${v.value === 1 ? "session" : "sessions"}`).join(", ")}`,
+  markDescription: (d) => d.medium,                  // what the name doesn't say
+  table: { columns: [{ label: "Medium", field: "medium" }] },
+  announce: true,                                    // after an update: "Search and Direct changed"
   on: { hover: "wiggle", update: "flash" }
 });
-chart.on("hover", (event) => console.log(event.mark.key, event.data.datum.goals));
-await chart.update({ stack: ["goals", "assists"] }); // resolves once the change has settled
-await chart.update({ data: afterMatchweek });
+chart.on("hover", (event) => console.log(event.mark.key, event.data.datum.new));
+await chart.update({ stack: ["new", "returning"] }); // resolves once the change has settled
+await chart.update({ data: afterLaunch });
 ```
 
 #### `BarChart<D>`
@@ -1846,7 +1844,7 @@ interface BarChartOptions<D> extends ChartOptions<D>
 
 The [shared options](#chartoptionsd), and:
 
-- `x`, `y`: `Accessor<D, number | string>`. A field or a function for each axis. The one whose values aren't numbers is the category: `y: "name", x: "goals"` draws bars, `x: "name", y: "goals"` columns. With `stack`, give only the category. A value read by a function is the series `"value"`.
+- `x`, `y`: `Accessor<D, number | string>`. A field or a function for each axis. The one whose values aren't numbers is the category: `y: "source", x: "sessions"` draws bars, `x: "source", y: "sessions"` columns. With `stack`, give only the category. A value read by a function is the series `"value"`.
 - `stack`: `readonly NumericKey<D>[]`. Numeric fields stacked from the baseline, in order, each a segment named after its field.
 - `sort`: `"none" | "value" | "key" | ((a: D, b: D) => number)`. Default `"none"`, data order. `"value"` puts the largest total first, `"key"` the keys A to Z (numbers in numeric order). Sorting never changes a key or a colour.
 - `orientation`: `"horizontal" | "vertical"`. Forces bars or columns; needed when both axes hold numbers.
@@ -1861,24 +1859,23 @@ Bars are 20 px thick in rows of 34 px, so a horizontal chart's height follows it
 donutChart<D>(target: string | Element, options: DonutChartOptions<D>): DonutChart<D>
 ```
 
-A donut chart in `target`: slices of a total, clockwise from 12 o'clock, each labelled outside the ring with its share, and the total in the hole ([architecture.md](architecture.md#donut-chart)). It works as the bar chart does: the arrow keys go round the ring, the table has each share and a total row, and each slice is read as "Saved: 112 shots, 28%". Its slices are `describe.arc` geometry, so effects that run on bars run on them unchanged. Options: [`DonutChartOptions<D>`](#donutchartoptionsd). Returns [`DonutChart<D>`](#donutchartd). A negative or non-finite value throws.
+A donut chart in `target`: slices of a total, clockwise from 12 o'clock, each labelled outside the ring with its share, and the total in the hole ([architecture.md](architecture.md#donut-chart)). It works as the bar chart does: the arrow keys go round the ring, the table has each share and a total row, and each slice is read as "Search: 18,400 sessions, 45%". Its slices are `describe.arc` geometry, so effects that run on bars run on them unchanged. Options: [`DonutChartOptions<D>`](#donutchartoptionsd). Returns [`DonutChart<D>`](#donutchartd). A negative or non-finite value throws.
 
 ```ts
-import { donutChart, travel } from "expressive-charts";
-import { soccerBall } from "expressive-charts/icons/sport";
+import { donutChart, icons, travel } from "expressive-charts";
 
-const shots = donutChart("#shots", {
-  label: "Shot outcomes",
-  data: outcomes,                                    // [{ outcome: "Goal", shots: 58 }, …]
-  category: "outcome",                               // names each slice, and is its key
-  value: "shots",
+const share = donutChart("#share", {
+  label: "Revenue by product line",
+  data: products,                                    // [{ product: "Hardware", revenue: 5.8 }, …], in $M
+  category: "product",                               // names each slice, and is its key
+  value: "revenue",
   sort: "value",                                     // the largest first
-  center: (total, format) => `${format(total)}\nshots`,
-  table: { series: { shots: "Shots" } },             // the value column's header
-  on: { hover: travel(soccerBall), update: "flash" } // the ball rolls round the slice
+  center: (total, format) => `$${format(total)}M\nrevenue`,
+  table: { series: { revenue: "Revenue ($M)" } },    // the value column's header
+  on: { hover: travel(icons.arrow), update: "flash" } // the arrow goes round the slice
 });
-await shots.update({ data: nextMatch });
-await shots.update({ on: { hover: "pulse", update: "flash" } }); // a new hover effect, in place
+await share.update({ data: nextQuarterProducts });
+await share.update({ on: { hover: "pulse", update: "flash" } }); // a new hover effect, in place
 ```
 
 #### `DonutChart<D>`
@@ -1900,7 +1897,7 @@ The [shared options](#chartoptionsd), and:
 - `category`: `Accessor<D, string | number>`, required. Names each slice, and is its key unless `key` is given.
 - `value`: `Accessor<D, number | null | undefined>`, required. Sizes each slice. A missing value counts as 0. The slices' series is the field's name (`"shots"`), or `"value"` for a function.
 - `sort`: `"none" | "value"`. Default `"none"`, data order. `"value"` puts the largest first.
-- `center`: `false | ((total, format) => string)`. The text in the hole. Default: the total in `format` over the value's series label ("406" over "shots"). `"\n"` breaks a line, and the first line is drawn large. It's `aria-hidden`, and its text is added to the chart's description.
+- `center`: `false | ((total, format) => string)`. The text in the hole. Default: the total in `format` over the value's series label ("41,000" over "sessions"). `"\n"` breaks a line, and the first line is drawn large. It's `aria-hidden`, and its text is added to the chart's description.
 - `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots by slice key.
 - `markLabel`: `(d: D, slice: SliceSummary) => string`. Words each slice's accessible name, given its share too ([`SliceSummary`](#slicesummary)).
 
@@ -1912,25 +1909,24 @@ The donut is 300 px high, and as large as the room its labels leave.
 lineChart<D>(target: string | Element, options: LineChartOptions<D>): LineChart<D>
 ```
 
-A line chart in `target`: a line per series through one row per x, each ending in a dot and a label that counts as the line moves ([architecture.md](architecture.md#line-chart)). The pointer anywhere over it hovers every series at the nearest x, with a crosshair and a tooltip, and nothing dimmed. It's one tab stop whose arrow keys go x by x, each x read as one image ("12: 15 goals, 14.2 xg"); on a time axis Page Down and Page Up go a calendar month on or back, in its `timeZone`, to the first x that far. With `hover: "point"` it hovers the one point nearest the pointer instead, with the other lines dimmed, and the arrow keys go along a line and between lines. Each line is a line mark keyed by its series, and each row's value a point mark keyed `"<series>@<row key>"` (`goals@12`), so `only("goals", …)` matches both; an effect meant for a line does nothing on a point. `reveal(x)` shows the data up to x, which is how [`playback()`](#playback) plays it. An `x` that gives `Date`s makes a time axis. A missing value, `null` or `undefined`, is a gap in its line with no point, while its x stays a stop whose name, tooltip and table say it's missing ([architecture.md](architecture.md#missing-values)). With `curve: "monotone"` each line curves through its values as d3's `curveMonotoneX` does, never above or below the values either side ([architecture.md](architecture.md#curves)). Options: [`LineChartOptions<D>`](#linechartoptionsd). Returns [`LineChart<D>`](#linechartd). `NaN` and the infinities throw, and so do repeated x values and numbers mixed with dates.
+A line chart in `target`: a line per series through one row per x, each ending in a dot and a label that counts as the line moves ([architecture.md](architecture.md#line-chart)). The pointer anywhere over it hovers every series at the nearest x, with a crosshair and a tooltip, and nothing dimmed. It's one tab stop whose arrow keys go x by x, each x read as one image ("8: 8 drought, 9.4 control"); on a time axis Page Down and Page Up go a calendar month on or back, in its `timeZone`, to the first x that far. With `hover: "point"` it hovers the one point nearest the pointer instead, with the other lines dimmed, and the arrow keys go along a line and between lines. Each line is a line mark keyed by its series, and each row's value a point mark keyed `"<series>@<row key>"` (`drought@8`), so `only("drought", …)` matches both; an effect meant for a line does nothing on a point. `reveal(x)` shows the data up to x, which is how [`playback()`](#playback) plays it. An `x` that gives `Date`s makes a time axis. A missing value, `null` or `undefined`, is a gap in its line with no point, while its x stays a stop whose name, tooltip and table say it's missing ([architecture.md](architecture.md#missing-values)). With `curve: "monotone"` each line curves through its values as d3's `curveMonotoneX` does, never above or below the values either side ([architecture.md](architecture.md#curves)). Options: [`LineChartOptions<D>`](#linechartoptionsd). Returns [`LineChart<D>`](#linechartd). `NaN` and the infinities throw, and so do repeated x values and numbers mixed with dates.
 
 ```ts
-import { lineChart, only, parallel, threshold, travel } from "expressive-charts";
-import { soccerBall } from "expressive-charts/icons/sport";
+import { icons, lineChart, only, parallel, threshold, travel } from "expressive-charts";
 
-const xg = lineChart("#xg", {
-  label: "Goals vs expected goals, season to date",
-  data: weeks,                                       // [{ week: 1, goals: 0, xg: 1.2 }, …]: one row per x
-  x: "week",
-  series: ["goals", "xg"],
-  seriesLabels: { goals: "Goals scored", xg: "Expected goals (xG)" },
-  labels: (value, series) => (series === "xg" ? `${value.toFixed(1)} xG` : `${value} goals`),
-  legend: { entries: [{ label: "Goals below xG", color: "negative" }] },
-  table: { category: "Matchweek", columns: [{ label: "Difference", field: (d) => d.goals - d.xg, after: "values" }] },
-  on: { decorate: only("goals", parallel(threshold({ compareTo: "xg" }), travel(soccerBall, { ride: "on" }))) }
+const height = lineChart("#height", {
+  label: "Seedling height by day, drought against control",
+  data: readings,                                    // [{ day: 0, drought: 2.0, control: 2.0 }, …]: one row per x
+  x: "day",
+  series: ["drought", "control"],
+  seriesLabels: { drought: "Drought", control: "Control (watered)" },
+  labels: (value, series) => (series === "control" ? `${value.toFixed(1)} cm, watered` : `${value.toFixed(1)} cm`),
+  legend: { entries: [{ label: "Drought below control", color: "negative" }] },
+  table: { category: "Day", columns: [{ label: "Difference", field: (d) => d.drought - d.control, after: "values" }] },
+  on: { decorate: only("drought", parallel(threshold({ compareTo: "control" }), travel(icons.dot, { ride: "on" }))) }
 });
-await xg.update({ data: [...weeks, nextWeek] });     // the new week grows out of the last
-xg.reveal(20);                                       // through matchweek 20
+await height.update({ data: [...readings, nextReading] }); // the new day grows out of the last
+height.reveal(8);                                    // through day 8
 
 // Dates make a time axis: [{ date: new Date("2025-01-01"), visits: 412, average: 398 }, …]
 const daily = lineChart("#daily", { label: "Visits per day", data: days, x: "date", series: ["visits", "average"], timeZone: "local" });
@@ -1956,18 +1952,18 @@ interface LineChartOptions<D> extends ChartOptions<D>
 The [shared options](#chartoptionsd), and:
 
 - `x`: `Accessor<D, number | Date>`, required. Each row's x. Rows are drawn in ascending x, and x values must be unique. `key` defaults to it, a `Date` by its `toISOString()`.
-- `series`: `readonly KeyOfType<D, number | null | undefined>[]`, required. The numeric fields drawn as lines, in order. A value that's `null` or `undefined` is missing: a gap in its line, from the value before to the value after, with no point, and "missing" (or `missing`'s word) in the x's name ("3: goals missing, 3.6 xg"), the tooltip and the table. A value alone between gaps shows its point at rest. A line revealed into a gap ends at its last value, and a line with no values is empty. Its samples leave the missing values out, with `gapBefore` on the first after each gap.
-- `missing`: `string`. Default `"missing"`. The word for a missing value: in the table's cell, and after the series' label in the x's name ("3: goals no data, 3.6 xg"), the tooltip and `markLabel`'s default `text`. A string that's empty, or only spaces, or anything that isn't a string throws a `TypeError`, and `update()` rejects it. `update({ missing })` words them again. The bar and donut charts have no missing values, so they don't take it.
-- `labels`: `false | ((value, series, format) => string)`. The label at each line's end. Default: its value in `format` with its series' label ("52 goals"). `false` turns them off; an empty string shows none.
+- `series`: `readonly KeyOfType<D, number | null | undefined>[]`, required. The numeric fields drawn as lines, in order. A value that's `null` or `undefined` is missing: a gap in its line, from the value before to the value after, with no point, and "missing" (or `missing`'s word) in the x's name ("3: drought missing, 4.1 control"), the tooltip and the table. A value alone between gaps shows its point at rest. A line revealed into a gap ends at its last value, and a line with no values is empty. Its samples leave the missing values out, with `gapBefore` on the first after each gap.
+- `missing`: `string`. Default `"missing"`. The word for a missing value: in the table's cell, and after the series' label in the x's name ("3: drought no data, 4.1 control"), the tooltip and `markLabel`'s default `text`. A string that's empty, or only spaces, or anything that isn't a string throws a `TypeError`, and `update()` rejects it. `update({ missing })` words them again. The bar and donut charts have no missing values, so they don't take it.
+- `labels`: `false | ((value, series, format) => string)`. The label at each line's end. Default: its value in `format` with its series' label ("8.6 drought"). `false` turns them off; an empty string shows none.
 - `curve`: `"linear" | "monotone"`. Default `"linear"`: straight from value to value. `"monotone"` is d3's `curveMonotoneX`: a smooth curve through every value, flat between two equal ones, that never goes above or below the values either side, so it shows no value the data doesn't have. Each run between gaps is curved on its own, so a run of two values is straight. A curved line's samples are its rows' and one at each bend between them, each with its `at` and `value` on the curve and `t` in order: a data effect that counts samples sees more than the rows, `delta` and `label` read the ends, which are rows or the reveal, and `threshold` changes colour where the drawn lines cross. A reveal between two rows ends the line on the curve. `update({ curve })` eases each line from straight to curved, or back, as a change; Off jumps. Anything else throws a `TypeError` naming it, and `update()` rejects it.
 - `timeZone`: `"UTC" | "local" | (string & {})`. Default `"UTC"`. A time axis's zone: `"UTC"`, `"local"`, the viewer's clock, or a zone's name as `Intl` knows it, such as `"Europe/London"`. Ticks fall on its midnights, months, years, hours and minutes through summer time, so a day can be 23 or 25 hours, and a midnight the clocks skip is the first time after it. Page Up and Page Down go a calendar month in it. Names, the tooltip, the table and the announcements say times in it with no zone's name, so a page names the zone in its label or description, or through `xFormat`. Where the clocks go back, a time that comes twice adds the zone's short name ("25 Oct 2026, 01:00 BST" and "25 Oct 2026, 01:00 GMT" in `en-GB`), in `"local"` too, so no two x's read the same. A date-only value such as `new Date("2026-01-05")` is UTC midnight, so in UTC it's 5 January on every machine. A name `Intl.DateTimeFormat` won't take as its `timeZone` throws a `TypeError` that says a zone's name is allowed, and `update()` rejects it.
 - `xFormat`: `(x: Date | number) => string`. Words an x for people: in its name, the tooltip's title, the table's row headers and announcements. Default: a medium date in the page's locale ("Jan 5, 2026"), with the time when any x has one; a number as it is. The ticks keep their own wording.
 - `hover`: `"x" | "point"`. Default `"x"`: the pointer anywhere over the chart, touch and the keys hover every series' point at the nearest x, with a crosshair and nothing dimmed, and the x's are the focus stops. `"point"` hovers one point:
-  - **The pointer** anywhere over the plot, and touch, hover the revealed point nearest it, by distance; of two as near, the series first in `series`. Where other lines' points are drawn within a px of it, as where goals equal xG, it's the one whose line passes nearest the pointer, by its stroke as drawn within 9 px along it of the point; a value alone between gaps counts as its dot. So the pointer just off them along a line hovers that line's point, and at their centre the series first in `series`. Leaving the plot leaves. A missing value, or a point past the reveal, has nothing to hover. `hover` fires for that point alone, and its hover effect plays on it.
+  - **The pointer** anywhere over the plot, and touch, hover the revealed point nearest it, by distance; of two as near, the series first in `series`. Where other lines' points are drawn within a px of it, as where both groups measure the same, it's the one whose line passes nearest the pointer, by its stroke as drawn within 9 px along it of the point; a value alone between gaps counts as its dot. So the pointer just off them along a line hovers that line's point, and at their centre the series first in `series`. Leaving the plot leaves. A missing value, or a point past the reveal, has nothing to hover. `hover` fires for that point alone, and its hover effect plays on it.
   - **Dimming.** The point shows in its strong colour, and its line and their decorations stay at full strength. Every other line and point dims to `--ec-dim-opacity`, with its decorations; text keeps its contrast. `dim: false` keeps them.
-  - **The tooltip** sits above the point, or below it without room, with no crosshair: the x in bold, then that series' value with its label ("3.6 xg"), or a tooltip function's text. While it shows, the pointer stays on the point while it's on its dot, though another is nearer, so it can go straight from the point onto the tooltip.
+  - **The tooltip** sits above the point, or below it without room, with no crosshair: the x in bold, then that series' value with its label ("4.1 control"), or a tooltip function's text. While it shows, the pointer stays on the point while it's on its dot, though another is nearer, so it can go straight from the point onto the tooltip.
   - **Keys.** One tab stop, on a point. Left and Right go along its line to the next x where it has a value, Up and Down to the point above or below at its x, by where they're drawn, Home and End to the line's first and last value, and Page Down and Page Up a page along it: a calendar month on a time axis, otherwise a tenth of its points. Escape ends the hover, and focus stays.
-  - **Names.** Each point is an image named by its x and its value, "12: 15 goals", or by `markLabel`, given that series alone in `values`. The x's aren't stops, and aren't named: `markLabel` is called once for each point, and `update({ hover: "x" })` names the x's.
+  - **Names.** Each point is an image named by its x and its value, "8: 8 drought", or by `markLabel`, given that series alone in `values`. The x's aren't stops, and aren't named: `markLabel` is called once for each point, and `update({ hover: "x" })` names the x's.
   - **Links** still go by x: a point hovered hovers the others at its x, and a link's hover shows at every series' point there, with nothing dimmed, as with `"x"`.
   - **`focus(key)`** takes a point's key, or an x's, for its first series' point there.
 
@@ -2013,16 +2009,16 @@ What every chart takes. The bar, donut and line charts add their own.
 - `motion`: `Motion | MotionMode`. Default: the page-wide `motion`. A mode is this chart's author default: the viewer's choice on the page-wide motion and the device's reduced-motion setting still win.
 - `on`: `EffectSlots<D>`. Effects or preset names by slot ([`EffectSlots`](#effectslotsd)).
 - `format`: `(value: number) => string`. Words values and the value axis's ticks. Default: the page's locale, to at most two decimals.
-- `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots (1 to 8) by series, pinned (`{ goals: 1, assists: 4 }`) or shared ([`colorAssignment()`](#colorassignment)). Colours follow the entity, never its rank. Default: slots in the order series are first seen. On `update()`, every mark is in its new colours from the change's first frame, and so are the overlays effects drew in them.
-- `seriesLabels`: `Record<string, string>`. Names for people, by series: `{ xg: "Expected goals" }`, used as given wherever the chart names a series (the legend, the table's headers, the default tooltip and names, announcements). A series without one goes by its field's name, and a value read by a function is the series `"value"`.
+- `colors`: `ColorAssignment | Readonly<Record<string, number>>`. Palette slots (1 to 8) by series, pinned (`{ new: 1, returning: 4 }`) or shared ([`colorAssignment()`](#colorassignment)). Colours follow the entity, never its rank. Default: slots in the order series are first seen. On `update()`, every mark is in its new colours from the change's first frame, and so are the overlays effects drew in them.
+- `seriesLabels`: `Record<string, string>`. Names for people, by series: `{ control: "Control (watered)" }`, used as given wherever the chart names a series (the legend, the table's headers, the default tooltip and names, announcements). A series without one goes by its field's name, and a value read by a function is the series `"value"`.
 - `width`, `height`: `number`. Fixed size in px. Default: the container's width, followed as it changes, and each chart's own height. Either way, a chart lays out again at once when its text changes size after it draws, such as spacing a viewer's stylesheet adds.
 - `dim`: `boolean`. Default true. Dims the other marks' bodies while one is hovered (to `--ec-dim-opacity`), with the paths and icons their effects draw, not their labels or text effects draw, which keep their contrast. The hovered mark's emphasis stays either way.
 - `legend`: `boolean | LegendOptions`. Default true: a swatch and a name for each series above the chart, when there are two entries or more. A donut, or bars with `colorBy: "category"`, list their categories instead, even one. `{ entries }` adds the page's own ([`LegendOptions`](#legendoptions)); `false` turns it off.
 - `tooltip`: `boolean | ((d: D) => string)`. Default true: the category, each value in `format` with its label, and a stack's total, beside the hovered or focused mark. A function gives a row's text instead, with `"\n"` for line breaks, set as text and never as HTML; an empty string shows none. Escape hides it. The pointer can move onto it, to read or select its text, and the hover stays while it's there; beside a mark, a clear bridge across the gap leads to it ([architecture.md](architecture.md#reference-charts)).
-- `markLabel`: `(d: D, mark: MarkSummary) => string`. Words each mark's accessible name, which by default is the category and each value: "Okafor: 16 goals, 4 assists" ([`MarkSummary`](#marksummary)). An empty result, or a throw (reported), keeps the default, so a mark is never unnamed. It's called once for each focus stop when the chart is drawn and as each update starts, never per frame: on a line chart each x, or with `hover: "point"` each point.
+- `markLabel`: `(d: D, mark: MarkSummary) => string`. Words each mark's accessible name, which by default is the category and each value: "Search: 12,300 new, 6,100 returning" ([`MarkSummary`](#marksummary)). An empty result, or a throw (reported), keeps the default, so a mark is never unnamed. It's called once for each focus stop when the chart is drawn and as each update starts, never per frame: on a line chart each x, or with `hover: "point"` each point.
 - `markDescription`: `false | ((d: D) => string)`. Each mark's accessible description: what its name doesn't say. Default: a tooltip function's text. `false` describes nothing.
 - `table`: `boolean | "hidden" | TableOptions<D>`. Default true: a closed "Data table" after the chart, the fallback every screen reader can read, with the rows in the chart's order. `"hidden"` keeps it out of sight but still read; `false` removes it ([`TableOptions`](#tableoptionsd)).
-- `announce`: `boolean | ((change: ChartChange) => string | undefined)`. Default false. A polite live region that sums up each update ("Sorted A to Z. Okafor and Tanaka changed"). A function words it instead ([`ChartChange`](#chartchange)); an empty string or `undefined` says nothing.
+- `announce`: `boolean | ((change: ChartChange) => string | undefined)`. Default false. A polite live region that sums up each update ("Sorted A to Z. Search and Direct changed"). A function words it instead ([`ChartChange`](#chartchange)); an empty string or `undefined` says nothing.
 
 The type parameter `D` is taken from `data`; the functions in `on`, `tooltip`, `markLabel`, `markDescription` and `table` don't widen it.
 
@@ -2126,7 +2122,7 @@ interface LegendEntry {
 }
 ```
 
-A swatch in `color`, a theme token or a CSS colour, named by `label` in the theme's text colour: `{ label: "Goals below xG", color: "negative" }`. `"mark"` and `"mark-strong"` throw, since an entry has no mark.
+A swatch in `color`, a theme token or a CSS colour, named by `label` in the theme's text colour: `{ label: "Drought below control", color: "negative" }`. `"mark"` and `"mark-strong"` throw, since an entry has no mark.
 
 #### `TableOptions<D>`
 
@@ -2137,7 +2133,7 @@ interface TableOptions<D>
 - `hidden`: `boolean`. Default false. Visually hidden, but still read, as with `table: "hidden"`.
 - `columns`: `readonly TableColumn<D>[]`. The page's own columns ([`TableColumn`](#tablecolumnd)).
 - `category`: `string`. The category column's header. Default: the category's field name, or "Category" when a function reads it.
-- `series`: `Record<string, string>`. Each series' column header, by series: `{ shots: "Shots" }`. Default: its `seriesLabels` name, or the series itself. Only the table changes, so a donut's value column can be named without renaming its slices or its centre.
+- `series`: `Record<string, string>`. Each series' column header, by series: `{ revenue: "Revenue ($M)" }`. Default: its `seriesLabels` name, or the series itself. Only the table changes, so a donut's value column can be named without renaming its slices or its centre.
 - `total`: `string`. Default "Total". The header of a stack's total column, or of a donut's total row.
 - `share`: `string`. Default "Share". A donut's share column's header.
 - `summary`: `string`. Default "Data table". The text that opens the table.
@@ -2190,9 +2186,9 @@ Palette slots that follow the entity: each key keeps its slot, from 1 to 8, thro
 ```ts
 import { barChart, colorAssignment, donutChart } from "expressive-charts";
 
-const colors = colorAssignment({ Goal: 1 });         // "Goal" is the same colour as a slice and as a column
-donutChart("#share", { label: "Shot outcomes", data: outcomes, category: "outcome", value: "shots", colors });
-barChart("#counts", { label: "Shot outcomes", data: outcomes, x: "outcome", y: "shots", colorBy: "category", colors });
+const colors = colorAssignment({ Search: 1 });       // "Search" is the same colour as a slice and as a column
+donutChart("#share", { label: "Sessions by source", data: sources, category: "source", value: "sessions", colors });
+barChart("#counts", { label: "Sessions by source", data: sources, x: "source", y: "sessions", colorBy: "category", colors });
 ```
 
 #### `ColorAssignment` (type)
@@ -2216,35 +2212,35 @@ Views of the same data in one place, one shown at a time, which turns each mark 
 ```ts
 import { barChart, chartSwitch, donutChart, link } from "expressive-charts";
 
-const shots = chartSwitch("#shots", {
+const traffic = chartSwitch("#traffic", {
   views: {
-    donut: (el, colors) => donutChart(el, { label: "Shot outcomes, share of total", data: outcomes, category: "outcome", value: "shots", colors }),
-    columns: (el, colors) => barChart(el, { label: "Shot outcomes, counts", data: outcomes, x: "outcome", y: "shots", orientation: "vertical", colorBy: "category", colors })
+    donut: (el, colors) => donutChart(el, { label: "Sessions by source, share of total", data: sources, category: "source", value: "sessions", colors }),
+    columns: (el, colors) => barChart(el, { label: "Sessions by source, counts", data: sources, x: "source", y: "sessions", orientation: "vertical", colorBy: "category", colors })
   },
   initial: "donut",
-  announce: true                                     // "Shot outcomes, counts" after a switch
+  announce: true                                     // "Sessions by source, counts" after a switch
 });
-button.addEventListener("click", () => void shots.show(shots.current === "donut" ? "columns" : "donut"));
-await shots.chart("columns").update({ data: nextMatch }); // the bar chart itself
-shots.on("hover", (event) => console.log(event.data.datum.shots)); // the view on show's hover
-const totals = barChart("#totals", { label: "Shot outcomes", data: outcomes, y: "outcome", x: "shots" });
-link([shots, totals]);                               // the view on show hovers with the bars beside it
+button.addEventListener("click", () => void traffic.show(traffic.current === "donut" ? "columns" : "donut"));
+await traffic.chart("columns").update({ data: lastMonth }); // the bar chart itself
+traffic.on("hover", (event) => console.log(event.data.datum.sessions)); // the view on show's hover
+const totals = barChart("#totals", { label: "Sessions by source", data: sources, y: "source", x: "sessions" });
+link([traffic, totals]);                             // the view on show hovers with the bars beside it
 ```
 
-A line chart is a view too. Key the columns as its points are (`"goals@12"`), with the bar chart's `key`, and each point grows into its column while the lines fade. Between two line charts, the lines morph by series, and the points stay hidden but for a value alone between gaps.
+A line chart is a view too. Key the columns as its points are (`"drought@8"`), with the bar chart's `key`, and each point grows into its column while the lines fade. Between two line charts, the lines morph by series, and the points stay hidden but for a value alone between gaps.
 
 ```ts
 import { barChart, chartSwitch, lineChart } from "expressive-charts";
 
-const season = chartSwitch("#season", {
+const trial = chartSwitch("#trial", {
   views: {
-    perMatch: (el, colors) => lineChart(el, { label: "Goals and xG per match", data: weeks, x: "week", series: ["goals", "xg"], colors }),
+    lines: (el, colors) => lineChart(el, { label: "Seedling height, drought and control", data: readings, x: "day", series: ["drought", "control"], colors }),
     columns: (el, colors) =>
-      barChart(el, { label: "Goals per match", data: weeks, x: (d) => String(d.week), y: "goals", key: (d) => `goals@${d.week}`, orientation: "vertical", colors })
+      barChart(el, { label: "Seedling height under drought", data: readings, x: (d) => String(d.day), y: "drought", key: (d) => `drought@${d.day}`, orientation: "vertical", colors })
   },
-  initial: "perMatch"
+  initial: "lines"
 });
-await season.show("columns");                         // focus on week 12's x goes to its column, goals@12
+await trial.show("columns");                          // focus on day 8's x goes to its column, drought@8
 ```
 
 With three views or more, a jump of two can go through the one between, so the change reads a step at a time: columns side by side, then stacked, then as shares of 100%.
@@ -2255,8 +2251,8 @@ import { chartSwitch, type ChartSwitchViewFactory } from "expressive-charts";
 // Each draws D3 columns in the container it's given and returns hostView() of its attachment.
 declare const sideBySide: ChartSwitchViewFactory, stacked: ChartSwitchViewFactory, shares: ChartSwitchViewFactory;
 
-const goals = chartSwitch("#goals", { views: { sideBySide, stacked, shares }, initial: "sideBySide", announce: true });
-await goals.show("shares", { via: "stacked" });        // to stacked, then on to shares, announced once
+const sessions = chartSwitch("#sessions", { views: { sideBySide, stacked, shares }, initial: "sideBySide", announce: true });
+await sessions.show("shares", { via: "stacked" });     // to stacked, then on to shares, announced once
 ```
 
 #### `ChartSwitch<T>`
@@ -2443,22 +2439,22 @@ Circles and shapes read by their tags, with no `geometry`: a D3 scatter and a cu
 ```ts
 import { expressive, only, samplesAlong, threshold } from "expressive-charts";
 
-// dots: a D3 scatter's <circle>s, one a player. Each is a point at its centre, with its radius, through its transforms.
-expressive<Player>(document.querySelectorAll("#scatter circle"), {
-  key: (d) => d.name,
-  value: (d) => d.goals,                             // a dot's one sample, { t: 0, value }, for a data effect
+// dots: a D3 scatter's <circle>s, one a site. Each is a point at its centre, with its radius, through its transforms.
+expressive<Site>(document.querySelectorAll("#scatter circle"), {
+  key: (d) => d.site,
+  value: (d) => d.passed,                            // a dot's one sample, { t: 0, value }, for a data effect
   keyboard: true,                                    // in document order
-  markLabel: (d) => `${d.name}: ${d.goals} goals`
+  markLabel: (d) => `${d.site}: ${d.passed} samples passed`
 });
 
-// curves: a <path> per series drawn with d3.line().curve(d3.curveMonotoneX), each read from its own d,
+// curves: a <path> per group drawn with d3.line().curve(d3.curveMonotoneX), each read from its own d,
 // as wide as its stroke, with a gap at each move that .defined() leaves.
-expressive(lines, {
+expressive(curves, {
   key: (d) => d.series,
-  segment: (d) => d.series,                          // a shape's series, which threshold reads through related("xg")
-  samples: (d, mark) => samplesAlong(mark, d.rows.map((r) => ({ x: x(r.week), y: y(r.value), value: r.value, at: r.week }))),
+  segment: (d) => d.series,                          // a shape's series, which threshold reads through related("control")
+  samples: (d, mark) => samplesAlong(mark, d.rows.map((r) => ({ x: x(r.day), y: y(r.value), value: r.value, at: r.day }))),
   watch: true,                                       // follows a D3 transition of each path's d
-  on: { decorate: only("goals", threshold({ compareTo: "xg" })) }
+  on: { decorate: only("drought", threshold({ compareTo: "control" })) }
 });
 ```
 
@@ -2471,10 +2467,10 @@ import { expressive } from "expressive-charts";
 
 /** The row index Plot bound to a rect. */
 const index = (el: Element) => (el as Element & { __data__: number }).__data__;
-const fx = expressive<Player>(plot.querySelectorAll('g[aria-label="bar"] > rect'), {
+const fx = expressive<Region>(plot.querySelectorAll('g[aria-label="bar"] > rect'), {
   datum: (el) => rows[index(el)]!,
-  key: (d) => d.name,
-  value: (d) => d.goals,
+  key: (d) => d.region,
+  value: (d) => d.revenue,
   on: { update: "flash" }
 });
 fx.refresh(nextPlot.querySelectorAll('g[aria-label="bar"] > rect')); // Plot's next <svg>
@@ -2542,17 +2538,16 @@ fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, options: VegaOptio
 Attaches effects to a Vega or Vega-Lite chart rendered as SVG, which is vega-embed's default ([architecture.md](architecture.md#vega-and-vega-lite-fromvegaview)). It reads the marks from the View's scenegraph rather than the DOM: rects are bars (stacks included), arcs slices, symbols points and lines lines. It follows the View's own renders, new data or a resize, so there's no `refresh()` to call. The library imports nothing from Vega. A line breaks where Vega leaves a point out (`defined: false`), as Vega-Lite does at a missing value by default, so it has gaps, and a line with no point drawn has no mark. A line drawn as a curve (any `interpolate` but `"linear"`) is the path Vega drew, read with [`describe.shape`](#shapespec): a gap at each move, and closed where Vega closes it on itself (the `-closed` curves). Its samples are at the items drawn, on the curve, so `threshold`'s crossings between them are approximate, as on a D3 curve. A straight line is read from its items, as before. A renderer other than SVG, a mark that isn't there and an unreadable mark type throw when attaching. Options: [`VegaOptions<D>`](#vegaoptionsd). Returns [`VegaAttachment<D>`](#vegaattachmentd).
 
 ```ts
-import { fromVegaView, only, parallel, threshold, travel } from "expressive-charts";
-import { soccerBall } from "expressive-charts/icons/sport";
+import { fromVegaView, icons, only, parallel, threshold, travel } from "expressive-charts";
 
-interface SeasonRow { week: number; series: string; value: number }
-// view: from await vegaEmbed("#season", spec), a Vega-Lite line with one row per week and series.
-fromVegaView<SeasonRow>(view, {
+interface VisitRow { week: number; series: string; value: number }
+// view: from await vegaEmbed("#visits", spec), a Vega-Lite line with one row per week and series.
+fromVegaView<VisitRow>(view, {
   key: (d) => d.series,                              // required, as for expressive()
   sample: (d) => ({ value: d.value, at: d.week }),   // each point's value, and its week for threshold
   keyboard: true,
-  markLabel: (d) => (d.series === "goals" ? "Goals scored" : "Expected goals"),
-  on: { decorate: only("goals", parallel(threshold({ compareTo: "xg" }), travel(soccerBall, { ride: "on" }))) }
+  markLabel: (d) => (d.series === "visits" ? "Visits" : "Four-week average"),
+  on: { decorate: only("visits", parallel(threshold({ compareTo: "average" }), travel(icons.dot, { ride: "on" }))) }
 });
 ```
 
@@ -2633,27 +2628,27 @@ import { chartSwitch, expressive, hostView } from "expressive-charts";
 
 // The page's own D3 code: each draws its chart in the element it's given, its <svg> role="group" with an
 // aria-label, and returns its marks and the <text>s that name them, in the marks' order.
-declare function drawPie(el: HTMLElement, rows: Outcome[]): { slices: D3Selection<SVGPathElement, Slice>; names: SVGTextElement[] };
-declare function drawColumns(el: HTMLElement, rows: Outcome[]): { rects: D3Selection<SVGRectElement, Outcome>; names: SVGTextElement[] };
+declare function drawPie(el: HTMLElement, rows: Product[]): { slices: D3Selection<SVGPathElement, ProductSlice>; names: SVGTextElement[] };
+declare function drawColumns(el: HTMLElement, rows: Product[]): { rects: D3Selection<SVGRectElement, Product>; names: SVGTextElement[] };
 
-const shots = chartSwitch("#shots", {
+const share = chartSwitch("#share", {
   views: {
     pie: (el) => {
-      const pie = drawPie(el, outcomes);
-      const fx = expressive(pie.slices, { key: (d) => d.data.outcome, keyboard: true, markLabel: (d) => `${d.data.outcome}: ${d.value} shots` });
-      return hostView(fx, { labels: () => pie.names.map((element, i) => ({ element, key: outcomes[i]!.outcome, role: "category" })) });
+      const pie = drawPie(el, products);
+      const fx = expressive(pie.slices, { key: (d) => d.data.product, keyboard: true, markLabel: (d) => `${d.data.product}: $${d.value}M` });
+      return hostView(fx, { labels: () => pie.names.map((element, i) => ({ element, key: products[i]!.product, role: "category" })) });
     },
     columns: (el) => {
-      const columns = drawColumns(el, outcomes);
-      const fx = expressive(columns.rects, { key: (d) => d.outcome, value: (d) => d.shots, keyboard: true, markLabel: (d) => `${d.outcome}: ${d.shots} shots` });
-      return hostView(fx, { labels: () => columns.names.map((element, i) => ({ element, key: outcomes[i]!.outcome, role: "category" })) });
+      const columns = drawColumns(el, products);
+      const fx = expressive(columns.rects, { key: (d) => d.product, value: (d) => d.revenue, keyboard: true, markLabel: (d) => `${d.product}: $${d.revenue}M` });
+      return hostView(fx, { labels: () => columns.names.map((element, i) => ({ element, key: products[i]!.product, role: "category" })) });
     }
   },
   initial: "pie",
-  announce: true                                     // "Shot outcomes, columns": the host <svg>'s aria-label
+  announce: true                                     // "Revenue by product line, columns": the host <svg>'s aria-label
 });
-button.addEventListener("click", () => void shots.show(shots.current === "pie" ? "columns" : "pie"));
-shots.chart("pie").refresh();                         // the attachment's own methods, after the page redraws
+button.addEventListener("click", () => void share.show(share.current === "pie" ? "columns" : "pie"));
+share.chart("pie").refresh();                         // the attachment's own methods, after the page redraws
 ```
 
 Two layouts of one chart often share an axis. Name it as a guide in each, by the same key, and it stays put through the switch when both draw it the same.
@@ -2661,45 +2656,45 @@ Two layouts of one chart often share an axis. Name it as a guide in each, by the
 ```ts
 import { chartSwitch, expressive, hostView, type ChartSwitchViewFactory } from "expressive-charts";
 
-// The page's own D3 code: goals and assists by player, side by side or stacked, on one x axis, <g class="x-axis">.
-declare function drawBars(el: HTMLElement, rows: Player[], layout: "side" | "stacked"): { svg: SVGSVGElement; segments: D3Selection<SVGRectElement, Stacked> };
+// The page's own D3 code: new and returning sessions by source, side by side or stacked, on one x axis, <g class="x-axis">.
+declare function drawBars(el: HTMLElement, rows: Channel[], layout: "side" | "stacked"): { svg: SVGSVGElement; segments: D3Selection<SVGRectElement, StackedChannel> };
 
 const layout = (kind: "side" | "stacked"): ChartSwitchViewFactory => (el) => {
-  const bars = drawBars(el, players, kind);
-  const fx = expressive(bars.segments, { key: (d) => `${d.key}@${d.data.name}`, keyboard: true });
+  const bars = drawBars(el, channels, kind);
+  const fx = expressive(bars.segments, { key: (d) => `${d.key}@${d.data.source}`, keyboard: true });
   return hostView(fx, { guides: () => [{ element: bars.svg.querySelector(".x-axis")!, key: "x" }] });
 };
-const goals = chartSwitch("#goals", { views: { side: layout("side"), stacked: layout("stacked") }, initial: "side" });
-await goals.show("stacked");                          // the axis stays where it is: both layouts draw it the same
+const sessions = chartSwitch("#sessions", { views: { side: layout("side"), stacked: layout("stacked") }, initial: "side" });
+await sessions.show("stacked");                       // the axis stays where it is: both layouts draw it the same
 ```
 
-**Several attachments, one view.** A chart drawn with several attachments on one `<svg>`, such as a dumbbell's dots for each half and the lines between them, switches as one view: `hostView([first, second, lines], options)`. Its marks are all of theirs, in the array's order, in the nearest element that holds each one's marks' common ancestor (each attachment's mapped into it when their ancestors differ), and a mark's focus, tab stop, colour and hiding go to the attachment it's from. `labels` and `guides` are the view's, over all of them: the whole `<svg>`'s. `D` is their rows, as a union. Each key must be one mark's, so key their marks apart (`first@Okafor`, `second@Okafor`, and the line `Okafor`): `hostView()` throws a `TypeError`, naming it, on a key two of them give a mark, on two in different `<svg>`s, on an attachment twice, and on an empty array. If a refresh later makes a key two of theirs, or leaves one in another `<svg>` than the first's, the view reports it, naming it, as each switch starts (as an uncaught error, which doesn't stop the switch), and the switch plays with the first attachment's mark for that key and leaves the other's out. A link between the attachments goes on: the switch's start ends their hovers. The view has no one hover, so it takes no part in a link of its switch, which hears the switch's other views, and `link()` doesn't take it alone. Its attachment's methods go to each: `refresh()` refreshes each from what it last read (a page that reads new sources refreshes each attachment with its own, and `refresh(source)` throws a `TypeError`), `update({ on })` updates each and resolves once all have, or rejects as one of them does, `on()` hears each, `leave()` ends each one's hover, and `destroy()` destroys each, the last first. An array of one attachment makes that attachment's view, as `hostView(attachment)` does.
+**Several attachments, one view.** A chart drawn with several attachments on one `<svg>`, such as a dumbbell's dots for each measurement and the lines between them, switches as one view: `hostView([before, after, lines], options)`. Its marks are all of theirs, in the array's order, in the nearest element that holds each one's marks' common ancestor (each attachment's mapped into it when their ancestors differ), and a mark's focus, tab stop, colour and hiding go to the attachment it's from. `labels` and `guides` are the view's, over all of them: the whole `<svg>`'s. `D` is their rows, as a union. Each key must be one mark's, so key their marks apart (`before@A1`, `after@A1`, and the line `A1`): `hostView()` throws a `TypeError`, naming it, on a key two of them give a mark, on two in different `<svg>`s, on an attachment twice, and on an empty array. If a refresh later makes a key two of theirs, or leaves one in another `<svg>` than the first's, the view reports it, naming it, as each switch starts (as an uncaught error, which doesn't stop the switch), and the switch plays with the first attachment's mark for that key and leaves the other's out. A link between the attachments goes on: the switch's start ends their hovers. The view has no one hover, so it takes no part in a link of its switch, which hears the switch's other views, and `link()` doesn't take it alone. Its attachment's methods go to each: `refresh()` refreshes each from what it last read (a page that reads new sources refreshes each attachment with its own, and `refresh(source)` throws a `TypeError`), `update({ on })` updates each and resolves once all have, or rejects as one of them does, `on()` hears each, `leave()` ends each one's hover, and `destroy()` destroys each, the last first. An array of one attachment makes that attachment's view, as `hostView(attachment)` does.
 
 ```ts
 import { chartSwitch, expressive, hostView, link } from "expressive-charts";
 
-// The page's own D3 code: a dumbbell, a <g> a player holding a dot for each half and the line between
-// them, and the same players as bars side by side, a <rect> each half; each returns its marks.
-interface Half { name: string; half: "first" | "second"; goals: number }
-declare function drawDumbbell(el: HTMLElement): { first: D3Selection<SVGCircleElement, Half>; second: D3Selection<SVGCircleElement, Half>; lines: D3Selection<SVGLineElement, Player>; names: SVGTextElement[] };
-declare function drawBars(el: HTMLElement): { rects: D3Selection<SVGRectElement, Half> };
+// The page's own D3 code: a dumbbell, a <g> a plant holding a dot for each measurement and the line between
+// them, and the same plants as bars side by side, a <rect> each measurement; each returns its marks.
+interface Measure { plant: string; when: "before" | "after"; height: number }
+declare function drawDumbbell(el: HTMLElement): { before: D3Selection<SVGCircleElement, Measure>; after: D3Selection<SVGCircleElement, Measure>; lines: D3Selection<SVGLineElement, Plant>; names: SVGTextElement[] };
+declare function drawBars(el: HTMLElement): { rects: D3Selection<SVGRectElement, Measure> };
 
-const byHalf = (d: Half) => `${d.half}@${d.name}`;  // first@Okafor: each half's mark keyed apart
-const halves = chartSwitch("#halves", {
+const byWhen = (d: Measure) => `${d.when}@${d.plant}`; // before@A1: each measurement's mark keyed apart
+const treatment = chartSwitch("#treatment", {
   views: {
     dumbbell: (el) => {
       const drawn = drawDumbbell(el);
-      const first = expressive(drawn.first, { key: byHalf, keyboard: true, markLabel: (d) => `${d.name}: ${d.goals} in the first half` });
-      const second = expressive(drawn.second, { key: byHalf, keyboard: true, markLabel: (d) => `${d.name}: ${d.goals} in the second half` });
-      const lines = expressive(drawn.lines, { key: (d) => d.name });
-      link([first, second, lines], { by: (event) => event.data.datum.name }); // a row lights as one
-      return hostView([first, second, lines], { labels: () => drawn.names.map((element) => ({ element, key: `first@${element.textContent}`, role: "category" })) });
+      const before = expressive(drawn.before, { key: byWhen, keyboard: true, markLabel: (d) => `${d.plant}: ${d.height} cm before treatment` });
+      const after = expressive(drawn.after, { key: byWhen, keyboard: true, markLabel: (d) => `${d.plant}: ${d.height} cm after treatment` });
+      const lines = expressive(drawn.lines, { key: (d) => d.plant });
+      link([before, after, lines], { by: (event) => event.data.datum.plant }); // a row lights as one
+      return hostView([before, after, lines], { labels: () => drawn.names.map((element) => ({ element, key: `before@${element.textContent}`, role: "category" })) });
     },
-    bars: (el) => hostView(expressive(drawBars(el).rects, { key: byHalf, keyboard: true }))
+    bars: (el) => hostView(expressive(drawBars(el).rects, { key: byWhen, keyboard: true }))
   },
   initial: "dumbbell"
 });
-halves.chart("dumbbell").refresh();                   // each attachment, from what it last read
+treatment.chart("dumbbell").refresh();                // each attachment, from what it last read
 ```
 
 #### `HostView<D>`

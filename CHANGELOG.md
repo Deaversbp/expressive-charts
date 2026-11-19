@@ -49,6 +49,14 @@ A page that needs one of these to stay as it is sets it itself: a duration or a 
 
 Additions can come in any minor release: a new export, a new optional field or option.
 
+## Unreleased
+
+### Removed
+
+- **`motionSwitch(target, motion, options?)`,** the form with the motion as its second argument, which 0.13.0 deprecated. Write `motionSwitch(target, { motion, ...options })` instead, or `motionSwitch(target, options)` where the motion was `undefined`.
+  - In TypeScript the old form is a type error. In JavaScript it throws a `TypeError` that names the new form, and builds nothing: a `Motion` second argument, or a third argument. Without the error, the switch would read the motion as its options and show the page-wide one.
+  - Options that aren't an object throw a `TypeError` too, as a second argument that was neither options nor a `Motion` did.
+
 ## 0.13.0 (18 November 2026)
 
 The last 0.x release: the API shaped for 1.0. Two changes can break a page or an effect, and one form is deprecated; they come first below, each with what to write instead. `expressive()`'s `geometry` takes `(datum, element, key)`: swap its first two arguments. `IconShape.linecap` and `Paint.linecap` gain `"square"`, and `IconShape.linejoin` gains `"bevel"`, a breaking change to the effect-author API for code that reads them and handles every case: add a case for each. And `motionSwitch(target, motion, options)` is deprecated: write `motionSwitch(target, { motion, ...options })`. The old form works in 0.13.0 as it did. 1.0 takes it out and changes nothing else; [what 1.0 will promise](#what-10-will-promise) is above. The rest needs nothing written instead: two built-in effects, `outline()` and `wait()`; `labelBounds` on `expressive()` and `fromVegaView()`; a refresh that keeps a hover's effects; `iconFromSvg` keeping square caps and bevel joins; and, in Safari, a chart's text laid out with a viewer's letter and word spacing. The demo site gains a page of examples on the library's own charts: revenue against its target, a measurement against its control, and traffic by source.

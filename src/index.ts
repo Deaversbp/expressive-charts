@@ -1,7 +1,7 @@
 // Public entry point and composition root: the only file that brings charts and effects together.
 // Exports are added here as each layer is built. See docs/architecture.md for the design.
 
-import { motion as pageMotion, type Motion, type TransitionEffect } from "./core";
+import { motion as pageMotion, type TransitionEffect } from "./core";
 import {
   barChart as drawBarChart,
   chartSwitch as buildChartSwitch,
@@ -159,17 +159,14 @@ export function fromVegaView<D = Record<string, unknown>>(view: VegaViewLike, op
  * choice (`motion.chooseMode()`), so it overrides the device's reduced-motion setting. `motion` is
  * the motion it shows and sets, default the page-wide one. `persist: "key"` saves the choice in localStorage.
  */
-export function motionSwitch(target: string | Element, options?: MotionSwitchOptions): MotionSwitch;
-/**
- * @deprecated Since 0.13.0, and gone in 1.0. Pass the motion among the options:
- * `motionSwitch(target, { motion, ...options })`, or `motionSwitch(target, options)` for the page-wide one.
- */
-export function motionSwitch(target: string | Element, motion: Motion | undefined, options?: MotionSwitchOptions): MotionSwitch;
-export function motionSwitch(target: string | Element, second?: Motion | MotionSwitchOptions, third?: MotionSwitchOptions): MotionSwitch {
-  // The form before 0.13.0 has a Motion second (it has chooseMode), or a third argument. A second that's no object is
-  // taken for a motion too, so it throws what it always threw.
-  const old = third !== undefined || (second !== undefined && (typeof second !== "object" || second === null || "chooseMode" in second));
-  const options = (old ? third : (second as MotionSwitchOptions | undefined)) ?? {};
-  const motion = old && second !== undefined ? (second as Motion) : (options.motion ?? pageMotion);
-  return buildMotionSwitch(target, { ...options, motion });
+export function motionSwitch(target: string | Element, options: MotionSwitchOptions = {}): MotionSwitch {
+  // 1.0 took out the form with a Motion second (it has chooseMode) and options third, which 0.13.0 deprecated. A page
+  // still written that way gets this error, where the switch would read its motion as options and show the page-wide one.
+  if (arguments[2] !== undefined || (typeof options === "object" && options !== null && "chooseMode" in options)) {
+    throw new TypeError("Since 1.0 motionSwitch takes (target, options), with the motion among the options: motionSwitch(target, { motion, ...options }).");
+  }
+  if (typeof options !== "object" || options === null) {
+    throw new TypeError(`motionSwitch: options must be an object, got ${options === null ? "null" : typeof options}.`);
+  }
+  return buildMotionSwitch(target, { ...options, motion: options.motion ?? pageMotion });
 }

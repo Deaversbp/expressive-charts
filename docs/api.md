@@ -2873,13 +2873,11 @@ motionSwitch("#dashboard-motion", { motion: dashboard }); // a switch for a moti
 
 ```ts
 motionSwitch(target: string | Element, options?: MotionSwitchOptions): MotionSwitch
-/** @deprecated */
-motionSwitch(target: string | Element, motion: Motion | undefined, options?: MotionSwitchOptions): MotionSwitch
 ```
 
 The viewer's motion control in `target`: Presentation, Analysis and Off as real buttons with `aria-pressed`, in a `role="group"` named by its visible label, and a note on what the mode does, which a screen reader hears after a click ([architecture.md](architecture.md#motion-switch)). A click is the viewer's own choice (`motion.chooseMode()`), so it overrides the device's reduced-motion setting; until then, Off is pressed while the device asks for reduced motion, and the note says why. It follows its `motion`, one of its options (default: the page-wide one), so it stays right whoever changes the mode. A target that isn't an element, or options of the wrong type, throw a `TypeError`. Returns [`MotionSwitch`](#motionswitch-type).
 
-**Deprecated: the motion as the second argument.** Until 0.13.0 the motion came before the options: `motionSwitch(target, motion?, options?)`. That form still works in 0.13.0 and builds the same control. It's marked `@deprecated` in the types, nothing is logged when it runs, and 1.0 takes it out. Write `motionSwitch(target, { motion, ...options })` instead, or `motionSwitch(target, options)` where the motion was `undefined`. The two are told apart by the second argument: a `Motion` (it has `chooseMode`), or anything with a third argument after it, is the old form. A second argument that is neither options nor a `Motion` throws a `TypeError`.
+**Taken out in 1.0: the motion as the second argument.** Until 0.13.0 the motion came before the options, `motionSwitch(target, motion?, options?)`; 0.13.0 deprecated that form, and 1.0 took it out ([CHANGELOG](../CHANGELOG.md)). Write `motionSwitch(target, { motion, ...options })` instead, or `motionSwitch(target, options)` where the motion was `undefined`. In TypeScript the old form is a type error. In JavaScript it throws a `TypeError` that names the new form, building nothing: a `Motion` second (it has `chooseMode`), or a third argument that isn't `undefined`. Options that aren't an object throw a `TypeError` too.
 
 #### `MotionSwitch` (type)
 

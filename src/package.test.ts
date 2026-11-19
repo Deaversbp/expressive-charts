@@ -159,14 +159,25 @@ describe("package.json", () => {
   });
 });
 
-// The first deprecation in src (M18 step 2). TypeScript reports no error for a deprecated call, so the tag is read from the source.
-describe("motionSwitch's deprecated form", () => {
-  it("marks the three-argument form deprecated in its types, with what to write instead, and the new form not", async () => {
+// 0.13.0 deprecated one form, motionSwitch(target, motion, options?), and 1.0 took it out (M19 step 3). TypeScript reports
+// no error for a deprecated call, so the tags are read from the source.
+describe("1.0's deprecations", () => {
+  it("leaves nothing deprecated in src: 1.0 took out what 0.13.0 deprecated", async () => {
+    const fs = (await import("node:fs/promises" as string)) as {
+      readdir(path: URL, options: { recursive: true }): Promise<string[]>;
+      readFile(path: URL, encoding: "utf8"): Promise<string>;
+    };
+    const root = new URL("./", import.meta.url);
+    const files = (await fs.readdir(root, { recursive: true })).filter((file) => /\.ts$/.test(file) && !/\.test\.ts$/.test(file));
+    const deprecated: string[] = [];
+    for (const file of files) if ((await fs.readFile(new URL(file.replace(/\\/g, "/"), root), "utf8")).includes("@deprecated")) deprecated.push(file);
+    expect(files.length).toBeGreaterThan(50);
+    expect(deprecated).toEqual([]);
+  });
+
+  it("declares motionSwitch with one form, (target, options?)", async () => {
     const fs = (await import("node:fs/promises" as string)) as { readFile(path: URL, encoding: "utf8"): Promise<string> };
     const source = (await fs.readFile(new URL("./index.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
-    const overloads = [...source.matchAll(/\/\*\*((?:(?!\*\/)[^])*)\*\/\nexport function motionSwitch\(([^)]*)\): MotionSwitch;/g)];
-    expect(overloads.map((m) => m[2])).toEqual(["target: string | Element, options?: MotionSwitchOptions", "target: string | Element, motion: Motion | undefined, options?: MotionSwitchOptions"]);
-    expect(overloads[0]![1]).not.toContain("@deprecated");
-    expect(overloads[1]![1]).toMatch(/@deprecated Since 0\.13\.0, and gone in 1\.0\. Pass the motion among the options:\n \* `motionSwitch\(target, \{ motion, \.\.\.options \}\)`/);
+    expect([...source.matchAll(/export function motionSwitch\(([^)]*)\): MotionSwitch/g)].map((m) => m[1])).toEqual(["target: string | Element, options: MotionSwitchOptions = {}"]);
   });
 });

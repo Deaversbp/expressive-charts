@@ -15,6 +15,7 @@ A screen reader reads the page aloud, so "hear" means real speech. You don't nee
 ## Setup
 
 1. In the repo, run `npm install` once, then `npm run dev`. Open the `bars.html` page at the address Vite prints, for example `http://localhost:5173/bars.html`.
+   - **Or use the demo site,** with nothing to install: every page is at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/), for example [bars.html](https://deaversbp.github.io/expressive-charts/bars.html). It's built from `main`. On a Mac, that's the way to run the VoiceOver steps.
 2. **Reload before you start.** The steps assume a fresh page: Goals, Highest first, after matchweek 24. The matchweeks are seeded, so matchweek 25 always changes the same players.
 3. The motion mode doesn't change what's spoken. Off stops the ball rolling, if it distracts you.
 4. The page's tab order: the three motion buttons, the three metric buttons, the two sort buttons, "Play next matchweek", the chart (one stop), then "Data table".
@@ -65,8 +66,11 @@ Before you start:
 - In Safari, go to Settings > Advanced and turn on **"Press Tab to highlight each item on a webpage"**. Without it, Tab skips the chart.
 - Turn VoiceOver on with Cmd+F5.
 - Turn Quick Nav off (press Left and Right arrow together until VoiceOver says "Quick Nav off"). With it off, the plain arrow keys reach the chart.
+- Turn single-key Quick Nav off too, so letter keys such as V reach the page: VO+Q switches it, and VoiceOver says which.
 
-VO means Control+Option.
+VO means Control+Option. If VO+Right stops on a group ("… group") without going in, VO+Shift+Down goes in and VO+Shift+Up comes out. VO+U opens the rotor, whose lists (headings, tables, form controls) Left and Right arrow go through; Escape closes it.
+
+Sections [D](#d-the-donut-page-donutchart-and-a-d3-pie), [E](#e-the-line-page-linechart-and-a-d3-line), [F](#f-the-morph-page-a-chart-switch), [P](#p-layout-morphs-on-d3-charts) and [S](#s-three-everyday-charts-revenue-seedlings-and-sessions) have VoiceOver steps of their own, after their NVDA ones, with these settings. With B and C, that's a page of each kind: our charts, a host's marks through `expressive()`, a switch, toggle buttons, a table and the announcements.
 
 | # | Do | Expect to hear (roughly) | What you heard |
 | --- | --- | --- | --- |
@@ -163,6 +167,25 @@ If a bar is read twice or in pieces here but not on the first chart, the differe
 
 If the total isn't heard in steps 1 and 5, it's still in the table's total row, but say so: the description may need to move into the group's name.
 
+**VoiceOver + Safari**, with the settings from [B](#b-voiceover--safari-macos). Open [the donut page on the demo site](https://deaversbp.github.io/expressive-charts/donut.html) and reload. The tab order is the one above.
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 10 times, until focus reaches the donut's first slice. | "Goal: 58 shots, 14%, image", and "Shot outcomes, group" (before it, or after a pause), perhaps with "406 shots". The ball rolls round Goal. | |
+| 2 | Right arrow 3 times. | "Saved: 112 shots, 28%, image", "Off target: 149 shots, 37%, image", "Blocked: 87 shots, 21%, image". The focus ring goes clockwise round the ring. | |
+| 3 | Right arrow once more, then Home, End and Left arrow. | Nothing new for Right (Blocked is the last slice). Then "Goal: 58 shots, 14%", "Blocked: 87 shots, 21%", "Off target: 149 shots, 37%", each an image. | |
+| 4 | VO+Right, then VO+Left. | "Blocked: 87 shots, 21%, image", then "Off target: 149 shots, 37%, image": one item per slice, never "Off target" and "149" separately, and never the "406" in the hole. | |
+| 5 | Escape. Shift+Tab once, to "Next match", and press Space. | "Next match, button", then "Match 1: Saved and Off target changed". | |
+| 6 | Tab once, back into the donut. | "Off target: 152 shots, 37%, image", the slice focused last, perhaps with the new total, "412 shots". | |
+| 7 | Tab once, to "Data table", and press Space. | "Data table, collapsed" (with "summary" or "disclosure triangle"), then "expanded". | |
+| 8 | VO+Right until you reach the table. | "Shot outcomes, table, 3 columns, 6 rows" (in either order). | |
+| 9 | VO+Down, then VO+Right twice. | "Goal", then each cell with its column header: "58, shots", "14%, Share". | |
+| 10 | VO+Down 4 times. | "28%", "37%", "21%" and "100%", each with its row's outcome: "Saved", "Off target", "Blocked", "Total". | |
+| 11 | Tab once, to the D3 pie. | "Goal: 58 shots, 14%, image", and "Shot outcomes on a D3 pie, group". The ball rolls round Goal on the pie. | |
+| 12 | Right arrow 3 times, then Home. | "Saved: 115 shots, 28%", "Off target: 152 shots, 37%", "Blocked: 87 shots, 21%", then "Goal: 58 shots, 14%", each an image. Never "Saved" or "115" on its own, and none of the pie's labels. | |
+| 13 | Shift+Tab 4 times, to "Largest first", and press Space. | "Largest first, toggle button" (perhaps "not selected"), then "selected", then the donut's "Sorted highest first". | |
+| 14 | Tab 4 times, back into the D3 pie. Then Home and Right arrow. | "Goal: 58 shots, 14%, image" (the slice focused last). Then "Off target: 152 shots, 37%" and "Saved: 115 shots, 28%": the ring is largest first now, and the keys follow it. | |
+
 ## E. The line page: `lineChart` and a D3 line
 
 `demo/line.html` shows goals against expected goals over a season on the library's `lineChart`, and on a line the page draws with D3, which `expressive()` names. One "Play season" button and one scrubber drive both.
@@ -215,6 +238,29 @@ If the chart's description isn't heard in step 1, it's also in the card's note, 
 | 13 | After step 12, press Escape, then NVDA+Space (browse mode), then Tab. | "Goals and expected goals on a Vega-Lite line, grouping", then "Goals scored: 56 goals by matchweek 38, graphic". | |
 | 14 | Focus mode, then Right arrow, then Left arrow. | "Expected goals (xG): 56.5 by matchweek 38, graphic", then "Goals scored: 56 goals by matchweek 38, graphic". The focus ring goes round each line, and the other line dims. | |
 
+**VoiceOver + Safari**, with the settings from [B](#b-voiceover--safari-macos). Open [the line page on the demo site](https://deaversbp.github.io/expressive-charts/line.html) and reload, so the whole season shows.
+
+**The page has more tab stops than when the NVDA steps were run.** Section K added the Line and Hover toggles before the chart, and section I two charts with missing weeks before the Vega-Lite line. So the tab order is: the three motion buttons, "Play season", the scrubber, "Straight", "Curved", "Each week", "Nearest point", the line chart (one stop), its "Data table", the D3 line (one stop), the line with missing weeks (one stop), its "Data table", the D3 line with missing weeks (one stop), then the Vega-Lite line (one stop). The counts below are for this order. In Safari the scrubber moves with the arrow keys, and Home and End, while it has focus.
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 10 times, until focus reaches the line chart's first week. | On the way: "Through matchweek 38, Matchweek, slider", and the four toggle buttons in "Line, group" and "Hover, group". Then "Matchweek 1: 0 goals, 0.6 xG, image", "Goals vs expected goals, season to date, group", perhaps its description, and, perhaps after a pause, "-0.6 vs expected". The crosshair and tooltip show at week 1. | |
+| 2 | Right arrow twice. | "Matchweek 2: 0 goals, 1.7 xG, image", then "Matchweek 3: 3 goals, 3.5 xG, image", each perhaps with its gap after a pause ("-1.7 vs expected", "-0.5 vs expected"). The crosshair moves a week at a time. | |
+| 3 | End, Left arrow, Home, then Left arrow again. | "Matchweek 38: 56 goals, 56.5 xG", "Matchweek 37: 55 goals, 55.1 xG", "Matchweek 1: 0 goals, 0.6 xG", each an image, then nothing new: week 1 is the first. | |
+| 4 | VO+Right, then VO+Left. | "Matchweek 2: 0 goals, 1.7 xG, image", then "Matchweek 1: 0 goals, 0.6 xG, image": one item per week. Never a number on its own, an end label, an axis or the ball. | |
+| 5 | Shift+Tab 5 times, to the scrubber. Press Home, then Right arrow 4 times. | "Through matchweek 38, Matchweek, slider". Then "Through matchweek 1", "Through matchweek 2" … "Through matchweek 5". Both charts glide back to week 5. | |
+| 6 | Tab 5 times, back into the line chart. Then End, then Right arrow. | "Matchweek 1: 0 goals, 0.6 xG, image" (the week focused last). Then "Matchweek 5: 4 goals, 6.0 xG, image": the last week shown. Then nothing new for Right. | |
+| 7 | Shift+Tab 6 times, to "Play season", and press Space. Wait until the season stops (about 5 seconds), then press Tab and Shift+Tab. | "Play season, button". Then nothing while it plays (perhaps "Pause" once, as the button's name changes). Then "Through matchweek 38, Matchweek, slider", and "Play season, button" again. | |
+| 8 | Tab 7 times, to "Data table", and press Space. | "Data table, collapsed", then "expanded". | |
+| 9 | VO+Right until you reach the table. Then VO+Down, then VO+Right 3 times. | "Goals vs expected goals, season to date, table, 4 columns, 39 rows" (in either order). Then "1", then each cell with its column header: "0, Goals scored", "0.6, Expected goals (xG)", "-0.6, Difference". | |
+| 10 | VO+Down. | "-1.7", with "2", the row's matchweek, in some order. | |
+| 11 | Tab once, to the D3 line. | "Goals scored: 56 goals by matchweek 38, image", and "Goals and expected goals on a D3 line, group". | |
+| 12 | Right arrow twice, then Left arrow. | "Expected goals (xG): 56.5 by matchweek 38, image", then nothing new, then "Goals scored: 56 goals by matchweek 38, image". The focus ring goes round each line, and the other line dims. | |
+| 13 | Tab 4 times, to the Vega-Lite line. | On the way, the two charts with missing weeks and a "Data table". Then "Goals scored: 56 goals by matchweek 38, image", and "Goals and expected goals on a Vega-Lite line, group". Nothing unnamed ("image" or "group" alone) before it. | |
+| 14 | Right arrow, then Left arrow. | "Expected goals (xG): 56.5 by matchweek 38, image", then "Goals scored: 56 goals by matchweek 38, image". | |
+
+**Known, no need to report:** VoiceOver may read "-0.6" as "minus 0.6", "vs" as "versus" and "xG" as "x g", as NVDA may.
+
 ## F. The morph page: a chart switch
 
 `demo/morph.html` shows a season's shot outcomes as a donut and as columns in one `chartSwitch`. A button switches between them, and the slices morph into their columns and back. This script covers what the switch adds; the donut reads as in [section D](#d-the-donut-page-donutchart-and-a-d3-pie) and the columns as section A's bars.
@@ -258,6 +304,26 @@ If the chart's description isn't heard in step 1, it's also in the card's note, 
 | 13 | Shift+Tab until you reach "Drop" (about 3 times), and press Space. | "Drop, toggle button, not pressed", then "pressed". Nothing else: the switch is rebuilt, still showing the columns, and focus stays on Drop. | |
 
 If the announcement in steps 3, 5, 6 or 9 isn't heard, or is heard before the switch lands, say so: the live region is written when the switch lands, and could move.
+
+**VoiceOver + Safari**, with the settings from [B](#b-voiceover--safari-macos). Open [the morph page on the demo site](https://deaversbp.github.io/expressive-charts/morph.html) and reload, and leave the motion on Presentation. The tab order is the one above. **Since the NVDA run,** section J added a card after this one, "Linked, largest first", so reading down this card now ends at that card's heading, where step 8 of the NVDA steps names "Two ways to morph".
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 7 times, until focus reaches the donut's first slice. | On the way: "Show as columns, button", then "Drop, toggle button" and "Unroll, selected, toggle button", in "Morph, group". Then "Goal: 58 shots, 14%, image", and "Shot outcomes, share of total, group", perhaps with "406 shots". | |
+| 2 | Right arrow. | "Saved: 112 shots, 28%, image". | |
+| 3 | Press V. | Nothing for about a second while the slices turn into columns. Then "Saved: 112 shots, image", perhaps with "Shot outcomes, counts, group", and the announcement "Shot outcomes, counts". The focus ring is on the Saved column. | |
+| 4 | Right arrow, then Left arrow. | "Off target: 149 shots, image", then "Saved: 112 shots, image". Never a share ("28%"): those are the donut's. | |
+| 5 | Press V again. | After about a second, "Saved: 112 shots, 28%, image", and "Shot outcomes, share of total". The focus ring is on the Saved slice. | |
+| 6 | Escape. Shift+Tab 3 times, to "Show as columns", and press Space. | "Show as columns, button". Then perhaps "Show as donut", as the name changes, and after about a second, "Shot outcomes, counts". | |
+| 7 | Tab, then Shift+Tab. | "Drop, toggle button", then "Show as donut, button": focus stayed on the button, and its name changed. | |
+| 8 | VO+Right until you reach the heading "Linked, largest first". | The Morph group and its two buttons, the legend ("Goal", "Saved", "Off target", "Blocked"), "Shot outcomes, counts, group", the four columns ("Goal: 58 shots, image" … "Blocked: 87 shots, image"), "Data table, collapsed", then the heading. **Never** a slice, a share or the donut's "406 shots", and the legend only once. | |
+| 9 | Shift+Tab until you're back on "Show as donut", then press Space twice, quickly. | "Show as donut, button". The columns start to turn into slices and go back. After about a second, one announcement: "Shot outcomes, counts". | |
+| 10 | Tab 4 times, to "Data table", and press Space. | On the way, the two Morph buttons and a column ("… shots, image"). Then "Data table, collapsed", then "expanded". | |
+| 11 | VO+Right until you reach the table. | "Shot outcomes, counts, table, 2 columns, 5 rows" (in either order). | |
+| 12 | VO+U, then Right arrow until the rotor's Tables list. Then Escape. | One table, "Shot outcomes, counts": the donut's table is hidden with the donut. | |
+| 13 | Shift+Tab until you reach "Drop", and press Space. | "Drop, toggle button", then "selected". Nothing else: the switch is rebuilt, still showing the columns, and focus stays on Drop. | |
+
+**Known, no need to report:** after V, VoiceOver may read the new chart's name twice: once as the group focus moves into, and once as the announcement. Do say if it's too much.
 
 ## G. The stress page's date line: `lineChart` on dates
 
@@ -839,6 +905,44 @@ M15 (0.10.0) adds a new page, `layouts.html`, with four cards, each a chart swit
 
 If a segment, band, value, tile or bar reads in pieces or twice, a drawn name or number is read, a button's state isn't read, an announcement isn't heard, comes twice, or names Stacked on a jump of two, or focus doesn't follow its mark, say so: the names, the hidden parts or the switch may need to change.
 
+**VoiceOver + Safari**, with the settings from [B](#b-voiceover--safari-macos), and the pointer off the charts. Open [the layouts page on the demo site](https://deaversbp.github.io/expressive-charts/layouts.html) and reload. **The page has more tab stops than when the NVDA steps were run.** Section R added a second row of buttons to the treemap's card, a group named "Position", which stays in its Bars view, and section Q a fifth card, the dumbbell. So the tab order is: the three motion buttons, "Side by side", "Stacked", "100%", the bars (one stop), "Stacked", "100%", the areas (one stop), "Radar", "Bars", the radar (one stop), "Treemap", "Bars", "All", "Forwards", "Wingers", "Midfielders", "Defenders", the treemap (one stop), then the dumbbell's card. The counts below are for this order.
+
+**The bars.**
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Press Tab 7 times, until focus reaches the bars. | On the way: "Side by side, selected, toggle button", "Stacked, toggle button", "100%, toggle button", in "Show, group". Then "Okafor: 16 goals, image", and "Goals and assists by player on D3 bars, side by side, group". | |
+| 2 | Right arrow 3 times. | "Okafor: 4 assists, image", "Lindqvist: 10 goals, image", "Lindqvist: 7 assists, image": each once. Never "Lindqvist" or "7" on their own, as drawn. | |
+| 3 | V. | Nothing for about a second while the assists slide onto the goals. Then "Lindqvist: 7 assists, image", perhaps with "… stacked, group", and the announcement "Goals and assists by player on D3 bars, stacked". The focus ring is on Lindqvist's assists. | |
+| 4 | V. | After about a second, "Lindqvist: 7 assists, 41% of 17 goals and assists, image", and the announcement "Goals and assists by player on D3 bars, as shares of 100%". | |
+| 5 | V. | About two seconds of nothing, while the bars go back through Stacked. Then "Lindqvist: 7 assists, image", and one announcement, "Goals and assists by player on D3 bars, side by side". **Not** "stacked" on the way. | |
+| 6 | Shift+Tab once, to "100%", and press Space. | "100%, toggle button", then "selected". About two seconds later, one announcement: "Goals and assists by player on D3 bars, as shares of 100%". **Not** "stacked". | |
+| 7 | Tab once. | "Lindqvist: 7 assists, 41% of 17 goals and assists, image": the segment focused last, in the new view. | |
+| 8 | Shift+Tab once, to "100%". VO+Right until you reach the heading "Shots, stacked and as shares, on a D3 area". | The legend, "Goals", "Assists", then the bars' name, then each segment once with its share, Okafor's goals to Castillo's assists, then the heading. **Never** a player's name, a percentage or an axis tick on its own, or a view not on show. | |
+
+**The areas, the radar and the treemap.**
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 9 | Tab until "Shots on target: 177 in 38 matches, image". | On the way, "Stacked, selected, toggle button" and "100%, toggle button". With it, "Shots on and off target per match on a D3 area, stacked, group". | |
+| 10 | Right arrow. | "Shots off target: 333 in 38 matches, image". | |
+| 11 | V. | After about a second, "Shots off target: 65% of 510 shots in 38 matches, image", and the announcement "Shots on and off target per match on a D3 area, as shares of 100%". Never "Off target" or "On target" on their own, as drawn by the bands. | |
+| 12 | V. | After about a second, "Shots off target: 333 in 38 matches, image", and the announcement "Shots on and off target per match on a D3 area, stacked". | |
+| 13 | Tab until "Okafor, goals: 0.50 per 90, 96th percentile, image". | On the way, "Radar, selected, toggle button" and "Bars, toggle button". With it, "Okafor against the league average per 90 minutes on a D3 radar, group". | |
+| 14 | Right arrow twice. | "Okafor, assists: 0.13 per 90, 52nd percentile, image", "Okafor, shots: 2.00 per 90, 91st percentile, image". Never an axis's name, as drawn round the radar. | |
+| 15 | V. | After about a second, "Okafor, shots: 2.00 per 90, 91st percentile, image", and the announcement "Okafor against the league average per 90 minutes on D3 bars, as percentiles". | |
+| 16 | Right arrow. | "League average, shots: 1.30 per 90, 57th percentile, image": the same axis's other bar. Never "57" or "Shots" on their own. | |
+| 17 | V. | After about a second, "League average, shots: 1.30 per 90, 57th percentile, image", and the announcement "Okafor against the league average per 90 minutes on a D3 radar". | |
+| 18 | Tab twice. | "Treemap, selected, toggle button", then "Bars, toggle button". | |
+| 19 | Press Space. | "selected". After about a second, the announcement "The season's 58 goals by scorer on D3 bars, most first". | |
+| 20 | Tab 6 times. | "All, selected, toggle button" in "Position, group", and "Forwards", "Wingers", "Midfielders", "Defenders", each a toggle button. Then "Okafor, forward: 16 goals, image", and "The season's 58 goals by scorer on D3 bars, most first, group". | |
+| 21 | End. | "Kowalski, defender: 1 goal, image": the last bar. | |
+| 22 | V. | After about a second, "Kowalski, defender: 1 goal, 2% of 58, image", and the announcement "The season's 58 goals by scorer and position on a D3 treemap". His tile is small and has no name drawn in it: the focus ring is on it. | |
+| 23 | Home, then Right arrow 4 times. | "Okafor, forward: 16 goals, 28% of 58", then "Lindqvist, forward: 10 goals, 17% of 58", "Moreau, winger: 8 goals, 14% of 58", "Reyes, winger: 5 goals, 9% of 58", "Brennan, winger: 1 goal, 2% of 58": position by position, each once. Never a name or "16 goals" on its own, as drawn in the tiles. | |
+| 24 | VO+Right until you reach the heading "First half against second, from a D3 dumbbell to bars". | The rest of the treemap's tiles, each once with its share of 58, then the heading. **Never** a bar, or a view not on show. | |
+
+**Known, no need to report:** after V, VoiceOver may read the new view's name twice: once as the group focus moves into, and once as the announcement. It may read "100%" as "100 percent" and "per 90" as "per ninety".
+
 ## Q. A dumbbell of three attachments, and guides that stay put
 
 M16 (0.11.0) adds a fifth card to `layouts.html`: the charts page's dumbbell, drawn by the same D3 code, whose three attachments, each half's dots and the lines between them, make one view of a chart switch with `hostView([first, second, lines])`. Its other view is bars side by side. And the page names its guides: the bars' axis, the areas' weeks and the dumbbell's axis stay on screen through a switch. The switch draws them as a copy in its overlay, which is hidden from screen readers.
@@ -1015,6 +1119,38 @@ M18 (0.13.0) adds one page, `examples.html`: three cards on the library's own ch
 | 24 | Escape, then NVDA+Space (browse mode). Shift+Tab once, to the button, and press Space. | "Show as bars, button". About a second later, one announcement: "Sessions by source, counts". | |
 | 25 | NVDA+Tab, then Tab once. | "Show as donut, button". Then "Sessions by source, counts, grouping", "Email: 3,000 sessions, graphic": the tab stop followed the source. | |
 | 26 | Press Shift+2 once, to the card's heading, then Down arrow until "Data table". | The note, the button, the legend's five sources, the chart's name and its five bars, Search's to Email's, each once. **Never** a slice, "41,000" or a share: only the view on show is read. | |
+
+**VoiceOver + Safari**, with the settings from [B](#b-voiceover--safari-macos), and the pointer off the charts. Open [the examples page on the demo site](https://deaversbp.github.io/expressive-charts/examples.html) and reload. The tab order is the one above. VO+Command+H goes to the next heading, and VO+Command+Shift+H to the one before.
+
+| # | Do | Expect to hear (roughly) | What you heard |
+| --- | --- | --- | --- |
+| 1 | Reload, and wait three seconds, touching nothing. | The page's title, "Three everyday charts · expressive-charts", and nothing after it: nothing plays at load. | |
+| 2 | Press Tab 4 times. | On the way, the three motion buttons in "Motion, group". Then "Play Q4, button". | |
+| 3 | Tab once, into the revenue chart. | "North: $4.2M revenue, 105% of its $4.0M target, image", and "Revenue by region, Q3 2026, against target, group". | |
+| 4 | Down arrow 4 times. | "East: $3.8M revenue, 106% of its $3.6M target", "South: $3.1M revenue, 89% of its $3.5M target", "West: $2.6M revenue, 87% of its $3.0M target", "Central: $1.9M revenue, 95% of its $2.0M target", each an image, each once. Never "105% of target", "$4.2M" or "North" on its own. | |
+| 5 | Shift+Tab once, to the button, and press Space. | "Play Q4, button". Then, as the bars start to change, one announcement: "Q4 2026: North, East, West and South changed". **Nothing else**: on screen the bars change length, West moves above South, and a change rises past four bars, unread. | |
+| 6 | Tab, then Shift+Tab. | "Central: $1.9M revenue, 90% of its $2.1M target, image", the bar you left, named for Q4, with "Revenue by region, Q4 2026, against target, group". Then "Back to Q3, button": its name says what a press does now. | |
+| 7 | Tab once. Then Home, then Down arrow twice. | "North: $4.6M revenue, 105% of its $4.4M target", "East: $3.7M revenue, 97% of its $3.8M target", "West: $3.5M revenue, 113% of its $3.1M target", each an image: West is third now. | |
+| 8 | Tab once, to "Data table", and press Space. | "Data table, collapsed", then "expanded". | |
+| 9 | VO+Right until you reach the table. Then VO+Down, then VO+Right 3 times. | "Revenue by region, Q4 2026, against target, table, 4 columns, 6 rows" (in either order). Then "North", then each cell with its column header: "$4.6M, Revenue", "$4.4M, Target", "105%, Of target". | |
+| 10 | Tab until "Day 0: 2.0 cm, Drought, image". | With it, "Seedling height by day, drought against control, group". | |
+| 11 | Right arrow twice. | "Day 1: 2.7 cm, Drought, image", "Day 2: 3.5 cm, Drought, image": along the drought line, each once. | |
+| 12 | End. | "Day 12: 8.6 cm, Drought, image". **Nothing** of the red the line has there. | |
+| 13 | Up arrow. | "Day 12: 13.9 cm, Control (watered), image": the other group's point on the same day. | |
+| 14 | Left arrow 3 times. | "Day 11: 12.8 cm", "Day 10: 11.7 cm", "Day 9: 10.5 cm", each "Control (watered), image". | |
+| 15 | Down arrow. | "Day 9: 8.3 cm, Drought, image". | |
+| 16 | VO+Command+Shift+H, to "Seedling height under drought, heading level 2". Then VO+Right until "Data table". | The note, the legend ("Drought", "Control (watered)", "Drought below control"), the chart's name, and the points, each once with its day, height and group. **Never** an axis number or an end label ("8.6 cm") on its own. | |
+| 17 | Tab until "Show as bars, button". | The button. | |
+| 18 | Tab once, into the sessions chart. | "Search: 18,400 sessions, 45%, image", and "Sessions by source, share of total, group", perhaps with "41,000 sessions". | |
+| 19 | Right arrow twice. | "Direct: 9,200 sessions, 22%, image", "Social: 6,100 sessions, 15%, image": clockwise, each once. | |
+| 20 | Press V. | Nothing for about a second while the slices turn into bars. Then "Social: 6,100 sessions, image", and the announcement "Sessions by source, counts". The focus ring is on Social's bar. | |
+| 21 | Down arrow twice. | "Referral: 4,300 sessions, image", "Email: 3,000 sessions, image". | |
+| 22 | Press V. | About a second of nothing. Then "Email: 3,000 sessions, 7%, image", and one announcement, "Sessions by source, share of total". | |
+| 23 | Shift+Tab once, to the button, and press Space. | "Show as bars, button". About a second later, one announcement: "Sessions by source, counts". | |
+| 24 | Tab, then Shift+Tab. | "Email: 3,000 sessions, image", with "Sessions by source, counts, group": the tab stop followed the source. Then "Show as donut, button". | |
+| 25 | VO+Command+Shift+H, to "Sessions by source, heading level 2". Then VO+Right until "Data table". | The note, the button, the legend's five sources, the chart's name and its five bars, Search's to Email's, each once. **Never** a slice, "41,000" or a share: only the view on show is read. | |
+
+**Known, no need to report:** VoiceOver may read "$4.2M" as "4.2 M dollars" or "dollar 4.2 M". It may read a view's name twice after V. The donut's total, "41,000 sessions", is its group's description, so VoiceOver may read it after a pause, or only with VO+Shift+H.
 
 ## Re-check: each bar's description
 

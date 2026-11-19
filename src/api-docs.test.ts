@@ -1,8 +1,8 @@
 // @vitest-environment node
 // The API reference and README (M6 decision 5), checked against the package. docs/api.md has an
 // entry for every export of every entry, values and types, read from the entries themselves with
-// TypeScript's compiler API, and no entry for anything else; the entries it marks as under the 0.x
-// promise are CHANGELOG's. Every code example in README.md, and every example in docs/api.md (a
+// TypeScript's compiler API, and no entry for anything else; src/promise.test.ts names every one of
+// them, so a rename fails typecheck. Every code example in README.md, and every example in docs/api.md (a
 // block that imports the package), type-checks against the source with the repository's own
 // compiler options, the page's names they use declared in PAGE below. README's links are absolute,
 // since npm shows it away from the repository, and the links in both find their files and headings.
@@ -25,9 +25,6 @@ const REPOSITORY = "https://github.com/Deaversbp/expressive-charts";
 const RAW = "https://raw.githubusercontent.com/Deaversbp/expressive-charts/main";
 /** The demo site, which publishes demo/ (.github/workflows/pages.yml). */
 const SITE = "https://deaversbp.github.io/expressive-charts";
-
-/** The line in docs/api.md that marks an entry as under the 0.x promise. */
-const PROMISED = "*Under the 0.x promise.*";
 
 /**
  * The page's own names the examples use, declared rather than defined: its rows, its elements, its
@@ -269,8 +266,6 @@ interface Section {
   readonly names: Map<string, number>;
   /** Names documented twice. */
   readonly twice: string[];
-  /** Names whose entry says it's under the 0.x promise. */
-  readonly promised: Set<string>;
 }
 
 /**
@@ -288,7 +283,7 @@ function sectionsOf(text: string): Map<string, Section> {
     const heading = headings.get(i + 1);
     if (heading && heading.level <= 2) {
       const name = /^`([^`]+)`$/.exec(heading.text)?.[1];
-      section = name === undefined ? undefined : { names: new Map(), twice: [], promised: new Set() };
+      section = name === undefined ? undefined : { names: new Map(), twice: [] };
       if (name !== undefined && section) sections.set(name, section);
       entry = [];
     } else if (heading && section) {
@@ -297,20 +292,23 @@ function sectionsOf(text: string): Map<string, Section> {
         if (section.names.has(name)) section.twice.push(name);
         else section.names.set(name, heading.line);
       }
-    } else if (line.trim() === PROMISED && section) {
-      for (const name of entry) section.promised.add(name);
     }
   });
   return sections;
 }
 
-/** CHANGELOG's promised names, as src/promise.test.ts reads them, each member (`describe.bar`) as its export. */
-function promisedNames(changelog: string): string[] {
-  const start = changelog.indexOf("## The 0.x promise");
-  const end = changelog.indexOf("From 0.1.0:", start);
-  if (start < 0 || end < 0) throw new Error('CHANGELOG.md has no "## The 0.x promise" section ending at "From 0.1.0:".');
-  const spans = [...changelog.slice(start, end).matchAll(/`([^`]+)`/g)].map((match) => match[1]!);
-  return unique(spans.filter((span) => /^[A-Za-z]\w*(\.\w+)?$/.test(span)).map((span) => span.split(".")[0]!));
+/** The entries' names src/promise.test.ts lists: its `import type`s for the types, its `values` for the values. */
+function promiseNames(source: string): Map<string, string[]> {
+  const spec: Record<string, string> = { "./index": "expressive-charts", "./icons/sport": "expressive-charts/icons/sport", "./testing": "expressive-charts/testing" };
+  const namespace: Record<string, string> = { lib: "expressive-charts", sport: "expressive-charts/icons/sport", testing: "expressive-charts/testing" };
+  const names = new Map<string, string[]>(Object.values(spec).map((entry) => [entry, []]));
+  for (const match of source.matchAll(/^import type \{([^}]*)\} from "([^"]+)";\r?$/gm)) {
+    names.get(spec[match[2]!]!)!.push(...match[1]!.split(",").map((name) => name.trim()).filter(Boolean));
+  }
+  for (const match of source.matchAll(/^ {4}(\w+): (lib|sport|testing)\.(\w+),?\r?$/gm)) {
+    if (match[1] === match[3]) names.get(namespace[match[2]!]!)!.push(match[1]!);
+  }
+  return names;
 }
 
 const unique = (names: readonly string[]): string[] => [...new Set(names)].sort();
@@ -511,9 +509,9 @@ describe("docs/api.md", () => {
     expect(sections.get("expressive-charts/style.css")?.names.size, "style.css exports no names").toBe(0);
   });
 
-  it("marks exactly the names the 0.x promise covers", () => {
-    const marked = unique([...sectionsOf(api).values()].flatMap((section) => [...section.promised]));
-    expect(marked).toEqual(promisedNames(root.read("CHANGELOG.md")));
+  it("has every export named in src/promise.test.ts, which guards the promise", () => {
+    const listed = promiseNames(root.read("src/promise.test.ts"));
+    for (const [entry, exported] of compiled.exports) expect(unique(listed.get(entry) ?? []), entry).toEqual(unique(exported));
   });
 
   it("has examples that type-check against the package", () => {

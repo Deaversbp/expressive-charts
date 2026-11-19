@@ -15,7 +15,7 @@ Composable motion and expressive effects for web charts. Hover, update and morph
 
 Each picture plays once and stops where its effect ends. **[The demo site](https://deaversbp.github.io/expressive-charts/)** has every effect to try, on the library's charts and on D3, Vega-Lite and hand-written ones, with the motion modes and reduced motion.
 
-> **Status: 0.13.0 (November 2026).** The effect-author API is under [the 0.x promise](#the-0x-promise); the charts, adapters, built-in effects and motion core can still change in a minor release. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#0130-18-november-2026) lists what's new and what changed since 0.12.0.
+> **Status: 1.0.0 (November 2026).** The package follows semantic versioning: [the promise](#the-promise) says what it covers. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#100-19-november-2026) lists what changed since 0.13.0.
 
 - **Effects first.** The mark effects `travel`, `flash`, `wiggle`, `pulse`, `trace`, `drawIn`, `outline` and the data effects `threshold`, `delta` and `label`, put together with `sequence`, `parallel`, `only` and `stagger`, with `wait` to hold a part back; and the transition effect `morph`, which `chartSwitch` plays to turn each mark of one chart into its mark in the next (a transition can't go into a combinator). An effect reads only a shared description of the mark, so one effect works on every chart, and effects of your own work everywhere the built-in ones do.
 - **Charts and adapters.** Bar, donut and line charts, a switch that morphs one into another, adapters that bring the same effects to SVG marks drawn by other code, and hover linked across them.
@@ -34,7 +34,7 @@ On a page with no bundler, the script-tag bundle defines one global, `Expressive
 
 ```html
 <div id="traffic"></div>
-<script src="https://cdn.jsdelivr.net/npm/expressive-charts@0.13/dist/expressive-charts.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/expressive-charts@1/dist/expressive-charts.global.js"></script>
 <script>
   const { barChart } = ExpressiveCharts;
   barChart("#traffic", {
@@ -197,7 +197,7 @@ The package lists its CSS under `sideEffects`, so bundlers keep that import. Cha
 - **Motion.** Reduced motion jumps every animation to its end state unless the viewer picks a mode on the page, with `motionSwitch()`. Nothing plays by itself, and a playback has its pause control in `playButton()` (WCAG 2.2.2).
 - **Other people's charts.** `expressive()` adds the same keyboard focus with `keyboard: true`, and one name per mark with `markLabel`.
 
-The demo pages with the library's charts on them have had a written WCAG 2.2 AA audit ([a11y-audit.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-audit.md)), and the test suite runs axe's WCAG rules on every demo page in Chromium, Firefox and WebKit, in light and dark, at 320 px wide and under forced colours. Screen-reader scripts for NVDA and Chrome, with their results, are in [a11y-check.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-check.md#results). The tooltip can be hovered, and dismissed with Escape. Known gap: VoiceOver hasn't been run.
+The demo pages with the library's charts on them have had a written WCAG 2.2 AA audit ([a11y-audit.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-audit.md)), and the test suite runs axe's WCAG rules on every demo page in Chromium, Firefox and WebKit, in light and dark, at 320 px wide and under forced colours. Screen-reader scripts for NVDA and Chrome, and for VoiceOver and Safari, with their results, are in [a11y-check.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-check.md#results). The tooltip can be hovered, and dismissed with Escape. Known gap: VoiceOver has read a page of each kind, not every script, and hasn't been run on iOS.
 
 ## Limits
 
@@ -214,11 +214,9 @@ SVG charts stay smooth up to a few hundred moving marks. Measured on `demo/stres
 
 The first draw of 1,000 static bars takes about 90 ms, and of 10,000 about a second. [architecture.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/architecture.md#limits) has the method and the numbers.
 
-## The 0.x promise
+## The promise
 
-From 0.1.0 the library follows semantic versioning. While it's 0.x, the effect-author API (`defineEffect`, `defineDataEffect`, `describe`, `matrix`, `offset`, the effect contracts and `expressive-charts/testing`) breaks only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. The charts, adapters, built-in effects, controls and motion core can still change in a minor release, and [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#the-0x-promise) lists every change. [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) marks each promised name.
-
-From 1.0 the whole package will follow semantic versioning: every name it exports, their types, what docs/api.md says each does, and the `--ec-*` custom properties. It won't promise the `ec-*` class names, the elements a chart builds, exact pixels, default durations or the words of a default announcement. [What 1.0 will promise](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#what-10-will-promise) has the list.
+From 1.0 the whole package follows semantic versioning: every name it exports, their types, what [docs/api.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/api.md) says each does, and the `--ec-*` custom properties. A breaking change to any of them comes only in a major release, with a migration note. It doesn't promise the `ec-*` class names, the elements a chart builds, exact pixels, default durations or the words of a default announcement. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#the-promise) has the lists.
 
 ## Links
 

@@ -1,5 +1,6 @@
 // What 0.13.0 changed on the way to 1.0, as a page writes it: motionSwitch()'s options, the order of
-// geometry's arguments, and an icon with square caps and bevel joins.
+// geometry's arguments, and an icon with square caps and bevel joins. 1.0 took out the old
+// motionSwitch() form, which 0.13.0 deprecated.
 import { createMotion, defineIcon, describe, expressive, motionSwitch, travel, type IconShape, type MotionSwitch, type Paint } from "expressive-charts";
 import type { Selection } from "./d3-shim";
 
@@ -11,10 +12,13 @@ motionSwitch("#motion"); // the page-wide motion
 motionSwitch("#motion", { persist: "site:motion" }); // no `undefined` to step over
 motionSwitch("#dashboard-motion", { motion: own, label: "Dashboard motion" });
 
-// The form before 0.13.0 still compiles and still works, marked @deprecated (an editor strikes it
-// through). 1.0 takes it out.
+// The form before 0.13.0, which 0.13.0 deprecated and 1.0 took out: a page in TypeScript gets these
+// errors to fix, and one in JavaScript a TypeError that names the form to write.
+// @ts-expect-error a Motion second: write motionSwitch("#motion", { motion: own, persist: "site:motion" })
 const before: MotionSwitch = motionSwitch("#motion", own, { persist: "site:motion" });
+// @ts-expect-error a Motion second: write motionSwitch("#motion", { motion: own })
 motionSwitch("#motion", own);
+// @ts-expect-error options third: write motionSwitch("#motion", { persist: "site:motion" })
 motionSwitch("#motion", undefined, { persist: "site:motion" });
 before.destroy();
 

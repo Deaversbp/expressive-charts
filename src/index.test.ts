@@ -1,4 +1,4 @@
-import { barChart, colorAssignment, createMotion, donutChart, expressive, motion, motionSwitch, playback, playButton, registerPreset, travel, type Motion, type MotionSwitchOptions } from "./index";
+import { barChart, colorAssignment, createMotion, donutChart, expressive, motion, motionSwitch, playback, playButton, registerPreset, travel, type Motion, type MotionSwitch, type MotionSwitchOptions } from "./index";
 
 // VERSION is checked against package.json's version in package.test.ts.
 describe("expressive-charts", () => {
@@ -123,8 +123,14 @@ describe("motionSwitch from the composition root", () => {
     make(target);
     return hash(target.innerHTML.replace(/ec-motion-\d+/g, "ec-motion"));
   };
-  /** What main (3720f29) built for `(target)`, `(target, motion)`, `(target, motion, options)` and `(target, undefined, options)`. */
+  /**
+   * What main (3720f29, 0.12.0's code) built for `(target)`, `(target, motion)`, `(target, motion, options)` and
+   * `(target, undefined, options)`. The forms that stay build the same.
+   */
   const MAIN = { page: "b534721dbb978f8f", own: "98ed2bdc7279eb5e", ownWithOptions: "80bdc1a04b47d514", pageWithOptions: "8c18845665367f51" };
+  /** `motionSwitch` as a page in JavaScript calls it, with any arguments. */
+  const untyped = motionSwitch as unknown as (...args: unknown[]) => MotionSwitch;
+  const removed = /^Since 1\.0 motionSwitch takes \(target, options\), with the motion among the options: motionSwitch\(target, \{ motion, \.\.\.options \}\)\.$/;
 
   it("takes its options second, the motion among them, and builds what main built", () => {
     expect(built((target) => motionSwitch(target))).toBe(MAIN.page);
@@ -136,36 +142,43 @@ describe("motionSwitch from the composition root", () => {
     expect(built((target) => motionSwitch(target, { ...more, motion: undefined }))).toBe(MAIN.pageWithOptions);
   });
 
-  it("still takes the form before 0.13.0, a motion second and options third, and builds the same", () => {
-    expect(built((target) => motionSwitch(target, own()))).toBe(MAIN.own);
-    expect(built((target) => motionSwitch(target, own(), more))).toBe(MAIN.ownWithOptions);
-    expect(built((target) => motionSwitch(target, undefined, more))).toBe(MAIN.pageWithOptions);
-    expect(built((target) => motionSwitch(target, motion))).toBe(MAIN.page);
-    // The second argument is the old form's motion, over one among its options.
-    expect(built((target) => motionSwitch(target, own(), { ...more, motion }))).toBe(MAIN.ownWithOptions);
-    expect(built((target) => motionSwitch(target, undefined, { ...more, motion: own() }))).toBe(MAIN.ownWithOptions);
-  });
-
-  it("sets the motion it was given, in either form, and leaves the page-wide one alone", () => {
-    for (const make of [(target: Element, mine: Motion) => motionSwitch(target, { motion: mine }), (target: Element, mine: Motion) => motionSwitch(target, mine)]) {
-      const mine = own();
-      const control = make(document.body.appendChild(document.createElement("div")), mine);
-      control.element.querySelector<HTMLButtonElement>('button[data-mode="off"]')!.click();
-      expect(mine.viewerChoice).toBe("off");
-      expect(motion.viewerChoice).toBeUndefined();
-      control.destroy();
+  it("throws a TypeError naming the new form for the form 1.0 took out, a motion second or options third, building nothing", () => {
+    const target = document.body.appendChild(document.createElement("div"));
+    const calls: unknown[][] = [
+      [own()],
+      [own(), more],
+      [undefined, more],
+      [motion],
+      [own(), { ...more, motion }],
+      [undefined, { ...more, motion: own() }],
+      [{}, more],
+      [{ chooseMode: 1 }]
+    ];
+    for (const args of calls) {
+      expect(() => untyped(target, ...args)).toThrow(TypeError);
+      expect(() => untyped(target, ...args)).toThrow(removed);
     }
+    expect(target.childElementCount).toBe(0);
+    // A third argument that's undefined is no third argument.
+    expect(built((target) => untyped(target, more, undefined))).toBe(MAIN.pageWithOptions);
   });
 
-  it("throws a TypeError for a second argument that is neither options nor a motion, and for a motion that isn't one", () => {
+  it("sets the motion among its options, and leaves the page-wide one alone", () => {
+    const mine = own();
+    const control = motionSwitch(document.body.appendChild(document.createElement("div")), { motion: mine });
+    control.element.querySelector<HTMLButtonElement>('button[data-mode="off"]')!.click();
+    expect(mine.viewerChoice).toBe("off");
+    expect(motion.viewerChoice).toBeUndefined();
+    control.destroy();
+  });
+
+  it("throws a TypeError for options that aren't an object, and for a motion that isn't one", () => {
     const target = document.body.appendChild(document.createElement("div"));
     for (const second of [42, "analysis", null, true]) {
-      expect(() => motionSwitch(target, second as unknown as Motion)).toThrow(TypeError);
-      expect(() => motionSwitch(target, second as unknown as Motion)).toThrow(/needs a Motion/);
+      expect(() => untyped(target, second)).toThrow(TypeError);
+      expect(() => untyped(target, second)).toThrow(/^motionSwitch: options must be an object, got (number|string|null|boolean)\.$/);
     }
     expect(() => motionSwitch(target, { motion: {} as Motion })).toThrow(/needs a Motion/);
-    expect(() => motionSwitch(target, { chooseMode: 1 } as unknown as Motion)).toThrow(/needs a Motion/);
-    expect(() => motionSwitch(target, {} as Motion, more)).toThrow(/needs a Motion/);
     expect(() => motionSwitch(target, { persist: "" })).toThrow(/persist/);
     expect(target.childElementCount).toBe(0);
   });

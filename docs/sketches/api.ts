@@ -167,7 +167,7 @@ export interface ChartOptions<D> extends BuiltChartOptions<D> {}
 // motionSwitch, the Presentation / Analysis / Off control, is built (src/charts/controls). Changed
 // from the sketch: it takes options ({ persist }) and returns a MotionSwitch.
 // CHANGED in M18 step 2, for 0.13.0: motionSwitch(target, options?), with the motion among the options;
-// the form before it, (target, motion?, options?), is a second overload marked @deprecated, and goes
-// in 1.0. expressive()'s geometry takes (datum, element, key), as its other callbacks take the row
+// the form before it, (target, motion?, options?), was a second overload marked @deprecated. REMOVED
+// in M19 step 3, for 1.0: it throws a TypeError naming the new form. expressive()'s geometry takes (datum, element, key), as its other callbacks take the row
 // first. IconShape's linecap gains "square" and its linejoin "bevel", and Paint's linecap "square"
 // (examples/08-shaped-for-1-0.ts has all three).

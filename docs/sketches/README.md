@@ -15,7 +15,7 @@ Pages written against the library's public API, the code a user would write. The
 | `examples/06-custom-effects.ts` | Two effects written outside the project, `trace` and `delta`, on a bar chart and on another library's bars, with the row-type checks and `checkEffect`. |
 | `examples/effects/` | `trace.ts` and `delta.ts` themselves: the worked examples in [effects-guide.md](../effects-guide.md), which `src/effects-guide.test.ts` also runs through `checkEffect`. |
 | `examples/07-presets.ts` | One-line presets and a registered house style. |
-| `examples/08-shaped-for-1-0.ts` | What 0.13.0 changed on the way to 1.0: `motionSwitch()`'s options and its deprecated form, the order of `geometry`'s arguments, and an icon with square caps and bevel joins. |
+| `examples/08-shaped-for-1-0.ts` | What 0.13.0 changed on the way to 1.0: `motionSwitch()`'s options, and its old form, deprecated then and taken out in 1.0, the order of `geometry`'s arguments, and an icon with square caps and bevel joins. |
 
 `npm run typecheck` compiles this folder (`tsc -p docs/sketches`). Every `// @ts-expect-error` line is a misuse the API must reject; if one stops failing, the API got looser.
 

@@ -1,133 +1,156 @@
 // @vitest-environment node
-// The 0.x promise (CHANGELOG.md): every name it covers is named here, values and types, so a rename or
-// a removal fails `npm run typecheck`. The test below keeps this list and CHANGELOG's the same.
+// The promise (CHANGELOG.md): from 1.0, every name the package's entries export, values and types. Each is named here,
+// so a rename or a removal fails `npm run typecheck`: the types by the imports below, the values by the lists after
+// them. So are the members of the objects api.md documents member by member. src/api-docs.test.ts checks that the
+// type imports are every type each entry exports, read with TypeScript's compiler API; the tests below check the
+// values against what each entry exports when it runs, and CHANGELOG's promise against the entries.
+
+import type {
+  Accessor, AnimateOptions, Animated, AnimatedOptions, AnyMarkEffect, ArcSpec, Attachment, BarChart,
+  BarChartOptions, BarSegmentSpec, BarSpec, Baseline, Chart, ChartChange, ChartLabel, ChartOptions, ChartSwitch,
+  ChartSwitchGuide, ChartSwitchOptions, ChartSwitchPaint, ChartSwitchShowOptions, ChartSwitchView,
+  ChartSwitchViewFactory, ChartSwitchViewName, ChartSwitchViews, Clock, Color, ColorAssignment, Combined,
+  DataEffect, DataEffectSpec, DeltaOptions, DonutChart, DonutChartOptions, DrawInOptions, Easing, EffectContext,
+  EffectOption, EffectSlot, EffectSlots, ExpressiveOptions, FlashOptions, FrameSource, Gait, GaitName, GaitPose,
+  GaitState, GeometryEffect, GeometryEffectSpec, HostGuide, HostLabel, HostMark, HostView, HostViewOptions, Icon,
+  IconHandle, IconShape, IconSource, IconSpec, Interpolator, KeyOfType, LabelOptions, Layer, LegendEntry,
+  LegendOptions, LineChart, LineChartOptions, LineSpec, Link, LinkOptions, LinkSource, ManualClock, MarkData,
+  MarkEffect, MarkEvent, MarkEvents, MarkGeometry, MarkHandle, MarkSource, MarkStyle, MarkSummary, Matrix,
+  MorphAlign, MorphOptions, Motion, MotionEnv, MotionMode, MotionOptions, MotionSwitch, MotionSwitchOptions,
+  MotionView, NumericKey, Outline, OutlineOptions, Paint, PathHandle, PlayButton, PlayButtonOptions, Playback,
+  PlaybackEvent, PlaybackOptions, Point, PointSpec, PresetName, PulseOptions, Rect, ReducedMotionSource, Sample,
+  SamplePoint, ScalingOverrides, ScalingRule, ScalingTable, SeekOptions, ShapeSpec, SliceSummary, StaggerOptions,
+  StepOptions, StyleOptions, SvgIconSpec, TableColumn, TableOptions, TextHandle, TextSpace, TextStyle,
+  ThresholdOptions, Timing, TraceOptions, TransitionContext, TransitionEffect, TravelOptions, Tween, TweenOptions,
+  TweenResult, VegaAttachment, VegaItem, VegaMark, VegaOptions, VegaSample, VegaViewLike, WiggleOptions
+} from "./index";
+import type {
+  CheckEffectOptions, CheckTransitionOptions, Drawn, DrawnIcon, DrawnPath, DrawnText, FixtureName, FixturePairName,
+  LayerCall, MarkCall, Picture, PlayOptions, RecordingLayer, RecordingMark, TestContext, TestContextOptions
+} from "./testing";
 
 import * as lib from "./index";
+import * as sport from "./icons/sport";
 import * as testing from "./testing";
 
-/** Stands for a type in the lists below: its type argument has to exist, or typecheck fails. */
-const type = <T>(): T | undefined => undefined;
+/** Every value each entry exports, by the name a page imports it from. */
+const values: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+  "expressive-charts": {
+    VERSION: lib.VERSION,
+    animated: lib.animated,
+    barChart: lib.barChart,
+    chartSwitch: lib.chartSwitch,
+    colorAssignment: lib.colorAssignment,
+    configure: lib.configure,
+    createClock: lib.createClock,
+    createMotion: lib.createMotion,
+    defaultClock: lib.defaultClock,
+    defaultScaling: lib.defaultScaling,
+    defineDataEffect: lib.defineDataEffect,
+    defineEffect: lib.defineEffect,
+    defineIcon: lib.defineIcon,
+    delta: lib.delta,
+    describe: lib.describe,
+    donutChart: lib.donutChart,
+    drawIn: lib.drawIn,
+    easeInOutCubic: lib.easeInOutCubic,
+    easeOutCubic: lib.easeOutCubic,
+    expressive: lib.expressive,
+    flash: lib.flash,
+    fromVegaView: lib.fromVegaView,
+    gaits: lib.gaits,
+    hostView: lib.hostView,
+    iconFromSvg: lib.iconFromSvg,
+    icons: lib.icons,
+    interpolateNumber: lib.interpolateNumber,
+    interpolatePoint: lib.interpolatePoint,
+    interpolateRecord: lib.interpolateRecord,
+    label: lib.label,
+    lineChart: lib.lineChart,
+    linear: lib.linear,
+    link: lib.link,
+    manualClock: lib.manualClock,
+    matrix: lib.matrix,
+    mediaReducedMotion: lib.mediaReducedMotion,
+    morph: lib.morph,
+    motion: lib.motion,
+    motionSwitch: lib.motionSwitch,
+    offset: lib.offset,
+    only: lib.only,
+    outline: lib.outline,
+    parallel: lib.parallel,
+    playButton: lib.playButton,
+    playback: lib.playback,
+    pulse: lib.pulse,
+    registerIcon: lib.registerIcon,
+    registerIcons: lib.registerIcons,
+    registerPreset: lib.registerPreset,
+    samplesAlong: lib.samplesAlong,
+    scaleDuration: lib.scaleDuration,
+    sequence: lib.sequence,
+    stagger: lib.stagger,
+    threshold: lib.threshold,
+    trace: lib.trace,
+    travel: lib.travel,
+    tween: lib.tween,
+    wait: lib.wait,
+    wiggle: lib.wiggle
+  },
+  "expressive-charts/icons/sport": {
+    cleat: sport.cleat,
+    soccerBall: sport.soccerBall,
+    sport: sport.sport
+  },
+  "expressive-charts/testing": {
+    checkEffect: testing.checkEffect,
+    checkTransition: testing.checkTransition,
+    fixturePairs: testing.fixturePairs,
+    fixtures: testing.fixtures,
+    play: testing.play,
+    testContext: testing.testContext
+  }
+};
 
-/**
- * The promised values, by the names CHANGELOG gives them: `describe`'s members one by one, `matrix`
- * as a whole. So `matrix` stands for all of its members, which are each named here.
- */
-const values = {
-  defineEffect: lib.defineEffect,
-  defineDataEffect: lib.defineDataEffect,
+/** The modules themselves, as a page loads them. */
+const modules: Readonly<Record<string, object>> = { "expressive-charts": lib, "expressive-charts/icons/sport": sport, "expressive-charts/testing": testing };
+
+/** The members api.md documents one by one, each a name a page writes (`describe.bar`). */
+const members = {
+  describe: [lib.describe.bar, lib.describe.arc, lib.describe.line, lib.describe.point, lib.describe.shape],
   matrix: [lib.matrix.translate, lib.matrix.rotate, lib.matrix.scale, lib.matrix.multiply, lib.matrix.apply],
-  offset: lib.offset,
-  "describe.bar": lib.describe.bar,
-  "describe.arc": lib.describe.arc,
-  "describe.line": lib.describe.line,
-  "describe.point": lib.describe.point,
-  "describe.shape": lib.describe.shape,
-  checkEffect: testing.checkEffect,
-  checkTransition: testing.checkTransition,
-  fixtures: testing.fixtures,
-  fixturePairs: testing.fixturePairs,
-  testContext: testing.testContext,
-  play: testing.play
+  gaits: [lib.gaits.roll, lib.gaits.step, lib.gaits.slide],
+  icons: [lib.icons.dot, lib.icons.arrow, lib.icons.chevron]
 };
 
-/** The promised types, in CHANGELOG's order. */
-const types = {
-  GeometryEffectSpec: type<lib.GeometryEffectSpec>(),
-  DataEffectSpec: type<lib.DataEffectSpec<unknown>>(),
-  BarSpec: type<lib.BarSpec>(),
-  BarSegmentSpec: type<lib.BarSegmentSpec>(),
-  Baseline: type<lib.Baseline>(),
-  ArcSpec: type<lib.ArcSpec>(),
-  LineSpec: type<lib.LineSpec>(),
-  PointSpec: type<lib.PointSpec>(),
-  ShapeSpec: type<lib.ShapeSpec>(),
-
-  GeometryEffect: type<lib.GeometryEffect>(),
-  DataEffect: type<lib.DataEffect>(),
-  TransitionEffect: type<lib.TransitionEffect>(),
-  MarkEffect: type<lib.MarkEffect>(),
-  AnyMarkEffect: type<lib.AnyMarkEffect>(),
-  Combined: type<lib.Combined<[lib.GeometryEffect]>>(),
-  EffectContext: type<lib.EffectContext>(),
-  TransitionContext: type<lib.TransitionContext>(),
-  TextSpace: type<lib.TextSpace>(),
-  MarkGeometry: type<lib.MarkGeometry>(),
-  Outline: type<lib.Outline>(),
-  Point: type<lib.Point>(),
-  Rect: type<lib.Rect>(),
-  MarkData: type<lib.MarkData>(),
-  Sample: type<lib.Sample>(),
-  Layer: type<lib.Layer>(),
-  MarkHandle: type<lib.MarkHandle>(),
-  MarkStyle: type<lib.MarkStyle>(),
-  Matrix: type<lib.Matrix>(),
-  Paint: type<lib.Paint>(),
-  TextStyle: type<lib.TextStyle>(),
-  Color: type<lib.Color>(),
-  IconHandle: type<lib.IconHandle>(),
-  PathHandle: type<lib.PathHandle>(),
-  TextHandle: type<lib.TextHandle>(),
-  Icon: type<lib.Icon>(),
-  IconShape: type<lib.IconShape>(),
-  IconSource: type<lib.IconSource>(),
-
-  MotionView: type<lib.MotionView>(),
-  MotionMode: type<lib.MotionMode>(),
-  Timing: type<lib.Timing>(),
-  Tween: type<lib.Tween>(),
-  TweenOptions: type<lib.TweenOptions>(),
-  TweenResult: type<lib.TweenResult>(),
-  Easing: type<lib.Easing>(),
-
-  CheckEffectOptions: type<testing.CheckEffectOptions>(),
-  CheckTransitionOptions: type<testing.CheckTransitionOptions>(),
-  TestContextOptions: type<testing.TestContextOptions>(),
-  PlayOptions: type<testing.PlayOptions>(),
-  FixtureName: type<testing.FixtureName>(),
-  FixturePairName: type<testing.FixturePairName>(),
-  TestContext: type<testing.TestContext>(),
-  RecordingLayer: type<testing.RecordingLayer>(),
-  RecordingMark: type<testing.RecordingMark>(),
-  Drawn: type<testing.Drawn>(),
-  DrawnIcon: type<testing.DrawnIcon>(),
-  DrawnPath: type<testing.DrawnPath>(),
-  DrawnText: type<testing.DrawnText>(),
-  LayerCall: type<testing.LayerCall>(),
-  MarkCall: type<testing.MarkCall>(),
-  Picture: type<testing.Picture>(),
-  Motion: type<lib.Motion>(),
-  Clock: type<lib.Clock>(),
-  ManualClock: type<lib.ManualClock>(),
-  ScalingOverrides: type<lib.ScalingOverrides>(),
-  ScalingRule: type<lib.ScalingRule>()
-};
-
-async function readChangelog(): Promise<string> {
+async function read(path: string): Promise<string> {
   // Node APIs aren't typed in this repo (the library never runs Node code), so the one used is typed here.
   const fs = (await import("node:fs/promises" as string)) as { readFile(path: URL, encoding: "utf8"): Promise<string> };
-  return fs.readFile(new URL("../CHANGELOG.md", import.meta.url), "utf8");
+  return (await fs.readFile(new URL(path, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 }
 
-/** The names in the promise's lists, as written: each `code` span that's a name (`describe.bar` too), up to "From 0.1.0:". */
-function promisedNames(changelog: string): string[] {
-  const start = changelog.indexOf("## The 0.x promise");
-  const end = changelog.indexOf("From 0.1.0:", start);
-  if (start < 0 || end < 0) throw new Error('CHANGELOG.md has no "## The 0.x promise" section ending at "From 0.1.0:".');
-  const spans = [...changelog.slice(start, end).matchAll(/`([^`]+)`/g)].map((match) => match[1]!);
-  return unique(spans.filter((span) => /^[A-Za-z]\w*(\.\w+)?$/.test(span)));
-}
-
-const unique = (names: readonly string[]): string[] => [...new Set(names)].sort();
-
-describe("the 0.x promise", () => {
-  it("exports every promised value", () => {
-    for (const [name, value] of Object.entries(values)) {
-      for (const part of [value].flat()) expect(["function", "object"], name).toContain(typeof part);
+describe("the promise", () => {
+  it("names every value each entry exports, and nothing else", () => {
+    for (const [entry, module] of Object.entries(modules)) {
+      expect(Object.keys(values[entry]!).sort(), entry).toEqual(Object.keys(module).filter((name) => name !== "default").sort());
+      for (const [name, value] of Object.entries(values[entry]!)) expect(value, `${entry}: ${name}`).toBe((module as Record<string, unknown>)[name]);
     }
   });
 
-  it("names the same values and types as CHANGELOG.md", async () => {
-    const names = promisedNames(await readChangelog());
-    expect(names).toEqual(unique([...Object.keys(values), ...Object.keys(types)]));
+  it("names every member api.md documents one by one, and they're all there", () => {
+    for (const [name, list] of Object.entries(members)) {
+      for (const member of list) expect(["function", "object"], name).toContain(typeof member);
+      expect(list, name).toHaveLength(Object.keys(lib[name as keyof typeof members]).length);
+    }
+  });
+
+  it("is CHANGELOG's: the whole package, its three entries and the stylesheet's", async () => {
+    const changelog = await read("../CHANGELOG.md");
+    const start = changelog.indexOf("\n## The promise\n");
+    const end = changelog.indexOf("\n## ", start + 1);
+    expect(start, 'CHANGELOG.md has a "## The promise" section').toBeGreaterThan(0);
+    const promise = changelog.slice(start, end);
+    for (const entry of [...Object.keys(modules), "expressive-charts/style.css"]) expect(promise).toContain(`\`${entry}\``);
+    expect(promise).toMatch(/A breaking change to anything promised below comes only in a major release, with a migration note/);
+    expect(changelog).not.toMatch(/## The 0\.x promise|### What 1\.0 will promise/);
   });
 });

@@ -30,7 +30,7 @@ Additions can come in any minor release: a new export, a new optional field or o
 
 ## 1.0.0 (19 November 2026)
 
-The first stable release. From 1.0 the whole package follows semantic versioning: every name it exports, their types, what docs/api.md says each does, and the `--ec-*` custom properties, as [the promise](#the-promise) above says. One form is taken out, as 0.13.0 said it would be: `motionSwitch(target, motion, options)`, which 0.13.0 deprecated. Write `motionSwitch(target, { motion, ...options })` instead. Nothing else changes, so a page that runs on 0.13.0 without that form runs on 1.0.0 as it did.
+The first stable release. From 1.0 the whole package follows semantic versioning: every name it exports, their types, what docs/api.md says each does, and the `--ec-*` custom properties, as [the promise](#the-promise) above says. One form is taken out, as 0.13.0 said it would be: `motionSwitch(target, motion, options)`, which 0.13.0 deprecated. Write `motionSwitch(target, { motion, ...options })` instead. Nothing else changes, so a page that runs on 0.13.0 without that form runs on 1.0.0 as it did. Before the release, VoiceOver and Safari read a page of each kind, and every step passed ([a11y-check.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/a11y-check.md#results)).
 
 ### Removed
 

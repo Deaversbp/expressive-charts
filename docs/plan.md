@@ -2,7 +2,7 @@
 
 > **This is the project's development log.** It's the plan the library was built from, milestone by milestone, with each decision and the reasons for it, written to the maintainer as the work went along. To use the library, start with [the README](../README.md) and [the API reference](api.md); [architecture.md](architecture.md) explains how it works.
 
-Status: M1 to M18 are complete (§9). M18 shaped the API for 1.0: square caps and bevel joins, one argument order for `expressive()`'s `geometry`, `motionSwitch()`'s options, with its old form deprecated, and what 1.0 will promise; it added `labelBounds` on `expressive()`, `outline()` and `wait()`, and a refresh that keeps a hover's effects; it fixed text spacing in Safari; and it gave the docs, and a new page, `examples.html`, examples for general use. **0.13.0, the last 0.x, is on npm**, published from CI through npm's trusted publishing with provenance on 18 November 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.13.0)), after 0.12.0 on 16 November, 0.11.0 on 12 November, 0.10.0 on 11 November, 0.9.0 on 3 November, 0.8.0 on 2 November, 0.7.0 on 1 November, 0.6.0 on 30 October, 0.5.0 on 29 October, 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. **1.0 is M19,** not yet planned: it takes out what 0.13.0 deprecates and changes nothing else, and VoiceOver + Safari is run before it (M18 decisions 1 and 18). Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
+Status: M1 to M18 are complete (§9). M18 shaped the API for 1.0: square caps and bevel joins, one argument order for `expressive()`'s `geometry`, `motionSwitch()`'s options, with its old form deprecated, and what 1.0 will promise; it added `labelBounds` on `expressive()`, `outline()` and `wait()`, and a refresh that keeps a hover's effects; it fixed text spacing in Safari; and it gave the docs, and a new page, `examples.html`, examples for general use. **0.13.0, the last 0.x, is on npm**, published from CI through npm's trusted publishing with provenance on 18 November 2026 ([npm](https://www.npmjs.com/package/expressive-charts), [the release](https://github.com/Deaversbp/expressive-charts/releases/tag/v0.13.0)), after 0.12.0 on 16 November, 0.11.0 on 12 November, 0.10.0 on 11 November, 0.9.0 on 3 November, 0.8.0 on 2 November, 0.7.0 on 1 November, 0.6.0 on 30 October, 0.5.0 on 29 October, 0.4.0 and 0.3.0 on 27 October, 0.2.0 on 26 October and 0.1.0 on 24 October. **1.0 is M19,** planned on 19 November 2026 (§9): it takes out what 0.13.0 deprecates and changes nothing else, puts the promise in force, and has VoiceOver + Safari run first on a page of each kind (M18 decisions 1 and 18). Its demo pages are at [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/). Every section of [a11y-check.md](a11y-check.md) has passed with NVDA + Chrome; VoiceOver + Safari, and what comes next, are in the backlog at the end of §9. Sections that are built say so and point to [architecture.md](architecture.md). When a section turns into code, move what's final into architecture.md and the README, and mark the section here as done.
 
 The goal for v0.1 is expressive motion that works on any SVG chart. We prove it two ways: by rebuilding everything in [`demo/lab.html`](../demo/lab.html) on our reference charts (ball-and-cleat bars, the goals vs xG line, the donut-to-bars morph), and by running the same effects on a chart we didn't build. All of it runs through one motion core, one mark contract and one effect interface. The first milestone is the bar chart and a plain-SVG bar adapter, both with the `travel` effect.
 
@@ -6066,6 +6066,141 @@ Each wave names the files it owns. Waves 1 and 2 run one after the other; wave 3
 - **0.13.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M18 is done, and that 1.0 is M19.
 
 **Status: complete (18 November 2026).** Every item on the list holds. Three things differ from the decisions by your choice: the demo pages' notes were reworded to say the outline and the wait are built in, with nine full-page baselines made again, shown to you first (step 4); `examples.html`'s target is text, since `barChart` has no target marker (step 6); and CHANGELOG's entry puts `geometry`'s order first, as decision 6 says, where step 7 listed the caps and joins first (step 7). The steps' own are in each Built list: among them, `geometry`'s error names the new order whenever the function throws, and `motionSwitch(target, {})` is a switch with no options (step 2); `fromVegaView()` applies `labelBounds` itself, since it describes its marks with `geometry` (step 4); the letter spacing is added between characters, one fewer than "a character", to match WebKit's own box, and the spacing check runs in all three browsers (step 5); short labels where an examples card is narrow (step 6); and the release PR left this plan to the docs-only one, and the release was created before main's visual jobs on the merge had finished, since its PR's run of the same tree had passed them (step 7). Steps 1 to 6 built and checked the first eleven items and their docs, script S passed with NVDA + Chrome, and step 7 published 0.13.0 to npm through trusted publishing with provenance, with its release on GitHub. 1.0 is M19.
+
+### M19: 1.0: the deprecated form taken out, the promise in force, and VoiceOver + Safari on a page of each kind (1.0.0)
+
+The first stable release. 1.0 takes out what 0.13.0 deprecates, `motionSwitch()`'s three-argument form, and changes nothing else (M18 decision 1). CHANGELOG's "What 1.0 will promise" becomes what 1.0 promises. Before the release, VoiceOver + Safari is run on six of a11y-check.md's sections, one page of each kind (M18 decision 18). Last, 1.0.0 on npm.
+
+**Demo:** nothing new. Every page draws and reads as it does on 0.13.0, since no page calls the old form.
+
+**Where M19 starts** (checked against main at `a134395` while planning, 19 November 2026):
+
+- **Already built.**
+  - **0.13.0** is npm's `latest`, published through trusted publishing with provenance. GitHub has no open issues or pull requests. Main is 0.13.0's code, with M18 marked complete; its CI and Pages are green on `a134395`.
+  - **What 0.13.0 deprecates:** one form, `motionSwitch(target, motion, options?)`. It's the second overload of `motionSwitch()` in `src/index.ts` (line 167), marked `@deprecated`, and the root tells it apart by a `Motion` second argument (it has `chooseMode`) or a third argument. Its tests are in `src/charts/controls/motion-switch.test.ts` and `src/index.test.ts`, and `src/package.test.ts` reads its `@deprecated` tag ("motionSwitch's deprecated form"). Its docs are api.md's `motionSwitch()`, architecture.md's motion switch, `docs/sketches/api.ts`, the old calls in `docs/sketches/examples/08-shaped-for-1-0.ts` (lines 14 to 19) and the sketches' README, and CHANGELOG 0.13.0's Deprecated. No demo page calls it: every page calls `motionSwitch("#motion")`.
+  - **The promise's text.** CHANGELOG has "What 1.0 will promise" under "The 0.x promise". README's status line says the effect-author API is under the 0.x promise, and its "The 0.x promise" section ends with a paragraph on 1.0. api.md marks 77 entries *Under the 0.x promise.* `src/promise.test.ts` names the effect-author API's values and types and checks them against CHANGELOG's list; `src/api-docs.test.ts` and `src/package.test.ts` read the 0.x words too. README links to `#the-0x-promise` and `#what-10-will-promise`, and so does CHANGELOG's 0.13.0 entry.
+  - **The script tag** is `expressive-charts@0.13`, in README and api.md.
+  - **VoiceOver + Safari.** a11y-check.md has VoiceOver steps for sections B and C only; D to S are NVDA's alone. Section B was used once, in part, to hear "1 goal" (October 2026). No section has had a full VoiceOver run, and a11y-audit.md says so. The deployed site, [deaversbp.github.io/expressive-charts](https://deaversbp.github.io/expressive-charts/), serves main's code.
+  - **The build.** tsdown 0.23.7, with rolldown 1.3.2 and rolldown-plugin-dts 0.30.2; vite 8.3.8; vitest 5.1.0, jsdom 31.0.1, Playwright 1.65.0 and axe-core 4.14.1; TypeScript 7.0.2 runs `typecheck`. This machine has Node 24.22.2.
+  - **npm on 19 November.** vitest 5.1.1, rolldown 1.3.3 and Playwright 1.65.1 are out. TypeScript 7.1 is still a beta (7.1.0-beta, and nightly 7.1.0-dev builds), and so is `get-tsconfig` 5 (5.0.0-beta.6). jsdom, axe-core, vite, tsdown, rolldown-plugin-dts, the D3 packages, Plot, Vega and Vega-Lite have nothing newer.
+  - **Sizes** (gzip, built on `a134395`, against their budgets), as 0.13.0's dry run had them: the stylesheet 2.4 of 2.5 KB, `motion` and `animated` 1.7 of 2, `describe` and `matrix` 6.6 of 7.5, `expressive` and `travel` 35.0 of 37.5, `barChart` 32.1 of 34, the line page's set 42.8 of 45.5, the switch's set 48.8 of 50, `chartSwitch`, `expressive` and `hostView` 44.7 of 45.5, everything 92.6 of 95, the script-tag bundle 92.2 of 98, `dist/index.cjs` 130.8 of 137, `dist/index.js` 132.8 of 137, `dist/testing.js` 23.5 of 24.5 and `dist/testing.cjs` 17.3 of 19. The size check passes, 16 rows.
+  - **The tests,** as 0.13.0's dry run counted them: 3,577 unit tests. The visual suite is 480 tests a browser, with 220 baselines, all Chromium's.
+- **Gaps.**
+  - The deprecated form is still there.
+  - The promise is in the future tense, and api.md's 77 marks will mean nothing once everything is promised.
+  - No section has had a full VoiceOver + Safari run, and D to S have no VoiceOver steps.
+- **What planning found to plan round.**
+  - **A JavaScript page that still passes the old form** would, once the overload is gone, have its `Motion` read as options. A `Motion` has none of the options' fields, so the switch would show the page-wide motion and say nothing. So 1.0 throws instead (decision 6).
+  - **The VoiceOver run needs a Mac,** and this project's machine is Windows. Nothing a page runs changes in 1.0, so you run it on the deployed site, which needs no install, and it can run beside the code steps.
+  - **A renamed heading breaks links:** README's two and CHANGELOG 0.13.0's go to `#the-0x-promise` and `#what-10-will-promise`.
+  - **Not measured:** anything VoiceOver says.
+- **Out of date:** nothing found.
+
+**What M19 takes from the backlog and the notes, and what stays:**
+
+| Item | Goes to |
+| --- | --- |
+| Taking out `motionSwitch()`'s old form (M18 decision 7) | Decision 6, step 3 |
+| "What 1.0 will promise" in force (M18 decision 24) | Decision 7, step 4 |
+| The budgets looked at once more before 1.0 (M18 decision 31) | Decision 8, step 5 |
+| VoiceOver + Safari (M18 decision 18; the backlog, M6 decision 2) | Decisions 1–3 and 5, steps 1 and 2: sections B, D, E, F, P and S |
+| VoiceOver on the other thirteen sections, A, C, G to O, Q and R | Stays: your choice in planning (decision 2). In the backlog |
+| What VoiceOver finds that needs no API change | Stays: your choice in planning (decision 3). An issue each, for 1.0.x |
+| vitest 5.1.1, rolldown 1.3.3 and Playwright 1.65.1 | Stay: your choice in planning (decision 4). They can follow 1.0 |
+| A bar's per-frame cost, and fewer attribute writes per frame | Stay: in the backlog. No API changes with them |
+| M16's and M17's leftovers (a view of several's tab stops, a guide's copy and its ancestors, an `enter` effect that stops with its reason, and the rest in the notes) | Stay: in the notes |
+| "Pour", a transition effect reporting its progress, and M15's smaller items | Stay: in the backlog and the notes |
+| `get-tsconfig` 5 stable, TypeScript 7.1, and `api-docs.test.ts` on TypeScript 7's API | Stay: all betas |
+| Colours crossing over in a switch, a rotated label keeping its turn, the two Vega items, framework wrappers and Canvas | Stay: left out on purpose |
+| Deprecating `0.0.0-stage` on npm, and deleting the old branches on origin | Stay: yours |
+
+The backlog's "VoiceOver + Safari on every section" is marked built for the six sections when step 2 is done, with the other thirteen left in it.
+
+**Decided while planning M19 (19 November 2026):** decisions 1–4 are yours, and 5–10 follow from them, M18's decisions and the code.
+
+1. **You run VoiceOver + Safari on a Mac, before 1.0.** Not automated in CI (Guidepup on a macOS runner), not by touch on an iPhone or iPad, and not left out of 1.0.
+2. **One page of each kind:** sections B (the bar chart, its table and its announcements), D (the donut and a D3 pie through `expressive()`), E (the line chart and a D3 line), F (a chart switch), P (host layouts through `hostView()`) and S (the examples page). Between them they cover each kind of thing a screen reader meets: our charts, a host's marks through an adapter, a switch, its toggle buttons and keys, a table and the announcements. Not every section, A to S.
+3. **1.0 goes as planned whatever VoiceOver finds, unless a fix needs an API change.** A finding whose fix changes no API (a name's words, a role, the elements built, none of them promised) is an issue for 1.0.x. One that needs an API change holds 1.0, and the step shows you. Not 1.0 waiting for every fix.
+4. **No tool changes.** 1.0 builds and tests with 0.13.0's tools, so the only change in the published files is the removed form. Not vitest 5.1.1, and not rolldown 1.3.3 or Playwright 1.65.1.
+5. **The VoiceOver steps** (decisions 1 and 2).
+   - **B and C have them.** D, E, F, P and S each gain a VoiceOver table after their NVDA one, as C has: the same "Listen for", B's settings (Tab to every item, Quick Nav off), and VoiceOver's keys and words ("image", "group", "toggle button", "selected"). A table only names what VoiceOver does differently from NVDA; where the two would say the same, it says so.
+   - **On the deployed site.** Setup says the pages are at the deployed address as well as `npm run dev`, so a Mac needs no install, and each section's first step names its page there.
+   - **Results.** Each section's run goes in Results with the versions of macOS, Safari and VoiceOver, and a11y-check.md's opening and a11y-audit.md's testers line say which sections passed. A step that reads differently but as well, as role words vary, passes, as Setup says.
+   - **What reads badly** goes in Results as you heard it, with an issue on GitHub for each, for 1.0.x (decision 3).
+6. **The deprecated form taken out** (M18 decisions 7, 19 and 23).
+   - **`motionSwitch(target, options?)` alone.** The second overload goes, and the root reads its second argument as the options.
+   - **A page that still passes the old form** gets a type error in TypeScript, and in JavaScript a `TypeError`: "Since 1.0 motionSwitch takes (target, options), with the motion among the options: motionSwitch(target, { motion, ...options })". The old form is told apart as 0.13.0 tells it: a second argument with `chooseMode`, or a third argument. A second argument that's no object throws the `TypeError` it throws now. Nothing else is checked.
+   - **The forms that stay build the same control,** digest for digest against 0.13.0's: `(target)`, `(target, options)` and `(target, { motion })`.
+   - **CHANGELOG** lists it under Removed, with what to write instead.
+   - **`08-shaped-for-1-0.ts`'s old calls** become `@ts-expect-error` lines, as `geometry`'s old order is there.
+7. **The promise in force** (M18 decisions 8, 9 and 24).
+   - **CHANGELOG** has one section, "The promise", in place of "The 0.x promise" and its "What 1.0 will promise": the same lists, in the present tense, with nothing added or taken out, and a sentence on what the 0.x promise was up to 0.13.0. The older entries keep their words; only their links to the old headings change.
+   - **README's status line** says 1.0.0 and that the package follows semantic versioning, and its promise section is a short paragraph pointing to CHANGELOG's.
+   - **api.md's 77 marks go,** since everything it documents is promised, and its opening says so.
+   - **`src/promise.test.ts`** guards every value and type the three entries export, not the effect-author API's alone, so a rename or a removal still fails `typecheck`. Its check against CHANGELOG's list goes with the list. `src/api-docs.test.ts` and `src/package.test.ts` read the new words.
+   - **The step shows you the text before its PR,** as M18 step 3 did.
+8. **Sizes and budgets** (M18 decision 31).
+   - **Looked at once more:** every size is within its budget on 0.13.0's code, the tightest the stylesheet (2.4 of 2.5 KB) and `chartSwitch`, `expressive` and `hostView` (44.7 of 45.5). The removal only shrinks the sets that import `motionSwitch()`, everything, the script-tag bundle and the two `dist/index` files.
+   - **No budget moves in 1.0.** The budgets guard tree-shaking and aren't promised; tightening them isn't part of 1.0. Step 3 says each size in bytes against main's, and the release measures them again on 1.0.0's code for README and architecture.md.
+9. **The release** (M18 decision 1).
+   - **1.0.0,** through trusted publishing with provenance, as CONTRIBUTING's Releasing says. Nothing is published, tagged or released without your go-ahead in that session.
+   - **CHANGELOG's 1.0.0 entry** opens with what it is, the first stable release, with the promise in force, then Removed, the old form with what to write instead. Nothing else is listed, since nothing else changes.
+   - **README** gets its status, its CHANGELOG link (`#100-…`), the script tag at `expressive-charts@1` (api.md's too), since `@1` serves every 1.x, and its sizes line. architecture.md's sizes are measured again on 1.0.0's code.
+   - **The scripts** M18 step 7 kept, if its notes folder still has them; otherwise the step writes its own. Each version pattern is checked for `1.0.0`, which has no `0.` in front.
+   - **The dry run:** `typecheck`, `test`, `build`, the size check, `pack-check` (59 names in the main entry), `npm pack` (its list and sizes shown to you, compared with 0.13.0's, from an LF copy as CI builds it) and `npm publish --dry-run`.
+   - **Before the go-ahead,** you check that the trusted publisher is still on npmjs.com, and the step checks main's CI.
+   - **After:** npm (the version as `latest`, README, provenance), a fresh project installing 1.0.0 and loading each entry as an ES module and as CommonJS, the old `motionSwitch()` form throwing its `TypeError` with the published code, and jsDelivr's `@1` and `@1.0.0`.
+   - **The date** is the release's local day, Pacific time, checked when CHANGELOG's heading is written and again just before the release.
+10. **One wave, one PR, and a docs-only one after the release** (M18 decision 3, and your note on CI).
+    - **One PR** has the VoiceOver steps and results, the removal, the promise and the release's files. None of it changes a page, so CI's visual jobs run once, about 11 minutes, and **the step stops if a picture moves.** The docs-only PR after the release marks M19 done here, and skips the visual jobs.
+    - **One session, one branch.** Step 1 is pushed first, so you can start on the Mac while steps 3 to 5 are built. Your results are committed to the PR before it merges.
+    - **Reviews.** Expect review comments. What Off and reduced motion do doesn't change: no page or effect does.
+    - **Notes.** The session writes its own hand-over notes: commits, decisions beyond the plan, where the plan and the code differ, and follow-ups, the 1.0.x issues among them.
+    - **Check GitHub, not the word,** before the merge and before the release. Push every commit before you merge.
+
+What's an addition and what isn't. 1.0.0 is a major release, so it may break what the 0.x promise covered; it breaks one form, which 0.13.0 deprecated.
+
+| Change | Under the promise? | Kind |
+| --- | --- | --- |
+| `motionSwitch(target, motion, options?)` taken out, with a `TypeError` | Not under the 0.x promise (the controls); under 1.0's | **Breaking,** as 0.13.0 said: Removed, with what to write instead |
+| The promise in force | The promise's own text | Words: nothing a page runs changes |
+| VoiceOver steps and results | No: the docs | Not published to npm |
+
+Every file is this wave's. `package.json` and the lockfile change only their version.
+
+**Wave 1** (alone; one PR, then the docs-only one):
+
+1. **VoiceOver steps for D, E, F, P and S** (decision 5). Owns a11y-check.md's new tables and its Setup line for the deployed site.
+   - **Done when** the six sections have VoiceOver steps, each naming its page on the deployed site, and the branch is pushed for you.
+   - Docs: a11y-check.md. No CHANGELOG entry.
+2. **Your VoiceOver run** (decisions 1–3 and 5): sections B, D, E, F, P and S, in Safari on a Mac, on the deployed site. It runs beside steps 3 to 5.
+   - The step records what you heard in Results, opens an issue for each finding, and marks the backlog's entry built for the six.
+   - **If a finding needs an API change,** the step stops and shows you before anything is released.
+   - **Done when** the six sections are run, each finding is recorded with its issue, and none needs an API change.
+   - Docs: a11y-check.md (its opening and Results), a11y-audit.md's testers line, and the backlog.
+3. **The deprecated form taken out** (decision 6). Owns `motionSwitch()` in `src/index.ts` and its tests.
+   - Tests: the forms that stay against 0.13.0's digests; `(target, motion)`, `(target, motion, options)` and `(target, undefined, options)` throwing the `TypeError`, its message naming the new form; a second argument that's no object throwing as it does; and `src/package.test.ts`'s check of the `@deprecated` tag becoming a check that the overload is gone.
+   - **Done when** every test passes but those that called the old form, each changed and listed in the PR, and every size is said in bytes against main's.
+   - Docs: api.md (`motionSwitch()`), architecture.md (the motion switch), `docs/sketches` (`api.ts`, `08-shaped-for-1-0.ts` and its README), and CHANGELOG's `## Unreleased`: Removed.
+   - Budgets: none.
+4. **The promise in force** (decision 7). Owns CHANGELOG's promise, README's status line and promise, api.md's opening and its marks, and `src/promise.test.ts`.
+   - **First, the text, shown to you.**
+   - **Done when** you've approved the text, and `src/promise.test.ts`, `src/api-docs.test.ts` and `src/package.test.ts` pass.
+   - Budgets: none.
+5. **Publish 1.0.0** (decisions 8 and 9). Owns the version (`package.json`, the lockfile, `VERSION`), CHANGELOG's 1.0.0 entry, README's status, CHANGELOG link, script tag and sizes, api.md's script tag, architecture.md's sizes, and CONTRIBUTING where it names a version.
+   - The dry run and the PR, as decision 9 says. The PR merges once step 2 is done.
+   - **Then, on your go-ahead in that session:** the `v1.0.0` release is created, and the workflow publishes it.
+   - **After:** the checks in decision 9, then the docs-only PR: M19's ✅, its status, and this plan's status line.
+
+**Done when:**
+- **`motionSwitch()`** takes `(target, options?)` alone, and the old form throws a `TypeError` that names the new one.
+- **CHANGELOG says what 1.0 promises,** in words you approved, and api.md has no 0.x marks.
+- **VoiceOver + Safari** has been run on sections B, D, E, F, P and S, with each finding recorded and an issue for each, and none needing an API change.
+- **Nothing a page draws or reads changes,** and every size is within its budget.
+- **Docs.** api.md, architecture.md, README and CHANGELOG cover the change, with what to write instead.
+- **1.0.0 is on npm,** published through trusted publishing with provenance, with its CHANGELOG entry and its release on GitHub. This plan's status line says M19 is done.
+
+**Status: planned (19 November 2026).**
 
 ### Backlog (after 0.1)
 

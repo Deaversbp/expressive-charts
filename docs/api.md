@@ -6,8 +6,7 @@ Every export of every entry of `expressive-charts`, values and types: what each 
 - **Layers.** Within the main entry, the names are grouped by layer, as the code is: the [core](#core) (motion, clocks, tweens and playback) and the [contracts](#contracts) charts and effects share, [geometry](#geometry), [effects](#effects), [icons](#icons), [presets and settings](#presets-icons-by-name-and-settings), [charts](#charts), [adapters](#adapters), [linked hover](#linked-hover) and [controls](#controls).
 - **Durations** are base values in ms, which the motion mode scales: a 500 ms base is 500 ms in Presentation, 175 ms in Analysis, and nothing with motion off ([`Timing`](#timing)).
 - **`D`** is the type of a chart's rows: `barChart<Player>` reads `Player` objects.
-- **The 0.x promise.** An entry marked *Under the 0.x promise.* is part of the effect-author API: from 0.1.0 it breaks only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. Everything else may still change in a minor release while the library is 0.x. [CHANGELOG.md](../CHANGELOG.md#the-0x-promise) has the promise.
-- **What 1.0 will promise.** From 1.0 every entry on this page is promised, marked or not: its name, its types, and what this page says it does, an option's default value among it where the page states one. So are the `--ec-*` custom properties in [the stylesheet's table](#expressive-chartsstylecss). Not promised: the `ec-*` class names and the elements a chart, an adapter or a control builds; the exact pixels of anything drawn; default durations and easings, and the scaling table's numbers; the words of a default name, tooltip or announcement; the files the package is split into, and their sizes; and anything this page doesn't state. [CHANGELOG.md](../CHANGELOG.md#what-10-will-promise) has it in full.
+- **The promise.** Every entry on this page is promised: its name, its types, and what this page says it does, an option's default value among it where the page states one. So are the `--ec-*` custom properties in [the stylesheet's table](#expressive-chartsstylecss). A breaking change to any of them comes only in a major release, with a migration note. Not promised: the `ec-*` class names and the elements a chart, an adapter or a control builds; the exact pixels of anything drawn; default durations and easings, and the scaling table's numbers; the words of a default name, tooltip or announcement; the files the package is split into, and their sizes; and anything this page doesn't state. [CHANGELOG.md](../CHANGELOG.md#the-promise) has the promise.
 - **Names that look alike.** A few names are close to another's, and each stays as it is for 1.0:
   - `label` is a chart's accessible name, and a motion switch's visible one; `labels` are a line chart's end labels, a control's button text and a host view's own `<text>`s; and [`label()`](#label) is the effect that draws text by a mark.
   - `at` on [`TextStyle`](#textstyle) is a point, where the text is drawn; `at` on [`Sample`](#sample) is the x behind a value, a week or a date.
@@ -31,7 +30,7 @@ It's an ES module and CommonJS (`require("expressive-charts")`), each with its o
 `dist/expressive-charts.global.js` is this entry as one minified script, for a page with no bundler. It defines `window.ExpressiveCharts`, holding every value below:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/expressive-charts@0.13/dist/expressive-charts.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/expressive-charts@1/dist/expressive-charts.global.js"></script>
 <script>
   const { barChart } = ExpressiveCharts;
 </script>
@@ -74,8 +73,6 @@ The page-wide motion, made by `createMotion()` with its defaults: Presentation, 
 
 #### `Motion` (type)
 
-*Under the 0.x promise.*
-
 ```ts
 interface Motion extends MotionView
 ```
@@ -94,8 +91,6 @@ A motion: a [`MotionView`](#motionview), plus who asked for what. The effective 
 
 #### `MotionView`
 
-*Under the 0.x promise.*
-
 ```ts
 interface MotionView {
   readonly mode: MotionMode;
@@ -107,8 +102,6 @@ interface MotionView {
 What charts and effects read of a motion. `mode` is the effective mode. `staged` is true only in Presentation, where a chart splits a data change into stages: values first, then positions. `duration(base, timing)` scales a base duration in ms by the effective mode and the [`Timing`](#timing) (default `"transition"`); 0 means jump to the end, and it's always 0 with motion off.
 
 #### `MotionMode`
-
-*Under the 0.x promise.*
 
 ```ts
 type MotionMode = "presentation" | "analysis" | "off"
@@ -136,8 +129,6 @@ interface MotionOptions
 
 #### `Timing`
 
-*Under the 0.x promise.*
-
 ```ts
 type Timing = "feedback" | "transition" | "effect" | "playback" | "stagger"
 ```
@@ -153,8 +144,6 @@ What a duration is for, which decides how each mode scales it ([`defaultScaling`
 | `stagger` | the wait before each mark of a `stagger` | base | 0 | 0 |
 
 #### `ScalingRule`
-
-*Under the 0.x promise.*
 
 ```ts
 interface ScalingRule {
@@ -175,8 +164,6 @@ type ScalingTable = { readonly [M in "presentation" | "analysis"]: { readonly [T
 A rule for every timing in Presentation and in Analysis, as [`defaultScaling`](#defaultscaling) is. Off is always 0.
 
 #### `ScalingOverrides`
-
-*Under the 0.x promise.*
 
 ```ts
 type ScalingOverrides = { readonly [M in "presentation" | "analysis"]?: { readonly [T in Timing]?: ScalingRule } }
@@ -245,8 +232,6 @@ A clock that moves only when it's told to, for tests: it reads `start` (default 
 
 #### `Clock`
 
-*Under the 0.x promise.*
-
 ```ts
 interface Clock {
   now(): number;
@@ -257,8 +242,6 @@ interface Clock {
 `now()` is the time in ms. `onFrame(callback)` calls `callback(now)` on every frame until the function it returns is called.
 
 #### `ManualClock`
-
-*Under the 0.x promise.*
 
 ```ts
 interface ManualClock extends Clock {
@@ -290,8 +273,6 @@ Animates progress from 0 to 1 over a base duration scaled by the motion mode, ca
 
 #### `Tween` (type)
 
-*Under the 0.x promise.*
-
 ```ts
 interface Tween {
   readonly finished: Promise<TweenResult>;
@@ -305,8 +286,6 @@ A running tween. `finished` resolves to `"done"` or `"cancelled"` and never reje
 
 #### `TweenOptions`
 
-*Under the 0.x promise.*
-
 ```ts
 interface TweenOptions
 ```
@@ -319,8 +298,6 @@ interface TweenOptions
 - `signal`: `AbortSignal`. Aborting it cancels the tween.
 
 #### `TweenResult`
-
-*Under the 0.x promise.*
 
 ```ts
 type TweenResult = "done" | "cancelled"
@@ -410,8 +387,6 @@ interpolateRecord<K extends string>(a: Readonly<Record<K, number>>, b: Readonly<
 Blends every key of two records of numbers. A key missing on one side counts as 0 there, so a series that appears grows from 0, and one that disappears shrinks to 0 and is gone at 1: what stacked segments need. It's an `Interpolator` for records.
 
 #### `Easing`
-
-*Under the 0.x promise.*
 
 ```ts
 type Easing = (t: number) => number
@@ -514,8 +489,6 @@ Types only: how charts and adapters describe a mark, what effects are, and how a
 
 #### `MarkGeometry`
 
-*Under the 0.x promise.*
-
 ```ts
 interface MarkGeometry
 ```
@@ -545,8 +518,6 @@ Build one with [`describe`](#describe).
 
 #### `Outline`
 
-*Under the 0.x promise.*
-
 ```ts
 interface Outline {
   readonly d: string;
@@ -559,8 +530,6 @@ A mark's shape: `d` is its SVG path data, which for a stroke leaves out the walk
 
 #### `Point`
 
-*Under the 0.x promise.*
-
 ```ts
 interface Point {
   readonly x: number;
@@ -569,8 +538,6 @@ interface Point {
 ```
 
 #### `Rect`
-
-*Under the 0.x promise.*
 
 ```ts
 interface Rect {
@@ -582,8 +549,6 @@ interface Rect {
 ```
 
 #### `MarkData<D>`
-
-*Under the 0.x promise.*
 
 ```ts
 interface MarkData<D = unknown> {
@@ -598,8 +563,6 @@ What a data effect reads beside the geometry. `datum` is the row behind the mark
 
 #### `Sample`
 
-*Under the 0.x promise.*
-
 ```ts
 interface Sample {
   readonly t: number;
@@ -613,8 +576,6 @@ A value at `t` along the walk, from 0 to 1. `at` is the x behind it (a week, a d
 
 #### `GeometryEffect`
 
-*Under the 0.x promise.*
-
 ```ts
 interface GeometryEffect {
   readonly kind: "geometry";
@@ -627,8 +588,6 @@ interface GeometryEffect {
 An effect that reads only the mark's geometry. `run()` animates and resolves when it's done or aborted. `end()` draws, at once, the state a full run ends in, which is all reduced motion shows. `clear()` does any cleanup beyond the runner's, which empties the run's layer and resets the mark anyway. Effects are stateless: one object runs on many marks at once, and each run's state lives on its context. Make one with [`defineEffect()`](#defineeffect).
 
 #### `DataEffect<D>`
-
-*Under the 0.x promise.*
 
 ```ts
 interface DataEffect<D = unknown> {
@@ -644,8 +603,6 @@ An effect that reads the mark's data too, as [`threshold`](#threshold) does. `ne
 
 #### `TransitionEffect`
 
-*Under the 0.x promise.*
-
 ```ts
 interface TransitionEffect {
   readonly kind: "transition";
@@ -659,8 +616,6 @@ An effect that plays between two views of a mark, as [`morph()`](#morph) does in
 
 #### `MarkEffect<D>`
 
-*Under the 0.x promise.*
-
 ```ts
 type MarkEffect<D = unknown> = GeometryEffect | DataEffect<D>
 ```
@@ -668,8 +623,6 @@ type MarkEffect<D = unknown> = GeometryEffect | DataEffect<D>
 An effect that plays on one mark: what an effect slot takes, and what a preset's factory returns.
 
 #### `AnyMarkEffect`
-
-*Under the 0.x promise.*
 
 ```ts
 type AnyMarkEffect = GeometryEffect | DataEffect<any>
@@ -679,8 +632,6 @@ What the combinators take: any mark effect, whatever rows it reads.
 
 #### `Combined<E>`
 
-*Under the 0.x promise.*
-
 ```ts
 type Combined<E extends readonly AnyMarkEffect[]>
 ```
@@ -688,8 +639,6 @@ type Combined<E extends readonly AnyMarkEffect[]>
 What [`sequence()`](#sequence) and [`parallel()`](#parallel) return for the parts `E`: a `GeometryEffect` if every part is one, otherwise a `DataEffect` that needs every data part's rows at once (an intersection), so a generic part such as `threshold()` can't widen a typed part back to `unknown`.
 
 #### `EffectContext`
-
-*Under the 0.x promise.*
 
 ```ts
 interface EffectContext
@@ -710,8 +659,6 @@ One run's context: the only way an effect touches the screen or the clock.
 
 #### `TextSpace`
 
-*Under the 0.x promise.*
-
 ```ts
 interface TextSpace {
   box(content: string, style: TextStyle): Rect;
@@ -730,8 +677,6 @@ Where effects' text sits on one chart or attachment: one space for every run on 
 
 #### `TransitionContext`
 
-*Under the 0.x promise.*
-
 ```ts
 interface TransitionContext extends EffectContext {
   readonly start: number;
@@ -741,8 +686,6 @@ interface TransitionContext extends EffectContext {
 A transition run's context. `start`, from 0 to 1, is where the run begins in the effect's own progress: 0 plays it all, and a switch back mid-way plays the reverse from 1 minus the progress the first had reached, so an effect that honours it retraces. Both views' marks are hidden while a transition plays, so `mark` does nothing and `onChange` never fires.
 
 #### `Layer`
-
-*Under the 0.x promise.*
 
 ```ts
 interface Layer {
@@ -760,8 +703,6 @@ A run's own overlay group, in chart coordinates, which the runner empties when t
 
 #### `MarkHandle`
 
-*Under the 0.x promise.*
-
 ```ts
 interface MarkHandle {
   set(style: MarkStyle): void;
@@ -772,8 +713,6 @@ interface MarkHandle {
 Restyles the mark itself. `set()` changes only the fields given, so effects running together don't undo each other; a field given as `undefined` goes back to its default. `reset()` goes back to the mark's own style. The runner resets it when the run is cleared.
 
 #### `MarkStyle`
-
-*Under the 0.x promise.*
 
 ```ts
 interface MarkStyle {
@@ -790,8 +729,6 @@ interface MarkStyle {
 - `halo`: a stroke along the outline, behind the mark: `width` is the stroke's, so half of it shows outside. Its colour defaults to the mark's own.
 
 #### `Paint`
-
-*Under the 0.x promise.*
 
 ```ts
 interface Paint {
@@ -812,8 +749,6 @@ How a layer's path is drawn.
 
 #### `TextStyle`
 
-*Under the 0.x promise.*
-
 ```ts
 interface TextStyle {
   readonly at: Point;
@@ -827,8 +762,6 @@ interface TextStyle {
 
 #### `Color`
 
-*Under the 0.x promise.*
-
 ```ts
 type Color = string
 ```
@@ -836,8 +769,6 @@ type Color = string
 A theme token or any CSS colour. The tokens are `"text"`, `"text-muted"`, `"surface"`, `"grid"`, `"axis"`, `"focus"`, `"negative"`, `"series-1"` to `"series-8"` and their `-strong` variants, and `"mark"` and `"mark-strong"`, the colours of the mark a run belongs to (in a [`Paint`](#paint) with `part`, that segment's). Tokens follow the light and dark themes ([`style.css`](#expressive-chartsstylecss)).
 
 #### `IconHandle`
-
-*Under the 0.x promise.*
 
 ```ts
 interface IconHandle {
@@ -850,8 +781,6 @@ An icon a layer drew. `place()` moves it, with a transform from icon space into 
 
 #### `PathHandle`
 
-*Under the 0.x promise.*
-
 ```ts
 interface PathHandle {
   update(d: string, paint?: Partial<Paint>): void;
@@ -863,8 +792,6 @@ A path a layer drew. `update()` replaces its path data and merges the paint fiel
 
 #### `TextHandle`
 
-*Under the 0.x promise.*
-
 ```ts
 interface TextHandle {
   update(style: Partial<TextStyle>, content?: string): void;
@@ -875,8 +802,6 @@ interface TextHandle {
 Text a layer drew. `update()` merges the style fields given, and replaces the text if `content` is given.
 
 #### `Matrix` (type)
-
-*Under the 0.x promise.*
 
 ```ts
 type Matrix = readonly [a: number, b: number, c: number, d: number, e: number, f: number]
@@ -954,8 +879,6 @@ const curve = describe.shape({ key: "visits", d: "M0,170C40,160 40,150 80,140", 
 
 #### `describe`
 
-*Under the 0.x promise.*
-
 ```ts
 const describe: {
   bar(spec: BarSpec): MarkGeometry;
@@ -980,8 +903,6 @@ Path data uses absolute `M`, `L`, `A` and `Z` only, with numbers rounded to 0.00
 
 #### `BarSpec`
 
-*Under the 0.x promise.*
-
 ```ts
 interface BarSpec
 ```
@@ -1000,8 +921,6 @@ A box in `labelBounds` or `nearbyLabels` with a coordinate that isn't finite, or
 
 #### `BarSegmentSpec`
 
-*Under the 0.x promise.*
-
 ```ts
 interface BarSegmentSpec {
   readonly series: string;
@@ -1013,8 +932,6 @@ One segment of a bar: its series, and its length along the walk in px, gap inclu
 
 #### `Baseline`
 
-*Under the 0.x promise.*
-
 ```ts
 type Baseline = "left" | "right" | "top" | "bottom"
 ```
@@ -1022,8 +939,6 @@ type Baseline = "left" | "right" | "top" | "bottom"
 The edge a bar grows from: `"left"` and `"right"` for horizontal bars (`"right"` for a negative one), `"bottom"` and `"top"` for columns.
 
 #### `ArcSpec`
-
-*Under the 0.x promise.*
 
 ```ts
 interface ArcSpec
@@ -1037,8 +952,6 @@ interface ArcSpec
 - `nearbyLabels`: `readonly Rect[]`. The boxes of other slices' labels near it, passed through as the geometry's `nearbyLabels`.
 
 #### `LineSpec`
-
-*Under the 0.x promise.*
 
 ```ts
 interface LineSpec {
@@ -1056,8 +969,6 @@ A polyline through `points` (at least one), in chart px, with straight legs. `br
 
 #### `PointSpec`
 
-*Under the 0.x promise.*
-
 ```ts
 interface PointSpec {
   readonly key: string;
@@ -1073,8 +984,6 @@ interface PointSpec {
 A dot of radius `r`. Its walk has length 0, so `travel` and `trace` do nothing on it, while `wiggle`, `pulse` and `flash` still work. `labelBounds`, the boxes of its own labels, and `nearbyLabels`, other marks' near it, are passed through as the geometry's.
 
 #### `ShapeSpec`
-
-*Under the 0.x promise.*
 
 ```ts
 interface ShapeSpec {
@@ -1117,8 +1026,6 @@ const under = describe.shape({ key: "height", d: area(x, 200, y).curve(curveMono
 
 #### `matrix`
 
-*Under the 0.x promise.*
-
 ```ts
 const matrix: {
   translate(x: number, y: number): Matrix;
@@ -1132,8 +1039,6 @@ const matrix: {
 Builds and applies [`Matrix`](#matrix-type) transforms, for `mark.set({ transform })` and `IconHandle.place()`. Positive rotations turn clockwise on screen, as SVG's `rotate()` does. `scale` takes `sy` equal to `sx` when it's left out, and `rotate` and `scale` keep `about` fixed (default the origin). `multiply(a, b, c)` composes like the SVG transform list `"a b c"`: `c` applies first. With no arguments it's the identity.
 
 #### `offset()`
-
-*Under the 0.x promise.*
 
 ```ts
 offset(point: Point, angle: number, distance: number): Point
@@ -1576,8 +1481,6 @@ interface StaggerOptions {
 
 #### `defineEffect()`
 
-*Under the 0.x promise.*
-
 ```ts
 defineEffect(spec: GeometryEffectSpec): GeometryEffect
 ```
@@ -1604,8 +1507,6 @@ barChart("#sales", { label: "Revenue by region", data: regions, y: "region", x: 
 
 #### `GeometryEffectSpec`
 
-*Under the 0.x promise.*
-
 ```ts
 interface GeometryEffectSpec {
   run(mark: MarkGeometry, ctx: EffectContext): Promise<void>;
@@ -1617,8 +1518,6 @@ interface GeometryEffectSpec {
 A [`GeometryEffect`](#geometryeffect) without its `kind`, with `clear` optional.
 
 #### `defineDataEffect()`
-
-*Under the 0.x promise.*
 
 ```ts
 defineDataEffect<D = unknown>(spec: DataEffectSpec<D>): DataEffect<D>
@@ -1639,8 +1538,6 @@ barChart("#samples", { label: "Samples passed by site", data: sites, y: "site", 
 ```
 
 #### `DataEffectSpec<D>`
-
-*Under the 0.x promise.*
 
 ```ts
 interface DataEffectSpec<D> {
@@ -1737,8 +1634,6 @@ What `iconFromSvg()` takes besides the markup: the name, and `anchor`, `pivot`, 
 
 #### `Icon`
 
-*Under the 0.x promise.*
-
 ```ts
 interface Icon
 ```
@@ -1756,8 +1651,6 @@ interface Icon
 
 #### `IconShape`
 
-*Under the 0.x promise.*
-
 ```ts
 interface IconShape
 ```
@@ -1765,8 +1658,6 @@ interface IconShape
 One path of an icon. `d`: path data in icon units. `fill`, `stroke`: `Color`; unset draws none (unlike SVG, where an unset fill is black). `width`: the stroke's width in icon units, default 1, so it scales with the icon. `linecap`: `"butt"` (default), `"round"` or `"square"`. `linejoin`: `"miter"` (default), `"round"` or `"bevel"`. `"square"` and `"bevel"` are new in 0.13.0, so code that reads a shape and handles every case has one more of each ([CHANGELOG](../CHANGELOG.md)); [`defineIcon()`](#defineicon) throws a `RangeError` for any other. `clip`: path data in icon units that clips the shape. `fillRule`: `"nonzero"` (default) or `"evenodd"`, which leaves a hole where the path's parts overlap, as solid icon sets draw them. `opacity`: from 0 to 1, default 1, for the whole shape, its fill and stroke together, as a duotone set fades its lighter part. `fillOpacity`, `strokeOpacity`: from 0 to 1, default 1, the fill's and the stroke's own, inside `opacity`, as a set fades a part's fill inside its full outline.
 
 #### `IconSource`
-
-*Under the 0.x promise.*
 
 ```ts
 interface IconSource {
@@ -2997,8 +2888,6 @@ ctx.layer.picture();                                                   // what's
 
 #### `checkEffect()`
 
-*Under the 0.x promise.*
-
 ```ts
 checkEffect(effect: GeometryEffect | DataEffect<unknown>, options?: CheckEffectOptions<unknown>): Promise<void>
 checkEffect<D>(effect: GeometryEffect | DataEffect<D>, options: CheckEffectOptions<D> & { readonly data: (mark: MarkGeometry) => MarkData<D> }): Promise<void>
@@ -3016,8 +2905,6 @@ It resolves when every check passes, and otherwise rejects with one `Error` list
 
 #### `CheckEffectOptions<D>`
 
-*Under the 0.x promise.*
-
 ```ts
 interface CheckEffectOptions<D = unknown>
 ```
@@ -3031,8 +2918,6 @@ interface CheckEffectOptions<D = unknown>
 
 #### `checkTransition()`
 
-*Under the 0.x promise.*
-
 ```ts
 checkTransition(effect: TransitionEffect, options?: CheckTransitionOptions): Promise<void>
 ```
@@ -3040,8 +2925,6 @@ checkTransition(effect: TransitionEffect, options?: CheckTransitionOptions): Pro
 The checks for a transition effect, on every pair (the fixture pairs by default), from a to b and from b to a: checks 1 to 4 of `checkEffect()`, a run from `start: 0.5` that ends as `end()` draws, and a retrace: at 0.25, 0.5 and 0.75, a run back from `start: 1 − p` must begin with the picture a run forward from `start: p` begins with, so a switch back mid-way doesn't jump. It resolves or rejects as `checkEffect()` does, naming the pair and the way.
 
 #### `CheckTransitionOptions`
-
-*Under the 0.x promise.*
 
 ```ts
 interface CheckTransitionOptions
@@ -3053,8 +2936,6 @@ interface CheckTransitionOptions
 
 #### `fixtures`
 
-*Under the 0.x promise.*
-
 ```ts
 const fixtures: Readonly<Record<FixtureName, MarkGeometry>>
 ```
@@ -3063,15 +2944,11 @@ One of each kind of mark an effect meets: a bar, a negative bar, a column, a sta
 
 #### `FixtureName`
 
-*Under the 0.x promise.*
-
 ```ts
 type FixtureName = "bar" | "negative bar" | "column" | "stacked" | "short bar" | "slice" | "line" | "gapped line" | "point"
 ```
 
 #### `fixturePairs`
-
-*Under the 0.x promise.*
 
 ```ts
 const fixturePairs: Readonly<Record<FixturePairName, readonly [MarkGeometry, MarkGeometry]>>
@@ -3081,15 +2958,11 @@ The pairs `checkTransition()` runs on by default: a slice and a column (a mark t
 
 #### `FixturePairName`
 
-*Under the 0.x promise.*
-
 ```ts
 type FixturePairName = "slice and column" | "bar and column" | "two slices" | "two lines" | "two points"
 ```
 
 #### `testContext()`
-
-*Under the 0.x promise.*
 
 ```ts
 testContext(options?: TestContextOptions): TestContext
@@ -3098,8 +2971,6 @@ testContext(options?: TestContextOptions): TestContext
 A complete [`EffectContext`](#effectcontext) on a manual clock, recording what the effect draws, for an effect's own tests. It's built on the same run scope the runner gives every run, so its `clear()` is the runner's cleanup. For a transition effect, add `start`: `{ ...testContext(), start: 0.5 }`.
 
 #### `TestContextOptions`
-
-*Under the 0.x promise.*
 
 ```ts
 interface TestContextOptions
@@ -3114,8 +2985,6 @@ interface TestContextOptions
 
 #### `TestContext`
 
-*Under the 0.x promise.*
-
 ```ts
 interface TestContext extends EffectContext
 ```
@@ -3129,8 +2998,6 @@ An [`EffectContext`](#effectcontext) whose `motion` is a [`Motion`](#motion-type
 
 #### `play()`
 
-*Under the 0.x promise.*
-
 ```ts
 play(clock: ManualClock, running: Promise<unknown>, options?: PlayOptions): Promise<number>
 ```
@@ -3138,8 +3005,6 @@ play(clock: ManualClock, running: Promise<unknown>, options?: PlayOptions): Prom
 Advances a manual clock a frame at a time until `running` settles, letting promise callbacks run between frames, so a sequence's next part starts on time. Resolves with the ms it advanced, and throws if `running` hasn't settled within the limit.
 
 #### `PlayOptions`
-
-*Under the 0.x promise.*
 
 ```ts
 interface PlayOptions {
@@ -3152,8 +3017,6 @@ interface PlayOptions {
 
 #### `RecordingLayer`
 
-*Under the 0.x promise.*
-
 ```ts
 interface RecordingLayer extends Layer
 ```
@@ -3161,8 +3024,6 @@ interface RecordingLayer extends Layer
 A [`Layer`](#layer) that keeps what's drawn: `drawn`, what's there now in creation order, which is also stacking order; `calls`, every call made on it or its handles ([`LayerCall`](#layercall)); `picture(decimals?)`, what's drawn as plain data with numbers rounded (default 3 decimals), to compare a full run with `end()`; and `clear()`, which removes everything.
 
 #### `RecordingMark`
-
-*Under the 0.x promise.*
 
 ```ts
 interface RecordingMark extends MarkHandle
@@ -3172,8 +3033,6 @@ A [`MarkHandle`](#markhandle) that keeps its `style`, after every `set()` and `r
 
 #### `Drawn`
 
-*Under the 0.x promise.*
-
 ```ts
 type Drawn = DrawnIcon | DrawnPath | DrawnText
 ```
@@ -3181,8 +3040,6 @@ type Drawn = DrawnIcon | DrawnPath | DrawnText
 One thing a recording layer holds.
 
 #### `DrawnIcon`
-
-*Under the 0.x promise.*
 
 ```ts
 interface DrawnIcon {
@@ -3198,8 +3055,6 @@ An icon, with the size it was drawn at and its last `place()`, `undefined` while
 
 #### `DrawnPath`
 
-*Under the 0.x promise.*
-
 ```ts
 interface DrawnPath {
   readonly kind: "path";
@@ -3211,8 +3066,6 @@ interface DrawnPath {
 
 #### `DrawnText`
 
-*Under the 0.x promise.*
-
 ```ts
 interface DrawnText {
   readonly kind: "text";
@@ -3223,8 +3076,6 @@ interface DrawnText {
 ```
 
 #### `LayerCall`
-
-*Under the 0.x promise.*
 
 ```ts
 type LayerCall =
@@ -3242,8 +3093,6 @@ A call on a recording layer or its handles, in order. Calls on removed handles a
 
 #### `MarkCall`
 
-*Under the 0.x promise.*
-
 ```ts
 type MarkCall = { readonly op: "set"; readonly style: MarkStyle } | { readonly op: "reset" }
 ```
@@ -3251,8 +3100,6 @@ type MarkCall = { readonly op: "set"; readonly style: MarkStyle } | { readonly o
 A call on a recording mark.
 
 #### `Picture`
-
-*Under the 0.x promise.*
 
 ```ts
 type Picture =

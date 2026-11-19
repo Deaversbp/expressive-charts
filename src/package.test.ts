@@ -135,7 +135,7 @@ describe("package.json", () => {
     }
   });
 
-  it("ships the changelog, where the 0.x promise is, beside the build", async () => {
+  it("ships the changelog, where the promise is, beside the build", async () => {
     const pkg = await packageJson();
     expect(pkg.files).toEqual(["dist", "CHANGELOG.md"]);
   });

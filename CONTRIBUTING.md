@@ -127,7 +127,7 @@ A new import set goes in `importSets` in `scripts/size.mjs`, with its budget in 
 - Run `npm run typecheck && npm test && npm run build` before opening it, and `npm run size` after the build. CI runs the same checks, then `npm run pack-check`.
 - If the change affects how the demo looks or moves, run `npm run test:visual:docker` too, and commit updated baselines if the change is intended. CI runs the visual suite in jobs of its own, one for each browser.
 - Update `README.md` and `docs/architecture.md` when the public API changes, and `docs/api.md`, the reference: `src/api-docs.test.ts` fails when an export has no entry there or an entry names no export, and type-checks every example in README and every example in `docs/api.md` that imports the package. An example uses the page's own names (`players`, `bars`), which the test declares in `PAGE`. README's links must be absolute (`https://github.com/Deaversbp/expressive-charts/blob/main/…`), since npm shows it away from the repository.
-- A name in the 0.x promise (in `CHANGELOG.md`) changes only in a minor release, with a migration note, and a deprecated name keeps working for one minor release. `src/promise.test.ts` names every promised value and type, so renaming or removing one fails `typecheck`; a name added to the promise goes in both lists, and a test checks they match.
+- Every name the package exports is under the promise (in `CHANGELOG.md`): it changes only in a major release, with a migration note, and a deprecated name keeps working until then. `src/promise.test.ts` names every exported value and type, so renaming or removing one fails `typecheck`; a new export goes in its lists too, and `src/api-docs.test.ts` fails until it does.
 
 ## Releasing
 

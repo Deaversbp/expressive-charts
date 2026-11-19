@@ -2,32 +2,9 @@
 
 Each release is listed here, newest first. [The development log](https://github.com/Deaversbp/expressive-charts/blob/main/docs/plan.md) records what each milestone built, and why.
 
-## The 0.x promise
+## The promise
 
-The library follows [semantic versioning](https://semver.org) from 0.1.0, with this promise for the 0.x releases.
-
-**The effect-author API** is:
-
-- `defineEffect` and `defineDataEffect`, with `GeometryEffectSpec` and `DataEffectSpec`;
-- `matrix` and `offset`;
-- `describe.bar`, `describe.arc`, `describe.line`, `describe.point` and `describe.shape`, with their specs: `BarSpec`, `BarSegmentSpec`, `Baseline`, `ArcSpec`, `LineSpec`, `PointSpec` and `ShapeSpec`;
-- the effect contracts (`GeometryEffect`, `DataEffect`, `TransitionEffect`, `MarkEffect`, `AnyMarkEffect`, `Combined`), the contexts (`EffectContext`, `TransitionContext`) and where their text sits (`TextSpace`), the mark and its data (`MarkGeometry`, `Outline`, `Point`, `Rect`, `MarkData`, `Sample`), the drawing API (`Layer`, `MarkHandle`, `MarkStyle`, `Matrix`, `Paint`, `TextStyle`, `Color`, and the handles `IconHandle`, `PathHandle` and `TextHandle`), and icons as an effect gets them (`Icon`, `IconShape`, `IconSource`);
-- the motion types the context uses: `MotionView`, `MotionMode`, `Timing`, `Tween`, `TweenOptions`, `TweenResult` and `Easing`;
-- `expressive-charts/testing`: `checkEffect`, `checkTransition`, `fixtures`, `fixturePairs`, `testContext` and `play`, with their options (`CheckEffectOptions`, `CheckTransitionOptions`, `TestContextOptions`, `PlayOptions`), the fixtures' names (`FixtureName`, `FixturePairName`), the test context (`TestContext`) and what it records (`RecordingLayer`, `RecordingMark`, `Drawn`, `DrawnIcon`, `DrawnPath`, `DrawnText`, `LayerCall`, `MarkCall`, `Picture`), and the motion types they use: `Motion`, `Clock`, `ManualClock`, `ScalingOverrides` and `ScalingRule`.
-
-That's every type these names use, so code written against them needs nothing outside the list. A test imports every name in it, so none can be renamed or removed by accident.
-
-From 0.1.0:
-
-- **A breaking change to that API comes only in a minor release** (0.1 → 0.2), never in a patch, and this file lists it with a migration note: what changed, and what to write instead.
-- **A deprecated name keeps working for one minor release.** It's marked `@deprecated` with its replacement, and removed in the minor release after that.
-- Additions (a new optional field, a new helper) can come in any release.
-
-Everything else can still change in a minor release while the library is 0.x: the motion core (`motion`, `createMotion`, the clocks, `tween`, `animated`, `playback`, and the types the list doesn't name), the charts, the adapters, the built-in effects and the controls. Those changes are listed here too. [docs/effects-guide.md](https://github.com/Deaversbp/expressive-charts/blob/main/docs/effects-guide.md) is the guide to the author API.
-
-### What 1.0 will promise
-
-From 1.0 the whole package follows semantic versioning, not the effect-author API alone. A breaking change to anything promised below comes only in a major release, with a migration note, and a deprecated name is taken out only in a major release. 0.13.0 is the last 0.x: 1.0 takes out what 0.13.0 deprecates and changes nothing else.
+The package follows [semantic versioning](https://semver.org): from 1.0, the whole package, not the effect-author API alone. A breaking change to anything promised below comes only in a major release, with a migration note, and a deprecated name is taken out only in a major release.
 
 **Promised:**
 
@@ -49,7 +26,11 @@ A page that needs one of these to stay as it is sets it itself: a duration or a 
 
 Additions can come in any minor release: a new export, a new optional field or option.
 
-## Unreleased
+**Before 1.0,** from 0.1.0 to 0.13.0, the promise covered the effect-author API alone: `defineEffect` and `defineDataEffect`, `matrix` and `offset`, `describe`, the effect contracts and `expressive-charts/testing`. A breaking change to it came only in a minor release, with a migration note, and a deprecated name kept working for one minor release. Everything else could change in a minor release. The entries below list every change either way.
+
+## 1.0.0 (19 November 2026)
+
+The first stable release. From 1.0 the whole package follows semantic versioning: every name it exports, their types, what docs/api.md says each does, and the `--ec-*` custom properties, as [the promise](#the-promise) above says. One form is taken out, as 0.13.0 said it would be: `motionSwitch(target, motion, options)`, which 0.13.0 deprecated. Write `motionSwitch(target, { motion, ...options })` instead. Nothing else changes, so a page that runs on 0.13.0 without that form runs on 1.0.0 as it did.
 
 ### Removed
 
@@ -59,7 +40,7 @@ Additions can come in any minor release: a new export, a new optional field or o
 
 ## 0.13.0 (18 November 2026)
 
-The last 0.x release: the API shaped for 1.0. Two changes can break a page or an effect, and one form is deprecated; they come first below, each with what to write instead. `expressive()`'s `geometry` takes `(datum, element, key)`: swap its first two arguments. `IconShape.linecap` and `Paint.linecap` gain `"square"`, and `IconShape.linejoin` gains `"bevel"`, a breaking change to the effect-author API for code that reads them and handles every case: add a case for each. And `motionSwitch(target, motion, options)` is deprecated: write `motionSwitch(target, { motion, ...options })`. The old form works in 0.13.0 as it did. 1.0 takes it out and changes nothing else; [what 1.0 will promise](#what-10-will-promise) is above. The rest needs nothing written instead: two built-in effects, `outline()` and `wait()`; `labelBounds` on `expressive()` and `fromVegaView()`; a refresh that keeps a hover's effects; `iconFromSvg` keeping square caps and bevel joins; and, in Safari, a chart's text laid out with a viewer's letter and word spacing. The demo site gains a page of examples on the library's own charts: revenue against its target, a measurement against its control, and traffic by source.
+The last 0.x release: the API shaped for 1.0. Two changes can break a page or an effect, and one form is deprecated; they come first below, each with what to write instead. `expressive()`'s `geometry` takes `(datum, element, key)`: swap its first two arguments. `IconShape.linecap` and `Paint.linecap` gain `"square"`, and `IconShape.linejoin` gains `"bevel"`, a breaking change to the effect-author API for code that reads them and handles every case: add a case for each. And `motionSwitch(target, motion, options)` is deprecated: write `motionSwitch(target, { motion, ...options })`. The old form works in 0.13.0 as it did. 1.0 takes it out and changes nothing else; [what 1.0 will promise](#the-promise) is above. The rest needs nothing written instead: two built-in effects, `outline()` and `wait()`; `labelBounds` on `expressive()` and `fromVegaView()`; a refresh that keeps a hover's effects; `iconFromSvg` keeping square caps and bevel joins; and, in Safari, a chart's text laid out with a viewer's letter and word spacing. The demo site gains a page of examples on the library's own charts: revenue against its target, a measurement against its control, and traffic by source.
 
 ### Changed
 

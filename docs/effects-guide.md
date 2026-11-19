@@ -4,7 +4,7 @@ An effect is a small piece of motion that runs on one mark: a ball rolling out a
 
 This guide covers the contract an effect reads, the drawing API it writes through, how it keeps time, the rules that keep charts readable, data effects, composing, testing with `checkEffect`, and transition effects, which play between two views of a mark, with `checkTransition`. It ends with two worked examples and a review checklist.
 
-**Stability.** The author API is public, under the 0.x promise in [CHANGELOG.md](../CHANGELOG.md): from 0.1.0, a breaking change to it comes only in a minor release (0.1 → 0.2), with a migration note, and a deprecated name keeps working for one minor release. The API is `defineEffect`, `defineDataEffect`, `matrix`, `offset`, `describe.*`, the effect, context and drawing contracts described here, and `expressive-charts/testing`.
+**Stability.** The author API is public, under the promise in [CHANGELOG.md](../CHANGELOG.md#the-promise), as the whole package is from 1.0: a breaking change to it comes only in a major release, with a migration note, and a deprecated name keeps working until then. From 0.1.0 to 0.13.0 it was under the 0.x promise, which allowed one in a minor release. The API is `defineEffect`, `defineDataEffect`, `matrix`, `offset`, `describe.*`, the effect, context and drawing contracts described here, and `expressive-charts/testing`.
 
 ## A first effect
 

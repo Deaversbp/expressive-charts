@@ -15,7 +15,7 @@ Composable motion and expressive effects for web charts. Hover, update and morph
 
 Each picture plays once and stops where its effect ends. **[The demo site](https://deaversbp.github.io/expressive-charts/)** has every effect to try, on the library's charts and on D3, Vega-Lite and hand-written ones, with the motion modes and reduced motion.
 
-> **Status: 1.0.0 (November 2026).** The package follows semantic versioning: [the promise](#the-promise) says what it covers. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#100-19-november-2026) lists what changed since 0.13.0.
+> **Status: 1.0.0 (November 2026).** The package follows semantic versioning: [the promise](#the-promise) says what it covers. [CHANGELOG.md](https://github.com/Deaversbp/expressive-charts/blob/main/CHANGELOG.md#100-20-november-2026) lists what changed since 0.13.0.
 
 - **Effects first.** The mark effects `travel`, `flash`, `wiggle`, `pulse`, `trace`, `drawIn`, `outline` and the data effects `threshold`, `delta` and `label`, put together with `sequence`, `parallel`, `only` and `stagger`, with `wait` to hold a part back; and the transition effect `morph`, which `chartSwitch` plays to turn each mark of one chart into its mark in the next (a transition can't go into a combinator). An effect reads only a shared description of the mark, so one effect works on every chart, and effects of your own work everywhere the built-in ones do.
 - **Charts and adapters.** Bar, donut and line charts, a switch that morphs one into another, adapters that bring the same effects to SVG marks drawn by other code, and hover linked across them.
